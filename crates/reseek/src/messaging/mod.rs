@@ -8,8 +8,10 @@
 //! [`Messaging`] is the engine. The client's events about messages and rooms reach it through
 //! [`Messaging::take`], in the order the client raised them, and one task handles them.
 
+mod away;
 mod conversations;
 mod export;
+mod feed;
 mod mentions;
 mod pins;
 mod retention;
@@ -53,7 +55,8 @@ pub static SCHEMA: Schema = db::schema!(
     "0001_initial",
     "0002_drop_session_end_reason",
     "0003_chat_pins",
-    "0004_chat_pins_revision"
+    "0004_chat_pins_revision",
+    "0005_away"
   ]
 );
 
@@ -122,6 +125,10 @@ pub struct Messaging {
   tasks: TaskTracker,
   /// what a message search is tried against before it runs
   probe: search::Probe,
+  /// whether we are away, and who was answered while we were
+  status: away::Status,
+  /// the public room feed, held while the server is asked for it or told to stop
+  feed: tokio::sync::Mutex<feed::Feed>,
   /// canceled when the daemon shuts down
   shutdown: CancellationToken,
 }
@@ -167,8 +174,11 @@ impl Messaging {
       session_user: Mutex::new(None),
       tasks: TaskTracker::new(),
       probe,
+      status: away::Status::default(),
+      feed: tokio::sync::Mutex::default(),
       shutdown,
     });
+    messaging.restore_status().await;
     let worker = tokio::spawn(
       messaging
         .clone()
@@ -181,6 +191,18 @@ impl Messaging {
         .clone()
         .push_unread()
         .instrument(info_span!("chat_unread")),
+    );
+    messaging.tasks.spawn(
+      messaging
+        .clone()
+        .idle_away()
+        .instrument(info_span!("auto_away")),
+    );
+    messaging.tasks.spawn(
+      messaging
+        .clone()
+        .follow_feed()
+        .instrument(info_span!("public_feed")),
     );
     Ok(messaging)
   }
@@ -259,6 +281,8 @@ impl Messaging {
       Event::Disconnected { at, .. } => {
         self.session_ended(at.into()).await;
         self.rooms_disconnected();
+        self.status_disconnected();
+        self.feed_disconnected().await;
       }
       other => {
         let span = info_span!("room", room = rooms::room_of(&other));

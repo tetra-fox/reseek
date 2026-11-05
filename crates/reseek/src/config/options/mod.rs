@@ -358,6 +358,15 @@ pub struct Chat {
   /// case.
   #[cascade(env = "RESEEK_CHAT_HIGHLIGHT_WORDS")]
   pub highlight_words: Vec<String>,
+  /// Time with no one at the UI after which we are shown as away, until someone opens it again.
+  /// `0` never sets away on its own.
+  #[cascade(env = "RESEEK_CHAT_AUTO_AWAY")]
+  #[serde(with = "crate::config::duration")]
+  pub auto_away: Duration,
+  /// Reply sent while we are away to the first private message from each user, marked as an
+  /// automatic message. Unset sends none.
+  #[cascade(env = "RESEEK_CHAT_AUTO_REPLY")]
+  pub auto_reply: Option<String>,
 }
 
 impl Default for Chat {
@@ -367,6 +376,8 @@ impl Default for Chat {
       max_message_length: 2000,
       accept_private_room_invitations: true,
       highlight_words: Vec::new(),
+      auto_away: Duration::from_secs(15 * 60),
+      auto_reply: None,
     }
   }
 }

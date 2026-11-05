@@ -8,9 +8,9 @@ use api_types::live::LiveFrame;
 use api_types::relay::RelayState;
 use api_types::state::{
   ConfigurationState, ConnectionWatchdogState, DirectoriesState, DistributedNetworkState,
-  HealthState, IncomingSearchHealth, ListenState, PortMappingState, PortMappingStatus, Privileges,
-  ProcessState, Reachable, SearchHealth, ServerConnectionState, ServerState, SharesState, State,
-  UserState, UserStatistics,
+  HealthState, IncomingSearchHealth, ListenState, OwnStatus, PortMappingState, PortMappingStatus,
+  Privileges, ProcessState, Reachable, SearchHealth, ServerConnectionState, ServerState,
+  SharesState, State, UserState, UserStatistics,
 };
 use cascade::Loaded;
 use tokio::sync::watch;
@@ -129,6 +129,7 @@ fn initial(loaded: &Loaded<Options>, paths: &Paths) -> State {
     },
     user: UserState {
       username: None,
+      status: OwnStatus::Online,
       privileges: Privileges {
         is_privileged: false,
         privileges_remaining: 0,

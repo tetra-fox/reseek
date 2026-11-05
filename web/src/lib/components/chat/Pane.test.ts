@@ -29,6 +29,7 @@ const privateMessage = (localId: number, fields: Partial<Schemas["PrivateMessage
     message: `hello ${localId}`,
     isAcknowledged: true,
     wasReplayed: false,
+    autoReply: false,
     ...fields
   }) as Schemas["PrivateMessage"];
 

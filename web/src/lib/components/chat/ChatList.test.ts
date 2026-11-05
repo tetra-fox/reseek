@@ -73,7 +73,8 @@ describe("the chat list", () => {
       direction: "In",
       message: "Room name invalid",
       isAcknowledged: true,
-      wasReplayed: false
+      wasReplayed: false,
+      autoReply: false
     };
     flushSync();
     const row = document.querySelector("[data-line='user:server']")!;
@@ -154,7 +155,8 @@ describe("the chat list", () => {
       direction: "In",
       message: "hey",
       isAcknowledged: false,
-      wasReplayed: false
+      wasReplayed: false,
+      autoReply: false
     };
     flushSync();
     // bob has the newest message now, but the list holds still under the pointer

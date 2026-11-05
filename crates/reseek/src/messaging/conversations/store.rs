@@ -54,7 +54,9 @@ macro_rules! message_columns {
       $table,
       "is_acknowledged, ",
       $table,
-      "was_replayed"
+      "was_replayed, ",
+      $table,
+      "auto_reply"
     )
   };
 }
@@ -101,6 +103,7 @@ fn message_from(row: &Row, at: usize) -> rusqlite::Result<PrivateMessage> {
     // written once, at the first delivery: it came from the server's offline store, so it was
     // sent while we were not logged in
     was_replayed: row.get(at + 7)?,
+    auto_reply: row.get(at + 8)?,
   })
 }
 
@@ -180,17 +183,19 @@ pub fn receive(conn: &Connection, inbound: &Inbound) -> rusqlite::Result<(Privat
   Ok((message_at(conn, local_id)?, new))
 }
 
-/// Stores a message we sent to `username` at `now`.
+/// Stores a message we sent to `username` at `now`; `auto_reply` when it answered someone on
+/// its own while we were away.
 pub fn sent(
   conn: &Connection,
   username: &str,
   text: &str,
+  auto_reply: bool,
   now: DateTime<Utc>,
 ) -> rusqlite::Result<PrivateMessage> {
   conn.execute(
     "INSERT INTO private_messages (username, remote_id, timestamp, direction, message, \
-     is_acknowledged, was_replayed) VALUES (?1, NULL, ?2, 0, ?3, 1, 0)",
-    params![username, timestamp(now), text],
+     is_acknowledged, was_replayed, auto_reply) VALUES (?1, NULL, ?2, 0, ?3, 1, 0, ?4)",
+    params![username, timestamp(now), text, auto_reply],
   )?;
   message_at(conn, conn.last_insert_rowid())
 }
@@ -556,7 +561,7 @@ mod tests {
           replayed: false,
         },
       )?;
-      sent(conn, "alice", "hi back", at("2026-10-26T10:01:00Z"))?;
+      sent(conn, "alice", "hi back", false, at("2026-10-26T10:01:00Z"))?;
       Ok(())
     })
     .await
@@ -593,7 +598,7 @@ mod tests {
         let now = Utc::now();
         activate(conn, "alice", now)?;
         let ids = (0..4)
-          .map(|n| Ok(sent(conn, "alice", &format!("line {n}"), now)?.local_id))
+          .map(|n| Ok(sent(conn, "alice", &format!("line {n}"), false, now)?.local_id))
           .collect::<rusqlite::Result<Vec<_>>>()?;
         let page = messages(conn, "alice", None, Some(ids[0]), 2, false)?;
         Ok((ids, page))

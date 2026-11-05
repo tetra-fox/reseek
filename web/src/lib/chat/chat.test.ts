@@ -51,7 +51,8 @@ describe("the chat store", () => {
       direction: "In",
       message: "User bob is now a member of room jazz",
       isAcknowledged: false,
-      wasReplayed: false
+      wasReplayed: false,
+      autoReply: false
     } as const;
     const net = fakeNetwork(() => undefined);
     live.start();
@@ -90,7 +91,8 @@ describe("the chat store", () => {
       direction: "In",
       message: "user bob has not enabled private room add",
       isAcknowledged: false,
-      wasReplayed: false
+      wasReplayed: false,
+      autoReply: false
     } as const;
     // the read started before the notice was stored, so it finds no conversation
     let answer = (_reply: undefined) => {};
@@ -140,7 +142,8 @@ describe("the chat store", () => {
       direction: "In",
       message: "user bob has not enabled private room add",
       isAcknowledged: false,
-      wasReplayed: false
+      wasReplayed: false,
+      autoReply: false
     } as const;
     let stored: typeof notice | null = null;
     const net = fakeNetwork((url) => {

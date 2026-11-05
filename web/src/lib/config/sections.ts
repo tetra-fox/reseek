@@ -409,7 +409,9 @@ export const sections: Section[] = [
         label: "Accept private room invitations"
       },
       { key: "chat.highlight_words", label: "Highlighted words" },
-      { key: "chat.max_message_length", label: "Maximum message length" }
+      { key: "chat.max_message_length", label: "Maximum message length" },
+      { key: "chat.auto_away", label: "Away after no one has the page open for" },
+      { key: "chat.auto_reply", label: "Reply while away" }
     ]
   },
   {

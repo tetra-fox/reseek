@@ -40,7 +40,8 @@ const message = {
   direction: "In",
   message: "hi",
   isAcknowledged: false,
-  wasReplayed: false
+  wasReplayed: false,
+  autoReply: false
 } as Schemas["PrivateMessage"];
 /** the directory's summary of alice, muted or not */
 const directory = (muted: boolean) => {

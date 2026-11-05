@@ -355,6 +355,11 @@ async fn handle(app: &AppState, event: Event, session: &mut Session) {
     | Event::PrivateRoomUserListReceived(_)
     | Event::PrivateRoomModeratedUserListReceived(_)) => app.messaging.take(room).await,
     Event::GlobalMessageReceived(message) => server_message(app, message),
+    Event::PublicChatMessageReceived {
+      room_name,
+      username,
+      message,
+    } => app.messaging.public_message(room_name, username, message),
     Event::UserStatusChanged(status) => user_status(app, &status).await,
     Event::UserStatisticsChanged(statistics) => {
       app
@@ -368,7 +373,6 @@ async fn handle(app: &AppState, event: Event, session: &mut Session) {
     | Event::PrivilegeNotificationReceived { .. }
     | Event::UserCannotConnect { .. }
     | Event::RoomListReceived(_)
-    | Event::PublicChatMessageReceived { .. }
     | Event::BrowseProgressUpdated(_)
     | Event::DistributedNetworkReset
     | Event::DistributedParentAdopted(_)

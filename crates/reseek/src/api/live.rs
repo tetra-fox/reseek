@@ -14,7 +14,7 @@ use utoipa_axum::routes;
 
 use super::error::ApiError;
 use crate::app::AppState;
-use crate::auth::{AnyRole, Authorized, Check, Presented, identify};
+use crate::auth::{AnyRole, Authorized, Check, Presented, identify, is_interactive};
 use crate::live::{self, Opening, Revalidate, topics};
 
 /// The event stream route.
@@ -70,6 +70,7 @@ async fn stream(
       holder: holder(&caller.principal, &presented),
       limit,
       last_seen: asked.flatten(),
+      person: is_interactive(&caller.principal),
     })
     .map_err(|_| ApiError::too_many("Too many event streams are open"))?;
   let listed: Vec<String> = topics.iter().map(ToString::to_string).collect();

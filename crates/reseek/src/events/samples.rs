@@ -69,6 +69,7 @@ pub fn sample(kind: EventType, d: &str, now: DateTime<Utc>) -> Option<Event> {
         message: text("message"),
         is_acknowledged: false,
         was_replayed: false,
+        auto_reply: false,
       },
     }),
     EventType::RoomMessageReceived => Event::RoomMessageReceived(RoomMessageReceivedEvent {

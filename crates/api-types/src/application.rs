@@ -36,3 +36,11 @@ pub struct DatabaseFile {
   /// the size of its write-ahead log in bytes, 0 when there is none
   pub wal_size_bytes: u64,
 }
+
+/// The body of `PUT /application/status`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct StatusChange {
+  /// what we are now
+  pub status: crate::state::OwnStatus,
+}

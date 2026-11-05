@@ -10,6 +10,7 @@ use api_types::messaging::rooms::{
 use api_types::messaging::{
   ChatPin, ChatPins, ExportFormat, MessageSearchQuery, MessageSearchResults, NotifyLevel,
 };
+use api_types::state::OwnStatus;
 use async_trait::async_trait;
 use axum::response::Response;
 
@@ -184,5 +185,9 @@ impl MessagingService for Messaging {
 
   async fn search(&self, query: MessageSearchQuery) -> Result<MessageSearchResults, ApiError> {
     Messaging::search(self, query).await
+  }
+
+  async fn set_status(&self, status: OwnStatus) -> Result<(), ApiError> {
+    Messaging::set_status(self, status).await
   }
 }

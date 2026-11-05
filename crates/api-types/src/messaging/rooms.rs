@@ -293,6 +293,23 @@ pub struct RoomUserStatus {
   pub status: crate::users::UserPresence,
 }
 
+/// A message said in a public room, the data of a `rooms.public_message` frame. The server
+/// sends every public room's messages while the feed is on, whether we are in the room or not.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PublicRoomMessage {
+  /// the room
+  #[schema(example = "indie")]
+  pub room_name: String,
+  /// the author
+  #[schema(example = "alice")]
+  pub username: String,
+  /// the text
+  pub message: String,
+  /// when it arrived; the server sends no time
+  pub received_at: DateTime<Utc>,
+}
+
 /// A user left a room we are in, the data of a `rooms.user_left` frame.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]

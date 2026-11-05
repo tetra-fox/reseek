@@ -1,8 +1,8 @@
 //! The application routes: the state document, the version and the release check, shutting
-//! down and restarting, the connection to the Soulseek server, and the log. Diagnostics that
+//! down and restarting, the connection to the Soulseek server, our away status, and the log. Diagnostics that
 //! the API document leaves out are here too.
 
-use api_types::application::{DatabaseFile, DisconnectReason, VersionLatestQuery};
+use api_types::application::{DatabaseFile, DisconnectReason, StatusChange, VersionLatestQuery};
 use api_types::auth::Role;
 use api_types::files::ContentQuery;
 use api_types::logs::LogRecord;
@@ -31,6 +31,7 @@ pub fn routes() -> OpenApiRouter<AppState> {
     .routes(routes!(get_version))
     .routes(routes!(get_latest_version))
     .routes(routes!(get_server, connect, disconnect))
+    .routes(routes!(set_status))
     .routes(routes!(get_live_logs))
     .routes(routes!(get_log_files))
     .routes(routes!(get_log_file))
@@ -188,6 +189,25 @@ async fn disconnect(
   let reason = reason.map(|Json(DisconnectReason(reason))| reason);
   app.services.application.disconnect(reason).await?;
   info!(by = caller.principal.subject, "disconnect asked for");
+  Ok(StatusCode::NO_CONTENT)
+}
+
+/// Sets us online or away, as other users see us; away lasts until it is set back. The server
+/// is told at once while logged in, else at the next login.
+#[utoipa::path(
+  put, path = "/application/status", tag = "application", request_body = StatusChange,
+  responses(
+    (status = 204, description = "set"), (status = 400, body = api_types::ErrorBody),
+    (status = 401, body = api_types::ErrorBody), (status = 403, body = api_types::ErrorBody)
+  )
+)]
+async fn set_status(
+  State(app): State<AppState>,
+  caller: Authorized<ReadWrite>,
+  Json(change): Json<StatusChange>,
+) -> Result<StatusCode, ApiError> {
+  app.services.messaging.set_status(change.status).await?;
+  info!(by = caller.principal.subject, status = ?change.status, "status set");
   Ok(StatusCode::NO_CONTENT)
 }
 

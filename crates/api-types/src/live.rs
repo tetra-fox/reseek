@@ -12,7 +12,8 @@ use crate::events::EventRecord;
 use crate::logs::LogRecord;
 use crate::messaging::conversations::{Conversation, ConversationMessage, ConversationUpdate};
 use crate::messaging::rooms::{
-  HistoryGap, JoinedRoom, Room, RoomMessageReceived, RoomUserJoined, RoomUserLeft, RoomUserStatus,
+  HistoryGap, JoinedRoom, PublicRoomMessage, Room, RoomMessageReceived, RoomUserJoined,
+  RoomUserLeft, RoomUserStatus,
 };
 use crate::messaging::{ChatPins, ChatUnread, ServerMessage};
 use crate::options::OptionsDocument;
@@ -118,6 +119,9 @@ pub enum LiveFrame {
   /// room history has a gap, from a time reseek was not connected
   #[serde(rename = "rooms.gap")]
   RoomsGap(HistoryGap),
+  /// a message in any public room, while a stream follows the `public_rooms` topic; not stored
+  #[serde(rename = "rooms.public_message")]
+  RoomsPublicMessage(PublicRoomMessage),
   /// a watched user's status changed
   #[serde(rename = "users.status")]
   UsersStatus(UserStatusChanged),
@@ -239,6 +243,7 @@ mod tests {
     "rooms.user_left",
     "rooms.user_status",
     "rooms.gap",
+    "rooms.public_message",
     "users.status",
     "users.browse_progress",
     "users.updated",

@@ -39,6 +39,9 @@ pub struct PrivateMessage {
   /// inbound: first delivered from the server's offline store, so it was sent while we were not
   /// logged in; outbound: always false
   pub was_replayed: bool,
+  /// outbound: sent on its own, as the answer to the first message from the peer while we were
+  /// away; inbound: always false
+  pub auto_reply: bool,
 }
 
 /// A private conversation with one peer.

@@ -59,7 +59,11 @@ pub async fn frames(topic: Topic, app: &AppState) -> Vec<LiveFrame> {
       app.telemetry.metrics().transfers().figures(),
     )],
     // clients fetch these lists themselves
-    Topic::SearchResponses(_) | Topic::Transfers | Topic::Users | Topic::Events => Vec::new(),
+    Topic::SearchResponses(_)
+    | Topic::Transfers
+    | Topic::Users
+    | Topic::Events
+    | Topic::PublicRooms => Vec::new(),
   }
 }
 

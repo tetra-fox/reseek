@@ -15,7 +15,8 @@ const fakeUnread = async (page: Page, messages: number, slow = 0) => {
     direction: "In",
     message: `line ${n}\nwith a second line`,
     isAcknowledged: false,
-    wasReplayed: false
+    wasReplayed: false,
+    autoReply: false
   });
   const conversation = (username: string, last: number) => ({
     username,

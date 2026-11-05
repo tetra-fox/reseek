@@ -262,10 +262,21 @@ pub struct IncomingSearchHealth {
 pub struct UserState {
   /// our username while connected
   pub username: Option<String>,
+  /// whether we are online or away, as others see us while we are logged in
+  pub status: OwnStatus,
   /// our privileges as the server reports them
   pub privileges: Privileges,
   /// our statistics as the server reports them
   pub statistics: UserStatistics,
+}
+
+/// Whether we are at the keyboard, as other users see it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub enum OwnStatus {
+  /// at the keyboard
+  Online,
+  /// away: set by hand, or after nobody had the UI open for a while
+  Away,
 }
 
 /// Privileges on the Soulseek network.

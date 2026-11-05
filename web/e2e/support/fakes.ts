@@ -134,7 +134,8 @@ export const fakeChat = async (page: Page) => {
     direction: "In",
     message,
     isAcknowledged: true,
-    wasReplayed: false
+    wasReplayed: false,
+    autoReply: false
   }));
   await page.route("**/api/v0/conversations**", (route) => {
     const url = new URL(route.request().url());
@@ -167,7 +168,8 @@ export const fakeChat = async (page: Page) => {
           direction,
           message,
           isAcknowledged: true,
-          wasReplayed: false
+          wasReplayed: false,
+          autoReply: false
         }))
       });
     }

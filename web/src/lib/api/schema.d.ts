@@ -205,6 +205,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v0/application/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Sets us online or away, as other users see us; away lasts until it is set back. The server
+         *     is told at once while logged in, else at the next login.
+         */
+        put: operations["set_status"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v0/application/version": {
         parameters: {
             query?: never;
@@ -4846,6 +4866,7 @@ export interface components {
         };
         /** @description A room we are in, as `GET /rooms/joined` lists it and `rooms.list` frames carry it. */
         JoinedRoom: {
+            lastMessage?: null | components["schemas"]["RoomMessage"];
             /**
              * Format: date-time
              * @description when the latest stored message arrived, null when none is stored
@@ -5129,6 +5150,11 @@ export interface components {
             data: components["schemas"]["HistoryGap"];
             /** @enum {string} */
             type: "rooms.gap";
+        } | {
+            /** @description a message in any public room, while a stream follows the `public_rooms` topic; not stored */
+            data: components["schemas"]["PublicRoomMessage"];
+            /** @enum {string} */
+            type: "rooms.public_message";
         } | {
             /** @description a watched user's status changed */
             data: components["schemas"]["UserStatusChanged"];
@@ -5548,6 +5574,11 @@ export interface components {
              */
             uploadSlots: number;
         };
+        /**
+         * @description Whether we are at the keyboard, as other users see it.
+         * @enum {string}
+         */
+        OwnStatus: "Online" | "Away";
         /** @description One page of a list, with how many items the whole list has. */
         Page_Transfer: {
             /** @description the items on this page, in the order asked for */
@@ -5730,6 +5761,11 @@ export interface components {
         };
         /** @description One private message. */
         PrivateMessage: {
+            /**
+             * @description outbound: sent on its own, as the answer to the first message from the peer while we were
+             *     away; inbound: always false
+             */
+            autoReply: boolean;
             /** @description which way it went */
             direction: components["schemas"]["MessageDirection"];
             /**
@@ -5904,6 +5940,29 @@ export interface components {
         ProxyProvider: {
             /** @description the proxy's identity headers are honored */
             enabled: boolean;
+        };
+        /**
+         * @description A message said in a public room, the data of a `rooms.public_message` frame. The server
+         *     sends every public room's messages while the feed is on, whether we are in the room or not.
+         */
+        PublicRoomMessage: {
+            /** @description the text */
+            message: string;
+            /**
+             * Format: date-time
+             * @description when it arrived; the server sends no time
+             */
+            receivedAt: string;
+            /**
+             * @description the room
+             * @example indie
+             */
+            roomName: string;
+            /**
+             * @description the author
+             * @example alice
+             */
+            username: string;
         };
         /** @description Transfers waiting in a queue. */
         QueuedMetrics: {
@@ -6873,6 +6932,11 @@ export interface components {
              */
             updatedAt: string;
         };
+        /** @description The body of `PUT /application/status`. */
+        StatusChange: {
+            /** @description what we are now */
+            status: components["schemas"]["OwnStatus"];
+        };
         /** @description The info stored for a user. */
         StoredInfo: components["schemas"]["StoredInfoSummary"] & {
             /** @description the peer's free text, may be empty */
@@ -7653,6 +7717,8 @@ export interface components {
             privileges: components["schemas"]["Privileges"];
             /** @description our statistics as the server reports them */
             statistics: components["schemas"]["UserStatistics"];
+            /** @description whether we are online or away, as others see us while we are logged in */
+            status: components["schemas"]["OwnStatus"];
             /** @description our username while connected */
             username?: string | null;
         };
@@ -8515,6 +8581,52 @@ export interface operations {
                 };
             };
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    set_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StatusChange"];
+            };
+        };
+        responses: {
+            /** @description set */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

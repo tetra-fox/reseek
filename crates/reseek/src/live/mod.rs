@@ -15,6 +15,7 @@ use std::time::Duration;
 
 use api_types::live::LiveFrame;
 use axum::body::Bytes;
+use tokio::sync::watch;
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, trace};
@@ -42,6 +43,17 @@ struct Hub {
   state: Mutex<HubState>,
   /// canceled when the daemon shuts down, which closes every stream
   cancel: CancellationToken,
+  /// who has a stream open, changed under the state's lock as streams open and close
+  audience: watch::Sender<Audience>,
+}
+
+/// Who has an event stream open.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Audience {
+  /// the streams of people at the UI, not of a stored credential such as an API key
+  pub people: u32,
+  /// the streams that follow the public room feed
+  pub public_rooms: u32,
 }
 
 struct HubState {
@@ -100,6 +112,8 @@ pub struct Opening {
   pub limit: u32,
   /// the last sequence number the client saw, when it is reconnecting
   pub last_seen: Option<u64>,
+  /// opened by someone at the UI rather than by a stored credential
+  pub person: bool,
 }
 
 /// A registered stream.
@@ -114,6 +128,8 @@ pub struct Registered {
   pub id: u64,
   hub: Arc<Hub>,
   holder: String,
+  /// what the stream adds to the audience
+  counts: Audience,
 }
 
 impl Drop for Registered {
@@ -126,6 +142,11 @@ impl Drop for Registered {
         hub.per_principal.remove(&self.holder);
       }
     }
+    let counts = self.counts;
+    self.hub.audience.send_modify(|audience| {
+      audience.people -= counts.people;
+      audience.public_rooms -= counts.public_rooms;
+    });
   }
 }
 
@@ -140,6 +161,7 @@ impl Live {
       hub: Arc::new(Hub {
         state: Mutex::new(HubState::new()),
         cancel,
+        audience: watch::Sender::new(Audience::default()),
       }),
     }
   }
@@ -194,6 +216,11 @@ impl Live {
     self.hub.lock().streams.values().any(|q| q.follows(&topic))
   }
 
+  /// Who has a stream open, as it changes.
+  pub fn audience(&self) -> watch::Receiver<Audience> {
+    self.hub.audience.subscribe()
+  }
+
   /// Registers a stream. When it saw a frame that is still kept, everything for its topics
   /// since then is queued for it and it needs no snapshots.
   pub fn open(&self, opening: Opening) -> Result<Registered, TooManyStreams> {
@@ -205,6 +232,10 @@ impl Live {
     }
     *count += 1;
     hub.evict();
+    let counts = Audience {
+      people: u32::from(opening.person),
+      public_rooms: u32::from(opening.topics.contains(&Topic::PublicRooms)),
+    };
     let queue = Arc::new(Queue::new(opening.topics));
     let resumed = match opening.last_seen {
       Some(seen) if seen >= hub.evicted_through && seen <= hub.last => hub
@@ -224,6 +255,10 @@ impl Live {
     hub.next_stream += 1;
     let id = hub.next_stream;
     hub.streams.insert(id, queue.clone());
+    self.hub.audience.send_modify(|audience| {
+      audience.people += counts.people;
+      audience.public_rooms += counts.public_rooms;
+    });
     Ok(Registered {
       queue,
       resumed,
@@ -231,6 +266,7 @@ impl Live {
       id,
       hub: self.hub.clone(),
       holder: opening.holder,
+      counts,
     })
   }
 }

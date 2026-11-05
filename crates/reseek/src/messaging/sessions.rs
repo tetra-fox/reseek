@@ -106,6 +106,11 @@ impl Messaging {
     }
     self.rejoin();
     self.watch_conversations();
+    let this = self.this();
+    self.tasks.spawn(async move {
+      this.status_at_login().await;
+      this.feed_at_login().await;
+    });
   }
 
   /// The session ended at `now`, with the daemon stopping or with the connection.

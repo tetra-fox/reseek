@@ -766,6 +766,60 @@
         }
       }
     },
+    "/api/v0/application/status": {
+      "put": {
+        "tags": [
+          "application"
+        ],
+        "summary": "Sets us online or away, as other users see us; away lasts until it is set back. The server\nis told at once while logged in, else at the next login.",
+        "operationId": "set_status",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatusChange"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "set"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v0/application/version": {
       "get": {
         "tags": [
@@ -19360,6 +19414,17 @@
           "lastReadId"
         ],
         "properties": {
+          "lastMessage": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RoomMessage",
+                "description": "the newest stored message not hidden, null when there is none"
+              }
+            ]
+          },
           "lastMessageAt": {
             "type": [
               "string",
@@ -20271,6 +20336,26 @@
                 "type": "string",
                 "enum": [
                   "rooms.gap"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "a message in any public room, while a stream follows the `public_rooms` topic; not stored",
+            "required": [
+              "data",
+              "type"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/PublicRoomMessage",
+                "description": "a message in any public room, while a stream follows the `public_rooms` topic; not stored"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "rooms.public_message"
                 ]
               }
             }
@@ -21277,6 +21362,14 @@
           }
         }
       },
+      "OwnStatus": {
+        "type": "string",
+        "description": "Whether we are at the keyboard, as other users see it.",
+        "enum": [
+          "Online",
+          "Away"
+        ]
+      },
       "Page_Transfer": {
         "type": "object",
         "description": "One page of a list, with how many items the whole list has.",
@@ -21613,9 +21706,14 @@
           "direction",
           "message",
           "isAcknowledged",
-          "wasReplayed"
+          "wasReplayed",
+          "autoReply"
         ],
         "properties": {
+          "autoReply": {
+            "type": "boolean",
+            "description": "outbound: sent on its own, as the answer to the first message from the peer while we were\naway; inbound: always false"
+          },
           "direction": {
             "$ref": "#/components/schemas/MessageDirection",
             "description": "which way it went"
@@ -21914,6 +22012,37 @@
           "enabled": {
             "type": "boolean",
             "description": "the proxy's identity headers are honored"
+          }
+        }
+      },
+      "PublicRoomMessage": {
+        "type": "object",
+        "description": "A message said in a public room, the data of a `rooms.public_message` frame. The server\nsends every public room's messages while the feed is on, whether we are in the room or not.",
+        "required": [
+          "roomName",
+          "username",
+          "message",
+          "receivedAt"
+        ],
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "the text"
+          },
+          "receivedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "when it arrived; the server sends no time"
+          },
+          "roomName": {
+            "type": "string",
+            "description": "the room",
+            "example": "indie"
+          },
+          "username": {
+            "type": "string",
+            "description": "the author",
+            "example": "alice"
           }
         }
       },
@@ -23719,6 +23848,19 @@
         ],
         "description": "A user's statistics with when the server sent them, as `GET /users/{username}/statistics`\nand the user cache return them."
       },
+      "StatusChange": {
+        "type": "object",
+        "description": "The body of `PUT /application/status`.",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/OwnStatus",
+            "description": "what we are now"
+          }
+        }
+      },
       "StoredInfo": {
         "allOf": [
           {
@@ -25160,6 +25302,7 @@
         "type": "object",
         "description": "Our own Soulseek account.",
         "required": [
+          "status",
           "privileges",
           "statistics"
         ],
@@ -25171,6 +25314,10 @@
           "statistics": {
             "$ref": "#/components/schemas/UserStatistics",
             "description": "our statistics as the server reports them"
+          },
+          "status": {
+            "$ref": "#/components/schemas/OwnStatus",
+            "description": "whether we are online or away, as others see us while we are logged in"
           },
           "username": {
             "type": [

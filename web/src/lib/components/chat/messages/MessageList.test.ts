@@ -21,7 +21,8 @@ const stored = (localId: number) => ({
   direction: "In",
   message: `line ${localId}`,
   isAcknowledged: true,
-  wasReplayed: false
+  wasReplayed: false,
+  autoReply: false
 });
 
 /** a conversation with alice of `total` messages, read a page at a time from the newest */

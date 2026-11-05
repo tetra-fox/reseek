@@ -10,6 +10,7 @@ use api_types::messaging::rooms::{
 use api_types::messaging::{
   ChatPin, ChatPins, ExportFormat, MessageSearchQuery, MessageSearchResults, NotifyLevel,
 };
+use api_types::state::OwnStatus;
 use async_trait::async_trait;
 use axum::response::Response;
 
@@ -237,6 +238,12 @@ pub trait MessagingService: Send + Sync {
 
   /// Searches the stored messages of conversations and rooms.
   async fn search(&self, query: MessageSearchQuery) -> Result<MessageSearchResults, ApiError> {
+    Err(not_yet(DOMAIN))
+  }
+
+  /// Sets us online or away by hand; the server is told at once while logged in, else at the
+  /// next login.
+  async fn set_status(&self, status: OwnStatus) -> Result<(), ApiError> {
     Err(not_yet(DOMAIN))
   }
 }

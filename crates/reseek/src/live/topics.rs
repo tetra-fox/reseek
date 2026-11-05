@@ -26,6 +26,8 @@ pub enum Topic {
   Conversations,
   /// chat rooms
   Rooms,
+  /// every message in every public room, which the server sends only while a stream follows it
+  PublicRooms,
   /// other users
   Users,
   /// raised events
@@ -56,6 +58,7 @@ impl FromStr for Topic {
       "transfers" => Topic::Transfers,
       "conversations" => Topic::Conversations,
       "rooms" => Topic::Rooms,
+      "public_rooms" => Topic::PublicRooms,
       "users" => Topic::Users,
       "events" => Topic::Events,
       "activity" => Topic::Activity,
@@ -81,6 +84,7 @@ impl fmt::Display for Topic {
       Topic::Transfers => f.write_str("transfers"),
       Topic::Conversations => f.write_str("conversations"),
       Topic::Rooms => f.write_str("rooms"),
+      Topic::PublicRooms => f.write_str("public_rooms"),
       Topic::Users => f.write_str("users"),
       Topic::Events => f.write_str("events"),
       Topic::Activity => f.write_str("activity"),
@@ -138,6 +142,7 @@ pub fn routes(frame: &LiveFrame) -> Vec<Topic> {
     | F::RoomsUserLeft(_)
     | F::RoomsUserStatus(_)
     | F::RoomsGap(_) => Topic::Rooms,
+    F::RoomsPublicMessage(_) => Topic::PublicRooms,
     F::UsersStatus(_) | F::UsersBrowseProgress(_) | F::UsersUpdated(_) | F::UsersRemoved(_) => {
       Topic::Users
     }

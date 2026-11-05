@@ -38,6 +38,8 @@
     },
     "chat": {
       "accept_private_room_invitations": true,
+      "auto_away": "15m",
+      "auto_reply": null,
       "highlight_words": [],
       "max_message_length": 2000,
       "notifications": {
@@ -694,6 +696,38 @@
       "doc": "Accepts invitations to private rooms. When off, the server is told that invitations are not accepted.",
       "choices": null,
       "default": true,
+      "apply": "live",
+      "secret": false,
+      "notApplied": null,
+      "entries": []
+    },
+    "chat.auto_away": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_CHAT_AUTO_AWAY",
+      "cliFlag": null,
+      "kind": "duration",
+      "doc": "Time with no one at the UI after which we are shown as away, until someone opens it again. `0` never sets away on its own.",
+      "choices": null,
+      "default": "15m",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null,
+      "entries": []
+    },
+    "chat.auto_reply": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_CHAT_AUTO_REPLY",
+      "cliFlag": null,
+      "kind": "string",
+      "doc": "Reply sent while we are away to the first private message from each user, marked as an automatic message. Unset sends none.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null,

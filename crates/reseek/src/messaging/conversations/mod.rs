@@ -138,6 +138,13 @@ impl Messaging {
           message: stored.clone(),
         }));
       self.watch_peer(&username);
+      // one sent while we were not logged in is not answered: we were not there to be away
+      if new
+        && !stored.was_replayed
+        && let Some(reply) = self.reply_for(&username)
+      {
+        self.auto_reply(&username, reply);
+      }
     }
     // clients announce a pushed message unless it came from the offline store, so a repeat is
     // not pushed; the conversation update carries its unread count
@@ -287,10 +294,19 @@ impl Messaging {
       .ok_or_else(|| no_conversation(username))
   }
 
-  /// Sends a private message to `username`, on one line, and opens the conversation and stores
-  /// what was sent once the server took it; a user blocked from messages is refused, as is a
-  /// text of line breaks alone.
   pub(super) async fn send_private(&self, username: &str, message: String) -> Result<(), ApiError> {
+    self.send(username, message, false).await
+  }
+
+  /// Sends a private message to `username`, on one line, and opens the conversation and stores
+  /// what was sent once the server took it, marked when it is the `auto_reply` sent while we
+  /// are away; a user blocked from messages is refused, as is a text of line breaks alone.
+  pub(super) async fn send(
+    &self,
+    username: &str,
+    message: String,
+    auto_reply: bool,
+  ) -> Result<(), ApiError> {
     if self.users.is_blocked(username, None, BlockScope::Messages) {
       return Err(ApiError::forbidden("The user is blocked"));
     }
@@ -312,7 +328,7 @@ impl Messaging {
         let now = Utc::now();
         let tx = conn.transaction()?;
         store::activate(&tx, &name, now)?;
-        let sent = store::sent(&tx, &name, &message, now)?;
+        let sent = store::sent(&tx, &name, &message, auto_reply, now)?;
         tx.commit()?;
         lock(&active).insert(name);
         Ok(sent)
