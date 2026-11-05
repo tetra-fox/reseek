@@ -29,10 +29,11 @@ export const patch = <T extends object>(target: T, source: T) => {
  * Rows kept by a stable id, for lists rendered with `{#each list.rows as row (key)}`. A row that
  * changes is patched in place: the same object, with only the fields that differ written, so its
  * DOM nodes stay and only the changed text updates. A push frame upserts one row; a poll's whole
- * answer goes through `reconcile`. A reload takes a turn from `reading` before it asks: its answer
- * may have been read before frames that arrive while it is on its way, so the rows those frames
- * changed keep their change. While the user interacts with a list (`interaction.frozen`),
- * removals wait, marked in `removed`, and happen when it ends
+ * answer goes through `reconcile`. A reload takes a turn from `reading` before it asks and hands
+ * it to `reconcile` with the answer, or to `failed`: the answer may have been read before frames
+ * that arrive while it is on its way, so the rows those frames changed keep their change, and an
+ * answer overtaken by a later reload is not taken. While the user interacts with a list
+ * (`interaction.frozen`), removals wait, marked in `removed`, and happen when it ends
  */
 export class Keyed<T extends object> {
   #rows = new SvelteMap<string, T>();
@@ -73,6 +74,14 @@ export class Keyed<T extends object> {
     return fresh;
   }
 
+  /** Writes `fields` onto the row with `key`, if the list has it, as a frame changing part of it */
+  assign(key: string, fields: Partial<T>) {
+    const row = this.#rows.get(key);
+    if (!row) return;
+    this.#changed?.add(key);
+    Object.assign(row, fields);
+  }
+
   /** Removes a row, or marks it removed until the interaction ends */
   remove(key: string) {
     this.#changed?.add(key);
@@ -89,7 +98,7 @@ export class Keyed<T extends object> {
     });
   }
 
-  /** Begins a reload of the whole list: gives back its turn, for `latest` and `reconcile` */
+  /** Begins a reload of the whole list and gives back its turn */
   reading(): number {
     this.#changed = new Set();
     return ++this.#turn;
@@ -100,12 +109,21 @@ export class Keyed<T extends object> {
     return turn === this.#turn;
   }
 
+  /** Ends the reload with `turn`, whose ask failed; gives back whether it was the latest */
+  failed(turn: number) {
+    if (!this.latest(turn)) return false;
+    this.#changed = null;
+    return true;
+  }
+
   /**
    * Makes the list hold exactly `rows`: patches what changed, adds what is new, removes the rest.
-   * With the `turn` of the latest reload, `rows` is its answer, and a row added, patched or
-   * removed since that reload began is left as it is
+   * With a `turn`, `rows` is that reload's answer: it is taken only while no later reload began,
+   * and leaves a row added, patched or removed since the reload began as it is. Gives back whether
+   * the rows were taken
    */
-  reconcile(rows: T[], turn?: number) {
+  reconcile(rows: T[], turn?: number): boolean {
+    if (turn !== undefined && !this.latest(turn)) return false;
     const since = turn === undefined ? null : this.#changed;
     if (turn !== undefined) this.#changed = null;
     const keep = new Set<string>();
@@ -117,6 +135,7 @@ export class Keyed<T extends object> {
     for (const key of this.#rows.keys()) {
       if (!keep.has(key) && !since?.has(key)) this.remove(key);
     }
+    return true;
   }
 
   /** Empties the list; the answer of a reload that began before is not taken */

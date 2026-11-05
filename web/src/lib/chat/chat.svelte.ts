@@ -69,7 +69,7 @@ class Chat {
       }
       const conversation = this.conversations.get(username);
       if (conversation && (conversation.lastMessage?.localId ?? 0) <= message.localId) {
-        conversation.lastMessage = message;
+        this.conversations.assign(username, { lastMessage: message });
       }
       void notifier.privateMessage(
         username,
@@ -86,7 +86,7 @@ class Chat {
         at: message.timestamp
       });
       const room = this.rooms.get(roomName);
-      if (room) room.lastMessageAt = message.timestamp;
+      this.rooms.assign(roomName, { lastMessageAt: message.timestamp });
       void notifier.roomMessage(roomName, message, room?.notify ?? "mentions", this.openPane);
     });
     live.on("chat.unread", (counts) => (this.unread = counts));
@@ -159,17 +159,23 @@ class Chat {
   load = (): Promise<void> => (this.#loading = this.#read());
 
   #read = async () => {
+    const turns = { conversations: this.conversations.reading(), rooms: this.rooms.reading() };
     const [conversations, rooms] = await Promise.all([
       call(() => api.GET("/api/v0/conversations")),
       call(() => api.GET("/api/v0/rooms/joined")),
       this.#readNotices(),
       pins.read()
     ]);
+    // a read that began after this one answers with what is newer, and says why it failed
+    if (!this.conversations.latest(turns.conversations)) return;
     if (conversations.ok) {
-      this.conversations.reconcile(conversations.data);
+      this.conversations.reconcile(conversations.data, turns.conversations);
       this.#peers();
+    } else {
+      this.conversations.failed(turns.conversations);
     }
-    if (rooms.ok) this.rooms.reconcile(rooms.data);
+    if (rooms.ok) this.rooms.reconcile(rooms.data, turns.rooms);
+    else this.rooms.failed(turns.rooms);
     const reasons = [];
     if (!conversations.ok) reasons.push(`Conversations: ${conversations.error}`);
     if (!rooms.ok) reasons.push(`Rooms: ${rooms.error}`);

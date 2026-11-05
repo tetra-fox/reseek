@@ -94,10 +94,8 @@
     order: sort.order
   });
 
-  // a newer load makes an older one's answer moot
-  let generation = 0;
   const load = async () => {
-    const at = ++generation;
+    const turn = rows.reading();
     const ask = query;
     const want = wanted;
     const found: UserSummary[] = [];
@@ -107,18 +105,20 @@
       const outcome = await call(() =>
         api.GET("/api/v0/users", { params: { query: { ...ask, offset, limit } } })
       );
-      if (at !== generation) return;
       if (!outcome.ok) {
+        if (!rows.failed(turn)) return;
         error = outcome.error;
         loaded = true;
         return;
       }
+      // a newer load makes this one's answer moot
+      if (!rows.latest(turn)) return;
       found.push(...outcome.data.users);
       count = outcome.data.total;
       offset += limit;
       if (outcome.data.users.length < limit) break;
     }
-    rows.reconcile(found);
+    rows.reconcile(found, turn);
     order = found.map((u) => u.username);
     total = count;
     error = "";

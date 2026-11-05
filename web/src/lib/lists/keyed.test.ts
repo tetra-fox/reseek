@@ -39,8 +39,11 @@ describe("a reload's answer", () => {
     list.reconcile(rows(["1", "one", 1], ["2", "two", 2], ["3", "six", 30]), turn);
     expect(list.rows).toEqual(rows(["1", "one", 10], ["3", "six", 30], ["4", "new", 4]));
 
-    // the next answer is taken whole
-    list.reconcile(rows(["1", "one", 11], ["4", "new", 4]), list.reading());
+    // an answer overtaken by a later reload is not taken; the later one is taken whole
+    const overtaken = list.reading();
+    const later = list.reading();
+    expect(list.reconcile(rows(["9", "old", 9]), overtaken)).toBe(false);
+    expect(list.reconcile(rows(["1", "one", 11], ["4", "new", 4]), later)).toBe(true);
     expect(list.rows).toEqual(rows(["1", "one", 11], ["4", "new", 4]));
   });
 });

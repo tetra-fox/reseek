@@ -67,9 +67,10 @@ class Searches {
   }
 
   load = async () => {
+    const turn = this.list.reading();
     const outcome = await call(() => api.GET("/api/v0/searches"));
-    if (outcome.ok) return this.#set(outcome.data);
-    loadFailed(this, outcome.error);
+    if (outcome.ok) return this.#set(outcome.data, turn);
+    if (this.list.failed(turn)) loadFailed(this, outcome.error);
   };
 
   /**
@@ -146,13 +147,14 @@ class Searches {
     this.loaded = false;
   }
 
-  #set(rows: Search[]) {
+  /** Takes the whole list, from a snapshot frame or as the answer of the reload with `turn` */
+  #set(rows: Search[], turn?: number) {
     // a search still being asked for isn't in the daemon's list yet, and keeps its row
     const asked = [...this.starting].flatMap((id) => {
       const row = this.list.get(id);
       return row && !rows.some((r) => r.id === id) ? [row] : [];
     });
-    this.list.reconcile([...rows, ...asked]);
+    if (!this.list.reconcile([...rows, ...asked], turn)) return;
     this.loaded = true;
     this.error = "";
   }

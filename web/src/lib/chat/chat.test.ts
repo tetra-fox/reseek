@@ -111,6 +111,26 @@ describe("the chat store", () => {
     expect(chat.latestNotice?.localId).toBe(3);
   });
 
+  it("keeps a conversation that opens while a read from before it is on its way", async () => {
+    let answer: ((list: unknown) => void) | undefined;
+    const net = fakeNetwork((url) => {
+      if (url.pathname.endsWith("/api/v0/conversations")) {
+        return new Promise((resolve) => (answer = resolve));
+      }
+      return url.pathname.endsWith("/rooms/joined") ? [] : undefined;
+    });
+    live.start();
+    net.frame("hello", { principal: { name: "me", role: "Administrator" } } as never);
+    const reading = chat.load();
+    await vi.waitFor(() => expect(answer).toBeDefined());
+    // carol writes for the first time after the daemon read the list
+    net.frame("conversations.update", { conversation: conversation("carol") });
+    await vi.waitFor(() => expect(chat.conversations.get("carol")).toBeDefined());
+    answer!([conversation("alice")]);
+    await reading;
+    expect(chat.conversations.rows.map((c) => c.username)).toEqual(["carol", "alice"]);
+  });
+
   it("reads a notice a stream that resumed to add the conversations never sends", async () => {
     const notice = {
       localId: 3,

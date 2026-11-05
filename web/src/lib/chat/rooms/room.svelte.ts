@@ -68,7 +68,7 @@ export class RoomMembers {
         const user = this.users.get(username);
         if (!user || user.status === status) return;
         const was = user.status;
-        user.status = status;
+        this.users.assign(username, { status });
         if (status === "Away" && was === "Online") this.#note("away", username);
         else if (status === "Online" && was === "Away") this.#note("returned", username);
       })
@@ -77,12 +77,17 @@ export class RoomMembers {
 
   /** Reads the room and its users */
   load = async () => {
+    const turn = this.users.reading();
     const outcome = await call(() =>
       api.GET("/api/v0/rooms/joined/{roomName}", { params: byRoom(this.name) })
     );
-    if (!outcome.ok) return void (this.error = outcome.error);
+    if (!outcome.ok) {
+      if (this.users.failed(turn)) this.error = outcome.error;
+      return;
+    }
+    if (!this.users.latest(turn)) return;
     this.error = "";
-    this.#take(outcome.data, false);
+    this.#take(outcome.data, false, turn);
   };
 
   /** The owner and operators of a private room */
@@ -162,16 +167,17 @@ export class RoomMembers {
 
   /**
    * Takes the room as read or pushed. A pushed one also says what changed in a private room's
-   * members and operators; a read one only replaces what is shown
+   * members and operators; a read one only replaces what is shown, and is the answer of the
+   * reload with `turn`
    */
-  #take(room: Schemas["Room"], pushed: boolean) {
+  #take(room: Schemas["Room"], pushed: boolean, turn?: number) {
     const before = this.room;
     if (pushed && before?.isPrivate && room.isPrivate) {
       this.#diff(before.members ?? [], room.members ?? [], "added", "removed");
       this.#diff(before.operators ?? [], room.operators ?? [], "operator", "notOperator");
     }
     this.room = room;
-    this.users.reconcile(room.users);
+    this.users.reconcile(room.users, turn);
     this.#wall(room.tickers);
   }
 

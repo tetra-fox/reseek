@@ -39,11 +39,14 @@
   let removing = $state<Transfer | null>(null);
   let confirmOpen = $state(false);
 
+  /** the turn of the last read of the list, whose answer the rows take */
+  let turn = 0;
   /** the newest `wanted` transfers in the directions asked for, with how many there are in all */
   const listed = new Loader(
-    () => {
+    async () => {
       const direction = which === "both" ? undefined : which;
-      return call(() =>
+      turn = rows.reading();
+      const outcome = await call(() =>
         api.GET("/api/v0/users/{username}/transfers", {
           params: {
             path: { username },
@@ -51,8 +54,10 @@
           }
         })
       );
+      if (!outcome.ok) rows.failed(turn);
+      return outcome;
     },
-    (data) => rows.reconcile(data.transfers)
+    (data) => rows.reconcile(data.transfers, turn)
   );
 
   keepCurrent(
