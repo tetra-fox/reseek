@@ -4,8 +4,8 @@
 //! user's judgment kept across a restart, a batch larger than the queue run whole, and a file
 //! uploaded for one analysis leaving nothing behind.
 
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 use api_types::events::EventType;
@@ -15,7 +15,7 @@ use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use serde_json::{Value, json};
 
-use super::analyzer::fixtures::{music, pink, write_flac};
+use super::analyzer::fixtures::{flac, music, pink, write_flac};
 use super::jobs::QUEUE_LIMIT;
 use crate::testing::{TRUSTED, TestApp, app, request, with};
 use crate::transfers::{Record, store as transfers};
@@ -31,11 +31,14 @@ fn route(relative: &str) -> String {
   )
 }
 
-/// Writes a lossless FLAC of generated music at `relative` under the downloads directory.
+/// Writes a lossless FLAC of generated music at `relative` under the downloads directory. The
+/// music is made and encoded once, and every file is a copy of it.
 fn lossless(app: &TestApp, relative: &str) {
+  static BYTES: OnceLock<Vec<u8>> = OnceLock::new();
+  let bytes = BYTES.get_or_init(|| flac(&music(1, 44_100, pink), 16, false));
   let path = app.state.paths.downloads.join(relative);
   std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-  write_flac(&music(1, 44_100, pink), 16, false, &path);
+  std::fs::write(path, bytes).unwrap();
 }
 
 /// The JSON header of a binary answer and the bytes after it.

@@ -322,6 +322,11 @@ impl Audio {
 /// Writes `audio` as FLAC at `path`: as `bits`-bit samples, or as 16-bit samples stored in 24
 /// bits when `padded`.
 pub fn write_flac(audio: &Audio, bits: u32, padded: bool, path: &Path) {
+  std::fs::write(path, flac(audio, bits, padded)).unwrap();
+}
+
+/// `audio` encoded as FLAC, as [`write_flac`] writes it.
+pub fn flac(audio: &Audio, bits: u32, padded: bool) -> Vec<u8> {
   let mut planes = audio.quantized(if padded { 16 } else { bits }, 7);
   if padded {
     planes.iter_mut().flatten().for_each(|s| *s <<= 8);
@@ -347,7 +352,7 @@ pub fn write_flac(audio: &Audio, bits: u32, padded: bool, path: &Path) {
   let stream = flacenc::encode_with_fixed_block_size(&config, source, config.block_size).unwrap();
   let mut sink = flacenc::bitsink::ByteSink::new();
   stream.write(&mut sink).unwrap();
-  std::fs::write(path, sink.as_slice()).unwrap();
+  sink.into_inner()
 }
 
 /// Writes `audio`, two channels at 44.1 kHz, as a constant-bitrate MP3 at `path`.
