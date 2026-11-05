@@ -8,10 +8,12 @@
   import { api, type Schemas } from "#lib/api/client.js";
   import Button from "#lib/components/ui/Button.svelte";
   import EmptyRow from "#lib/components/ui/EmptyRow.svelte";
+  import * as Filter from "#lib/components/ui/filter/filter.js";
   import Input from "#lib/components/ui/Input.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Notice from "#lib/components/ui/Notice.svelte";
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
+  import { type ActiveFilter, typedFilter } from "#lib/lists/filtered.js";
   import { freezesWhileUsed, interaction } from "#lib/lists/interaction.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
@@ -111,6 +113,16 @@
   const copyChosen = () => void copyText(asText(chosen));
   /** Copies the newest `n` lines the filters show, oldest first, as a log file reads */
   const copyLast = (n: number) => void copyText(asText(shown.slice(0, n).toReversed()));
+  let grid = $state<HTMLElement | null>(null);
+  /** the levels hidden, then the text */
+  const filters = $derived<ActiveFilter[]>([
+    ...LEVELS.filter((l) => !levels.includes(l.level)).map((l) => ({
+      id: l.level,
+      label: `${l.level} hidden`,
+      clear: () => (levels = [...levels, l.level])
+    })),
+    ...typedFilter(text, () => (text = ""))
+  ]);
   /** how many lines of each level the list holds, for the level chips */
   const counts = $derived(
     lines.reduce<Record<string, number>>((all, l) => {
@@ -127,34 +139,29 @@
   {:else}
     <Button size="sm" variant="outline" onclick={() => (paused = true)}><PauseIcon />Pause</Button>
   {/if}
-  <div class="flex flex-wrap gap-1" role="group" aria-label="Levels">
+  <Filter.Group label="Levels">
     {#each LEVELS as l (l.level)}
       {@const on = levels.includes(l.level)}
-      <button
-        type="button"
-        aria-pressed={on}
+      <Filter.Chip
+        pressed={on}
+        hides
+        count={counts[l.level] ?? 0}
+        class="font-mono text-xs"
         title={on
           ? `Hide ${l.level} lines. Alt-click to show only these.`
           : `Show ${l.level} lines`}
-        class={[
-          "flex h-control-sm items-center gap-1.5 rounded-full border px-2.5 font-mono text-xs transition-colors duration-(--motion-fast)",
-          on ? [l.chip, "border-transparent"] : "text-fg-subtle line-through hover:text-fg-muted"
-        ]}
         onclick={(e) =>
           (levels = e.altKey
             ? [l.level]
             : on
               ? levels.filter((x) => x !== l.level)
-              : [...levels, l.level])}>
-        {l.short}
-        <span class="tabular-nums opacity-70">{counts[l.level] ?? 0}</span>
-      </button>
+              : [...levels, l.level])}>{l.short}</Filter.Chip>
     {/each}
-  </div>
+  </Filter.Group>
   <Input
     type="search"
     wrapperClass="w-56"
-    class="h-control-sm"
+    class={["h-control-sm", text.trim() && Filter.FILTERING]}
     placeholder="Filter"
     aria-label="Filter the log"
     bind:value={text} />
@@ -190,7 +197,15 @@
 
 {#if error}<Notice kind="error">{error}</Notice>{/if}
 
+<Filter.Summary
+  {filters}
+  shown={shown.length}
+  total={lines.length}
+  noun={["line", "lines"]}
+  refocus={() => grid?.focus()} />
+
 <div
+  bind:this={grid}
   class="max-h-[65svh] overflow-auto rounded-card border bg-surface font-mono text-xs shadow-card outline-none focus-visible:ring-2 focus-visible:ring-accent"
   role="grid"
   aria-label="Live log"
@@ -216,6 +231,14 @@
       </span>
     </div>
   {:else}
-    <EmptyRow text="No log lines" />
+    {#if lines.length}
+      <Filter.Empty
+        {filters}
+        total={lines.length}
+        noun={["line", "lines"]}
+        refocus={() => grid?.focus()} />
+    {:else}
+      <EmptyRow text="No log lines" />
+    {/if}
   {/each}
 </div>

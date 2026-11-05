@@ -28,6 +28,7 @@
   import Button from "#lib/components/ui/Button.svelte";
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
   import EmptyRow from "#lib/components/ui/EmptyRow.svelte";
+  import * as Filter from "#lib/components/ui/filter/filter.js";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Notice from "#lib/components/ui/Notice.svelte";
   import Select from "#lib/components/ui/Select.svelte";
@@ -39,6 +40,7 @@
   import { folderCaption } from "#lib/files/summary.js";
   import { dateTime, formatBytes, plural } from "#lib/format.js";
   import { inspector, useInspector } from "#lib/inspector/inspector.svelte.js";
+  import type { ActiveFilter } from "#lib/lists/filtered.js";
   import { href } from "#lib/nav.js";
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
@@ -158,6 +160,22 @@
   const shows = (e: Entry) =>
     e.kind !== "file" || !only || passes(only, marks.file(root, e.path), analyzable(e.name));
   $effect(() => marks.retain());
+  /** the files the list holds unfiltered: the shown folder's and those of the folders open in it */
+  const files = $derived(
+    [...listings]
+      .filter(([at]) => at === path || expansion.isOpen(at))
+      .flatMap(([at, read]) => entries(read, at.split("/").filter(Boolean), sort.by, sort.dir))
+      .filter((e) => e.kind === "file")
+  );
+  /** the files in the shown folder itself, which an emptied list says the filter hides */
+  const filesHere = $derived(top.filter((e) => e.kind === "file").length);
+  const filters = $derived<ActiveFilter[]>(
+    FILE_FILTERS.filter((f) => f.id === only).map((f) => ({
+      id: f.id,
+      label: f.label,
+      clear: () => (only = null)
+    }))
+  );
   /** the key of the file the inspector shows, which follows focus in the tree */
   let shownKey = $state<string | null>(null);
   const shown = $derived(shownKey === null ? undefined : byKey.get(shownKey));
@@ -345,7 +363,7 @@
       <Select
         bind:value={only}
         aria-label="Show"
-        class="h-control-sm w-52 max-w-full"
+        class={["h-control-sm w-52 max-w-full", only && Filter.FILTERING]}
         options={[
           { value: null, label: "All files" },
           ...FILE_FILTERS.map((f) => ({ value: f.id, label: f.label }))
@@ -356,6 +374,13 @@
     <InspectorToggle />
   </div>
 </div>
+
+<Filter.Summary
+  {filters}
+  shown={files.filter(shows).length}
+  total={files.length}
+  noun={["file", "files"]}
+  refocus={() => tree?.focus()} />
 
 {#snippet menu(e: Entry)}
   <Menu.Root>
@@ -516,11 +541,17 @@
     </SelectionBar>
   {/if}
   {#if lines.every((l) => l.kind === "item" && l.item.kind === "up")}
-    <EmptyRow
-      text={only
-        ? "No files here match the filter"
-        : root === "downloads" && !path
+    {#if only && filesHere}
+      <Filter.Empty
+        {filters}
+        total={filesHere}
+        noun={["file", "files"]}
+        refocus={() => tree?.focus()} />
+    {:else}
+      <EmptyRow
+        text={root === "downloads" && !path
           ? "No finished downloads yet"
           : "This folder is empty"} />
+    {/if}
   {/if}
 {/if}

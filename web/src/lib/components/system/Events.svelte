@@ -11,6 +11,7 @@
   import Button from "#lib/components/ui/Button.svelte";
   import Dialog from "#lib/components/ui/Dialog.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
+  import * as Filter from "#lib/components/ui/filter/filter.js";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Pagination from "#lib/components/ui/Pagination.svelte";
   import Select from "#lib/components/ui/Select.svelte";
@@ -18,6 +19,7 @@
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import Username from "#lib/components/users/Username.svelte";
   import { dateTime, plural } from "#lib/format.js";
+  import type { ActiveFilter } from "#lib/lists/filtered.js";
   import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { Keyed } from "#lib/lists/keyed.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
@@ -99,6 +101,21 @@
       types: types.includes(type) ? types.filter((t) => t !== type) : [...types, type]
     });
 
+  const EVENTS = ["event", "events"] as const;
+  let toolbar = $state<HTMLElement | null>(null);
+  /** the list reloads as the types change, so focus goes to the types menu, which stays */
+  const refocus = () => toolbar?.querySelector("button")?.focus();
+  const filters = $derived<ActiveFilter[]>(
+    types.map((type) => ({
+      id: type,
+      label: type,
+      clear: () => to({ page: 1, types: types.filter((t) => t !== type) })
+    }))
+  );
+  // the types are the URL's, which a type's own clear writes from as they were, so clearing them
+  // one after another would keep all but the last
+  const clearTypes = () => to({ page: 1, types: [] });
+
   const pretty = (e: Record) => JSON.stringify(e.data, null, 2);
   const userOf = (e: Record) => {
     const data = e.data as { username?: unknown };
@@ -106,11 +123,11 @@
   };
 </script>
 
-<div class="flex flex-wrap items-center gap-inline">
+<div class="flex flex-wrap items-center gap-inline" bind:this={toolbar}>
   <Menu.Root>
     <Menu.Trigger>
       {#snippet child({ props })}
-        <Button {...props} variant="outline" size="sm"
+        <Button {...props} variant="outline" size="sm" class={[types.length && Filter.FILTERING]}
           >{types.length
             ? plural(types.length, "type", "types")
             : "All types"}<ChevronDownIcon /></Button>
@@ -125,9 +142,6 @@
       {/each}
     </Menu.Content>
   </Menu.Root>
-  {#if types.length}
-    <Button variant="ghost" size="sm" onclick={() => to({ page: 1, types: [] })}>All types</Button>
-  {/if}
   <div class="ml-auto flex flex-wrap items-center justify-end gap-inline">
     <Select
       class="h-control-sm w-32"
@@ -138,10 +152,22 @@
   </div>
 </div>
 
+{#if listed.data}
+  <Filter.Summary
+    {filters}
+    shown={listed.data.total}
+    total={null}
+    noun={EVENTS}
+    {refocus}
+    onclear={clearTypes} />
+{/if}
+
 {#if listed.error && !events.length}
   <ErrorSegment caption={listed.error} retry={() => void listed.load()} retryLabel="Retry" />
 {:else if listed.loading}
   <Skeleton class="h-64" />
+{:else if !events.length && types.length}
+  <Filter.Empty {filters} total={null} noun={EVENTS} {refocus} onclear={clearTypes} />
 {:else if !events.length}
   <EmptyState icon={CalendarCheckIcon} title="No events" />
 {:else}
