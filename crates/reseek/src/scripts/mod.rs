@@ -102,10 +102,15 @@ impl Scripts {
     shell: Option<Shell>,
     shutdown: CancellationToken,
   ) -> Arc<Self> {
+    let hidden = run::secret_variables(config.current().schema());
     let scripts = Arc::new(Self {
       config,
       events: events.clone(),
-      context: Arc::new(Context { directory, shell }),
+      context: Arc::new(Context {
+        directory,
+        shell,
+        hidden,
+      }),
       queues: Mutex::new(HashMap::new()),
       advised: Mutex::new(HashSet::new()),
       tasks: TaskTracker::new(),

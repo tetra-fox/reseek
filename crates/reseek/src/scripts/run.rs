@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use api_types::events::{Event, EventRecord, ScriptRunCompleted};
+use cascade::Schema;
 use tokio::process::{Child, Command};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
@@ -35,12 +36,26 @@ pub struct Shell {
   pub prefix: &'static str,
 }
 
-/// What every run uses: where scripts run and the shell.
+/// What every run uses: where scripts run, the shell, and what of the daemon's environment
+/// a script does not inherit.
 pub struct Context {
   /// the working directory of every run, where a large event's file is written
   pub directory: PathBuf,
   /// the shell, `None` when the system names none
   pub shell: Option<Shell>,
+  /// the variables taken out of every run's environment
+  pub hidden: Vec<String>,
+}
+
+/// The variables that set a secret option, such as the Soulseek password, which a script that
+/// prints its environment would otherwise put into its run's recorded output.
+pub fn secret_variables(schema: &Schema) -> Vec<String> {
+  schema
+    .fields()
+    .iter()
+    .filter(|field| field.secret)
+    .flat_map(|field| field.env_names().map(str::to_string))
+    .collect()
 }
 
 /// A run waiting its turn: the event, and the script as it was defined when the event came.
@@ -285,6 +300,9 @@ async fn attempt(
     "Running script"
   );
   let mut command = invocation.command();
+  for name in &context.hidden {
+    command.env_remove(name);
+  }
   command
     .current_dir(&context.directory)
     .envs(variables(&job.record, data, file.as_deref()))
@@ -454,5 +472,51 @@ mod tests {
     assert!(unshelled.unwrap_err().contains("$SHELL"));
     let bare = Invocation::of(&run(None, Some("/bin/true"), None, None), None).unwrap();
     assert_eq!(bare.arguments, Arguments::Line(String::new()));
+  }
+
+  #[test]
+  fn the_variables_of_secret_options_are_hidden_and_no_others() {
+    let hidden = secret_variables(&cascade::Schema::of::<crate::config::Options>());
+    for name in ["RESEEK_SLSK_PASSWORD", "RESEEK_PASSWORD", "RESEEK_API_KEY"] {
+      assert!(hidden.iter().any(|h| h == name), "{name} in {hidden:?}");
+    }
+    assert!(!hidden.iter().any(|h| h == "RESEEK_USERNAME"));
+  }
+
+  #[cfg(unix)]
+  #[tokio::test]
+  async fn a_hidden_variable_is_not_in_a_run_s_environment() {
+    // HOME stands in for a secret: the test cannot set a variable of its own in the daemon's
+    // environment without racing other threads
+    assert!(
+      std::env::var_os("HOME").is_some(),
+      "the test needs HOME set"
+    );
+    let dir = tempfile::tempdir().unwrap();
+    let context = Context {
+      directory: dir.path().to_path_buf(),
+      shell: None,
+      hidden: vec!["HOME".into()],
+    };
+    let job = Job {
+      name: "env".into(),
+      script: Box::new(Script {
+        run: run(
+          None,
+          Some("/bin/sh"),
+          None,
+          Some(&["-c", r#"echo "${HOME-unset}""#]),
+        ),
+        ..Script::default()
+      }),
+      record: Arc::new(EventRecord {
+        id: Uuid::nil(),
+        timestamp: chrono::Utc::now(),
+        event: Event::Noop(api_types::events::NoFields { version: 0 }),
+      }),
+    };
+    let ran = super::run(&job, &context, &CancellationToken::new()).await;
+    assert!(ran.succeeded, "{ran:?}");
+    assert_eq!(ran.output, "unset");
   }
 }
