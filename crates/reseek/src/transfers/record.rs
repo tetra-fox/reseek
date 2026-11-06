@@ -16,6 +16,12 @@ pub const COLUMNS: &str = "Id, JobId, Username, Direction, Filename, Size, State
                            PlaceInQueue, Exception, Attempts, NextAttemptAt, Removed, LocalPath, \
                            Destination, SearchId, Paused";
 
+/// The order transfers are listed in when nothing else decides: as they were asked for, and
+/// rows from the same instant in the order they were written, since their ids are random.
+pub const ASKED_ORDER: &str = "RequestedAt, rowid";
+/// [`ASKED_ORDER`] reversed, the newest first.
+pub const NEWEST_FIRST: &str = "RequestedAt DESC, rowid DESC";
+
 /// One transfer's row.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Record {

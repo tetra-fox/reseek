@@ -22,7 +22,7 @@ use rusqlite::Row;
 use rusqlite::types::Type;
 
 use crate::db::{self, Database, DbError, Location, Schema};
-pub use record::{COLUMNS, Record, transfer};
+pub use record::{ASKED_ORDER, COLUMNS, NEWEST_FIRST, Record, transfer};
 
 /// `transfers.db`: the `Transfers` table, each transfer's state history, and which speed limits
 /// are in force.

@@ -12,7 +12,7 @@ use rusqlite::types::Value;
 use uuid::Uuid;
 
 use super::categories::condition;
-use super::{COLUMNS, Record, direction_text, store, transfer};
+use super::{ASKED_ORDER, COLUMNS, Record, direction_text, store, transfer};
 use crate::db::{Database, DbError, timestamp};
 
 /// The remote directory of a remote filename: everything before its last separator, which is
@@ -73,7 +73,7 @@ async fn grouped_rows(
       let sql = format!(
         "SELECT {COLUMNS} FROM Transfers WHERE Direction = ?1 AND (?2 OR Removed = 0) \
          AND (?3 IS NULL OR Username = ?3) AND (?4 IS NULL OR RequestedAt >= ?4) \
-         AND (?5 IS NULL OR RequestedAt < ?5) ORDER BY RequestedAt, Id LIMIT ?6"
+         AND (?5 IS NULL OR RequestedAt < ?5) ORDER BY {ASKED_ORDER} LIMIT ?6"
       );
       let mut statement = conn.prepare_cached(&sql)?;
       let rows = statement.query_map(
@@ -181,7 +181,7 @@ pub async fn page(
       i64::try_from(query.offset).unwrap_or(i64::MAX),
     ));
     let sql = format!(
-      "SELECT {COLUMNS} FROM Transfers WHERE {filter} ORDER BY {column} {order}, RequestedAt, Id \
+      "SELECT {COLUMNS} FROM Transfers WHERE {filter} ORDER BY {column} {order}, {ASKED_ORDER} \
        LIMIT ? OFFSET ?"
     );
     let mut statement = conn.prepare(&sql)?;

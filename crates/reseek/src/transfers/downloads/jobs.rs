@@ -25,7 +25,7 @@ use crate::jobs::{Ended, NewJob, NewPart};
 use crate::sync::lock;
 use crate::transfers::categories::UNFINISHED;
 use crate::transfers::listing::remote_directory;
-use crate::transfers::{Record, text_at};
+use crate::transfers::{ASKED_ORDER, Record, text_at};
 
 /// The jobs whose files are still being enqueued: none of them is over, whatever its
 /// downloads do. A job is opened before any download of it runs, as none exists yet or, on a
@@ -78,10 +78,10 @@ fn finished(
   if pending {
     return Ok(None);
   }
-  let mut statement = conn.prepare_cached(
+  let mut statement = conn.prepare_cached(&format!(
     "SELECT Username, Filename, State FROM Transfers WHERE JobId = ?1 AND Removed = 0 \
-     ORDER BY RequestedAt, rowid",
-  )?;
+     ORDER BY {ASKED_ORDER}"
+  ))?;
   let rows = statement
     .query_map([job.to_string()], |row| {
       Ok((
@@ -288,10 +288,10 @@ fn name_under<'a>(filename: &'a str, folder: &str) -> &'a str {
 /// The downloads of the job `job` still listed, in the order they were asked for.
 fn parts(conn: &Connection, job: Uuid) -> rusqlite::Result<Vec<Part>> {
   conn
-    .prepare_cached(
+    .prepare_cached(&format!(
       "SELECT Id, Username, Filename, State, Paused, Exception FROM Transfers \
-       WHERE JobId = ?1 AND Removed = 0 ORDER BY RequestedAt, Id",
-    )?
+       WHERE JobId = ?1 AND Removed = 0 ORDER BY {ASKED_ORDER}"
+    ))?
     .query_map([job.to_string()], |row| {
       let id: String = row.get(0)?;
       Ok(Part {
@@ -658,8 +658,14 @@ mod tests {
     db.write(|conn| {
       let open = Open::default();
       let job = Uuid::new_v4();
-      let mut records: Vec<Record> = (1..=3)
-        .map(|n| queued(job, "alice", &format!("@@a\\Album\\0{n}.flac")))
+      // files asked for together share the instant, and their ids sort against the order
+      let asked = chrono::Utc::now();
+      let mut records: Vec<Record> = (1..=3u128)
+        .map(|n| Record {
+          id: Uuid::from_u128(10 - n),
+          requested_at: asked,
+          ..queued(job, "alice", &format!("@@a\\Album\\0{n}.flac"))
+        })
         .collect();
       for record in &records {
         store::insert(conn, record)?;

@@ -19,7 +19,7 @@ use super::{Downloads, FileRequest, Group, internal};
 use crate::api::error::ApiError;
 use crate::services::TransferService;
 use crate::transfers::categories::UNFINISHED;
-use crate::transfers::{COLUMNS, Record, listing, removal, store};
+use crate::transfers::{ASKED_ORDER, COLUMNS, Record, listing, removal, store};
 
 /// What a refused enqueue call is told when every one allowed at once runs already.
 const BUSY: &str =
@@ -105,7 +105,7 @@ impl Downloads {
       .read(move |conn| {
         let mut statement = conn.prepare(&format!(
           "SELECT {COLUMNS} FROM Transfers WHERE JobId = ?1 AND Removed = 0 \
-           AND NOT {UNFINISHED} AND State <> 48 ORDER BY RequestedAt, Id"
+           AND NOT {UNFINISHED} AND State <> 48 ORDER BY {ASKED_ORDER}"
         ))?;
         statement
           .query_map([job.to_string()], Record::read)?

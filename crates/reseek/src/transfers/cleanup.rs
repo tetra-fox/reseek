@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 use super::categories::UNFINISHED;
 use super::downloads::{FileRequest, Group};
-use super::{COLUMNS, Record, direction_at, direction_text};
+use super::{ASKED_ORDER, COLUMNS, Record, direction_at, direction_text};
 use crate::db::{Database, DbError, timestamp};
 
 /// Why a transfer left unfinished at the last stop ended.
@@ -78,7 +78,7 @@ pub async fn take_resumable(db: &Database) -> Result<Resumable, DbError> {
     {
       let mut select = tx.prepare(&format!(
         "SELECT {COLUMNS} FROM Transfers WHERE Resumable = 1 AND Direction = ?1 AND Removed = 0 \
-         ORDER BY RequestedAt, Id"
+         ORDER BY {ASKED_ORDER}"
       ))?;
       let records = select.query_map(
         params![direction_text(TransferDirection::Download)],

@@ -13,7 +13,7 @@ use rusqlite::types::Value;
 use crate::db::{Database, DbError, read_timestamp};
 use crate::sync::lock;
 use crate::transfers::categories::{FAILED, IN_PROGRESS, QUEUED, SUCCESSFUL, condition};
-use crate::transfers::{COLUMNS, direction_text, transfer};
+use crate::transfers::{COLUMNS, NEWEST_FIRST, direction_text, transfer};
 
 /// How long a user's figures are reused.
 const FIGURES_FOR: Duration = Duration::from_secs(5);
@@ -148,7 +148,7 @@ pub async fn page(
       paged.push(Value::Integer(i64::from(query.limit)));
       paged.push(Value::Integer(i64::from(query.offset)));
       let sql = format!(
-        "SELECT {COLUMNS} FROM Transfers WHERE {filter} ORDER BY RequestedAt DESC, Id \
+        "SELECT {COLUMNS} FROM Transfers WHERE {filter} ORDER BY {NEWEST_FIRST} \
          LIMIT ?{} OFFSET ?{}",
         paged.len() - 1,
         paged.len()
