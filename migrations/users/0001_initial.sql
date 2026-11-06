@@ -33,11 +33,17 @@ CREATE TABLE users (
   group_override TEXT,
   -- chat notifications off for this user
   muted INTEGER NOT NULL DEFAULT 0,
-  -- listed first
-  pinned INTEGER NOT NULL DEFAULT 0
+  -- 1 for a buddy, listed first
+  buddy INTEGER NOT NULL DEFAULT 0,
+  -- the SHA-256 of `picture` in hex, null exactly when `picture` is; the URL the picture is
+  -- fetched from carries it, so a new picture is a new URL
+  picture_tag TEXT,
+  -- a buddy may also be trusted, and we may ask to be told when their presence changes
+  trusted INTEGER NOT NULL DEFAULT 0,
+  notify_presence INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX users_last_seen ON users(last_seen_at DESC);
-CREATE INDEX users_pinned ON users(pinned) WHERE pinned = 1;
+CREATE INDEX users_buddy ON users(buddy) WHERE buddy = 1;
 
 -- our blocks of users; the configuration's blocks are not stored
 CREATE TABLE blocks (
@@ -50,6 +56,16 @@ CREATE TABLE blocks (
   -- null for a block that does not end
   expires_at TEXT,
   -- the name of the principal that made it
-  created_by TEXT NOT NULL
+  created_by TEXT NOT NULL,
+  -- the addresses blocked with the user, a JSON array of IP addresses, networks or ranges;
+  -- anyone connecting from one of them is blocked from the block's scopes
+  addresses TEXT NOT NULL DEFAULT '[]'
 );
 CREATE INDEX blocks_expiry ON blocks(expires_at) WHERE expires_at IS NOT NULL;
+
+-- what we like (liked = 1) and hate (liked = 0), in the order we listed them; the server is told
+-- them at every login
+CREATE TABLE interests (
+  interest TEXT PRIMARY KEY,
+  liked INTEGER NOT NULL
+);
