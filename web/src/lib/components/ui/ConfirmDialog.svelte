@@ -9,6 +9,8 @@
     body: string;
     /** the confirm button's words */
     confirm: string;
+    /** the other button's words, Cancel by default */
+    dismiss?: string;
     danger?: boolean;
     onconfirm: () => void;
     /** where focus goes once it closes; the default returns it to what opened the dialog */
@@ -20,6 +22,7 @@
     title,
     body,
     confirm,
+    dismiss = "Cancel",
     danger = false,
     onconfirm,
     onclosefocus
@@ -41,7 +44,7 @@
       <div class="flex justify-end gap-inline">
         <AlertDialog.Cancel>
           {#snippet child({ props })}
-            <Button {...props} variant="ghost">Cancel</Button>
+            <Button {...props} variant="ghost">{dismiss}</Button>
           {/snippet}
         </AlertDialog.Cancel>
         <AlertDialog.Action>

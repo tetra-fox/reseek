@@ -12,6 +12,7 @@
     title={q.title}
     body={q.body}
     confirm={q.confirm}
+    dismiss={q.dismiss}
     danger
     onconfirm={q.run} />
 {/if}

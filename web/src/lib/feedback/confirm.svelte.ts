@@ -1,5 +1,12 @@
 /** A question the page asks before a destructive action */
-export type Question = { title: string; body: string; confirm: string; run: () => void };
+export type Question = {
+  title: string;
+  body: string;
+  confirm: string;
+  /** the other button's words, Cancel by default, for a question whose confirm cancels */
+  dismiss?: string;
+  run: () => void;
+};
 
 /** The page's one shared confirm dialog: what it asks, while it is open */
 class Confirmation {

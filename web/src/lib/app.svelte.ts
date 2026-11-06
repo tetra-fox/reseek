@@ -111,7 +111,8 @@ class App {
 
   #follow() {
     if (!this.#release.length) {
-      this.#release.push(live.retain("application"), live.retain("metrics"));
+      // jobs are followed on every screen, for the bottom bar and their notifications
+      this.#release.push(live.retain("application"), live.retain("metrics"), live.retain("jobs"));
     }
     live.start();
   }

@@ -15,6 +15,7 @@ export type Topic =
   | "search"
   | `search:${string}`
   | "transfers"
+  | "jobs"
   | "conversations"
   | "rooms"
   | "public_rooms"
@@ -29,6 +30,7 @@ const ORDER = [
   "logs",
   "search",
   "transfers",
+  "jobs",
   "conversations",
   "rooms",
   "public_rooms",

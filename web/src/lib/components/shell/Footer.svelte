@@ -2,6 +2,7 @@
   import ActivityIcon from "@lucide/svelte/icons/activity";
   import ArrowDownIcon from "@lucide/svelte/icons/arrow-down";
   import ArrowUpIcon from "@lucide/svelte/icons/arrow-up";
+  import ListChecksIcon from "@lucide/svelte/icons/list-checks";
 
   import { activityPrefs } from "#lib/activity/activity.svelte.js";
   import { api } from "#lib/api/client.js";
@@ -9,6 +10,9 @@
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { Busy } from "#lib/feedback/busy.svelte.js";
   import { formatSpeedPadded } from "#lib/format.js";
+  import { failureUnseen, summaryText } from "#lib/jobs/jobs.js";
+  import { jobsSeen } from "#lib/jobs/jobs.svelte.js";
+  import { href } from "#lib/nav.js";
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
   import { REPOSITORY } from "#lib/shell/project.js";
@@ -40,6 +44,10 @@
     };
   };
   const downloads = $derived(figures("downloads"));
+  // the jobs running or paused, and a mark for a failure since the Jobs page was last opened
+  const jobsText = $derived(summaryText(app.state?.jobs));
+  const jobsShort = $derived(summaryText(app.state?.jobs, true));
+  const failed = $derived(failureUnseen(app.state?.jobs, jobsSeen.at));
   const uploads = $derived(figures("uploads"));
 </script>
 
@@ -91,6 +99,19 @@
         >{uploads.active} active · {uploads.queued} queued</span>
     </span>
   </SpeedLimits>
+  {#if jobsText || failed}
+    <a
+      href={href("/jobs")}
+      class="flex h-control-sm shrink-0 items-center gap-1.5 rounded-badge px-2 text-fg-muted hover:bg-hover hover:text-fg"
+      title={failed ? "A job failed. Open Jobs to see it." : "Open Jobs"}>
+      <ListChecksIcon class="size-3.5" />
+      <span class="max-md:hidden">{jobsText ?? "A job failed"}</span>
+      <span class="md:hidden">{jobsShort ?? "A job failed"}</span>
+      {#if failed}<span class="size-2 shrink-0 rounded-full bg-danger" aria-label="A job failed"
+        ></span
+        >{/if}
+    </a>
+  {/if}
   <button
     type="button"
     aria-pressed={activityPrefs.open}
