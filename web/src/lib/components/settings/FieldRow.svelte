@@ -97,7 +97,7 @@
           >not default</Badge>
       {/if}
       <SourceBadge source={info.source} />
-      {#if info.apply !== "live"}<Badge tone="warning">{info.apply}</Badge>{/if}
+      {#if info.apply !== "live"}<Badge tone="warning">Applies on {info.apply}</Badge>{/if}
     </div>
     <p id={help} class="text-xs text-pretty wrap-anywhere text-fg-muted">
       {#each helpParts(info.doc) as part, i (i)}{#if part.code}<code class="font-mono wrap-anywhere"
@@ -105,7 +105,7 @@
           >{:else}{part.text}{/if}{/each}
       {#if !tabular && info.default !== null && info.default !== undefined && !(Array.isArray(info.default) && !info.default.length)}
         <span class="text-fg-subtle"
-          >Default <code class="font-mono wrap-anywhere">{shown(info.default)}</code>.</span>
+          >Default <code class="font-mono wrap-anywhere">{shown(info.default)}</code></span>
       {/if}
     </p>
   </div>

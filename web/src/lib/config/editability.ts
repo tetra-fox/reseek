@@ -2,6 +2,10 @@ import { dateTime } from "#lib/format.js";
 import { UNTIL_RESTART } from "#lib/wording.js";
 
 import type { ConfigView } from "./fields";
+import { valueAt } from "./sections";
+
+/** The manager of configuration files found in the Nix store */
+const NIX = "Nix";
 
 /**
  * How an option can be changed from here: saved to its file, applied at runtime only, or not at
@@ -20,8 +24,12 @@ export const lasting = (o: { untilRestart: boolean; expiresAt?: string | null })
 /** What manages the file a save of `key` writes, null when nothing does */
 export const managerOf = (view: ConfigView, key: string): string | null => {
   const file = view.files.find((f) => f.name === fileOf(view, key));
-  return view.managedBy ?? (file?.path.startsWith("/nix/store/") ? "nix" : null);
+  return view.managedBy ?? (file?.path.startsWith("/nix/store/") ? NIX : null);
 };
+
+/** What manages the configuration files, for the one line the settings page says it in */
+export const managerOfFiles = (view: ConfigView): string | null =>
+  view.managedBy ?? (view.files.some((f) => f.path.startsWith("/nix/store/")) ? NIX : null);
 
 /**
  * Where a change is made: the settings page, which asks how long a value applied at runtime
@@ -35,60 +43,36 @@ export const editability = (
   from: ChangedFrom = "settings"
 ): Editability => {
   const field = view.fields[key];
-  if (!field)
-    return { mode: "locked", notice: "This option is not recognized by this version of reseek" };
+  if (!field) return { mode: "locked", notice: "Not recognized by this version of reseek" };
   const { source, apply } = field;
-  if (source.layer === "env") {
-    return { mode: "locked", notice: `Set by ${source.var}. Change it there.` };
-  }
-  if (source.layer === "cli") {
-    return {
-      mode: "locked",
-      notice: `Set on the command line with ${source.flag}. Change it there.`
-    };
-  }
+  if (source.layer === "env") return { mode: "locked", notice: `Set by ${source.var}` };
+  if (source.layer === "cli") return { mode: "locked", notice: `Set by ${source.flag}` };
+  // the daemon refuses every change while remote configuration is off, which the page says once
+  if (valueAt(view.values, "remote_configuration") !== true)
+    return { mode: "locked", notice: null };
   const name = fileOf(view, key);
   const file = view.files.find((f) => f.name === name);
-  const writable = !view.managedBy && (file?.writable ?? false);
-  if (writable) {
-    return {
-      mode: "save",
-      notice: apply === "restart" ? "Requires a restart to take effect" : null
-    };
-  }
+  if (!view.managedBy && file?.writable) return { mode: "save", notice: null };
   const runtime = apply === "live" || apply === "reconnect";
   const manager = managerOf(view, key);
-  const why = file?.readOnlyReason ?? "read-only";
+  const reason = file?.readOnlyReason;
+  const readOnly = reason ? `${name} is read-only (${reason})` : `${name} is read-only`;
   if (runtime && from === "page") {
-    const unsaved = manager ? `Managed by ${manager}.` : `${name} is not writable (${why}).`;
     return {
       mode: "runtime",
-      notice: `${unsaved} A change here is kept as a runtime override until removed.`
+      notice: manager
+        ? `Overrides the ${manager} configuration until removed`
+        : `${readOnly}, so a change here overrides it until removed`
     };
   }
-  // a value applied here lasts as long as the choice made when applying it
-  const applied =
-    source.layer === "runtime"
-      ? `The value applied here lasts ${lasting(source)}.`
-      : "Changes made here apply immediately and last until restart or until removed, as chosen when applying.";
-  if (manager) {
-    return runtime
-      ? {
-          mode: "runtime",
-          notice: `Set by ${manager}. ${applied} Use Copy as Nix and add the result to the configuration.`
-        }
-      : {
-          mode: "locked",
-          notice: `Set by ${manager}. Requires a restart. Use Copy as Nix and add the result to the configuration.`
-        };
+  if (!runtime) {
+    return {
+      mode: "locked",
+      notice: manager ? `Change it in the ${manager} configuration` : readOnly
+    };
   }
-  return runtime
-    ? {
-        mode: "runtime",
-        notice: `${name} is not writable (${why}). ${applied}`
-      }
-    : {
-        mode: "locked",
-        notice: `${name} is not writable (${why}). This option requires a restart.`
-      };
+  if (source.layer === "runtime")
+    return { mode: "runtime", notice: `Applied here ${lasting(source)}` };
+  // the settings page says once that managed values change here only until restart or removal
+  return { mode: "runtime", notice: manager ? null : `${readOnly}, so changes here are temporary` };
 };

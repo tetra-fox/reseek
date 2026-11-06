@@ -177,65 +177,72 @@ describe("controls and drafts", () => {
 });
 
 describe("editability", () => {
-  it("saves to a writable file, and says when a restart is needed", () => {
-    expect(editability(view, "soulseek.description")).toEqual({ mode: "save", notice: null });
-    expect(editability(view, "web.port")).toEqual({
-      mode: "save",
-      notice: "Requires a restart to take effect"
-    });
+  /** the fixture with remote configuration on, without which nothing can be changed */
+  const remote = (): ConfigView => {
+    const v = copy();
+    (v.values as Record<string, unknown>).remote_configuration = true;
+    return v;
+  };
+
+  it("saves to a writable file", () => {
+    expect(editability(remote(), "soulseek.description")).toEqual({ mode: "save", notice: null });
+    expect(editability(remote(), "web.port")).toEqual({ mode: "save", notice: null });
   });
 
-  it("locks what the environment or the command line set", () => {
-    const v = copy();
+  it("locks everything while remote configuration is off, which the page says once", () => {
+    expect(editability(view, "soulseek.description")).toEqual({ mode: "locked", notice: null });
+  });
+
+  it("locks what the environment or the command line set, naming where", () => {
+    const v = remote();
     v.fields["soulseek.username"].source = { layer: "env", var: "RESEEK_SLSK_USERNAME" };
     v.fields["web.port"].source = { layer: "cli", flag: "--http-port" };
     expect(editability(v, "soulseek.username")).toEqual({
       mode: "locked",
-      notice: "Set by RESEEK_SLSK_USERNAME. Change it there."
+      notice: "Set by RESEEK_SLSK_USERNAME"
     });
-    expect(editability(v, "web.port").notice).toBe(
-      "Set on the command line with --http-port. Change it there."
-    );
+    expect(editability(v, "web.port").notice).toBe("Set by --http-port");
   });
 
   it("applies at runtime what a managed file holds, unless it needs a restart", () => {
-    const v = copy();
-    v.managedBy = "nixos";
+    const v = remote();
+    v.managedBy = "Nix";
     v.files[0].writable = false;
-    expect(editability(v, "soulseek.description").mode).toBe("runtime");
-    expect(editability(v, "soulseek.description").notice).toContain("Copy as Nix");
-    expect(editability(v, "web.port")).toMatchObject({ mode: "locked" });
+    expect(editability(v, "soulseek.description")).toEqual({ mode: "runtime", notice: null });
+    expect(editability(v, "web.port")).toEqual({
+      mode: "locked",
+      notice: "Change it in the Nix configuration"
+    });
   });
 
-  it("says on a page that keeps a change until removed how it is kept, without Copy as Nix", () => {
-    const v = copy();
+  it("says on a page that keeps a change until removed what it overrides", () => {
+    const v = remote();
     v.files[0].writable = false;
     v.files[0].readOnlyReason = "permission denied";
     expect(editability(v, "soulseek.description", "page")).toEqual({
       mode: "runtime",
       notice:
-        "config.toml is not writable (permission denied). A change here is kept as a runtime override until removed."
+        "config.toml is read-only (permission denied), so a change here overrides it until removed"
     });
-    v.managedBy = "nixos";
+    v.managedBy = "Nix";
     expect(editability(v, "soulseek.description", "page").notice).toBe(
-      "Managed by nixos. A change here is kept as a runtime override until removed."
+      "Overrides the Nix configuration until removed"
     );
     expect(editability(v, "web.port", "page")).toEqual(editability(v, "web.port"));
   });
 
   it("names why a file can't be written", () => {
-    const v = copy();
+    const v = remote();
     v.files[0].writable = false;
     v.files[0].readOnlyReason = "permission denied";
     expect(editability(v, "soulseek.description")).toEqual({
       mode: "runtime",
-      notice:
-        "config.toml is not writable (permission denied). Changes made here apply immediately and last until restart or until removed, as chosen when applying."
+      notice: "config.toml is read-only (permission denied), so changes here are temporary"
     });
   });
 
   it("says whether a value applied at runtime lasts until restart or until removed", () => {
-    const v = copy();
+    const v = remote();
     v.files[0].writable = false;
     const applied = (untilRestart: boolean) => {
       v.fields["soulseek.description"].source = {
@@ -247,8 +254,8 @@ describe("editability", () => {
       };
       return editability(v, "soulseek.description").notice;
     };
-    expect(applied(true)).toContain("The value applied here lasts until restart.");
-    expect(applied(false)).toContain("The value applied here lasts until removed.");
+    expect(applied(true)).toBe("Applied here until restart");
+    expect(applied(false)).toBe("Applied here until removed");
   });
 });
 

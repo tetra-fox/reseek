@@ -8,7 +8,7 @@
   import Card from "#lib/components/ui/Card.svelte";
   import ConfirmDialog from "#lib/components/ui/ConfirmDialog.svelte";
   import Notice from "#lib/components/ui/Notice.svelte";
-  import { lasting } from "#lib/config/editability.js";
+  import { lasting, managerOfFiles } from "#lib/config/editability.js";
   import type { ConfigView } from "#lib/config/fields.js";
   import { valueAt } from "#lib/config/sections.js";
   import { Busy } from "#lib/feedback/busy.svelte.js";
@@ -22,6 +22,7 @@
   const busy = new Busy();
   const overrides = $derived(Object.entries(view.overrides));
   const remote = $derived(valueAt(view.values, "remote_configuration") === true);
+  const manager = $derived(managerOfFiles(view));
   let restarting = $state(false);
 
   const reconnect = () =>
@@ -47,13 +48,17 @@
 
 {#if !remote}
   <Notice kind="warning">
-    Remote configuration is off. Settings are read-only here. Set
-    <code>remote_configuration</code> to change them.
+    Settings are read-only because <code>remote_configuration</code> is off
+  </Notice>
+{:else if manager}
+  <Notice>
+    {manager} manages the configuration files, so changes made here are temporary. Copy as Nix gives you
+    the lines to add to your configuration.
   </Notice>
 {/if}
 {#if view.loadError}
   <Notice kind="error"
-    >Could not reload the configuration. The previous values remain in effect: {view.loadError}</Notice>
+    >Could not reload the configuration, so the previous values still apply: {view.loadError}</Notice>
 {/if}
 {#each view.warnings as warning (warning)}
   <Notice kind="warning">{warning}</Notice>
@@ -83,7 +88,7 @@
   </Notice>
 {/if}
 
-<Card title="Files" description={view.managedBy ? `Managed by ${view.managedBy}` : undefined}>
+<Card title="Files" description={manager && !remote ? `Managed by ${manager}` : undefined}>
   <ul class="flex flex-col gap-2 text-sm">
     {#each view.files as file (file.name)}
       <li class="flex flex-wrap items-center gap-inline">
@@ -108,7 +113,7 @@
 {#if overrides.length}
   <Card
     title="Runtime overrides"
-    description="Values applied from this page or the API, on top of the configuration files">
+    description="Set from this page or the API, on top of the configuration files">
     <ul class="-mx-5 divide-y border-y">
       {#each overrides as [key, override] (key)}
         <li class="flex flex-wrap items-center gap-inline px-5 py-2 text-sm">
