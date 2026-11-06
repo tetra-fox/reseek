@@ -245,11 +245,22 @@ fn a_range_past_where_another_track_ends_reads_the_audio() {
 }
 
 #[test]
-fn a_packet_that_starts_inside_the_one_before_fails_the_stream() {
+fn a_packet_holding_more_than_it_lasts_is_cut_to_its_duration() {
   // every packet holds 4096 frames, but the table says the first three last 2048
   let bytes = timed(&[(3, 2048), (1, 3712)]);
-  let failed = whole(&bytes).unwrap_err();
-  assert_eq!(failed, "the file's packets overlap in time");
+  let cut = whole(&bytes).unwrap();
+  assert_eq!(cut.len(), 44 + (3 * 2048 + 3712) * 4);
+  let tone = whole(TONE).unwrap();
+  let pcm = |wav: &[u8], from: usize, to: usize| wav[44 + from * 4..44 + to * 4].to_vec();
+  for packet in 0..3 {
+    let at = packet * 2048;
+    assert_eq!(
+      pcm(&cut, at, at + 2048),
+      pcm(&tone, packet * 4096, packet * 4096 + 2048),
+      "packet {packet}"
+    );
+  }
+  assert_eq!(pcm(&cut, 6144, 9856), pcm(&tone, 12_288, 16_000));
 }
 
 #[test]
@@ -281,6 +292,25 @@ fn packets_shorter_than_their_time_leave_silence_and_ranges_match_the_whole() {
       wav_bytes(&bytes, start, length).unwrap(),
       gapped[start as usize..(start + length) as usize],
       "{start}+{length}"
+    );
+  }
+}
+
+#[test]
+fn a_range_past_a_packet_holding_more_than_it_lasts_matches_the_whole() {
+  // the first three packets last 256 frames and the first holds 4096; the other three are cut
+  // to a byte, which does not decode, so nothing after the first packet is audio
+  let bytes = timed(&[(3, 256), (1, 3712)]);
+  let first = get(TONE, box_at(TONE, b"stsz") + 20);
+  let bytes = replaced(bytes, &boxed(b"stsz", &[0, 0, 4, first, 1, 1, 1], &[]));
+  let whole = whole(&bytes).unwrap();
+  assert_eq!(whole.len(), 44 + (3 * 256 + 3712) * 4);
+  // a seek to a frame past the first 256 lands on a later packet
+  for start in [44 + 256 * 4, 44 + 1486 * 4, 44 + 4000 * 4] {
+    assert_eq!(
+      wav_bytes(&bytes, start, 1000),
+      Ok(whole[start as usize..][..1000].to_vec()),
+      "{start}"
     );
   }
 }

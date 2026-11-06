@@ -1,6 +1,6 @@
 //! Reading the PCM of a WAV a stretch at a time: samples read from an AIFF file and turned
-//! around, or decoded from ALAC and placed by their packet's time, with silence where packets
-//! leave a gap or the audio ends before its stated length.
+//! around, or decoded from ALAC and placed by their packet's time for as long as it lasts, with
+//! silence where packets leave a gap or the audio ends before its stated length.
 
 use std::io::{self, Read, Seek, SeekFrom};
 
@@ -25,8 +25,8 @@ pub(super) type Reopen = Box<dyn Fn() -> io::Result<Box<dyn MediaSource>> + Send
 pub(super) enum Source {
   /// samples read from an AIFF file and turned around
   Aiff(Aiff, Box<dyn MediaSource>),
-  /// samples decoded from ALAC, each kept to its top `width` bytes; `reopen` and `hint` open the
-  /// file's container anew
+  /// samples decoded from ALAC, each kept to its top `width` bytes and each packet's to its
+  /// duration; `reopen` and `hint` open the file's container anew
   Alac {
     decoder: Box<Decoder>,
     hint: Hint,
@@ -90,19 +90,25 @@ impl Source {
       }
       Self::Alac { decoder, .. } => {
         let mut samples = Vec::new();
-        let Some(start) = decoder.next_interleaved(&mut samples) else {
+        let Some(frames) = decoder.next_interleaved(&mut samples) else {
           return match decoder.stopped.take() {
             Some(reason) => Err(reason),
             None => Ok(None),
           };
         };
+        // a seek places a frame by the packets' stated durations, so samples a packet holds past
+        // its own would reach into a later packet's place only when read from the start
+        let stated = (frames.end - frames.start).saturating_mul(u64::from(format.channels));
+        if stated < samples.len() as u64 {
+          samples.truncate(stated as usize);
+        }
         let width = usize::from(format.width);
         out.reserve(samples.len() * width);
         for sample in samples {
           // the sample's bits are at the top of its 32
           out.extend_from_slice(&sample.to_le_bytes()[4 - width..]);
         }
-        Ok(Some(start))
+        Ok(Some(frames.start))
       }
     }
   }

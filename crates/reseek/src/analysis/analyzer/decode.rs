@@ -4,6 +4,7 @@
 //! they actually use.
 
 use std::fs::File;
+use std::ops::Range;
 use std::path::Path;
 
 use symphonia::core::audio::GenericAudioBufferRef;
@@ -281,22 +282,26 @@ impl Decoder {
   }
 
   /// Decodes the next packet into `samples`, interleaved over every channel with each sample at
-  /// the top of its 32 bits, and returns the sample frame it starts at; `None` at the end of the
-  /// file or when decoding cannot go on, with the reason in `stopped`.
-  pub fn next_interleaved(&mut self, samples: &mut Vec<i32>) -> Option<u64> {
-    let pts = self.step()?;
+  /// the top of its 32 bits, and returns the sample frames the container says it covers, from
+  /// its timestamp for its duration, which the samples can fall short of or run past; `None` at
+  /// the end of the file or when decoding cannot go on, with the reason in `stopped`.
+  pub fn next_interleaved(&mut self, samples: &mut Vec<i32>) -> Option<Range<u64>> {
+    let (pts, dur) = self.step()?;
     self.decoder.last_decoded().copy_to_vec_interleaved(samples);
     let (numer, denom) = self.ticks();
     let rate = u128::from(self.claimed.sample_rate);
-    // a timestamp is below 2^63 and the other two below 2^32, so the product fits
-    let frame = u128::try_from(pts)
-      .ok()
-      .and_then(|pts| u64::try_from(pts * numer * rate / denom).ok());
-    if frame.is_none() {
-      debug!(pts, "a packet's timestamp is out of range");
+    // a timestamp and a duration add to below 2^65, a tick's numerator is below 2^32 and the rate
+    // at most `MAX_RATE`, below 2^20, so the product fits
+    let frame = |ticks: u128| u64::try_from(ticks * numer * rate / denom).ok();
+    let frames = u128::try_from(pts).ok().and_then(|pts| {
+      let end = pts + u128::from(dur);
+      Some(frame(pts)?..frame(end)?)
+    });
+    if frames.is_none() {
+      debug!(pts, dur, "a packet's timestamp is out of range");
       self.stopped = Some("the file's timing is out of range".to_string());
     }
-    frame
+    frames
   }
 
   /// A timestamp tick as a fraction of a second; one sample frame when the container gives none.
@@ -338,9 +343,9 @@ impl Decoder {
   }
 
   /// Decodes the next packet of the track that holds samples, which the decoder then holds, and
-  /// returns its timestamp; `None` at the end of the file or when decoding cannot go on, with
-  /// the reason in `stopped`.
-  fn step(&mut self) -> Option<i64> {
+  /// returns its timestamp and duration; `None` at the end of the file or when decoding cannot
+  /// go on, with the reason in `stopped`.
+  fn step(&mut self) -> Option<(i64, u64)> {
     loop {
       let packet = match self.format.next_packet() {
         Ok(Some(packet)) => packet,
@@ -392,7 +397,7 @@ impl Decoder {
       if bytes > 0 && self.densest.is_none_or(|(b, f)| frames * b > f * bytes) {
         self.densest = Some((bytes, frames));
       }
-      return Some(packet.pts.get());
+      return Some((packet.pts.get(), packet.dur.get()));
     }
   }
 
