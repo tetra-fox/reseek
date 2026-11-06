@@ -12,7 +12,7 @@
 </script>
 
 {#if !session.can("Administrator")}
-  <Notice kind="info">Only administrators can view logs.</Notice>
+  <Notice kind="info">Only administrators can view logs</Notice>
 {:else}
   <Crumbs steps={[{ label: tab === "history" ? "History" : "Live" }]} />
   <nav aria-label="Logs" class="flex gap-1">

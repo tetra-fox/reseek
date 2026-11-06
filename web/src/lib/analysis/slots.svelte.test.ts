@@ -104,9 +104,7 @@ describe("the Analysis page's slots", () => {
   it("sends only a file the analyzer reads", () => {
     slots.upload("a", new File(["x"], "cover.jpg"));
     expect(sendFile).not.toHaveBeenCalled();
-    expect(toasts[0]?.text).toBe(
-      "cover.jpg cannot be analyzed, as it is not a type the analyzer reads."
-    );
+    expect(toasts[0]?.text).toBe("cover.jpg is not a type the analyzer reads");
   });
 
   it("refuses a file over the daemon's limit before sending it", () => {
@@ -122,8 +120,6 @@ describe("the Analysis page's slots", () => {
     };
     expect(sent(3_000_000_000)).toBe(true);
     expect(sent(3_000_000_001)).toBe(false);
-    expect(toasts[0]?.text).toBe(
-      "mine.flac is too large to upload. The largest upload is 2.79 GB."
-    );
+    expect(toasts[0]?.text).toBe("mine.flac is over the 2.79 GB upload limit");
   });
 });

@@ -144,7 +144,7 @@ test("looking up a user who does not exist says so and opens nothing", async ({ 
 
   await searchBox(page).fill("nobody");
   await page.getByRole("option", { name: "Look up nobody" }).click();
-  await expect(page.getByText("No user named nobody was found.")).toBeVisible();
+  await expect(page.getByText("No user named nobody")).toBeVisible();
   await expect(page).toHaveURL(/#\/users$/);
   await expect(page.getByRole("option", { name: "Look up nobody" })).toBeVisible();
 });

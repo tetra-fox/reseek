@@ -116,7 +116,7 @@
             : undefined}>
           <Presence presence={p.presence} />
         </span>
-        <h1 class="truncate font-mono text-lg font-semibold" style:color={nameColor(name)}>
+        <h1 class="truncate font-mono text-lg font-medium" style:color={nameColor(name)}>
           {name}
         </h1>
         <Button
@@ -129,7 +129,7 @@
         <Flag code={p.countryCode} />
         <GroupBadge group={p.group} />
         {#if lostGroup}
-          <Badge tone="warning" title={`This user is assigned to ${p.groupOverride}`}
+          <Badge tone="warning" title={`Assigned to ${p.groupOverride}`}
             >Group no longer exists</Badge>
         {/if}
         {#if p.block}
@@ -289,7 +289,7 @@
   bind:open={deleting}
   busy={forgetting.running}
   title={`Forget ${name}?`}
-  description="Removes the user from the user list, with their notes, tags and block. The user is listed again after any new interaction.">
+  description="Their notes, tags and block are deleted too. They are listed again after any new interaction.">
   <label class="flex items-center gap-2 text-sm">
     <Checkbox checked={purge} onCheckedChange={(on) => (purge = on)} />
     Also remove the transfers and messages with this user

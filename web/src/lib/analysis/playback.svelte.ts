@@ -101,6 +101,6 @@ export class Playback {
     const url = this.src;
     this.playing = false;
     this.src = null;
-    this.problem = (url && (await refusal(url))) ?? "This file could not be played.";
+    this.problem = (url && (await refusal(url))) ?? "This file could not be played";
   };
 }

@@ -29,8 +29,7 @@
   let { node, open, depth, tick, ondownload, actions, menu }: Props = $props();
 
   /** why a locked folder is dimmed */
-  const LOCKED_HINT =
-    "These files cannot be downloaded. The user shares them only with buddies or privileged users.";
+  const LOCKED_HINT = "Locked: the user shares these only with buddies or privileged users";
 </script>
 
 <!-- a folder's line after its toggle: its tick, icon, name and what it holds, then its actions -->

@@ -161,7 +161,7 @@
     {#if notices}
       <ServerIcon class="size-4 shrink-0 text-fg-muted" />
       <div class="name-count flex-1 gap-2">
-        <h2 class="truncate font-semibold">{chatName(target)}</h2>
+        <h2 class="truncate font-medium">{chatName(target)}</h2>
         <span class="text-xs text-fg-muted"><span>Notices from the Soulseek server</span></span>
       </div>
     {:else if target.kind === "user"}
@@ -170,12 +170,12 @@
       <span class="text-xs text-fg-muted">{summary?.presence ?? ""}</span>
     {:else}
       {#if members?.room?.isPrivate}
-        <LockIcon class="size-4 text-fg-muted" aria-label="private room" />
+        <LockIcon class="size-4 text-fg-muted" aria-label="Private room" />
       {:else}
         <HashIcon class="size-4 text-fg-muted" />
       {/if}
       <div class="name-count flex-1 gap-2">
-        <h2 class="truncate font-semibold">{target.name}</h2>
+        <h2 class="truncate font-medium">{target.name}</h2>
         <span class="text-xs text-fg-muted"
           ><span>{plural(members?.users.size ?? 0, "user", "users")}</span></span>
       </div>
@@ -244,7 +244,7 @@
         <EmptyState
           icon={ServerIcon}
           class="flex-1 justify-center"
-          title="No notices from the server are stored" />
+          title="No notices from the server" />
       {:else}
         <MessageList
           {pane}
@@ -254,7 +254,7 @@
       {/if}
       {#if target.kind === "room" && !joined && !write}
         <p class="border-t px-3 py-2 text-xs text-fg-muted">
-          This room is not joined. Its stored history is shown.
+          This room is not joined, so only its stored history shows
         </p>
       {:else if !notices}
         <Composer bind:this={composer} {pane} {disabled} {names} />

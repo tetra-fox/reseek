@@ -109,7 +109,7 @@ describe("the message list", () => {
     );
     expect(to.mock.calls).toEqual([[join, "center"]]);
     expect(toEnd).not.toHaveBeenCalled();
-    expect(toasts.map((t) => t.text)).toEqual(["That message is no longer stored."]);
+    expect(toasts.map((t) => t.text)).toEqual(["That message is no longer stored"]);
   });
 
   it("brings the message the keys are on into view before opening its menu", async () => {

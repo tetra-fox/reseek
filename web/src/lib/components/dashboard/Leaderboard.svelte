@@ -100,7 +100,7 @@
          the header's sorting moves into a switch by the title; in rem so it follows the text -->
     <section class="@container flex flex-col gap-2">
       <div class="flex items-center gap-2">
-        <h3 class="flex items-center gap-1.5 text-sm font-semibold">
+        <h3 class="flex items-center gap-1.5 text-sm font-medium">
           <table.Icon class="size-4" />{table.title}
           {#if loading}<Spinner class="size-3.5" />{/if}
         </h3>
@@ -181,7 +181,7 @@
           {:else}
             <tr
               ><td colspan="6" class="py-6 text-center text-fg-subtle"
-                >No {table.title.toLowerCase()} in this range.</td
+                >No {table.title.toLowerCase()} in this range</td
               ></tr>
           {/each}
         </tbody>

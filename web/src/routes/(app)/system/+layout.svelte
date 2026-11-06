@@ -27,7 +27,7 @@
     {@const current = path === `/system/${tab}` || path.startsWith(`/system/${tab}/`)}
     <a href={href(`/system/${tab}`)} aria-current={current ? "page" : undefined} class="nav-tab">
       {#if flagged(tab)}
-        <CircleAlertIcon class="size-4 text-warning" aria-label="needs attention" />
+        <CircleAlertIcon class="size-4 text-warning" aria-label="Needs attention" />
       {/if}
       {title}
     </a>

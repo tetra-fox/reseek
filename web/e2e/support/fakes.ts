@@ -631,7 +631,7 @@ const report = (
   spectrogramUrl: "/api/v0/files/downloads/files/x/analysis/spectrogram",
   spectrogram: layout(duration, scale),
   override,
-  limitations: ["Two or more lossy generations show as the lowest cutoff among them."],
+  limitations: ["Of several lossy generations, only the lowest cutoff shows"],
   stale: false
 });
 

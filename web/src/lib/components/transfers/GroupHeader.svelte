@@ -31,6 +31,7 @@
   import { href } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
   import { act, folderOf, openFolder } from "#lib/transfers/actions.js";
+  import { PAUSE_WARNING } from "#lib/transfers/bulk.js";
   import { encodePath } from "#lib/transfers/content.js";
   import { groupProgress } from "#lib/transfers/grid/progress.js";
   import type { Group } from "#lib/transfers/grid/view.js";
@@ -126,7 +127,7 @@
       run: () =>
         confirmation.ask({
           title: `Pause ${plural(pausable.length, "download", "downloads")}?`,
-          body: "Files in progress stop and keep what arrived; the rest wait. You lose your place in each user's queue.",
+          body: PAUSE_WARNING,
           confirm: "Pause",
           run: () =>
             void act(

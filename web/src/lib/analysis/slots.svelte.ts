@@ -111,18 +111,14 @@ class Slots {
   /** Sends a local file to the daemon, into the slot once it is there */
   upload(id: SlotId, file: File) {
     if (!analyzable(file.name)) {
-      const text = `${file.name} cannot be analyzed, as it is not a type the analyzer reads.`;
-      return void toast(text, "error");
+      return void toast(`${file.name} is not a type the analyzer reads`, "error");
     }
     // the daemon refuses a larger file as well, but only once it is being sent, which a browser
     // can report as a lost connection rather than as the answer
     const limit = app.state?.process.uploadMaxBytes;
     if (limit !== undefined && file.size > limit) {
       const largest = formatBytes(limit);
-      return void toast(
-        `${file.name} is too large to upload. The largest upload is ${largest}.`,
-        "error"
-      );
+      return void toast(`${file.name} is over the ${largest} upload limit`, "error");
     }
     this.#stopSending(id);
     if (this[id]) this.clear(id);

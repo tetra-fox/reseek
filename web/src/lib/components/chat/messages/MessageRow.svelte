@@ -190,16 +190,14 @@
         <time class="text-xs text-fg-subtle" datetime={m.timestamp} title={formatDate(m.timestamp)}
           >{chatTime(m.timestamp, clock.now)}</time>
         {#if m.replayed}
-          <Tooltip
-            text="This message was sent while you were offline, and the server delivered it when you connected.">
+          <Tooltip text="The server held it until you connected">
             {#snippet child({ props })}
               <span {...props} class="text-xs text-fg-subtle italic">sent while offline</span>
             {/snippet}
           </Tooltip>
         {/if}
         {#if m.automatic}
-          <Tooltip
-            text="You were away, so reseek answered the first message from this person with your away reply.">
+          <Tooltip text="Sent automatically because you were away">
             {#snippet child({ props })}
               <span {...props} class="text-xs text-fg-subtle italic">sent automatically</span>
             {/snippet}

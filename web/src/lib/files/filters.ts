@@ -163,27 +163,27 @@ const readToken = (token: string, filters: Filters, keys: readonly string[]): bo
 
 /** Every token the filter box understands, for its help */
 export const FILTER_TOKENS: { token: string; meaning: string }[] = [
-  { token: "word", meaning: "The path contains the word." },
-  { token: "-word", meaning: "The path does not contain the word." },
+  { token: "word", meaning: "The path contains the word" },
+  { token: "-word", meaning: "The path does not contain the word" },
   {
     token: "type:flac|mp3",
-    meaning: "The file type is one of those listed. !type:mp3 excludes a type."
+    meaning: "The file type is one of those listed; !type:mp3 excludes one"
   },
-  { token: "size:10m", meaning: "At least 10 MB. Units: k, m, g." },
-  { token: "size:<1g", meaning: "Less than 1 GB. Also >, <=, = and ! (not)." },
-  { token: "size:5m..50m", meaning: "Between 5 and 50 MB." },
-  { token: "bitrate:320", meaning: "At least 320 kbps. Short form: br:." },
-  { token: "bitrate:=256|=320", meaning: "Exactly 256 or 320 kbps." },
-  { token: "bitdepth:24", meaning: "At least 24 bits. Short form: bd:." },
-  { token: "length:3:00..6:00", meaning: "Between 3 and 6 minutes. Seconds are also accepted." },
+  { token: "size:10m", meaning: "At least 10 MB, in units of k, m or g" },
+  { token: "size:<1g", meaning: "Less than 1 GB; also >, <=, = and ! (not)" },
+  { token: "size:5m..50m", meaning: "Between 5 and 50 MB" },
+  { token: "bitrate:320", meaning: "At least 320 kbps, or br:320" },
+  { token: "bitrate:=256|=320", meaning: "Exactly 256 or 320 kbps" },
+  { token: "bitdepth:24", meaning: "At least 24 bits, or bd:24" },
+  { token: "length:3:00..6:00", meaning: "Between 3 and 6 minutes, or in seconds" },
   {
     token: "country:NL|BE",
-    meaning: "The user is in one of the listed countries. !country:NL excludes a country."
+    meaning: "The user is in one of the listed countries; !country:NL excludes one"
   },
-  { token: "islossless, islossy", meaning: "Lossless or lossy files only." },
-  { token: "iscbr, isvbr", meaning: "Constant or variable bit rate only." },
-  { token: "minbr:, minbd:, minfs:, minlen:", meaning: "Older minimum filters, still accepted." },
-  { token: "minfif:8", meaning: "Users with at least 8 matching files." }
+  { token: "islossless, islossy", meaning: "Lossless or lossy files only" },
+  { token: "iscbr, isvbr", meaning: "Constant or variable bit rate only" },
+  { token: "minbr:, minbd:, minfs:, minlen:", meaning: "Older minimum filters, still accepted" },
+  { token: "minfif:8", meaning: "Users with at least 8 matching files" }
 ];
 
 /** An example of each token a filter box can take, by its name */

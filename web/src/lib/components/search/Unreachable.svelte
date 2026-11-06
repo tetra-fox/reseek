@@ -14,7 +14,7 @@
     {unreachable(listen.port)}
     {#if listen.portMapping.state === "failed" && listen.portMapping.error}
       <span class="mt-1 block text-fg-muted">
-        Port mapping is on, but the router refused the request: {listen.portMapping.error}
+        The router refused port mapping: {listen.portMapping.error}
       </span>
     {/if}
     {#snippet action()}

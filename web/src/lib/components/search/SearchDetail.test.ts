@@ -226,7 +226,7 @@ describe("search results", () => {
     flushSync();
     expect(document.querySelector("[role=grid] [role=row][data-line]")).toBeNull();
     expect(details()?.querySelector("h2")).toBeNull();
-    expect(details()?.textContent).toContain("Select a file to see its details.");
+    expect(details()?.textContent).toContain("No file selected");
     unmount(pane);
   });
 

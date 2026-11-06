@@ -45,7 +45,7 @@
   bind:open
   {busy}
   title="Add downloads"
-  description="Enter a username and the remote path of a shared file, or paste slsk:// links or search results in JSON.">
+  description="Enter a username and file path, or paste slsk:// links or search results as JSON">
   <form
     id="add-download"
     class="flex flex-col gap-group"

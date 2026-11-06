@@ -20,7 +20,7 @@ export const reason = (status: number, body?: unknown): string => {
   if (typeof body === "string" && body) return body;
   if (status === 403) return "Permission denied";
   if (status === 404) return "Not found";
-  if (status === 429) return "Too many attempts. Try again shortly";
+  if (status === 429) return "Too many attempts, try again shortly";
   if (status >= 500) return `Server error (HTTP ${status})`;
   return `HTTP ${status}`;
 };

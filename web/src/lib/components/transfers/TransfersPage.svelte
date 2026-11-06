@@ -261,7 +261,7 @@
     ask(
       active > 0,
       `Cancel ${plural(active, "active transfer", "active transfers")}?`,
-      "Any transfer in progress stops immediately.",
+      "Transfers in progress stop at once",
       "Cancel transfers",
       () => void runBulk("cancel", transfers)
     );
@@ -350,7 +350,7 @@
     icon={direction === "download" ? DownloadIcon : UploadIcon}
     title={direction === "download" ? "No downloads yet" : "No uploads yet"}
     description={direction === "download"
-      ? "Downloads start from search results, from a user's shares, or from Add with a path or link."
+      ? "Download from search results or a user's shares, or use Add"
       : undefined} />
 {:else if !filtered.length}
   <Filter.Empty

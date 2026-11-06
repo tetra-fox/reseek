@@ -146,7 +146,7 @@
   <EmptyState
     icon={UsersIcon}
     title="No buddies yet"
-    description="Add a buddy to follow when they are online, share folders with buddies only and search their shares." />
+    description="Add a buddy to see when they are online and to share folders with buddies only" />
 {:else}
   <div
     class="overflow-x-auto rounded-card border bg-surface text-sm shadow-card outline-none focus-visible:ring-2 focus-visible:ring-accent"

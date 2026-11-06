@@ -59,7 +59,7 @@
   const reconnect = () =>
     confirmation.ask({
       title: "Reconnect?",
-      body: "Transfers in progress are interrupted while reseek reconnects to the Soulseek server.",
+      body: "Transfers in progress will be interrupted",
       confirm: "Reconnect",
       run: () =>
         void busy.run(async () => {
@@ -77,7 +77,7 @@
   const shutDown = () =>
     confirmation.ask({
       title: "Shut down reseek?",
-      body: "reseek must then be started again manually.",
+      body: "It will have to be started again by hand",
       confirm: "Shut down",
       run: () => void busy.run(() => call(() => api.DELETE("/api/v0/application")))
     });
@@ -147,9 +147,11 @@
         {#if s.pendingRestart || s.pendingReconnect}
           <dt>Pending</dt>
           <dd class="text-warning">
-            {[s.pendingRestart && "a restart", s.pendingReconnect && "a reconnect"]
-              .filter(Boolean)
-              .join(" and ")}
+            {s.pendingRestart && s.pendingReconnect
+              ? "Restart and reconnect"
+              : s.pendingRestart
+                ? "Restart"
+                : "Reconnect"}
           </dd>
         {/if}
         {#if s.configuration.lastReloadAt}
@@ -192,12 +194,12 @@
         <dt>Privileges</dt>
         <dd>
           {s.user.privileges.isPrivileged
-            ? `until ${s.user.privileges.privilegedUntil ? new Date(s.user.privileges.privilegedUntil).toLocaleString() : formatDuration(s.user.privileges.privilegesRemaining)}`
-            : "none"}
+            ? `Until ${s.user.privileges.privilegedUntil ? new Date(s.user.privileges.privilegedUntil).toLocaleString() : formatDuration(s.user.privileges.privilegesRemaining)}`
+            : "None"}
         </dd>
         <dt>Auto-reconnect</dt>
         <dd>
-          {s.connectionWatchdog.isEnabled ? "on" : "off"}
+          {s.connectionWatchdog.isEnabled ? "On" : "Off"}
           {#if s.connectionWatchdog.nextAttemptAt}, next {ago(
               s.connectionWatchdog.nextAttemptAt,
               clock.now
@@ -236,11 +238,11 @@
         <dt>Parent</dt>
         <dd>
           {s.distributedNetwork.parent ??
-            (s.distributedNetwork.isBranchRoot ? "none (branch root)" : "none")}
+            (s.distributedNetwork.isBranchRoot ? "None (branch root)" : "None")}
         </dd>
         <dt>Branch</dt>
         <dd>
-          level {s.distributedNetwork.branchLevel}, root {s.distributedNetwork.branchRoot ?? "?"}
+          Level {s.distributedNetwork.branchLevel}, root {s.distributedNetwork.branchRoot ?? "?"}
         </dd>
         <dt>Children</dt>
         <dd>
@@ -275,7 +277,7 @@
                     onclick={() => void disconnectAgent(agent.name)}>Disconnect</Button>
                 {/if}
               </span>
-            {:else}none connected{/each}
+            {:else}None connected{/each}
           </dd>
         {/if}
       </dl>

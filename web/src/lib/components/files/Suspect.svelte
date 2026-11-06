@@ -14,7 +14,7 @@
       : `Size implies ${suspect.impliedKbps} kbps, low for a lossless file`
   );
   const text = $derived(
-    `${first}. This is an indication, not a verdict. Tags, cover art, silence or an unusual encoder can cause it, and a fake file can pass. Check the spectrum after downloading.`
+    `${first}. Tags, cover art, silence or an unusual encoder can also cause this, so check the spectrum after downloading.`
   );
 </script>
 

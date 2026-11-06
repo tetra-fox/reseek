@@ -113,7 +113,7 @@ export class UserFinder {
     if (this.#text() !== name) return;
     if (outcome.ok) return void goto(userHref(name, this.#tab));
     this.#onmissed?.();
-    toast(outcome.status === 404 ? `No user named ${name} was found.` : outcome.error, "error");
+    toast(outcome.status === 404 ? `No user named ${name}` : outcome.error, "error");
   }
 
   /** Opens the user an entry names, one the directory does not hold once the network knows them */

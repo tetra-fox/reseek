@@ -89,7 +89,7 @@ test("sets how a notification is announced, and offers the permission Desktop ne
   });
   await login(page, "/system/settings");
   const section = page.locator("#notifications");
-  const notice = section.getByText("Desktop notifications are not turned on in this browser.");
+  const notice = section.getByText("Desktop notifications are off in this browser");
   const choose = (type: string, mode: string) =>
     section.getByRole("radiogroup", { name: type }).getByRole("radio", { name: mode }).click();
 

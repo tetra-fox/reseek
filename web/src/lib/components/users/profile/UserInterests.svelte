@@ -26,7 +26,7 @@
   {#if interests.loading}
     <Skeleton class="h-12" />
   {:else if interests.data && !lists.some(({ list }) => list.length)}
-    <p class="text-sm text-fg-muted">{username} lists no interests.</p>
+    <p class="text-sm text-fg-muted">{username} lists no interests</p>
   {:else if interests.data}
     <dl class="flex flex-col gap-2">
       {#each lists as { title, list } (title)}

@@ -102,10 +102,7 @@
       <Field label="Expires">
         <Select aria-label="Expires" bind:value={expiresIn} options={EXPIRIES} />
       </Field>
-      <Field
-        label="Only from"
-        for="token-cidr"
-        hint="Comma-separated networks. Leave empty to allow any.">
+      <Field label="Only from" for="token-cidr" hint="Comma-separated networks, or empty for any">
         <Input id="token-cidr" bind:value={cidr} placeholder="192.168.1.0/24" />
       </Field>
       <div class="flex justify-end">

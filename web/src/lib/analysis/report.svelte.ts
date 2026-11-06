@@ -107,7 +107,7 @@ export class FileReport {
     // a file queued already shows its job once the queue is read
     if (outcome.ok || outcome.status === 409) void jobs.refresh();
     else if (outcome.status === 404 && target.kind === "file" && target.root === "temporary") {
-      this.error = "This local file is no longer held. Upload it again.";
+      this.error = "This uploaded file is gone. Upload it again.";
     } else toast(`Could not analyze the file: ${outcome.error}`, "error");
   }
 }

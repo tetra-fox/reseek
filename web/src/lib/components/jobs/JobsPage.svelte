@@ -114,7 +114,7 @@
   const clearEnded = () =>
     confirmation.ask({
       title: "Clear finished jobs?",
-      body: `${plural(ended, "finished job", "finished jobs")} leave the list. Jobs still running or waiting stay.`,
+      body: `${plural(ended, "finished job", "finished jobs")} will be removed. Running and queued jobs stay.`,
       confirm: "Clear",
       run: () => void busy.run(() => jobs.clearEnded(), "Finished jobs cleared")
     });
@@ -209,7 +209,7 @@
     <EmptyState
       icon={ListChecksIcon}
       title="No jobs"
-      description="Downloads, share scans, analyses and cleanups show here while they run and after they end." />
+      description="Downloads, share scans, analyses and cleanups appear here" />
   {:else if !listed.length}
     <Filter.Empty {filters} total={all.length} noun={JOBS} {refocus} onclear={clearAll} />
   {:else}

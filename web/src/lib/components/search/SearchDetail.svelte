@@ -326,7 +326,7 @@
     class="flex flex-wrap items-center gap-inline rounded-card border bg-surface p-4 shadow-card">
     <StatusIcon state={search.state} />
     <!-- the buttons go under the title rather than squeeze it below a word's width -->
-    <h2 class="min-w-0 flex-1 basis-40 truncate text-lg font-semibold" title={search.searchText}>
+    <h2 class="min-w-0 flex-1 basis-40 truncate text-lg font-medium" title={search.searchText}>
       {search.searchText}
     </h2>
     {#if scopeLabel(search.scope)}<Badge tone="accent">{scopeLabel(search.scope)}</Badge>{/if}
@@ -434,6 +434,6 @@
     <EmptyState
       icon={SearchXIcon}
       title="No results"
-      description="Use fewer or different words, or search again later." />
+      description="Try fewer or different words, or search again later" />
   {/if}
 {/if}

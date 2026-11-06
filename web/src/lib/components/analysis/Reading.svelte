@@ -17,51 +17,51 @@
     v === null || v === undefined ? null : `${v.toFixed(1)} dB`;
   const share = (v: number | null | undefined) =>
     v === null || v === undefined ? null : v.toFixed(2);
-  /** each measure: its name, its value, and what it tells, left out when it has no value */
+  /** each measure: its name, its value and what its name doesn't tell; left out without a value */
   const rows = $derived(
     (
       [
-        ["Median cutoff", kHz(m.cutoffMedianHz), "Frequency at which the content usually ends."],
+        ["Median cutoff", kHz(m.cutoffMedianHz), "Where the content usually ends"],
         [
           "Shelf sharpness",
           db(m.shelfSharpnessDbP95),
-          "Steepness of the cutoff. Above 30 dB indicates an encoder low-pass. A few dB indicates a natural roll-off."
+          "Above 30 dB points to an encoder low-pass, a few dB to a natural roll-off"
         ],
         [
           "Gaps in the top band",
           share(m.sfb21Holes),
-          "Empty bins between 16 and 20 kHz per filled bin. Informational only, since tonal content also raises it."
+          "Empty bins per filled bin from 16 to 20 kHz. Tonal content raises it too, so it is not used in the verdict."
         ],
         [
           "Frame rhythm",
           share(m.frameArtifactScore),
-          "Strength of noise repetition at the frame length of a lossy codec. Informational only."
+          "Noise repeating at a lossy codec's frame length. Not used in the verdict."
         ],
         [
           "Energy above half the band",
           m.upsampleRatio === null || m.upsampleRatio === undefined
             ? null
             : m.upsampleRatio.toExponential(1),
-          "Measured for files above 48 kHz. Low for upsampled audio, and also for much genuine high-resolution audio."
+          "Measured for sample rates above 48 kHz. Low for upsampled audio, but also for much genuine high-resolution audio."
         ],
-        ["Bits in use", m.bitDepthEffective?.toString() ?? null, "Number of bits the samples use."],
-        ["Quietest level", db(m.noiseFloorDbfs), "Level of the quietest passages, in dBFS."],
+        ["Bits in use", m.bitDepthEffective?.toString() ?? null, ""],
+        ["Quietest level", db(m.noiseFloorDbfs), "The noise floor, in dBFS"],
         [
           "Channel correlation",
           share(m.stereoCorrelation),
-          "A value of 1 means identical channels, which indicates a mono source."
+          "At 1 the channels are identical, so the source is mono"
         ],
         [
           "Side energy",
           db(m.sideEnergyDb),
-          "Difference between the channels relative to their sum."
+          "Difference between the channels relative to their sum"
         ],
         [
           "Clipped samples",
           m.clippedSamplesPct === null || m.clippedSamplesPct === undefined
             ? null
             : `${m.clippedSamplesPct.toFixed(3)}%`,
-          "Share of samples at full scale."
+          ""
         ]
       ] as [string, string | null, string][]
     ).filter(([, value]) => value !== null)
@@ -100,7 +100,7 @@
       {/if}
       {#if m.cutoffHzHistogram.length}
         <div class="flex flex-col gap-1">
-          <h4 class="text-xs font-medium text-fg-muted uppercase">Cutoff distribution</h4>
+          <h4 class="text-xs font-medium text-fg-muted">Cutoff distribution</h4>
           <ul class="flex flex-col gap-0.5" aria-label="Cutoffs by share of windows">
             {#each m.cutoffHzHistogram as [hz, count] (hz)}
               <li class="grid grid-cols-[5rem_1fr_3rem] items-center gap-2 text-xs">
@@ -115,14 +115,14 @@
         </div>
       {/if}
       <div class="flex flex-col gap-1">
-        <h4 class="text-xs font-medium text-fg-muted uppercase">Measures</h4>
+        <h4 class="text-xs font-medium text-fg-muted">Measures</h4>
         <dl class="flex flex-col gap-1.5">
           {#each rows as [name, value, meaning] (name)}
             <div>
               <dt class="flex justify-between gap-2">
                 <span class="font-medium">{name}</span><span class="tabular-nums">{value}</span>
               </dt>
-              <dd class="text-xs text-fg-muted">{meaning}</dd>
+              {#if meaning}<dd class="text-xs text-fg-muted">{meaning}</dd>{/if}
             </div>
           {/each}
         </dl>
@@ -137,7 +137,7 @@
       </p>
       {#if report.limitations.length}
         <div class="flex flex-col gap-1">
-          <h4 class="text-xs font-medium text-fg-muted uppercase">Limitations</h4>
+          <h4 class="text-xs font-medium text-fg-muted">Limitations</h4>
 
           <ul class="list-disc pl-5 text-fg-muted">
             {#each report.limitations as limit (limit)}<li>{limit}</li>{/each}

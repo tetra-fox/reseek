@@ -9,11 +9,11 @@
   const blocked = $derived(
     {
       granted: null,
-      default: "Desktop notifications are not turned on in this browser.",
+      default: "Desktop notifications are off in this browser",
       denied:
         "This browser blocks desktop notifications from this site. Allow them in its settings.",
       insecure: DESKTOP_NEEDS_HTTPS,
-      unsupported: "This browser does not support desktop notifications."
+      unsupported: "This browser does not support desktop notifications"
     }[notifier.permission]
   );
 </script>

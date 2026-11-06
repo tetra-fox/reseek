@@ -141,7 +141,7 @@
       <Input bind:value={text} required class="font-mono" />
     </label>
     {#if replaces}
-      <Notice kind="info">A preset named {name.trim()} already exists and will be replaced.</Notice>
+      <Notice kind="info">A preset named {name.trim()} already exists and will be replaced</Notice>
     {/if}
   </form>
   {#snippet footer()}

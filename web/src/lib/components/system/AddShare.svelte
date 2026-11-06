@@ -55,7 +55,7 @@
   const addable = $derived(remote && edit?.mode === "save");
   const why = $derived.by(() => {
     if (!data || manager) return null;
-    if (!remote) return "Adding a share takes remote_configuration.";
+    if (!remote) return "Turn on remote_configuration to add shares";
     return edit?.mode === "save" ? null : edit?.notice;
   });
   const entries = $derived((valueAt(data?.values, KEY) ?? []) as string[]);
@@ -159,7 +159,7 @@
     bind:open
     busy={saving || scanning.running}
     title={added ? "Share added" : "Add share"}
-    description={added ? undefined : "Folders on the machine reseek runs on."}
+    description={added ? undefined : "Folders on the machine reseek runs on"}
     class="w-[min(36rem,calc(100vw-2rem))]">
     {#if added}
       <p class="text-sm">
@@ -206,17 +206,15 @@
       </FileTree>
       {#each cut as listed (listed.path)}
         <p class="text-xs text-fg-muted">
-          <code class="font-mono wrap-anywhere">{listed.path}</code> holds more folders than are listed.
+          <code class="font-mono wrap-anywhere">{listed.path}</code> has more folders than shown
         </p>
       {/each}
-      <div class="flex flex-col gap-1 text-sm">
-        {#if chosen}
+      {#if chosen}
+        <div class="flex flex-col gap-1 text-sm">
           <code class="font-mono text-xs wrap-anywhere">{chosen}</code>
-          {#if taken}<p class="text-xs text-fg-muted">This folder is already in the shares.</p>{/if}
-        {:else}
-          <p class="text-xs text-fg-muted">Pick a folder by its name. Arrows open folders.</p>
-        {/if}
-      </div>
+          {#if taken}<p class="text-xs text-fg-muted">This folder is already in the shares</p>{/if}
+        </div>
+      {/if}
       <div class="flex flex-wrap items-end gap-group">
         <Segmented
           size="sm"
@@ -232,7 +230,7 @@
         </label>
       </div>
       {#if kind === "exclude"}
-        <p class="text-xs text-fg-muted">Exclude keeps a folder inside a share off the network.</p>
+        <p class="text-xs text-fg-muted">Exclude keeps a folder inside a share off the network</p>
       {/if}
       {#if error}<Notice kind="error">{error}</Notice>{/if}
     {/if}

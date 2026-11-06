@@ -33,16 +33,16 @@
         <Linked text={description} />
       </p>
     {:else}
-      <p class="text-sm text-fg-muted">No profile text.</p>
+      <p class="text-sm text-fg-muted">No profile text</p>
     {/if}
     <dl class="flex flex-wrap gap-x-6 gap-y-1 text-xs">
       <div class="flex items-center gap-1">
         <dt class="text-fg-muted">Free upload slot</dt>
         <dd>
           {#if freeUploadSlot}
-            <CircleCheckIcon class="size-3.5 text-success" aria-label="yes" />
+            <CircleCheckIcon class="size-3.5 text-success" aria-label="Yes" />
           {:else}
-            <CircleXIcon class="size-3.5 text-danger" aria-label="no" />
+            <CircleXIcon class="size-3.5 text-danger" aria-label="No" />
           {/if}
         </dd>
       </div>

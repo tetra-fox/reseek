@@ -45,7 +45,7 @@
   title={usernames.length === 1
     ? `Upload group for ${usernames[0]}`
     : `Upload group for ${usernames.length} users`}
-  description="A group set in the configuration takes precedence over this one.">
+  description="A group set in the configuration overrides this one">
   <Form layout="stacked">
     <Field label="Upload group" for="assign-group">
       <Select

@@ -64,9 +64,7 @@
   <EmptyState
     class="shrink-0 px-0 py-0"
     title={id === "a" ? "Add a file to analyze" : "Add a file to compare"}
-    description={write && !viewport.phone
-      ? "You can also drop a file anywhere in this row."
-      : undefined}
+    description={write && !viewport.phone ? "Or drop a file anywhere in this row" : undefined}
     action={ways} />
   {#if picking && !viewport.phone}
     <div

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { type Target, VERDICTS } from "#lib/analysis/analysis.js";
+  import { NOT_ANALYZED, STALE, type Target, VERDICTS } from "#lib/analysis/analysis.js";
   import type { FileReport } from "#lib/analysis/report.svelte.js";
   import { slots } from "#lib/analysis/slots.svelte.js";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
@@ -29,20 +29,16 @@
   {:else if report === undefined}
     <Skeleton class="h-20" />
   {:else if report === null}
-    {#if !job}<p class="text-fg-muted">This file has not been analyzed.</p>{/if}
+    {#if !job}<p class="text-fg-muted">{NOT_ANALYZED}</p>{/if}
   {:else if report.stale}
-    {#if !job}
-      <p class="text-fg-muted">
-        This file was analyzed by an older version of reseek. Analyze it again to view the results.
-      </p>
-    {/if}
+    {#if !job}<p class="text-fg-muted">{STALE}</p>{/if}
   {:else}
     <p>
       <span class="font-medium">{VERDICTS[report.verdict]}</span>
       <span class="text-fg-muted">· {Math.round(report.confidence * 100)}% confidence</span>
     </p>
     {#if scope}<Thumbnail {scope} onopen={() => slots.open(target, name)} />{/if}
-    <p class="text-xs text-fg-muted">An aid to judgment, not proof.</p>
+    <p class="text-xs text-fg-muted">A guide, not proof</p>
   {/if}
 
   {#if report}

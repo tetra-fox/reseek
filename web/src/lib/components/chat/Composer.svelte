@@ -322,9 +322,7 @@
           <dd class="text-xs text-fg-muted">{c.about}</dd>
         {/each}
       </dl>
-      <p class="mt-2 text-xs text-fg-subtle">
-        To send a message that starts with /, begin it with //.
-      </p>
+      <p class="mt-2 text-xs text-fg-subtle">Start with // to send a message that begins with /</p>
     </div>
   {/if}
   <div class="flex items-end gap-2">
@@ -367,7 +365,7 @@
         </span>
       {/if}
       {#if flattened}
-        <span class="text-fg-muted">Line breaks are replaced with spaces in private messages.</span>
+        <span class="text-fg-muted">Line breaks become spaces in private messages</span>
       {/if}
       {#if length > max * 0.9}
         <span class={["ml-auto tabular-nums", length > max ? "text-danger" : "text-fg-muted"]}>

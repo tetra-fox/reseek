@@ -115,21 +115,21 @@
   const remove = (name: string) =>
     confirmation.ask({
       title: "Remove from the room",
-      body: `Remove ${name} from ${members.name}? The user cannot rejoin until added again.`,
+      body: `Remove ${name} from ${members.name}? They can rejoin only if added again.`,
       confirm: "Remove",
       run: () => void members.removeMember(name).then(report(`${name} was removed`))
     });
   const giveUp = () =>
     confirmation.ask({
       title: "Give up ownership",
-      body: `Give up ${members.name}? It becomes a public room with no owner, and you leave it. Its members lose access to it and are not told.`,
+      body: `Give up ${members.name}? It becomes a public room with no owner and you leave it. Its members lose access without being told.`,
       confirm: "Give up",
       run: () => void members.dropOwnership().then(report(`Gave up ${members.name} and left it`))
     });
   const quit = () =>
     confirmation.ask({
       title: "Leave the private room",
-      body: `Leave ${members.name}? Rejoining requires being added again.`,
+      body: `Leave ${members.name}? You can rejoin only if added again.`,
       confirm: "Leave",
       run: () => void members.dropMembership().then(report(`Left ${members.name}`))
     });
@@ -237,10 +237,10 @@
               </span>
               {#if u.username === room?.owner}<CrownIcon
                   class="size-3 shrink-0 text-warning"
-                  aria-label="owner" />{/if}
+                  aria-label="Owner" />{/if}
               {#if blocked(u.username)}<span
                   class="size-2 shrink-0 rounded-full bg-danger"
-                  title="blocked"></span
+                  title="Blocked"></span
                 >{/if}
               {#if u.self}<span class="text-xs text-accent">you</span>{/if}
             </span>

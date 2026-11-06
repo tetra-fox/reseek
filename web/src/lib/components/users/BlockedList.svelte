@@ -231,7 +231,7 @@
   bind:open={importing}
   busy={sending}
   title="Import blocks"
-  description="One username per line. Lines starting with # are ignored. A JSON export is also accepted.">
+  description="One username per line, or a JSON export. Lines starting with # are ignored.">
   <Textarea
     class="min-h-40 font-mono text-xs"
     aria-label="Blocks to import"

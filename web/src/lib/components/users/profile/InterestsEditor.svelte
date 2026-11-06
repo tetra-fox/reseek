@@ -59,7 +59,7 @@
         {/each}
       </ul>
     {:else}
-      <p class="text-sm text-fg-muted">Nothing listed.</p>
+      <p class="text-sm text-fg-muted">Nothing listed</p>
     {/if}
     {#if !disabled}
       <form class="flex gap-inline" onsubmit={(e) => add(e, side)}>

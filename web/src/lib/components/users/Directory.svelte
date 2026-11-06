@@ -282,7 +282,7 @@
   <EmptyState
     icon={UsersIcon}
     title="No users yet"
-    description="Users from transfers, private messages and browsing are listed here." />
+    description="Users you transfer with, message or browse appear here" />
 {:else}
   <div
     bind:this={grid}

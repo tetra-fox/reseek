@@ -257,7 +257,7 @@
         at === null ? -1 : lines.findIndex((l) => l.kind === "message" && l.message.localId >= at);
       const line = lines[index];
       if (at !== null && (line?.kind !== "message" || line.message.localId !== at)) {
-        toast("That message is no longer stored.");
+        toast("That message is no longer stored");
       }
       if (index === -1) toBottom();
       else shown.scrollTo(index, "center");

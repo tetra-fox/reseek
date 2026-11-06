@@ -93,7 +93,7 @@ test("analyzes a finished download from its row and keeps a judgment", async ({ 
   const inspector = await details(page);
   // the inspector gives the verdict in a line, with the spectrogram small
   await expect(inspector.getByText("Likely a transcode").first()).toBeVisible();
-  await expect(inspector.getByText("An aid to judgment, not proof.")).toBeVisible();
+  await expect(inspector.getByText("A guide, not proof")).toBeVisible();
   await inspector.getByRole("button", { name: "Open in Analysis" }).click();
 
   const viewer = page.getByRole("region", { name: "Slot A" });
@@ -101,7 +101,7 @@ test("analyzes a finished download from its row and keeps a judgment", async ({ 
   await expect(plot).toBeVisible();
   // the guide opens from the toolbar with the disclaimer
   await page.getByRole("button", { name: "Guide" }).click();
-  await expect(page.getByText(/This analysis is an aid to judgment, not proof/)).toBeVisible();
+  await expect(page.getByText(/The analysis is a guide, not proof/)).toBeVisible();
   await page.keyboard.press("Escape");
   // each guide line shows and hides from its legend, drawn on the plot at its frequency
   const legend = viewer.getByRole("button", { name: "MP3 128k" });
@@ -502,9 +502,7 @@ test("a report an older version made asks to be analyzed again", async ({ page }
   await login(page, "/downloads");
   const slot = await openSlot(page);
   await expect(
-    slot.getByText(
-      "This file was analyzed by an older version of reseek. Analyze it again to view the results."
-    )
+    slot.getByText("Results from an older version of reseek can't be shown")
   ).toBeVisible();
   // it offers, and does not start by itself
   expect(queued).toHaveLength(0);

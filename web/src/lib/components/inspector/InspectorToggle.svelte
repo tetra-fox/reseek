@@ -12,6 +12,6 @@
     variant={inspector.open ? "secondary" : "outline"}
     size="sm"
     aria-pressed={inspector.open}
-    title="Show or hide the details of the file in focus (I or Space in the list)"
+    title="Show or hide file details (I or Space)"
     onclick={() => inspector.toggle()}><PanelRightIcon />Details</Button>
 {/if}

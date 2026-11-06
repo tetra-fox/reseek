@@ -157,7 +157,7 @@
 </script>
 
 <Dialog bind:open title="Join a room" busy={creating} class="w-[min(36rem,calc(100vw-2rem))]">
-  <h3 class="text-sm font-semibold">Public rooms</h3>
+  <h3 class="text-sm font-medium">Public rooms</h3>
   <div class="flex gap-2">
     <Input
       type="search"
@@ -206,11 +206,11 @@
             <span role="gridcell" class="flex min-w-0 items-center gap-1.5 px-2">
               {#if room.isPrivate}<LockIcon
                   class="size-3.5 text-fg-muted"
-                  aria-label="private" />{/if}
-              {#if room.isOwned}<CrownIcon class="size-3.5 text-warning" aria-label="owned" />{/if}
+                  aria-label="Private" />{/if}
+              {#if room.isOwned}<CrownIcon class="size-3.5 text-warning" aria-label="Owned" />{/if}
               {#if room.isModerated}<GavelIcon
                   class="size-3.5 text-fg-muted"
-                  aria-label="operator" />{/if}
+                  aria-label="Operator" />{/if}
               <span class="truncate">{room.name}</span>
             </span>
             <span role="gridcell" class="truncate px-2 text-right tabular-nums"
@@ -253,13 +253,13 @@
       e.preventDefault();
       void create();
     }}>
-    <h3 class="text-sm font-semibold">Create a room</h3>
+    <h3 class="text-sm font-medium">Create a room</h3>
     <Field label="Name" for="create-name">
       <Input id="create-name" maxlength={24} bind:value={name} autocomplete="off" />
     </Field>
     {#if existing}
       <div class="flex flex-wrap items-center gap-inline text-sm" role="status">
-        <span class="text-fg-muted">There is a public room called {existing.name}.</span>
+        <span class="text-fg-muted">{existing.name} is already a public room</span>
         {#if isJoined(existing.name)}
           <Button size="sm" variant="outline" onclick={() => enter(existing.name)}>Open it</Button>
         {:else}

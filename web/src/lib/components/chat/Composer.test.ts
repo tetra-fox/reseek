@@ -95,7 +95,7 @@ describe("the composer", () => {
   });
 
   it("keeps a private message on one line and a room's as written", async () => {
-    const note = "Line breaks are replaced with spaces in private messages.";
+    const note = "Line breaks become spaces in private messages";
     const room = open();
     expect(room.press("Enter", true)).toBe(true);
     room.type("one\ntwo");

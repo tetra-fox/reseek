@@ -14,7 +14,7 @@
   import InterestsEditor from "#lib/components/users/profile/InterestsEditor.svelte";
   import { href } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
-  import { OwnInterests } from "#lib/users/interests.svelte.js";
+  import { INTERESTS_HINT, OwnInterests } from "#lib/users/interests.svelte.js";
   import { InterestFinder } from "#lib/users/recommendations.svelte.js";
 
   import Recommended from "./Recommended.svelte";
@@ -47,7 +47,7 @@
   );
   const note = $derived(
     !interest && source === "personal" && read?.popularInstead
-      ? "Nothing is recommended for you yet, so popular interests show instead. Add interests you like to get recommendations."
+      ? "Nothing is recommended for you yet, so these are popular interests"
       : undefined
   );
 
@@ -60,9 +60,7 @@
   const refresh = () => finder.show(finder.shown);
 </script>
 
-<Card
-  title="Your interests"
-  description="Told to the Soulseek server, which matches you with people who share them. Saved as you go.">
+<Card title="Your interests" description={INTERESTS_HINT}>
   <InterestsEditor interests={own} disabled={!admin} />
 </Card>
 
@@ -97,10 +95,7 @@
     {:else if read && (read.lists.recommended.length || read.lists.unrecommended.length)}
       <Recommended lists={read.lists} ours={own.lists} canMark={admin} onmark={mark} />
     {:else if read}
-      <EmptyState
-        icon={SparklesIcon}
-        title="Nothing to recommend"
-        description="The server has no recommendations here yet." />
+      <EmptyState icon={SparklesIcon} title="Nothing to recommend" />
     {/if}
   </Card>
 
@@ -119,9 +114,7 @@
       <EmptyState
         icon={UsersIcon}
         title="No users found"
-        description={interest
-          ? "Nobody the server knows of lists this interest."
-          : "Add interests you like and the server finds users who share them."} />
+        description={interest ? undefined : "Add interests to find users who share them"} />
     {/if}
   </Card>
 </div>

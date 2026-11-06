@@ -156,7 +156,7 @@
       bind:value={reach} />
   {/if}
   {#if app.state && !connected}
-    <p class="text-xs text-fg-muted">Connect to the Soulseek server to search.</p>
+    <p class="text-xs text-fg-muted">Connect to the Soulseek server to search</p>
   {/if}
   {#if scoped}
     <div class="flex items-center gap-2 text-xs text-fg-muted">

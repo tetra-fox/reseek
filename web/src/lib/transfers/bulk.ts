@@ -52,6 +52,9 @@ export const bulkRequest = (
   return ids.length ? { action, ids } : null;
 };
 
+/** What pausing downloads costs, said before it is done */
+export const PAUSE_WARNING = "Partial files are kept. You lose your place in each user's queue.";
+
 /** How many active transfers a cancel would stop, which it asks about first */
 export const activeAmong = (transfers: Transfer[]) =>
   transfers.filter((t) => t.state === "InProgress").length;

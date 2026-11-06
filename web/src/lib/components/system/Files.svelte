@@ -272,7 +272,7 @@
           }
         : {
             title: `Delete ${targets.length} items?`,
-            body: "This cannot be undone.",
+            body: "This cannot be undone",
             confirm: "Delete",
             run: () => void remove(targets)
           }
@@ -345,7 +345,7 @@
 
 {#if !managed}
   <Notice kind="info">
-    Remote file management is disabled. Enable <code>remote_file_management</code> to delete files here.
+    Turn on <code>remote_file_management</code> to delete files here
   </Notice>
 {/if}
 

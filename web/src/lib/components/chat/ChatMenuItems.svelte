@@ -52,13 +52,13 @@
       user
         ? {
             title: "Close conversation",
-            body: `Close the conversation with ${target.name}? The history is kept, and the conversation reopens when a new message arrives.`,
+            body: `Close the conversation with ${target.name}? The history is kept, and it reopens when they message you.`,
             confirm: "Close",
             run: () => void chat.close(target.name).then(report)
           }
         : {
             title: "Leave room",
-            body: `Leave ${target.name}? Its messages stop arriving until the room is joined again.`,
+            body: `Leave ${target.name}?`,
             confirm: "Leave",
             run: () => void chat.leave(target.name).then(report)
           }

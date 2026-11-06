@@ -173,16 +173,15 @@
       <div
         class="flex flex-wrap items-center gap-x-2 gap-y-1 border-b px-3 py-1.5 text-xs text-fg-muted">
         <span class="flex min-w-[min(100%,16rem)] flex-1 items-center gap-2"
-          ><BellRingIcon class="size-3.5 shrink-0" />Desktop notifications can announce new messages
-          while this tab is in the background.</span>
+          ><BellRingIcon class="size-3.5 shrink-0" />Get a desktop notification for new messages
+          while this tab is in the background</span>
         <Button variant="link" class="text-xs" onclick={() => void notifier.ask()}
           >{TURN_ON_NOTIFICATIONS}</Button>
       </div>
     {/if}
     {#if insecure}
       <p class="flex items-center gap-2 border-b px-3 py-1.5 text-xs text-fg-muted">
-        <BellOffIcon class="size-3.5 shrink-0" />{DESKTOP_NEEDS_HTTPS} On this address, new messages are
-        announced only inside the page.
+        <BellOffIcon class="size-3.5 shrink-0" />{DESKTOP_NEEDS_HTTPS}
       </p>
     {/if}
     {#if target === "search"}

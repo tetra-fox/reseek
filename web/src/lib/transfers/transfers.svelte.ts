@@ -94,7 +94,7 @@ export class Transfers {
     if (this.direction === "download") {
       void call(() => api.GET("/api/v0/transfers/downloads/queue")).then((order) => {
         if (order.ok) this.#ordered(order.data.ids);
-        else toast(`The local queue's order was not read: ${order.error}`, "error");
+        else toast(`Could not load the queue order: ${order.error}`, "error");
       });
     }
     const turn = this.list.reading();

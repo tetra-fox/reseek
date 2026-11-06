@@ -52,7 +52,7 @@
   {:else if !reports}
     <Skeleton class="h-24" />
   {:else if !reports.length}
-    <p class="text-sm text-fg-muted">Files appear here once they have been analyzed.</p>
+    <p class="text-sm text-fg-muted">No files analyzed yet</p>
   {:else}
     <ul class="flex min-h-0 flex-col overflow-y-auto">
       {#each reports as report (report.path)}

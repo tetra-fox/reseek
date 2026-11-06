@@ -262,7 +262,7 @@ test("a search that finds nothing says so, and offers the name", async ({ page }
   await fakeSearch(page);
   await login(page, "/chat");
   await box(page).fill("zzz");
-  await expect(page.getByRole("listbox")).toContainText("No rooms, users or messages match.");
+  await expect(page.getByRole("listbox")).toContainText("No rooms, users or messages match");
   await page.keyboard.press("Enter");
   await expect(page.getByText('Nothing matches "zzz"')).toBeVisible();
   await page.getByRole("button", { name: "Join this room" }).click();

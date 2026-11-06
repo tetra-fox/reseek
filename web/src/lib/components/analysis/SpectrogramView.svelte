@@ -72,9 +72,8 @@
   const toggle = () => {
     if (track && canToggle) void playback.toggle(track, codec, scope.cursor);
   };
-  /** A reason the daemon gave, as a sentence */
-  const sentence = (reason: string) =>
-    `${reason.charAt(0).toUpperCase()}${reason.slice(1)}${/[.!?]$/.test(reason) ? "" : "."}`;
+  /** A reason the daemon gave, capitalized to stand on its own */
+  const sentence = (reason: string) => `${reason.charAt(0).toUpperCase()}${reason.slice(1)}`;
 
   /** The user put the cursor somewhere: playback moves there too */
   const seek = (t: number) => {
@@ -202,18 +201,16 @@
         {readout}
       </p>
       {#if track && !canPlay}
-        <p class="text-xs text-fg-muted">
-          This browser cannot play this file. The cursor does not follow playback.
-        </p>
+        <p class="text-xs text-fg-muted">This browser cannot play this file</p>
       {:else if playback.problem}
         <p class="text-xs text-fg-muted" role="status">{playback.problem}</p>
       {/if}
     {/if}
     {#if layout.sampled}
       <p class="text-xs text-fg-muted">
-        Only {scope.starts.length} one-second samples across the {formatDuration(
+        Only {scope.starts.length} one-second samples of this {formatDuration(
           layout.durationSeconds
-        )} of this file were analyzed. The hatched stretches between them were not read.
+        )} file were analyzed; the hatched stretches were not
       </p>
     {/if}
   </div>

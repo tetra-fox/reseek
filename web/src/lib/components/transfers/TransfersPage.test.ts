@@ -464,7 +464,7 @@ describe("the transfers table", () => {
       flushSync();
       expect(row(a.id)).toBeNull();
       expect(pane()?.querySelector("h2")).toBeNull();
-      expect(pane()?.textContent).toContain("Select a file to see its details.");
+      expect(pane()?.textContent).toContain("No file selected");
     });
 
     it("give focus back to the table when the inspector closes from inside", async () => {
@@ -521,7 +521,7 @@ describe("the transfers table", () => {
       // short of the Undo's countdown, which would carry the removal out
       await vi.advanceTimersByTimeAsync(100);
       flushSync();
-      expect(pane()?.textContent).toContain("Select a file to see its details.");
+      expect(pane()?.textContent).toContain("No file selected");
       expect(document.activeElement).toBe(pane());
     });
 

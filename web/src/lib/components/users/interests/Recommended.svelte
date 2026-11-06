@@ -42,9 +42,8 @@
           <a
             class="min-w-0 flex-1 text-sm wrap-anywhere hover:underline"
             href={interestHref(interest)}>{interest}</a>
-          <span
-            class="w-14 shrink-0 text-right text-xs text-fg-muted tabular-nums"
-            title="The server's score">{score.toLocaleString()}</span>
+          <span class="w-14 shrink-0 text-right text-xs text-fg-muted tabular-nums" title="Score"
+            >{score.toLocaleString()}</span>
           <span class="flex w-28 shrink-0 justify-end gap-0.5">
             {#if mine}
               <Badge tone="outline">{mine}</Badge>

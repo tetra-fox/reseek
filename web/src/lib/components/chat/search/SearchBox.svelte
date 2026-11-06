@@ -163,7 +163,7 @@
     </Suggest.Group>
   {/if}
   {#if noName && !listed.hits.length && box.current}
-    <p class="px-2 py-1 text-sm text-fg-muted">No rooms, users or messages match.</p>
+    <p class="px-2 py-1 text-sm text-fg-muted">No rooms, users or messages match</p>
   {/if}
   {#if noName && write}
     {#if text !== SERVER}

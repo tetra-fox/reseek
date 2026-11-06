@@ -21,8 +21,8 @@
       sideOffset={6}
       class="z-50 w-[min(30rem,calc(100vw-2rem))] rounded-card border bg-overlay p-4 text-sm shadow-raised outline-none data-[state=closed]:animate-popover-out data-[state=open]:animate-popover-in">
       <p class="mb-2 text-fg-muted">
-        Every word must appear in the file path. A file without an attribute, such as bitrate, is
-        not filtered by that attribute.
+        Every word must appear in the path. A file with no bitrate or other attribute passes that
+        attribute's filter.
       </p>
       <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
         {#each FILTER_TOKENS as t (t.token)}

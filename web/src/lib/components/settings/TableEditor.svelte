@@ -197,7 +197,7 @@
       type="password"
       autocomplete="new-password"
       aria-label={label}
-      placeholder={isHidden(held) ? "Kept. Type to replace" : ""}
+      placeholder={isHidden(held) ? "Type a new value to replace it" : ""}
       value={isHidden(held) ? "" : String(held ?? "")}
       oninput={(e) => typeSecret(row, column.key, e.currentTarget.value)}
       {disabled} />
@@ -248,7 +248,7 @@
     <p class="text-xs text-danger" role="alert">{message}</p>
   {/each}
   {#if !rows.length}
-    <p class="text-sm text-fg-muted">None yet.</p>
+    <p class="text-sm text-fg-muted">None yet</p>
   {:else if onALine}
     <!-- the whole width, rows parted by hairlines; on a phone each row stacks, its cells under
          their labels -->

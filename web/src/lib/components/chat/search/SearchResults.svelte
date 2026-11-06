@@ -129,7 +129,7 @@
 <div class="flex min-h-0 flex-1 flex-col">
   <header class="flex flex-wrap items-center gap-x-2 gap-y-1 border-b px-3 py-2">
     {@render lead()}
-    <h2 class="min-w-0 flex-1 basis-40 truncate font-semibold">
+    <h2 class="min-w-0 flex-1 basis-40 truncate font-medium">
       {q ? `Results for "${q}"` : "Search"}
     </h2>
     {#if q}
@@ -149,7 +149,7 @@
     <EmptyState
       icon={SearchIcon}
       title="Search rooms, users and messages"
-      description={'Type in the box above the chat list. Messages can be searched with a "quoted phrase", or one OR another.'} />
+      description={'Use the box above the chat list. Messages match a "quoted phrase" or one word OR another.'} />
   {:else if !search.current}
     <div class="flex flex-col gap-3 p-3" aria-hidden="true">
       {#each [0, 1, 2] as n (n)}<Skeleton class="h-9 w-full" />{/each}
@@ -182,7 +182,7 @@
       {#each lines as line, i (line.key)}
         {#if line.kind === "heading"}
           <div role="row" {...list.line(line, i)} class="flex gap-2 px-2 pt-3 pb-1 text-sm">
-            <span role="columnheader" class="font-semibold">{line.title}</span>
+            <span role="columnheader" class="font-medium">{line.title}</span>
             {#if line.title === "Messages"}
               <span class="text-fg-muted">{plural(line.count, "match", "matches")}</span>
             {/if}

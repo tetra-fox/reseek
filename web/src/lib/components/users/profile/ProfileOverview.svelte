@@ -45,7 +45,7 @@
       freeUploadSlot={p.info.hasFreeUploadSlot}
       queueLength={p.info.queueLength} />
   {:else}
-    <p class="text-sm text-fg-muted">The profile has not been loaded. Use Refresh to request it.</p>
+    <p class="text-sm text-fg-muted">Use Refresh to load the profile</p>
   {/if}
 </Card>
 
@@ -75,7 +75,7 @@
   {#each tiles as tile (tile.label)}
     <div class="flex flex-col gap-0.5 rounded-card border bg-surface p-4 shadow-card">
       <span class="text-xs text-fg-muted">{tile.label}</span>
-      <span class="text-2xl font-semibold tabular-nums">{tile.value.toLocaleString()}</span>
+      <span class="text-2xl font-medium tabular-nums">{tile.value.toLocaleString()}</span>
       <span class="text-xs text-fg-subtle">{tile.sub}</span>
     </div>
   {/each}

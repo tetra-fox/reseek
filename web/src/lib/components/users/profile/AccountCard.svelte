@@ -73,7 +73,7 @@
     <Button variant="ghost" size="sm" href={href(SOULSEEK_SETTINGS)}>Soulseek settings</Button>
   </div>
   {#if allowed && !online}
-    <p class="text-xs text-fg-muted">Log in to the server to change the password.</p>
+    <p class="text-xs text-fg-muted">Connect to the Soulseek server to change the password</p>
   {/if}
   {#if notice}<p class="text-xs text-fg-muted">{notice}</p>{/if}
 </Card>
@@ -82,7 +82,7 @@
   bind:open
   busy={changing}
   title="Change password"
-  description="The server changes it at once. Any other client on this account needs the new one at its next login.">
+  description="This takes effect at once. Other clients on this account need the new password at their next login.">
   <form id="change-password" class="flex flex-col gap-group" onsubmit={change}>
     <!-- for password managers, which pair a new password with its account -->
     <input type="text" class="hidden" autocomplete="username" value={name} readonly />
@@ -99,7 +99,7 @@
         bind:value={repeated}
         required />
     </label>
-    {#if mismatch}<p class="text-xs text-danger">The two passwords differ.</p>{/if}
+    {#if mismatch}<p class="text-xs text-danger">The passwords do not match</p>{/if}
     {#if error}<Notice kind="error">{error}</Notice>{/if}
   </form>
   {#snippet footer()}

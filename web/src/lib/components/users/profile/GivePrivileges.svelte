@@ -63,15 +63,15 @@
   bind:open
   busy={sending}
   title={`Give ${username} privileges`}
-  description="Privileged users are served first by other users. The days come off your own privileges. If the server refuses the gift, it says so in a private message.">
+  description="Privileged users go first in other users' queues. The days come off your own privileges, and if the server refuses, it says so in a private message.">
   {#if daysLeft < 1}
-    <Notice kind="info">You have no whole days of privileges to give.</Notice>
+    <Notice kind="info">You have no whole days of privileges to give</Notice>
   {:else}
     <Form id="give-privileges" layout="stacked" class="flex flex-col gap-group" onsubmit={submit}>
       <Field
         label="Days"
         for="give-privileges-days"
-        hint={`You have ${plural(daysLeft, "whole day", "whole days")} left.`}>
+        hint={`You have ${plural(daysLeft, "whole day", "whole days")} left`}>
         <Input
           id="give-privileges-days"
           class="tabular-nums"

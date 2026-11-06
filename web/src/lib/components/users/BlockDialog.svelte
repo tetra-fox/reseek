@@ -71,7 +71,7 @@
     const address = await addressOf(names[0]);
     finding = false;
     if (blocking.asked !== asked) return;
-    if (!address) error = `The address of ${names[0]} is not known; they may be offline.`;
+    if (!address) error = `No address known for ${names[0]}, who may be offline`;
     else if (!listed.includes(address)) addresses = [...listed, address].join(" ");
   };
 
@@ -162,7 +162,7 @@
         onclick={() => void addTheirs()}>Add their current address</Button>
     {/if}
     {#if !scopes.length}
-      <p class="text-xs text-danger">Select at least one item to block.</p>
+      <p class="text-xs text-danger">Select at least one item to block</p>
     {/if}
     {#if error}<Notice kind="error">{error}</Notice>{/if}
   </Form>

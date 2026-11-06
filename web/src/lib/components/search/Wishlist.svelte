@@ -44,10 +44,10 @@
 <Card
   title="Wishlist"
   description={schedule?.every
-    ? "Each search runs again in turn, as often as the Soulseek server allows, and tells you when it finds new files."
+    ? "Searches run again regularly and report new files"
     : app.isServerConnected
-      ? "Each search runs again in turn once the Soulseek server says how often it may."
-      : "Each search runs again in turn while you are connected."}>
+      ? "Waiting for the Soulseek server to say how often searches may run"
+      : "Searches run while you are connected"}>
   {#if write}
     <form class="flex gap-inline px-5" onsubmit={add}>
       <Input

@@ -69,7 +69,7 @@
   <div class="flex min-w-48 flex-1 flex-col gap-2">
     <p class="text-sm">{over ? "Drop to use this picture" : "Drag a picture here"}</p>
     <p class="text-xs text-fg-muted">
-      {FORMATS}, up to {MAX_SIZE}. Kept as a JPEG no wider or taller than 512 pixels.
+      {FORMATS} up to {MAX_SIZE}, scaled down to fit 512 pixels
     </p>
     <input
       bind:this={input}

@@ -4,6 +4,7 @@
   import { tick } from "svelte";
 
   import type { SlotId } from "#lib/analysis/address.js";
+  import { NOT_ANALYZED, STALE } from "#lib/analysis/analysis.js";
   import type { FileReport } from "#lib/analysis/report.svelte.js";
   import { slots } from "#lib/analysis/slots.svelte.js";
   import { trackOf } from "#lib/analysis/track.js";
@@ -77,9 +78,9 @@
     const [file] = e.dataTransfer?.files ?? [];
     if (!file) return;
     if (e.dataTransfer?.items[0]?.webkitGetAsEntry()?.isDirectory) {
-      return void toast("A folder cannot be analyzed. Drop a single file.", "error");
+      return void toast("Drop a single file, not a folder", "error");
     }
-    if (!write) return void toast("Uploading a file requires write access.", "error");
+    if (!write) return void toast("Uploading needs write access", "error");
     slots.upload(id, file);
   };
 </script>
@@ -153,7 +154,7 @@
         <Skeleton class="h-40" />
       {:else if report === null}
         {#if !job}
-          <p class="text-sm text-fg-muted">This file has not been analyzed.</p>
+          <p class="text-sm text-fg-muted">{NOT_ANALYZED}</p>
           {#if write}
             <Button
               variant="outline"
@@ -165,10 +166,7 @@
         {/if}
       {:else if report.stale}
         {#if !job}
-          <p class="text-sm text-fg-muted">
-            This file was analyzed by an older version of reseek. Analyze it again to view the
-            results.
-          </p>
+          <p class="text-sm text-fg-muted">{STALE}</p>
           {#if write}
             <Button
               variant="outline"

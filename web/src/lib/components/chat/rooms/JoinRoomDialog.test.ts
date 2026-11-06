@@ -75,7 +75,7 @@ describe("the join dialog", () => {
     type("#create-name", "indie");
     expect(create().disabled).toBe(true);
     expect(document.querySelector("[role=status]")!.textContent).toContain(
-      "There is a public room called indie"
+      "indie is already a public room"
     );
     create().closest("form")!.requestSubmit();
     await flush();

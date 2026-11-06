@@ -74,7 +74,7 @@
     <Textarea
       bind:value={note}
       rows={2}
-      placeholder="Notes on what was heard or seen"
+      placeholder="What you heard or saw"
       disabled={choice === null}
       oninput={() => (saved = false)} />
   </label>

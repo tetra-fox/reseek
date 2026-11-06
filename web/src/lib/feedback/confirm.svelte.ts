@@ -1,7 +1,7 @@
 /** A question the page asks before a destructive action */
 export type Question = {
   title: string;
-  body: string;
+  body?: string;
   confirm: string;
   /** the other button's words, Cancel by default, for a question whose confirm cancels */
   dismiss?: string;

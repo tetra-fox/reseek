@@ -19,7 +19,6 @@
   import { href } from "#lib/nav.js";
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
-  import { fields } from "#lib/stored.svelte.js";
 
   // the databases on disk with their sizes, the retention in force, and the transfer lists' upkeep
   const databases = new Loader(() => call(() => api.GET("/api/v0/application/data")));
@@ -56,7 +55,7 @@
   const clearCompleted = (direction: "uploads" | "downloads") =>
     confirmation.ask({
       title: `Clear finished ${direction}?`,
-      body: `All finished ${direction} are removed from the list. They remain in the statistics.`,
+      body: "They stay in the statistics",
       confirm: "Clear",
       run: () =>
         void busy.run(
@@ -80,6 +79,7 @@
   const retentionText = (value: unknown) => {
     if (value === null || value === undefined) return "Kept forever";
     if (typeof value === "number") return value.toLocaleString();
+    if (typeof value === "boolean") return value ? "Yes" : "No";
     const ms = parseDuration(value);
     return ms === null ? String(value) : sayDuration(ms);
   };
@@ -100,7 +100,7 @@
     <EmptyState
       icon={DatabaseIcon}
       title="No database files"
-      description="reseek keeps its databases in memory." />
+      description="reseek keeps its databases in memory" />
   {:else}
     <div
       class="-mx-5 border-y text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
@@ -155,8 +155,7 @@
 
 <Card title="Finished transfers">
   <p class="text-sm text-fg-muted">
-    Long lists slow down the Downloads and Uploads screens. Cleared transfers remain in the
-    statistics.
+    Long lists slow down Downloads and Uploads. Cleared transfers stay in the statistics.
   </p>
   {#if write}
     <div class="flex flex-wrap gap-inline">

@@ -85,7 +85,6 @@
 <ConfirmDialog
   bind:open={confirming}
   title="Log out?"
-  body="This browser must log in again to use reseek."
   confirm="Log out"
   danger
   onconfirm={logout} />

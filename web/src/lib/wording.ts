@@ -13,7 +13,7 @@ export const BUDDY = {
   noun: "Buddy",
   plural: "Buddies",
   trusted: "Trusted",
-  trustedHint: "Also sees the folders shared with trusted buddies only",
+  trustedHint: "Also sees folders shared only with trusted buddies",
   notify: "Notify when online",
   notifyHint: "Tells you when they come online, go away or go offline"
 } as const;
@@ -26,12 +26,12 @@ export const TURN_ON_NOTIFICATIONS = "Turn on notifications";
 
 /** Why a page on a plain http address gets no desktop notifications */
 export const DESKTOP_NEEDS_HTTPS =
-  "Browsers show desktop notifications only over HTTPS or on localhost.";
+  "Browsers show desktop notifications only over HTTPS or on localhost";
 
 /** The confirmation before restarting reseek, the same from Info and from Settings */
 export const RESTART = {
   title: "Restart reseek?",
-  body: "Transfers in progress stop and resume after the restart.",
+  body: "Transfers in progress stop and resume after the restart",
   confirm: "Restart"
 } as const;
 

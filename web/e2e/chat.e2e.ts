@@ -237,7 +237,7 @@ test("a private message stays on one line", async ({ page }) => {
 
   await box.fill("");
   await page.keyboard.insertText("pasted\nlines");
-  const note = page.getByText("Line breaks are replaced with spaces in private messages.");
+  const note = page.getByText("Line breaks become spaces in private messages");
   await expect(note).toBeVisible();
   await page.keyboard.press("Enter");
   await expect(note).toHaveCount(0);
@@ -255,7 +255,7 @@ test("a room's message keeps its line breaks", async ({ page }) => {
   await page.keyboard.press("Shift+Enter");
   await page.keyboard.type("two");
   await expect(box).toHaveValue("one\ntwo");
-  await expect(page.getByText("Line breaks are replaced")).toHaveCount(0);
+  await expect(page.getByText("Line breaks become spaces")).toHaveCount(0);
   await box.fill("");
 });
 

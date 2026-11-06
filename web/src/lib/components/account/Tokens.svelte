@@ -42,7 +42,7 @@
 
 <Card
   title="API tokens"
-  description="For scripts and tools. A token cannot exceed the permissions of the account that created it.">
+  description="For scripts and other tools, with no more access than the account that created them">
   {#snippet action()}
     <Button variant="outline" size="sm" onclick={() => (creating = true)}>
       <PlusIcon />New token
@@ -66,11 +66,11 @@
                 <td><code>slsk_{t.prefix}...</code></td>
                 <td>{t.role}</td>
                 <td>{dateTime(t.createdAt)}</td>
-                <td>{t.expiresAt ? dateTime(t.expiresAt) : "never"}</td>
+                <td>{t.expiresAt ? dateTime(t.expiresAt) : "Never"}</td>
                 <td
                   >{t.lastUsedAt
                     ? `${ago(t.lastUsedAt)} from ${t.lastUsedIp ?? "?"}`
-                    : "never"}</td>
+                    : "Never"}</td>
                 <td class="text-right">
                   <Button
                     variant="ghost"
@@ -88,7 +88,7 @@
                 <td>{t.name} <Badge tone="outline">config</Badge></td>
                 <td></td>
                 <td>{t.role}</td>
-                <td colspan="3">from {t.cidr}</td>
+                <td colspan="3">From {t.cidr}</td>
                 <td></td>
               </tr>
             {/if}

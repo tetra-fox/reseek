@@ -361,7 +361,7 @@
   {#if nix}
     <div class="flex flex-col gap-1">
       <p class="text-xs text-fg-muted">
-        The browser blocked copying. Copy the text from this box.
+        The browser blocked copying. Copy the text below.
         <Button variant="link" class="ml-1" onclick={() => (nix = null)}>Close</Button>
       </p>
       <Textarea class="field-sizing-content max-h-64 font-mono text-xs" readonly value={nix} />
@@ -371,7 +371,7 @@
     {#each fields as field, i (field.key)}
       {#if opensHeading(field, i)}
         <h4
-          class="flex h-8 items-center bg-surface-muted/50 px-5 text-xs leading-none font-semibold text-fg-muted">
+          class="flex h-8 items-center bg-surface-muted/50 px-5 text-xs leading-none font-medium text-fg-muted">
           {field.heading}
         </h4>
       {/if}
@@ -401,7 +401,7 @@
               <AddShare explain={false} />
             {:else if field.key === "search.filter_presets"}
               <span class="text-xs text-fg-muted"
-                >Presets can also be saved and removed from search results.</span>
+                >Presets can also be saved and removed from search results</span>
             {/if}
           {/snippet}
         </FieldRow>

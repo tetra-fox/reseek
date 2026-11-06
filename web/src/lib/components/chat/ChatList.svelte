@@ -338,7 +338,7 @@
                   style:color={person ? nameColor(t.name) : undefined}>{chatName(t)}</span>
                 {#if notify === "none" || summary?.muted}<BellOffIcon
                     class="size-3 shrink-0 text-fg-subtle"
-                    aria-label="muted" />{/if}
+                    aria-label="Muted" />{/if}
                 {#if summary?.block}<Badge tone="danger" class="-my-px py-0">blocked</Badge>{/if}
               </span>
               <span class="row-meta text-right text-xs text-fg-subtle"
@@ -356,7 +356,7 @@
                   )}{/if}
               </span>
               {#if counts?.mentions}
-                <Badge tone="accent" class={count} title="mentions">@{counts.mentions}</Badge>
+                <Badge tone="accent" class={count} title="Mentions">@{counts.mentions}</Badge>
               {:else if counts?.unread}
                 <Badge class={count}>{counts.unread}</Badge>
               {:else if unread}
@@ -414,7 +414,7 @@
       class="flex-auto text-fg-muted aria-[current=page]:nav-current"
       href={publicFeedHref()}
       aria-current={feed ? "page" : undefined}
-      title="What is said in every public room, as it is said"
+      title="Messages from every public room, shown live"
       ><RadioTowerIcon />All public rooms</Button>
   </div>
 </div>

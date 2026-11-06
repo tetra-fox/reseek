@@ -156,6 +156,6 @@ describe("the search box", () => {
     component = mount(SearchBar, { target: document.body, props: { text: "aphex twin" } });
     flushSync();
     expect(document.querySelector<HTMLInputElement>('input[type="search"]')!.disabled).toBe(true);
-    expect(document.body.textContent).toContain("Connect to the Soulseek server to search.");
+    expect(document.body.textContent).toContain("Connect to the Soulseek server to search");
   });
 });

@@ -43,7 +43,7 @@
 <Dialog
   bind:open={sending.open}
   title={`Send ${what}`}
-  description="Their client decides whether to take it. Files go out under the usual upload slots and limits."
+  description="Their client decides whether to accept. Upload slots and limits still apply."
   {busy}>
   <Form id="send-form" layout="stacked" class="flex flex-col gap-group" onsubmit={submit}>
     <Field label="Send to" for="send-username">

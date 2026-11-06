@@ -126,7 +126,7 @@ test.describe("on a wide screen", () => {
     await expect(technical).toHaveAttribute("aria-expanded", "true");
     await page.reload();
     await expect(pane(page)).toBeVisible();
-    await expect(pane(page).getByText("Select a file to see its details.")).toBeVisible();
+    await expect(pane(page).getByText("No file selected")).toBeVisible();
     await page.getByRole("button", { name: "2.flac", exact: true }).click();
     await expect(details).toHaveAttribute("aria-expanded", "false");
     await expect(technical).toHaveAttribute("aria-expanded", "true");
@@ -143,7 +143,7 @@ test.describe("on a wide screen", () => {
     const toggle = page.locator("main").getByRole("button", { name: "Details", exact: true });
     await toggle.click();
     await expect(toggle).toHaveAttribute("aria-pressed", "true");
-    await expect(pane(page).getByText("Select a file to see its details.")).toBeVisible();
+    await expect(pane(page).getByText("No file selected")).toBeVisible();
 
     await grid.focus();
     await page.keyboard.press("ArrowDown");

@@ -202,7 +202,7 @@
     aria-live="polite">
     <div class="flex items-baseline gap-3">
       <span class="text-sm font-medium">Scanning shares</span>
-      <span class="ml-auto text-sm font-semibold tabular-nums">{percent}%</span>
+      <span class="ml-auto text-sm font-medium tabular-nums">{percent}%</span>
     </div>
     <div
       class="h-1.5 overflow-hidden rounded-full bg-surface-muted"
@@ -269,7 +269,7 @@
                   Shared because
                   <a href={href("/system/settings")} class="underline"
                     >Share the downloads folder</a>
-                  is enabled (<code>{r.derivedFrom}</code>)
+                  is on (<code>{r.derivedFrom}</code>)
                 </span>
               {/if}
             </span>
@@ -291,7 +291,7 @@
             </span>
           </div>
         {:else}
-          <EmptyRow text="No shares configured" />
+          <EmptyRow text="No shares" />
         {/each}
       </div>
     {/snippet}
@@ -316,7 +316,7 @@
             <span role="gridcell" class="font-mono text-xs">{r.localPath}</span>
           </div>
         {:else}
-          <EmptyRow text="No exclusions configured" />
+          <EmptyRow text="No exclusions" />
         {/each}
       </div>
     {/snippet}

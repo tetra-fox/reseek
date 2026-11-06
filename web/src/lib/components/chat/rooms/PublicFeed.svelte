@@ -66,10 +66,9 @@
     {@render lead?.()}
     <RadioTowerIcon class="size-4 shrink-0 text-fg-muted" />
     <div class="name-count min-w-0 flex-1 gap-2">
-      <h2 class="truncate font-semibold">All public rooms</h2>
+      <h2 class="truncate font-medium">All public rooms</h2>
       <span class="text-xs text-fg-muted"
-        ><span>What is said in every public room, while this is open. None of it is kept.</span
-        ></span>
+        ><span>Messages from every public room, shown live and not saved</span></span>
     </div>
     <Input
       type="search"
@@ -82,20 +81,11 @@
   <div class="relative flex min-h-0 flex-1 flex-col">
     {#if !shown.length}
       {#if !connected}
-        <EmptyState
-          icon={RadioTowerIcon}
-          title="Not connected"
-          description="Messages show here once reseek is connected to the Soulseek server." />
+        <EmptyState icon={RadioTowerIcon} title="Not connected to the Soulseek server" />
       {:else if feed.lines.length}
-        <EmptyState
-          icon={SearchIcon}
-          title="No messages match"
-          description="New messages that match the filter show here as they come." />
+        <EmptyState icon={SearchIcon} title="No messages match" />
       {:else}
-        <EmptyState
-          icon={RadioTowerIcon}
-          title="Waiting for messages"
-          description="Each message said in a public room shows here as it is said." />
+        <EmptyState icon={RadioTowerIcon} title="Waiting for messages" />
       {/if}
     {:else}
       <!-- a log takes focus, so the keys scroll it -->

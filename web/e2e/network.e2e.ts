@@ -72,7 +72,7 @@ test("looks up a user the server has, and says so of one it does not", async ({ 
 
   await box.fill("nobody-has-this-name");
   await page.getByRole("option", { name: "Look up nobody-has-this-name" }).click();
-  await expect(page.getByText("No user named nobody-has-this-name was found.")).toBeVisible();
+  await expect(page.getByText("No user named nobody-has-this-name")).toBeVisible();
   await expect(page).toHaveURL(/#\/users$/);
 
   await box.fill(PEER);

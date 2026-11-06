@@ -33,6 +33,7 @@
   import { jobs } from "#lib/jobs/jobs.svelte.js";
   import { href } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
+  import { PAUSE_WARNING } from "#lib/transfers/bulk.js";
 
   // one job: what it is, where it is and how far, who started it, its controls, and its parts
   // once opened
@@ -60,7 +61,7 @@
     if (job.kind !== "download") return run();
     confirmation.ask({
       title: `Pause ${job.name}?`,
-      body: "Files in progress stop and keep what arrived; the rest wait. You lose your place in each user's queue.",
+      body: PAUSE_WARNING,
       confirm: "Pause",
       run
     });
@@ -70,8 +71,8 @@
       title: `Cancel ${job.name}?`,
       body:
         job.kind === "download"
-          ? "Every file that has not finished stops. Files that arrived stay."
-          : "The work stops where it is.",
+          ? "Unfinished files stop. Finished files stay."
+          : "The work stops where it is",
       confirm: "Cancel job",
       dismiss: "Keep going",
       run: () => void busy.run(() => jobs.control(job.id, "cancel"))
@@ -167,11 +168,8 @@
     </div>
     <div class="flex items-center gap-1 row-action max-md:col-start-2 md:justify-end">
       {#if job.kind === "download"}
-        <Button
-          variant="ghost"
-          size="sm"
-          href={href(`/downloads?job=${job.id}`)}
-          title="Show this job's files in Downloads">Show in Downloads</Button>
+        <Button variant="ghost" size="sm" href={href(`/downloads?job=${job.id}`)}
+          >Show in Downloads</Button>
       {/if}
       {#if write}
         {#if job.pausable && job.state === "paused"}
@@ -207,10 +205,10 @@
               size="icon-sm"
               aria-label="Run again"
               title={job.kind === "download"
-                ? "Queue the files that did not arrive again, as a new job"
+                ? "Queue the missing files again as a new job"
                 : job.kind === "analysis"
-                  ? "Analyze the files that failed again, as a new job"
-                  : "Run again, as a new job"}
+                  ? "Analyze the failed files again as a new job"
+                  : "Run again as a new job"}
               disabled={busy.running}
               onclick={() => void busy.run(() => jobs.runAgain(job.id), "Started again")}
               ><RotateCwIcon /></Button>
@@ -233,7 +231,7 @@
       {:else if parts === null}
         <Spinner class="size-4" />
       {:else if !parts.length}
-        <span class="text-fg-muted">This job has no parts.</span>
+        <span class="text-fg-muted">This job has no parts</span>
       {:else}
         <ul class="flex max-h-80 flex-col gap-0.5 overflow-y-auto">
           {#each parts as p, i (`${i}:${p.name}`)}

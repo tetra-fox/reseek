@@ -56,9 +56,9 @@
   {/if}
   {#if jobs.backlog}
     <p class="text-xs text-fg-muted tabular-nums">
-      {plural(jobs.backlog, "more file joins", "more files join")} the queue as it empties.
+      {plural(jobs.backlog, "more file joins", "more files join")} the queue as it empties
     </p>
   {:else if !jobs.list.length}
-    <p class="text-sm text-fg-muted">No files are waiting or being analyzed.</p>
+    <p class="text-sm text-fg-muted">Nothing in the queue</p>
   {/if}
 </section>

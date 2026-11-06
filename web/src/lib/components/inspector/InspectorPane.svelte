@@ -33,7 +33,7 @@
         aria-label="Close details"
         onclick={() => inspector.close()}><XIcon /></Button>
     </div>
-    <p class="px-4 text-sm text-fg-muted">Select a file to see its details.</p>
+    <p class="px-4 text-sm text-fg-muted">No file selected</p>
   {/if}
 {/snippet}
 

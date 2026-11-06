@@ -5,6 +5,9 @@ import { call } from "#lib/request.js";
 
 export type Interests = Schemas["Interests"];
 
+/** What the interests editor's card says about the lists */
+export const INTERESTS_HINT = "The server uses these to suggest similar users";
+
 /** Which of the two lists */
 export type Side = keyof Interests;
 

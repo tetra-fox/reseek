@@ -6,7 +6,7 @@
   type Props = {
     open: boolean;
     title: string;
-    body: string;
+    body?: string;
     /** the confirm button's words */
     confirm: string;
     /** the other button's words, Cancel by default */
@@ -38,8 +38,10 @@
       onCloseAutoFocus={onclosefocus}
       class="fixed top-1/2 left-1/2 z-50 flex w-[min(26rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col gap-4 rounded-card border bg-surface p-5 shadow-raised outline-none data-[state=closed]:animate-popover-out data-[state=open]:animate-popover-in">
       <div class="flex flex-col gap-1">
-        <AlertDialog.Title class="text-base font-semibold">{title}</AlertDialog.Title>
-        <AlertDialog.Description class="text-sm text-fg-muted">{body}</AlertDialog.Description>
+        <AlertDialog.Title class="text-base font-medium">{title}</AlertDialog.Title>
+        {#if body}
+          <AlertDialog.Description class="text-sm text-fg-muted">{body}</AlertDialog.Description>
+        {/if}
       </div>
       <div class="flex justify-end gap-inline">
         <AlertDialog.Cancel>

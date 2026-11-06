@@ -99,7 +99,7 @@
 <ConfirmDialog
   bind:open={everywhere}
   title="Log out other sessions?"
-  body="Every other browser must log in again."
+  body="Other browsers will have to log in again"
   confirm="Log out other sessions"
   danger
   onconfirm={revokeOthers} />

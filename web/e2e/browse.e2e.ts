@@ -113,7 +113,7 @@ test("the folders a deep line is in stay pinned while it scrolls", async ({ page
 test("a locked folder is dimmed and nothing in it can be ticked", async ({ page }) => {
   const tree = await browseCarol(page);
   const locked = folder(tree, "\\Locked");
-  await expect(locked.getByTitle(/shares them only with buddies/)).toBeVisible();
+  await expect(locked.getByTitle(/shares these only with buddies/)).toBeVisible();
   await expect(locked.getByRole("checkbox")).toHaveCount(0);
   await expect(locked.getByRole("button", { name: /Download this folder/ })).toHaveCount(0);
   await locked.click();

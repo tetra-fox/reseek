@@ -126,7 +126,7 @@
   const discard = () =>
     confirmation.ask({
       title: "Discard changes?",
-      body: "The edits are discarded and the file is left unchanged.",
+      body: "Your edits to the file will be lost",
       confirm: "Discard",
       run: () => void load()
     });
@@ -178,7 +178,7 @@
   </Notice>
 {:else if !writable}
   <Notice kind="warning"
-    >{info?.name} is not writable{info?.readOnlyReason ? ` (${info.readOnlyReason})` : ""}.</Notice>
+    >{info?.name} is not writable{info?.readOnlyReason ? ` (${info.readOnlyReason})` : ""}</Notice>
 {:else if file}
   <Notice kind="warning">Editing {file.path}</Notice>
 {/if}
@@ -267,7 +267,7 @@
 
 <Dialog
   bind:open={() => debugText !== null, (o) => !o && (debugText = null)}
-  title="Effective configuration, with the source of each value"
+  title="Effective configuration and where each value comes from"
   class="w-[min(56rem,calc(100vw-2rem))]">
   <CodeEditor class="h-[60svh]" aria-label="Debug view" value={debugText ?? ""} readonly />
   {#snippet footer()}

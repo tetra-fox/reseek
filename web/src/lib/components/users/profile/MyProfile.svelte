@@ -18,7 +18,7 @@
   import { Loader } from "#lib/loader.svelte.js";
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
-  import { OwnInterests } from "#lib/users/interests.svelte.js";
+  import { INTERESTS_HINT, OwnInterests } from "#lib/users/interests.svelte.js";
   import { ownProfile } from "#lib/users/profile.svelte.js";
   import { users } from "#lib/users/users.svelte.js";
 
@@ -57,7 +57,7 @@
   // the server takes a new password at once, so the one in the configuration stops working
   const passwordNotice = $derived(
     passwordEdit?.mode === "runtime"
-      ? `${passwordEdit.notice} Add the new password to the configuration as well.`
+      ? `${passwordEdit.notice}. Add the new password to the configuration too.`
       : (passwordEdit?.notice ?? null)
   );
 
@@ -181,12 +181,10 @@
 </script>
 
 {#if !admin}
-  <Notice kind="info">Only administrators can change the profile.</Notice>
+  <Notice kind="info">Only administrators can change the profile</Notice>
 {:else if view.data && !remote}
-  <Notice kind="info">
-    Editing the profile requires <code>remote_configuration</code>. Until it is enabled, the profile
-    is read-only.
-  </Notice>
+  <Notice kind="info"
+    >The profile is read-only because <code>remote_configuration</code> is off</Notice>
 {/if}
 <LoadError loader={ownProfile.loader} />
 
@@ -268,9 +266,7 @@
         </div>
       </Card>
 
-      <Card
-        title="Interests and dislikes"
-        description="Told to the Soulseek server, which matches you with people who share them. Saved as you go.">
+      <Card title="Interests and dislikes" description={INTERESTS_HINT}>
         <InterestsEditor {interests} disabled={!admin} />
       </Card>
 
