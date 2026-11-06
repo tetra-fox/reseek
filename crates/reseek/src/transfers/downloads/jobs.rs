@@ -73,7 +73,7 @@ fn finished(
   }
   let mut statement = conn.prepare_cached(
     "SELECT Username, Filename, State FROM Transfers WHERE JobId = ?1 AND Removed = 0 \
-     ORDER BY RequestedAt, Id",
+     ORDER BY RequestedAt, rowid",
   )?;
   let rows = statement
     .query_map([job.to_string()], |row| {
