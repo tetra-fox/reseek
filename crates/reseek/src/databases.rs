@@ -4,12 +4,10 @@
 use std::path::Path;
 
 use api_types::application::DatabaseFile;
-use async_trait::async_trait;
 use tracing::{debug, warn};
 
 use crate::api::error::ApiError;
 use crate::db::Database;
-use crate::services::ApplicationService;
 
 /// Every database the daemon opened.
 pub struct Databases {
@@ -59,9 +57,9 @@ async fn size(path: &Path) -> u64 {
   }
 }
 
-#[async_trait]
-impl ApplicationService for Databases {
-  async fn databases(&self) -> Result<Vec<DatabaseFile>, ApiError> {
+impl Databases {
+  /// The database files with their sizes on disk; none while the databases are in memory.
+  pub async fn databases(&self) -> Vec<DatabaseFile> {
     let mut files = Vec::new();
     for path in self.list.iter().filter_map(Database::path) {
       let Some(name) = stem(path) else {
@@ -76,11 +74,9 @@ impl ApplicationService for Databases {
         wal_size_bytes: size(Path::new(&wal)).await,
       });
     }
-    Ok(files)
+    files
   }
-}
 
-impl Databases {
   /// The names of the database files, as the Data tab lists them.
   pub fn names(&self) -> Vec<String> {
     self

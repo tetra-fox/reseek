@@ -52,6 +52,6 @@ impl ApplicationService for Application {
   }
 
   async fn databases(&self) -> Result<Vec<DatabaseFile>, ApiError> {
-    self.databases.databases().await
+    Ok(self.databases.databases().await)
   }
 }
