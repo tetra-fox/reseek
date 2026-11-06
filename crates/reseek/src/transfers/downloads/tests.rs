@@ -427,6 +427,40 @@ async fn a_download_job_ends_in_the_list_with_its_files_named_under_its_folder()
   );
 }
 
+#[tokio::test]
+async fn a_folder_download_skips_the_files_the_filters_match_before_asking_its_user() {
+  let app = app(TRUSTED, &[]).await;
+  let file = |name: &str| super::FileRequest {
+    filename: format!("@@a\\Album\\{name}"),
+    size: 1,
+  };
+  let group = super::Group {
+    username: "alice".into(),
+    files: vec![file("setup.EXE"), file("Thumbs.db"), file(".DS_Store")],
+    destination: None,
+    search_id: None,
+  };
+  let downloads = &app.state.downloads;
+  let results = downloads.enqueue(Uuid::new_v4(), vec![group], true).await;
+  let enqueued = results
+    .into_iter()
+    .next()
+    .unwrap()
+    .expect("nothing left to ask alice for");
+  assert!(enqueued.enqueued.is_empty());
+  let skipped: Vec<&str> = enqueued.failed.iter().map(|f| f.message.as_str()).collect();
+  assert_eq!(skipped, ["Skipped: Filtered"; 3]);
+  for kept in ["Thumbs.db.flac", "01 desktop.ini.mp3", "exe.flac"] {
+    let patterns = &app.state.config.current().values.transfers.download.filters;
+    let matched = patterns.iter().any(|p| {
+      reseek_shares::patterns::compile(p, false)
+        .unwrap()
+        .is_match(&format!("@@a\\Album\\{kept}"))
+    });
+    assert!(!matched, "{kept} is downloaded");
+  }
+}
+
 /// Reads the download `id` until `done` holds for it, for ten seconds at most.
 async fn read_until(app: &TestApp, id: Uuid, done: impl Fn(&Record) -> bool) -> Record {
   for _ in 0..1000 {

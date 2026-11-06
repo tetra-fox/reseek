@@ -309,6 +309,10 @@
           },
           "subdirectory": "${SOURCE_DIRECTORY}"
         },
+        "filters": [
+          "\\.(exe|msi|scr|com|bat|lnk)$",
+          "(^|[\\\\/])(thumbs\\.db|desktop\\.ini|\\.ds_store)$"
+        ],
         "request_style": "queue",
         "retry": {
           "attempts": 3,
@@ -3284,6 +3288,27 @@
       "doc": "Directory under the downloads directory that a finished file is moved to, relative to it. `${SOURCE_USERNAME}`, `${SOURCE_PATH}`, `${SOURCE_DIRECTORY}`, `${JOB_ID}` (the download job: everything queued with the file in one go), `${SEARCH_ID}` and `${SEARCH_TEXT}` are replaced with their values.",
       "choices": null,
       "default": "${SOURCE_DIRECTORY}",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null,
+      "entries": []
+    },
+    "transfers.download.filters": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_DOWNLOAD_FILTERS",
+      "cliFlag": null,
+      "kind": {
+        "list": "string"
+      },
+      "doc": "Regular expressions, matched ignoring case against a file's remote path. A file of a folder or a selection that matches any of them is skipped; a file downloaded on its own never is. Empty to download everything.",
+      "choices": null,
+      "default": [
+        "\\.(exe|msi|scr|com|bat|lnk)$",
+        "(^|[\\\\/])(thumbs\\.db|desktop\\.ini|\\.ds_store)$"
+      ],
       "apply": "live",
       "secret": false,
       "notApplied": null,

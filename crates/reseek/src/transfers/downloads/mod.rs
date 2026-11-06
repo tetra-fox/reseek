@@ -430,7 +430,7 @@ impl Downloads {
         .iter()
         .map(|g| (g.username.clone(), g.files.len()))
         .collect();
-      let results = self.enqueue(job, groups).await;
+      let results = self.enqueue(job, groups, false).await;
       for ((username, count), result) in asked.into_iter().zip(results) {
         match result {
           Ok(enqueued) => info!(

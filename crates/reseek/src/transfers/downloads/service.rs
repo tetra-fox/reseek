@@ -68,7 +68,7 @@ impl Downloads {
       .into_iter()
       .map(|retried| (retried.group, retried.records))
       .unzip();
-    let (job, outcomes) = self.enqueue_new(JobStarter::you(), asked).await;
+    let (job, outcomes) = self.enqueue_new(JobStarter::you(), asked, false).await;
     for (records, outcome) in retried.into_iter().zip(outcomes) {
       match outcome {
         Ok(enqueued) => {
@@ -248,7 +248,7 @@ impl TransferService for Downloads {
     let _call = self.enqueue_call()?;
     let groups: Vec<Group> = request.groups.into_iter().map(group).collect();
     let usernames: Vec<String> = groups.iter().map(|g| g.username.clone()).collect();
-    let (job, outcomes) = self.enqueue_new(JobStarter::you(), groups).await;
+    let (job, outcomes) = self.enqueue_new(JobStarter::you(), groups, true).await;
     let groups = usernames
       .into_iter()
       .zip(outcomes)

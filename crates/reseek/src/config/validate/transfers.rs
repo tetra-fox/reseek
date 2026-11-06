@@ -63,6 +63,14 @@ pub(super) fn check(transfers: &Transfers, case_sensitive: bool, report: &mut Re
     ),
   );
   check_destination(&download.destination, report);
+  for pattern in &download.filters {
+    if !is_regex(pattern, false) {
+      report.add(
+        "transfers.download.filters",
+        format!("The download filter {pattern} is not a valid regular expression."),
+      );
+    }
+  }
 
   let groups = &transfers.groups;
   check_group(

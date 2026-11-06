@@ -322,12 +322,14 @@ fn parts_folder(parts: &[Part]) -> &str {
 
 impl Downloads {
   /// Enqueues `groups` as a new download job started by `starter`, listed in the jobs list;
-  /// returns its id and what came of each group. A job of which no download was made ends
-  /// failed with the groups' reasons.
+  /// returns its id and what came of each group. With `filtered`, the files of a job of more
+  /// than one file that match `transfers.download.filters` are skipped. A job of which no
+  /// download was made ends failed with the groups' reasons.
   pub async fn enqueue_new(
     &self,
     starter: JobStarter,
     groups: Vec<Group>,
+    filtered: bool,
   ) -> (
     Uuid,
     Vec<Result<super::Enqueued, crate::api::error::ApiError>>,
@@ -345,7 +347,9 @@ impl Downloads {
     if let Err(e) = self.jobs.create(new).await {
       warn!(%job, error = %e, "download job not listed");
     }
-    let results = self.enqueue(job, groups).await;
+    // a file asked for on its own is never filtered
+    let files: usize = groups.iter().map(|g| g.files.len()).sum();
+    let results = self.enqueue(job, groups, filtered && files > 1).await;
     let made = results.iter().any(|result| {
       result
         .as_ref()

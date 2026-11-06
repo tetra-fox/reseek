@@ -102,7 +102,7 @@ pub struct Limit {
 }
 
 /// Downloads from other users.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Cascade)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Download {
   /// Maximum number of downloads running at once. No limit when not set. When lowered,
@@ -123,6 +123,28 @@ pub struct Download {
   pub retry: Retry,
   /// Destination of finished downloads.
   pub destination: Destination,
+  /// Regular expressions, matched ignoring case against a file's remote path. A file of a
+  /// folder or a selection that matches any of them is skipped; a file downloaded on its own
+  /// never is. Empty to download everything.
+  #[cascade(env = "RESEEK_DOWNLOAD_FILTERS")]
+  pub filters: Vec<String>,
+}
+
+impl Default for Download {
+  fn default() -> Self {
+    Self {
+      slots: None,
+      speed_limit: None,
+      alt_speed_limit: None,
+      request_style: RequestStyle::default(),
+      retry: Retry::default(),
+      destination: Destination::default(),
+      filters: vec![
+        r"\.(exe|msi|scr|com|bat|lnk)$".to_string(),
+        r"(^|[\\/])(thumbs\.db|desktop\.ini|\.ds_store)$".to_string(),
+      ],
+    }
+  }
 }
 
 /// Retries of failed downloads.

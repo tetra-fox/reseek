@@ -340,6 +340,11 @@ export const sections: Section[] = [
         },
         { key: "transfers.download.destination.exists", label: "If the file exists" },
         {
+          key: "transfers.download.filters",
+          label: "Files skipped in folder downloads",
+          control: "regex-list"
+        },
+        {
           key: "transfers.download.destination.permissions.mode",
           label: "File mode",
           placeholder: "system default"

@@ -9,6 +9,7 @@ use std::collections::HashSet;
 use api_types::live::LiveFrame;
 use api_types::transfers::{EnqueueFailure, Transfer, TransferDirection};
 use api_types::users::blocking::BlockScope;
+use regex::Regex;
 use rusqlite::params;
 use soulseek_client::ClientError;
 use tracing::{Instrument, debug, info, warn};
@@ -33,6 +34,9 @@ const AT_ONCE: usize = 5;
 pub(super) fn gate_for(files: usize) -> usize {
   if files <= ALL_AT_ONCE { files } else { AT_ONCE }
 }
+
+/// Why a file matching a download filter was skipped.
+const FILTERED: &str = "Skipped: Filtered";
 
 /// What scripts read as a file already downloading.
 const ALREADY_RUNNING: &str = "Skipped: Already in progress";
@@ -148,11 +152,32 @@ fn unreachable(username: &str, error: ClientError) -> ApiError {
 
 impl Downloads {
   /// Enqueues `groups` as the job `job`, each group as its own enqueue, and says for each what
-  /// came of it. A user blocked from downloads through the API is a conflict; one offline or
+  /// came of it. With `filtered`, files matching `transfers.download.filters` are skipped and
+  /// listed as failed. A user blocked from downloads through the API is a conflict; one offline or
   /// blocked by the configuration a 404. Files already downloading are listed as failed and the
   /// rest enqueued. The job is open until every group was tried, so it is not over before all
   /// its files are in.
-  pub async fn enqueue(&self, job: Uuid, groups: Vec<Group>) -> Vec<Result<Enqueued, ApiError>> {
+  pub async fn enqueue(
+    &self,
+    job: Uuid,
+    groups: Vec<Group>,
+    filtered: bool,
+  ) -> Vec<Result<Enqueued, ApiError>> {
+    let filters: Vec<Regex> = if filtered {
+      self
+        .config
+        .current()
+        .values
+        .transfers
+        .download
+        .filters
+        .iter()
+        // validation refuses a filter that does not compile
+        .filter_map(|pattern| reseek_shares::patterns::compile(pattern, false).ok())
+        .collect()
+    } else {
+      Vec::new()
+    };
     // the job runs on a task of its own, so a caller that stops waiting, such as a request
     // whose connection drops, leaves no record without its task and no job open
     let this = self.this();
@@ -162,7 +187,7 @@ impl Downloads {
         this.open_job(job);
         let mut results = Vec::with_capacity(groups.len());
         for group in groups {
-          results.push(this.enqueue_group(job, group).await);
+          results.push(this.enqueue_group(job, group, &filters).await);
         }
         this.close_job(job).await;
         results
@@ -181,11 +206,43 @@ impl Downloads {
     }
   }
 
-  /// Enqueues one group of the job `job`.
-  async fn enqueue_group(&self, job: Uuid, group: Group) -> Result<Enqueued, ApiError> {
+  /// Enqueues one group of the job `job`, skipping the files that match `filters`.
+  async fn enqueue_group(
+    &self,
+    job: Uuid,
+    mut group: Group,
+    filters: &[Regex],
+  ) -> Result<Enqueued, ApiError> {
     check(&group.username, &group.files)?;
+    let (skipped, kept): (Vec<FileRequest>, Vec<FileRequest>) = group
+      .files
+      .into_iter()
+      .partition(|file| filters.iter().any(|filter| filter.is_match(&file.filename)));
+    let skipped: Vec<EnqueueFailure> = skipped
+      .into_iter()
+      .map(|file| {
+        debug!(
+          username = group.username,
+          filename = file.filename,
+          "download filtered"
+        );
+        EnqueueFailure {
+          filename: file.filename,
+          message: FILTERED.to_string(),
+        }
+      })
+      .collect();
+    if kept.is_empty() {
+      return Ok(Enqueued {
+        enqueued: Vec::new(),
+        failed: skipped,
+      });
+    }
+    group.files = kept;
     self.reachable(&group.username).await?;
-    self.make(job, group).await
+    let mut enqueued = self.make(job, group).await?;
+    enqueued.failed.extend(skipped);
+    Ok(enqueued)
   }
 
   /// In the turn of the user of `group`, writes a record in the job `job` for every file of
