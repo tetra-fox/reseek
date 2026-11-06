@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use axum::Router;
 use hyper::body::Incoming;
-use hyper_util::rt::{TokioExecutor, TokioIo};
+use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
 use hyper_util::server::conn::auto;
 use hyper_util::server::graceful::GracefulShutdown;
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -20,6 +20,16 @@ use tower::ServiceExt;
 use tracing::{Instrument, debug, info, warn};
 
 pub use listen::{Listeners, bind};
+
+/// How long a client has to finish the TLS handshake.
+const TLS_HANDSHAKE: Duration = Duration::from_secs(10);
+
+/// How long a client has to send a request's headers, counted from the end of the previous
+/// request on a kept-alive connection.
+const HEADER_READ: Duration = Duration::from_secs(30);
+
+/// How often an HTTP/2 connection is pinged, so one whose client is gone is closed.
+const H2_PING: Duration = Duration::from_secs(60);
 
 /// How a connection reached us.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -87,16 +97,18 @@ async fn accept_loop(
         let watcher = graceful.watcher();
         tokio::spawn(
           async move {
-            match acceptor.accept(stream).await {
-              Ok(stream) => {
-                let connection = builder(true)
+            match tokio::time::timeout(TLS_HANDSHAKE, acceptor.accept(stream)).await {
+              Ok(Ok(stream)) => {
+                let h2 = stream.get_ref().1.alpn_protocol() == Some(b"h2".as_slice());
+                let connection = builder(h2)
                   .serve_connection_with_upgrades(TokioIo::new(stream), service(app, peer))
                   .into_owned();
                 if let Err(e) = watcher.watch(connection).await {
                   debug!(error = %e, "HTTPS connection ended with an error");
                 }
               }
-              Err(e) => debug!(remote = ?peer.remote, error = %e, "TLS handshake failed"),
+              Ok(Err(e)) => debug!(remote = ?peer.remote, error = %e, "TLS handshake failed"),
+              Err(_) => debug!(remote = ?peer.remote, "TLS handshake timed out"),
             }
           }
           .in_current_span(),
@@ -139,10 +151,24 @@ where
   );
 }
 
-/// HTTP/1.1, plus HTTP/2 over TLS.
-fn builder(tls: bool) -> auto::Builder<TokioExecutor> {
-  let builder = auto::Builder::new(TokioExecutor::new());
-  if tls { builder } else { builder.http1_only() }
+/// HTTP/2 when the TLS handshake chose it, else HTTP/1.1. The version comes from ALPN rather
+/// than from the first bytes, since hyper waits for those bytes without a timeout.
+fn builder(h2: bool) -> auto::Builder<TokioExecutor> {
+  let mut builder = auto::Builder::new(TokioExecutor::new());
+  // hyper applies its timeouts only with a timer set, and without one has none at all
+  builder
+    .http1()
+    .timer(TokioTimer::new())
+    .header_read_timeout(HEADER_READ);
+  builder
+    .http2()
+    .timer(TokioTimer::new())
+    .keep_alive_interval(H2_PING);
+  if h2 {
+    builder.http2_only()
+  } else {
+    builder.http1_only()
+  }
 }
 
 /// The service for one connection: `app`, with the peer put on each request.
