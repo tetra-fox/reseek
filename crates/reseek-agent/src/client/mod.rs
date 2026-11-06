@@ -1,8 +1,9 @@
 //! The agent's connection to its controller, one for the life of the program: it dials, logs
 //! in, uploads its shares and serves the controller's requests; whenever the socket is lost, it
 //! dials again, backing off up to 30 seconds and starting over once it was ready. A refusal of
-//! its configuration backs off to the cap at once and is warned about once per reason. A change
-//! to the controller's settings closes the socket and dials again with the new ones.
+//! its configuration, or another agent logging in under its instance name, backs off to the cap
+//! at once and is warned about once per reason. A change to the controller's settings closes the
+//! socket and dials again with the new ones.
 
 mod dial;
 mod downloads;
@@ -162,13 +163,25 @@ impl AgentClient {
       };
       info!(address = %settings.address, "connected to the relay controller");
       let ended = self.serve(socket, settings).await;
-      if ended.ready {
+      shut_down = ended.code == Some(close::SHUTTING_DOWN);
+      // two agents with one instance name would otherwise take the socket from each other
+      // within a second, each time uploading their whole share index
+      let superseded = ended.code == Some(close::SUPERSEDED);
+      refused = superseded || ended.refusal.is_some();
+      if ended.ready && !refused {
         failures = 1;
       }
-      shut_down = ended.code == Some(close::SHUTTING_DOWN);
-      refused = ended.refusal.is_some();
       match &ended.refusal {
         Some(reason) => self.warn_once(reason, "the relay controller refused this agent"),
+        None if superseded => {
+          let current = self.config.current();
+          let name = &current.values.instance_name;
+          let reason = format!("another agent logged in as {name}");
+          self.warn_once(
+            &reason,
+            "the relay controller dropped this agent for another",
+          );
+        }
         None => info!(code = ended.code, "relay controller connection lost"),
       }
     }
