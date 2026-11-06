@@ -435,11 +435,11 @@ impl Client {
     // taking a response and handing it over are one step, so a search that ends waits for the
     // responses it took
     let mut handler = lock(&search.handler);
-    let Some(Accepted { snapshot, response }) = responses::accept(&search, response) else {
-      return tracing::trace!(
-        token = search.token,
-        "search response dropped: the search is not taking responses"
-      );
+    let Accepted { snapshot, response } = match responses::accept(&search, response) {
+      Ok(accepted) => accepted,
+      Err(reason) => {
+        return tracing::trace!(token = search.token, reason, "search response dropped");
+      }
     };
     tracing::trace!(
       username = response.username,

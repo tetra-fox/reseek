@@ -9,6 +9,7 @@ use std::time::Duration;
 use soulseek_proto::frame::FrameKind;
 use soulseek_proto::server::{LoginRequest, LoginResponse, PrivateRoomToggle, SetListenPort};
 use soulseek_proto::{LoginUsernameError, ServerCode, ServerRequest, validate_login_username};
+use tokio::sync::Semaphore;
 use tokio::time::{Instant, MissedTickBehavior, interval_at};
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
@@ -18,6 +19,7 @@ use crate::conn::{Conn, ConnKind, MessageConn, ReadEvent, resolve};
 use crate::error::{ClientError, ConnectionErrorKind};
 use crate::inbound;
 use crate::listener::Listener;
+use crate::log::LogLimiter;
 use crate::options::ClientOptions;
 use crate::state::ClientState;
 use crate::waiter::WaitKey;
@@ -25,6 +27,12 @@ use crate::waiter::WaitKey;
 /// The server never answers a ping, but writing one at this interval shows whether the socket
 /// still takes writes.
 const PING_INTERVAL: Duration = Duration::from_secs(60);
+
+/// Accepted connections still waiting for their first message at once. Past it a new one is
+/// closed on accept, so peers that connect and stay silent cannot use up our file descriptors.
+const UNIDENTIFIED_CONNECTIONS: usize = 128;
+
+static UNIDENTIFIED_FULL: LogLimiter = LogLimiter::new();
 
 impl Client {
   /// Connects to the server at `address:port` and logs in. The listener starts first, so a busy
@@ -265,15 +273,27 @@ impl Client {
   }
 
   /// Binds the listener on the configured address. Accepted connections are classified on a
-  /// task of their own and handed on.
+  /// task of their own and handed on, at most `UNIDENTIFIED_CONNECTIONS` of them at once.
   pub(super) fn start_listener(&self, options: &ClientOptions) -> Result<Listener, ClientError> {
     let client = self.downgrade();
+    let unidentified = Arc::new(Semaphore::new(UNIDENTIFIED_CONNECTIONS));
     Listener::start(
       SocketAddr::new(options.listen_ip_address, options.listen_port),
       options.listen_backlog,
       move |stream, remote| {
         // the client is gone; dropping the stream closes it
         let Some(client) = client.upgrade() else {
+          return;
+        };
+        let Ok(classifying) = unidentified.clone().try_acquire_owned() else {
+          if let Some(suppressed) = UNIDENTIFIED_FULL.allow() {
+            tracing::debug!(
+              %remote,
+              limit = UNIDENTIFIED_CONNECTIONS,
+              suppressed,
+              "too many connections waiting for their first message, closed on accept"
+            );
+          }
           return;
         };
         let options = client.options().incoming_connection_options.clone();
@@ -287,7 +307,9 @@ impl Client {
             tokio::select! {
               () = lifetime.cancelled() => {}
               () = async {
-                if let Some(inbound) = inbound::classify(conn).await
+                let inbound = inbound::classify(conn).await;
+                drop(classifying);
+                if let Some(inbound) = inbound
                   && let Some(client) = client.upgrade()
                 {
                   client.route_inbound(inbound).await;

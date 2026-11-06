@@ -1,9 +1,10 @@
 //! Taking a response into a search: only while the search runs, only what its filters let
-//! through, files filtered out of both lists, the counts and the idle deadline moved on, and the
-//! search ended once it reaches a limit.
+//! through, at most one per user, files filtered out of both lists, the counts and the idle
+//! deadline moved on, and the search ended once it reaches a limit.
 //! Locked files are counted apart and do not count toward the file limit, since they cannot be
 //! downloaded.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use soulseek_proto::peer::SearchResponse;
@@ -18,6 +19,8 @@ pub(super) struct Counts {
   pub(super) responses: u64,
   pub(super) files: u64,
   pub(super) locked_files: u64,
+  /// the users whose response was taken
+  pub(super) users: HashSet<String>,
   /// the search times out at this instant unless a response is taken first
   pub(super) deadline: Instant,
 }
@@ -29,6 +32,7 @@ impl Default for Counts {
       responses: 0,
       files: 0,
       locked_files: 0,
+      users: HashSet::new(),
       deadline: Instant::now(),
     }
   }
@@ -40,13 +44,16 @@ pub(super) struct Accepted {
   pub(super) response: Arc<SearchResponse>,
 }
 
-/// Takes `response`, which the options let through, into `search` if the search runs, and ends
-/// the search when it reaches a limit with it; `None` when the search is not taking responses.
-/// The limit is decided with the counts, so no response is taken past it.
-pub(super) fn accept(search: &Running, response: SearchResponse) -> Option<Accepted> {
+/// Takes `response`, which the options let through, into `search` if the search runs and took
+/// none from its user yet, and ends the search when it reaches a limit with it; otherwise why
+/// not. The limit is decided with the counts, so no response is taken past it.
+pub(super) fn accept(search: &Running, response: SearchResponse) -> Result<Accepted, &'static str> {
   let mut counts = lock(&search.counts);
   if counts.state != SearchState::IN_PROGRESS || search.outcome.borrow().is_some() {
-    return None;
+    return Err("the search is not taking responses");
+  }
+  if !counts.users.insert(response.username.clone()) {
+    return Err("the search has a response from this user");
   }
   counts.responses += 1;
   counts.files += response.files.len() as u64;
@@ -57,7 +64,7 @@ pub(super) fn accept(search: &Running, response: SearchResponse) -> Option<Accep
   } else if counts.files >= u64::from(search.options.file_limit) {
     search.complete(SearchState::FILE_LIMIT_REACHED);
   }
-  Some(Accepted {
+  Ok(Accepted {
     snapshot: search.snapshot(&counts),
     response: Arc::new(response),
   })
@@ -118,8 +125,12 @@ mod tests {
   }
 
   fn response(files: &[&str], locked: &[&str]) -> SearchResponse {
+    from("bob", files, locked)
+  }
+
+  fn from(username: &str, files: &[&str], locked: &[&str]) -> SearchResponse {
     SearchResponse {
-      username: "bob".into(),
+      username: username.into(),
       token: 1,
       files: files.iter().map(|name| file(name)).collect(),
       has_free_upload_slot: true,
@@ -157,8 +168,24 @@ mod tests {
       *search.outcome.borrow(),
       Some(SearchState::RESPONSE_LIMIT_REACHED)
     );
-    assert!(accept(&search, response(&["b.mp3"], &[])).is_none());
+    assert!(accept(&search, from("carol", &["b.mp3"], &[])).is_err());
     assert_eq!(lock(&search.counts).responses, 1);
+  }
+
+  #[test]
+  fn a_second_response_from_one_user_is_not_taken_or_counted() {
+    let search = running(2);
+    accept(&search, response(&["a.mp3"], &[])).unwrap();
+    assert!(accept(&search, response(&["b.mp3"], &[])).is_err());
+    assert_eq!(lock(&search.counts).responses, 1);
+    assert_eq!(lock(&search.counts).files, 1);
+    assert!(search.outcome.borrow().is_none());
+    // another user still counts, and reaches the limit
+    accept(&search, from("carol", &["c.mp3"], &[])).unwrap();
+    assert_eq!(
+      *search.outcome.borrow(),
+      Some(SearchState::RESPONSE_LIMIT_REACHED)
+    );
   }
 
   #[test]

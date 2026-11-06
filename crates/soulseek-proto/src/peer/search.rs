@@ -234,14 +234,6 @@ pub(crate) mod tests {
         FieldError::InflatedTooLarge { limit: 16 }
       ))
     );
-    let frame_len = Limits {
-      peer_message_bytes: 16,
-      ..Limits::DEFAULT
-    };
-    assert!(matches!(
-      PeerMessage::decode_with(&frame, &frame_len),
-      Err(DecodeError::FrameTooLarge { limit: 16, .. })
-    ));
     assert_eq!(
       PeerMessage::decode_with(&frame, &Limits::DEFAULT),
       Ok(response)

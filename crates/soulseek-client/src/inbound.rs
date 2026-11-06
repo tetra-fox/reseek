@@ -5,13 +5,13 @@
 use std::fmt::Write as _;
 
 use soulseek_proto::init::{PeerInit, PierceFirewall};
-use soulseek_proto::{DecodeError, FieldError, InitMessage, PeerConnectionType};
+use soulseek_proto::{
+  DecodeError, FieldError, InitMessage, LIMIT_INIT_MESSAGE_BYTES, PeerConnectionType,
+};
+use tokio::time::timeout;
 
 use crate::conn::Conn;
 use crate::error::{ClientError, ConnectionErrorKind};
-
-/// The first message is at most a username and a connection type; anything longer is not one.
-const MAX_INIT_BYTES: u32 = 1024;
 
 /// how many leading bytes of an unrecognized first message an error shows
 const SHOWN_BYTES: usize = 16;
@@ -36,11 +36,20 @@ pub(crate) enum InboundConnection {
 }
 
 /// Reads the first message of an accepted connection and says what it is for, or closes it when
-/// it is for nothing we know. The connection's own inactivity timeout bounds how long a silent
-/// peer can hold it.
+/// it is for nothing we know. The whole message must arrive within the connection's connect
+/// timeout, so a peer sending a byte now and then cannot hold the socket past it.
 pub(crate) async fn classify(mut conn: Conn) -> Option<InboundConnection> {
   let remote = conn.handle().remote();
-  let init = match read_init(&mut conn).await {
+  let deadline = conn.handle().options().connect_timeout;
+  let init = timeout(deadline, read_init(&mut conn))
+    .await
+    .unwrap_or_else(|_| {
+      Err(ClientError::Timeout(format!(
+        "No initialization message within {} milliseconds",
+        deadline.as_millis()
+      )))
+    });
+  let init = match init {
     Ok(init) => init,
     // the connection logs why it closed, in its own span with the remote address
     Err(error) => {
@@ -75,7 +84,7 @@ pub(crate) async fn classify(mut conn: Conn) -> Option<InboundConnection> {
 async fn read_init(conn: &mut Conn) -> Result<InitMessage, ClientError> {
   let mut frame = conn.read_exact(4).await?;
   let len = u32::from_le_bytes([frame[0], frame[1], frame[2], frame[3]]);
-  if len > MAX_INIT_BYTES {
+  if len > LIMIT_INIT_MESSAGE_BYTES {
     return Err(unrecognized(&frame, len));
   }
   frame.extend(conn.read_exact(len as usize).await?);
@@ -108,39 +117,56 @@ fn unrecognized(frame: &[u8], len: u32) -> ClientError {
 
 #[cfg(test)]
 mod tests {
+  use std::time::Duration;
+
   use tokio::io::AsyncWriteExt;
   use tokio::net::{TcpListener, TcpStream};
 
   use super::*;
   use crate::options::ConnectionOptions;
 
-  /// an accepted connection whose remote end has sent `bytes`, and that remote end
-  async fn accepted_with(bytes: &[u8]) -> (Conn, TcpStream) {
+  /// an accepted connection with `options` whose remote end has sent `bytes`, and that remote
+  /// end
+  async fn accepted_with(options: ConnectionOptions, bytes: &[u8]) -> (Conn, TcpStream) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let mut remote = TcpStream::connect(listener.local_addr().unwrap())
       .await
       .unwrap();
     let (stream, address) = listener.accept().await.unwrap();
     remote.write_all(bytes).await.unwrap();
-    (
-      Conn::accepted(stream, address, ConnectionOptions::default()),
-      remote,
-    )
+    (Conn::accepted(stream, address, options), remote)
   }
 
   /// the reason a connection that sent `bytes` was closed with
   async fn rejection(bytes: &[u8]) -> String {
-    let (conn, _remote) = accepted_with(bytes).await;
+    let (conn, _remote) = accepted_with(ConnectionOptions::default(), bytes).await;
     let handle = conn.handle().clone();
     assert!(classify(conn).await.is_none(), "nothing is classified");
     handle.disconnected().await.message
   }
 
   #[tokio::test]
-  async fn a_first_message_over_1_kib_is_rejected_from_its_length() {
+  async fn a_first_message_over_the_limit_is_rejected_from_its_length() {
     assert_eq!(
-      rejection(&1025u32.to_le_bytes()).await,
-      "Unrecognized initialization message: 01040000 (1029 bytes)"
+      rejection(&(LIMIT_INIT_MESSAGE_BYTES + 1).to_le_bytes()).await,
+      "Unrecognized initialization message: 01100000 (4101 bytes)"
+    );
+  }
+
+  #[tokio::test]
+  async fn a_first_message_still_arriving_at_the_deadline_is_rejected() {
+    let options = ConnectionOptions {
+      connect_timeout: Duration::from_millis(200),
+      inactivity_timeout: None,
+      ..ConnectionOptions::default()
+    };
+    // the length promises a frame that never comes
+    let (conn, _remote) = accepted_with(options, &[9, 0]).await;
+    let handle = conn.handle().clone();
+    assert!(classify(conn).await.is_none(), "nothing is classified");
+    assert_eq!(
+      handle.disconnected().await.message,
+      "No initialization message within 200 milliseconds"
     );
   }
 

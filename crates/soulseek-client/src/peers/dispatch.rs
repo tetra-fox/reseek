@@ -1,14 +1,17 @@
 //! What the client does with each message a peer sends on a message connection: answer it from
 //! the application's resolvers, complete the wait of the request it answers, or raise the event
 //! it carries. Every frame is handled on a task of its own, with a bound on how many run at once
-//! across all connections; at the bound a connection's reader waits before reading its next
-//! frame, so a stuck resolver slows the peers sending to it and loses nothing.
+//! across all connections and a smaller one per connection; at a bound a connection's reader
+//! waits before reading its next frame, so a stuck resolver slows the peers sending to it and
+//! loses nothing.
 //!
-//! Browse, folder and search responses are compressed, and anyone can connect and send them
-//! under any name. Each is inflated only when something waits for it: a browse response is not
-//! even kept unless a browse follows its header on this connection and its length is within
-//! bounds, a folder or search response is inflated only once the token at its start, inflated
-//! alone, is one we wait for. A connection inflates one of them at a time, on the blocking pool.
+//! A frame is read in only when its code is one a message has and its length is within what
+//! that message may need; any other is skipped unread. Browse, folder and search responses are
+//! compressed, and anyone can connect and send them. Each is inflated only when something waits
+//! for it: a browse response is not even kept unless a browse follows its header on this
+//! connection, a folder or search response is inflated only once the token at its start,
+//! inflated alone, is one we wait for. A search response is taken only under the name of the
+//! connection it came on. A connection inflates one message at a time, on the blocking pool.
 
 use std::sync::Arc;
 
@@ -17,16 +20,17 @@ use soulseek_proto::{
   DecodeError, Limits, PeerCode, PeerMessage, TransferDirection, peek_folder_contents_token,
   peek_search_response,
 };
-use tokio::sync::{OwnedSemaphorePermit, Semaphore, watch};
+use tokio::sync::{Semaphore, watch};
 use tracing::Instrument;
 
 use crate::client::Client;
-use crate::conn::{FrameBody, MessageConn, ReadEvent};
+use crate::conn::{FrameBody, HandlerPermit, MessageConn, ReadEvent};
 use crate::error::{ClientError, MessageErrorKind};
+use crate::log::LogLimiter;
 use crate::waiter::WaitKey;
 
-/// the largest browse response followed, compressed
-const MAX_BROWSE_RESPONSE: u64 = 64 << 20;
+static OVERSIZE: LogLimiter = LogLimiter::new();
+static MISNAMED: LogLimiter = LogLimiter::new();
 
 /// The start of a browse response on its way, so its progress can be followed: the frame's
 /// length, the connection bringing it, and how many payload bytes of it have arrived
@@ -44,7 +48,7 @@ pub struct IncomingBrowse {
 struct Arrival {
   frame: Vec<u8>,
   /// held until the frame is handled, against the bound on frames handled at once
-  permit: Option<OwnedSemaphorePermit>,
+  permit: Option<HandlerPermit>,
   /// the connection's turn to inflate, one compressed message at a time
   inflating: Arc<Semaphore>,
 }
@@ -52,7 +56,7 @@ struct Arrival {
 impl Client {
   /// Starts the read loop of a peer message connection. A browse response's header completes
   /// the wait for it before the payload arrives, and its progress is published as it does; one
-  /// no browse follows is skipped unread.
+  /// no browse follows is skipped unread, like any frame whose header rules it out.
   pub(crate) fn start_peer_reading(&self, conn: &MessageConn) {
     let client = self.downgrade();
     let reader = conn.clone();
@@ -72,6 +76,10 @@ impl Client {
           FrameBody::Skip
         }
       }
+      // nothing is handled once the client is gone
+      ReadEvent::Header { len, code } => client.upgrade().map_or(FrameBody::Skip, |client| {
+        client.frame_body(&reader, len, code)
+      }),
       ReadEvent::Progress { code, current, .. } if code == PeerCode::BrowseResponse.code() => {
         if let Some(progress) = &browse {
           progress.send_replace(current);
@@ -89,8 +97,47 @@ impl Client {
         }
         FrameBody::Read
       }
-      ReadEvent::Header { .. } | ReadEvent::Progress { .. } => FrameBody::Read,
+      ReadEvent::Progress { .. } => FrameBody::Read,
     });
+  }
+
+  /// Whether the payload of a frame `len` long of `code`, other than a browse response, is read
+  /// in: one of a code no message has or longer than its message may be is skipped. User info
+  /// skipped as too long fails the request waiting for it.
+  fn frame_body(&self, conn: &MessageConn, len: u32, code: u32) -> FrameBody {
+    let Some(known) = PeerCode::from_code(code) else {
+      tracing::debug!(code, len, "unhandled peer message");
+      return FrameBody::Skip;
+    };
+    let limit = self
+      .options()
+      .limits
+      .frame_limits()
+      .peer_message_bytes(known);
+    if len <= limit {
+      return FrameBody::Read;
+    }
+    if let Some(suppressed) = OVERSIZE.allow() {
+      tracing::debug!(
+        code,
+        name = known.name(),
+        len,
+        limit,
+        suppressed,
+        "peer message longer than its limit, skipped"
+      );
+    }
+    if known == PeerCode::InfoResponse
+      && let Some(username) = conn.handle().username()
+    {
+      let error = ClientError::Message {
+        kind: MessageErrorKind::Read,
+        message: "user info too large".into(),
+        source: None,
+      };
+      self.user_info_unreadable(username, error);
+    }
+    FrameBody::Skip
   }
 
   /// Hands the browses of the connection's user the start of the browse response `len` long
@@ -108,27 +155,33 @@ impl Client {
     let key = WaitKey::BrowseResponseConnection {
       username: username.to_owned(),
     };
-    // the payload after the code
-    let size = u64::from(len).saturating_sub(4);
-    let followed = if size > MAX_BROWSE_RESPONSE {
+    let limit = self.options().limits.max_message_size;
+    if len > limit {
+      if let Some(suppressed) = OVERSIZE.allow() {
+        tracing::debug!(
+          len,
+          limit,
+          suppressed,
+          "browse response longer than its limit, skipped"
+        );
+      }
       let error = ClientError::Message {
         kind: MessageErrorKind::Read,
         message: "browse response too large".into(),
         source: None,
       };
       self.waiter().fault_all(&key, error);
-      false
-    } else {
-      let incoming = IncomingBrowse {
-        length: len,
-        connection: conn.clone(),
-        received,
-      };
-      // every browse of this user follows the response
-      self.waiter().complete_all(&key, incoming) > 0
+      return false;
+    }
+    let incoming = IncomingBrowse {
+      length: len,
+      connection: conn.clone(),
+      received,
     };
+    // every browse of this user follows the response
+    let followed = self.waiter().complete_all(&key, incoming) > 0;
     if !followed {
-      tracing::debug!(size, "browse response nobody follows, skipped");
+      tracing::debug!(len, "browse response nobody follows, skipped");
     }
     followed
   }
@@ -141,8 +194,9 @@ impl Client {
     tokio::spawn(async move { client.handle_peer_frame(&conn, arrival).await }.instrument(span));
   }
 
-  /// A search response goes to the search its token names. Only the username and token are
-  /// inflated first, so a response for a search that is over costs next to nothing.
+  /// A search response goes to the search its token names, when it names the user whose
+  /// connection it came on. Only the username and token are inflated first, so a response for a
+  /// search that is over costs next to nothing.
   async fn search_response_received(
     &self,
     conn: &MessageConn,
@@ -161,6 +215,19 @@ impl Client {
         peer = conn.handle().username(),
         "search response for no active search, dropped"
       );
+    }
+    let peer = conn.handle().username();
+    if peer != Some(username.as_str()) {
+      if let Some(suppressed) = MISNAMED.allow() {
+        tracing::debug!(
+          username,
+          token,
+          peer,
+          suppressed,
+          "search response under a name other than its connection's, dropped"
+        );
+      }
+      return;
     }
     // a malformed one has been logged by the decoder
     if let Some(Ok(PeerMessage::SearchResponse(response))) =
@@ -241,10 +308,12 @@ impl Client {
         Err(DecodeError::UnknownCode { code }) => {
           return tracing::debug!(code, len = frame.len(), "unhandled peer message");
         }
-        Err(error) => {
-          // the decoder has logged it; the wait for what it was fails now rather than times out
-          return self.fault_unparseable(&username, &frame, &error);
+        // the decoder has logged it; the wait for what it was fails now rather than times out
+        Err(error) if code == Some(PeerCode::InfoResponse) => {
+          let error = ClientError::message_read("The peer returned invalid user info", error);
+          return self.user_info_unreadable(&username, error);
         }
+        Err(error) => return self.fault_unparseable(&username, &frame, &error),
       },
     };
     let code = message.code();

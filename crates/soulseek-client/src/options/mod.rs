@@ -228,8 +228,8 @@ impl ClientOptions {
 /// Bounds on remote input and on the work it can make the client start
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ClientLimits {
-  /// largest frame accepted on a peer connection; browse responses of large shares are the
-  /// only legitimately big ones
+  /// Largest browse response accepted, as its frame length. Every other peer message is bounded
+  /// by what its own fields may need, and a frame past its bound is skipped unread.
   pub max_message_size: u32,
   /// outbound peer connection attempts in flight at once
   pub max_concurrent_peer_connects: u32,
@@ -260,7 +260,7 @@ impl ClientLimits {
   /// the frame and payload limits the decoders enforce
   pub fn frame_limits(&self) -> Limits {
     Limits {
-      peer_message_bytes: self.max_message_size,
+      browse_message_bytes: self.max_message_size,
       ..Limits::DEFAULT
     }
   }

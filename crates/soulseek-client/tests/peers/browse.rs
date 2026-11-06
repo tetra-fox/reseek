@@ -10,7 +10,9 @@ use crate::support::soulfind::{self, User};
 use crate::support::{Logs, PATIENCE, free_port, listening_options};
 use soulseek_client::{BrowseOptions, BrowseProgress, ClientError, ClientOptions, Event};
 use soulseek_proto::peer::{BrowseResponse, Directory, File, UserInfo};
-use soulseek_proto::{PeerMessage, RemoteFilename};
+use soulseek_proto::{
+  LIMIT_USER_INFO_PICTURE_BYTES, Limits, PeerCode, PeerMessage, RemoteFilename,
+};
 use tokio_util::sync::CancellationToken;
 
 fn mp3(name: &str) -> File {
@@ -154,7 +156,9 @@ async fn a_folder_comes_with_the_folders_below_it_and_info_says_who_may_upload()
 #[tokio::test]
 async fn a_browse_response_larger_than_the_bound_is_refused_and_never_inflated() {
   let logs = Logs::capture();
-  let mut scripted = Scripted::start().await;
+  let mut options = listening_options();
+  options.limits.max_message_size = 1024;
+  let mut scripted = Scripted::with_options(options).await;
   let browse = tokio::spawn({
     let client = scripted.client().clone();
     async move {
@@ -165,8 +169,8 @@ async fn a_browse_response_larger_than_the_bound_is_refused_and_never_inflated()
   });
   let mut bob = scripted.connected().await;
   assert_eq!(bob.read_peer().await, PeerMessage::BrowseRequest);
-  // the header of a response just over 64 MiB
-  let len: u32 = (64 << 20) + 5;
+  // the header of a response just over the bound
+  let len: u32 = 1025;
   let mut header = len.to_le_bytes().to_vec();
   header.extend(5u32.to_le_bytes());
   bob.send(&header).await;
@@ -187,9 +191,6 @@ async fn a_browse_response_larger_than_the_bound_is_refused_and_never_inflated()
     bob.read_peer().await,
     PeerMessage::InfoResponse(_)
   ));
-  logs
-    .wait_for(&["browse response nobody follows", "skipped"])
-    .await;
   assert!(
     logs.lines_with(&["malformed message rejected"]).is_empty(),
     "{}",
@@ -257,23 +258,30 @@ async fn two_browses_of_one_user_both_take_the_response() {
 }
 
 #[tokio::test]
-async fn user_info_with_a_picture_over_the_bound_is_dropped() {
+async fn user_info_too_large_to_read_fails_the_request() {
   let mut options = listening_options();
-  options.message_timeout = Duration::from_millis(300);
+  options.message_timeout = Duration::from_secs(30);
   let mut scripted = Scripted::with_options(options).await;
-  let asked = tokio::spawn({
-    let client = scripted.client().clone();
-    async move { client.get_user_info(BOB, &CancellationToken::new()).await }
-  });
+  let client = scripted.client().clone();
+  let ask = move || {
+    let client = client.clone();
+    tokio::spawn(async move { client.get_user_info(BOB, &CancellationToken::new()).await })
+  };
+  let asked = ask();
   let mut bob = scripted.connected().await;
   assert_eq!(bob.read_peer().await, PeerMessage::InfoRequest);
+  // a short description leaves the frame within bounds, so the decoder finds the picture
   let large = UserInfo {
-    picture: Some(vec![0; (5 << 20) + 1]),
+    picture: Some(vec![0; LIMIT_USER_INFO_PICTURE_BYTES + 1]),
     ..info()
   };
   bob.send(&PeerMessage::InfoResponse(large).encode()).await;
-  let error = asked.await.unwrap().unwrap_err();
-  assert!(matches!(error, ClientError::Timeout(_)), "{error:?}");
+  let error = tokio::time::timeout(PATIENCE, asked)
+    .await
+    .unwrap()
+    .unwrap()
+    .unwrap_err();
+  assert!(error.to_string().contains("invalid user info"), "{error:?}");
 
   // a folder request waits as long as it is told to
   let started = tokio::time::Instant::now();
@@ -289,6 +297,27 @@ async fn user_info_with_a_picture_over_the_bound_is_dropped() {
     .await;
   assert!(matches!(folder, Err(ClientError::Timeout(_))), "{folder:?}");
   assert!(started.elapsed() < Duration::from_secs(2));
+
+  // one longer than any user info may be fails the request from its header
+  assert!(matches!(
+    bob.read_peer().await,
+    PeerMessage::FolderContentsRequest(_)
+  ));
+  let asked = ask();
+  assert_eq!(bob.read_peer().await, PeerMessage::InfoRequest);
+  let len = Limits::DEFAULT.peer_message_bytes(PeerCode::InfoResponse) + 1;
+  let mut header = len.to_le_bytes().to_vec();
+  header.extend(PeerCode::InfoResponse.code().to_le_bytes());
+  bob.send(&header).await;
+  let error = tokio::time::timeout(PATIENCE, asked)
+    .await
+    .unwrap()
+    .unwrap()
+    .unwrap_err();
+  assert!(
+    error.to_string().contains("user info too large"),
+    "{error:?}"
+  );
 }
 
 #[tokio::test]
@@ -318,9 +347,9 @@ async fn a_response_read_whole_still_arrives_after_its_connection_closed_waiting
   });
   let mut bob = scripted.connected().await;
   assert_eq!(bob.read_peer().await, PeerMessage::BrowseRequest);
-  // 256 requests take every handler; the response behind them waits for one, the connection
-  // goes quiet and closes
-  let mut frames: Vec<u8> = (0..256)
+  // 16 requests take every handler one connection may hold; the response behind them waits for
+  // one, the connection goes quiet and closes
+  let mut frames: Vec<u8> = (0..16)
     .flat_map(|_| PeerMessage::InfoRequest.encode())
     .collect();
   frames.extend(PeerMessage::BrowseResponse(listing(10)).encode());

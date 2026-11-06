@@ -17,6 +17,10 @@ use tracing::Instrument;
 use super::{Conn, ConnHandle, ConnReadHalf, ConnWriteHalf};
 use crate::error::{ClientError, ConnectionErrorKind};
 
+/// frames of one gated connection being handled at once, so a peer whose handlers back up holds
+/// at most this many of the shared gate's permits and other connections keep being read
+const CONNECTION_HANDLERS: usize = 16;
+
 /// What the read loop reports about the frames it reads, in order
 #[derive(Debug)]
 pub enum ReadEvent {
@@ -64,6 +68,13 @@ enum Payload {
   Encoded(EncodedFrame),
   /// closes the connection with this reason once everything queued before it is written
   Close(String),
+}
+
+/// What the handler of a gated frame holds until the frame is handled: one of the shared gate's
+/// permits and one of its connection's own
+pub(crate) struct HandlerPermit {
+  _shared: OwnedSemaphorePermit,
+  _connection: OwnedSemaphorePermit,
 }
 
 /// resolves once the write it belongs to is on the socket, or with why it never got there
@@ -148,15 +159,16 @@ impl MessageConn {
   }
 
   /// Starts the read loop like [`MessageConn::start_reading`], except that after reading each
-  /// frame the loop waits for a permit from `gate` and hands it to `sink` with the frame. The
-  /// next frame is read only once a permit was free, so while every permit is held by frames
-  /// being handled the remote's writes back up instead of frames being dropped. Header and
-  /// progress events come without a permit. What `sink` answers to a header decides whether
-  /// the frame's payload is read or skipped; its answer to other events is not used.
+  /// frame the loop waits for one of the connection's `CONNECTION_HANDLERS` turns, then for a
+  /// permit from `gate`, and hands both to `sink` with the frame. The next frame is read only
+  /// once both were free, so while the permits are held by frames being handled the remote's
+  /// writes back up instead of frames being dropped. Header and progress events come without a
+  /// permit. What `sink` answers to a header decides whether the frame's payload is read or
+  /// skipped; its answer to other events is not used.
   pub(crate) fn start_reading_gated(
     &self,
     gate: Arc<Semaphore>,
-    sink: impl FnMut(ReadEvent, Option<OwnedSemaphorePermit>) -> FrameBody + Send + 'static,
+    sink: impl FnMut(ReadEvent, Option<HandlerPermit>) -> FrameBody + Send + 'static,
   ) -> bool {
     self.spawn_read_loop(Some(gate), sink)
   }
@@ -164,7 +176,7 @@ impl MessageConn {
   fn spawn_read_loop(
     &self,
     gate: Option<Arc<Semaphore>>,
-    sink: impl FnMut(ReadEvent, Option<OwnedSemaphorePermit>) -> FrameBody + Send + 'static,
+    sink: impl FnMut(ReadEvent, Option<HandlerPermit>) -> FrameBody + Send + 'static,
   ) -> bool {
     let reading = self
       .reading
@@ -351,13 +363,14 @@ async fn write_encoded(half: &mut ConnWriteHalf, frame: EncodedFrame) -> Result<
 async fn read_loop(
   reading: Reading,
   gate: Option<Arc<Semaphore>>,
-  mut sink: impl FnMut(ReadEvent, Option<OwnedSemaphorePermit>) -> FrameBody,
+  mut sink: impl FnMut(ReadEvent, Option<HandlerPermit>) -> FrameBody,
 ) {
   let Reading {
     mut half,
     frame_kind,
     limits,
   } = reading;
+  let gate = gate.map(|shared| (shared, Arc::new(Semaphore::new(CONNECTION_HANDLERS))));
   let width = frame_kind.code_width();
   let mut chunk = vec![0; half.handle().options().read_buffer_size];
   loop {
@@ -419,15 +432,26 @@ async fn read_loop(
     tracing::trace!(len, code, "frame read");
     // a frame read whole is handed over even when the connection closes while it waits, since
     // a wait for it may already count on it; the next read on the closed connection ends the loop
+    // the connection's own turn comes first, so a connection at its bound waits without taking
+    // a shared permit from the others
     let permit = match &gate {
       None => None,
-      Some(gate) => Some(
-        gate
+      Some((shared, connection)) => {
+        let connection = connection
           .clone()
           .acquire_owned()
           .await
-          .expect("a read gate is never closed"),
-      ),
+          .expect("a connection's handler semaphore is never closed");
+        let shared = shared
+          .clone()
+          .acquire_owned()
+          .await
+          .expect("a read gate is never closed");
+        Some(HandlerPermit {
+          _shared: shared,
+          _connection: connection,
+        })
+      }
     };
     sink(ReadEvent::Frame(frame), permit);
   }
@@ -470,6 +494,52 @@ mod tests {
       let _ = events.send(event);
     }));
     received
+  }
+
+  /// the permits of the frames `conn` reads under `gate`, in order
+  fn collect_gated(
+    conn: &MessageConn,
+    gate: Arc<Semaphore>,
+  ) -> mpsc::UnboundedReceiver<HandlerPermit> {
+    let (permits, received) = mpsc::unbounded_channel();
+    assert!(conn.start_reading_gated(gate, move |event, permit| {
+      if let ReadEvent::Frame(_) = event {
+        // the test drops the receiver when it is done looking
+        let _ = permits.send(permit.expect("a gated frame comes with a permit"));
+      }
+      FrameBody::Read
+    }));
+    received
+  }
+
+  #[tokio::test]
+  async fn a_connection_holding_its_handlers_leaves_the_gate_to_others() {
+    let gate = Arc::new(Semaphore::new(CONNECTION_HANDLERS + 1));
+    let (flooding, mut flooder) = pair(ConnectionOptions::default(), FrameKind::Peer).await;
+    let (other, mut remote) = pair(ConnectionOptions::default(), FrameKind::Peer).await;
+    let mut held = collect_gated(&flooding, gate.clone());
+    let mut handled = collect_gated(&other, gate);
+    // a frame with a code and no payload
+    let frame = [4, 0, 0, 0, 1, 0, 0, 0];
+    flooder
+      .write_all(&frame.repeat(CONNECTION_HANDLERS + 4))
+      .await
+      .unwrap();
+    let mut permits = Vec::new();
+    for _ in 0..CONNECTION_HANDLERS {
+      permits.push(held.recv().await.unwrap());
+    }
+    remote.write_all(&frame).await.unwrap();
+    let _handled = tokio::time::timeout(Duration::from_secs(5), handled.recv())
+      .await
+      .expect("the other connection's frame is handled")
+      .unwrap();
+    assert!(
+      held.try_recv().is_err(),
+      "the flooding connection waits for its own handlers"
+    );
+    drop(permits.pop());
+    let _next = held.recv().await.unwrap();
   }
 
   #[tokio::test]

@@ -30,8 +30,9 @@ use crate::limit::Limiter;
 use crate::lock;
 use crate::waiter::{Scope, Waiter};
 
-/// peer messages handled at once across every connection; at the bound a connection's reader
-/// waits for one of them to finish before reading its next frame
+/// peer messages handled at once across every connection, of which one connection holds only a
+/// few; at the bound a connection's reader waits for one of them to finish before reading its
+/// next frame
 const PEER_HANDLERS: usize = 256;
 
 /// replaced message connections kept open per user beside the current one; a peer reconnecting

@@ -9,10 +9,11 @@ use std::time::Duration;
 use crate::support::peer::PeerSide;
 use crate::support::{Logs, PATIENCE, Session, listening_options};
 use soulseek_client::{
-  ClientError, ClientOptions, IncomingBrowse, MessageErrorKind, Resolvers, WaitKey,
+  ClientError, ClientOptions, Event, IncomingBrowse, MessageErrorKind, Resolvers, SearchOptions,
+  SearchScope, SearchState, WaitKey,
 };
 use soulseek_proto::peer::*;
-use soulseek_proto::{PeerCode, PeerMessage, RemoteFilename, TransferDirection};
+use soulseek_proto::{Limits, PeerCode, PeerMessage, RemoteFilename, TransferDirection};
 use tokio_util::sync::CancellationToken;
 
 fn resolvers() -> Resolvers {
@@ -277,16 +278,35 @@ async fn ignored_and_unknown_messages_leave_the_connection_up() {
 }
 
 #[tokio::test]
-async fn a_frame_longer_than_the_limit_closes_the_connection() {
-  let mut options = ClientOptions {
-    resolvers: resolvers(),
-    ..listening_options()
-  };
-  options.limits.max_message_size = 1024;
-  let session = Session::with_options(options).await;
+async fn a_frame_longer_than_any_message_closes_the_connection() {
+  let session = session().await;
   let mut bob = bob(&session).await;
-  bob.send(&2048u32.to_le_bytes()).await;
+  bob.send(&u32::MAX.to_le_bytes()).await;
   bob.closed().await;
+}
+
+#[tokio::test]
+async fn a_frame_longer_than_its_message_is_skipped_unread() {
+  let logs = Logs::capture();
+  let session = session().await;
+  let mut bob = bob(&session).await;
+  // a queue request just over its bound, then a request on the same connection
+  let len = Limits::DEFAULT.peer_message_bytes(PeerCode::QueueDownload) + 1;
+  let mut frames = len.to_le_bytes().to_vec();
+  frames.extend(PeerCode::QueueDownload.code().to_le_bytes());
+  frames.extend(vec![0; len as usize - 4]);
+  frames.extend(PeerMessage::InfoRequest.encode());
+  bob.send(&frames).await;
+  assert!(matches!(
+    bob.read_peer().await,
+    PeerMessage::InfoResponse(_)
+  ));
+  assert_eq!(
+    logs.lines_with(&["frame skipped", "code=43"]).len(),
+    1,
+    "{}",
+    logs.text()
+  );
 }
 
 #[tokio::test]
@@ -383,16 +403,16 @@ async fn messages_past_the_handler_bound_wait_instead_of_being_dropped() {
     .flat_map(|_| PeerMessage::InfoRequest.encode())
     .collect();
   bob.send(&frames).await;
-  // 256 messages are handled at once
+  // 16 messages, the most one connection may have handled, are handled at once
   tokio::time::timeout(PATIENCE, async {
-    while asked.load(Ordering::SeqCst) < 256 {
+    while asked.load(Ordering::SeqCst) < 16 {
       tokio::time::sleep(Duration::from_millis(10)).await;
     }
   })
   .await
   .unwrap();
   tokio::time::sleep(Duration::from_millis(100)).await;
-  assert_eq!(asked.load(Ordering::SeqCst), 256);
+  assert_eq!(asked.load(Ordering::SeqCst), 16);
   release.add_permits(requests);
   for _ in 0..requests {
     assert!(matches!(
@@ -400,4 +420,71 @@ async fn messages_past_the_handler_bound_wait_instead_of_being_dropped() {
       PeerMessage::InfoResponse(_)
     ));
   }
+}
+
+#[tokio::test]
+async fn a_search_takes_one_response_per_user_and_only_under_its_connections_name() {
+  let mut session = session().await;
+  let mut bob = bob(&session).await;
+  let options = SearchOptions {
+    search_timeout: Duration::from_millis(500),
+    response_limit: 2,
+    ..SearchOptions::default()
+  };
+  let searching = tokio::spawn({
+    let client = session.client.clone();
+    async move {
+      client
+        .search(
+          "daft punk",
+          SearchScope::Network,
+          Some(7),
+          options,
+          &CancellationToken::new(),
+        )
+        .await
+    }
+  });
+  session
+    .event(|event| match event {
+      Event::SearchStateChanged { search, .. } if search.state == SearchState::IN_PROGRESS => {
+        Some(())
+      }
+      _ => None,
+    })
+    .await;
+  let answer = |username: &str| {
+    PeerMessage::SearchResponse(SearchResponse {
+      username: username.into(),
+      token: 7,
+      files: vec![File {
+        code: 1,
+        filename: "@@music\\around the world.mp3".into(),
+        size: 4_000_000,
+        extension: "mp3".into(),
+        attributes: Vec::new(),
+      }],
+      has_free_upload_slot: true,
+      upload_speed: 1000,
+      queue_length: 0,
+      locked_files: Vec::new(),
+    })
+    .encode()
+  };
+  // counting the misnamed one or bob's second would reach the response limit
+  let mut frames = answer("mallory");
+  frames.extend(answer("bob"));
+  frames.extend(answer("bob"));
+  bob.send(&frames).await;
+  let (search, responses) = tokio::time::timeout(PATIENCE, searching)
+    .await
+    .unwrap()
+    .unwrap()
+    .unwrap();
+  assert_eq!(
+    search.state,
+    SearchState::COMPLETED | SearchState::TIMED_OUT
+  );
+  assert_eq!(responses.len(), 1, "{responses:?}");
+  assert_eq!(responses[0].username, "bob");
 }

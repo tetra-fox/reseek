@@ -216,13 +216,13 @@ mod tests {
       split(FrameKind::Distributed, &len.to_le_bytes(), &LIMITS),
       Err(DecodeError::FrameTooLarge { .. })
     ));
-    let small = Limits {
-      peer_message_bytes: 16,
-      ..Limits::DEFAULT
-    };
-    assert!(matches!(
-      split(FrameKind::Peer, &17u32.to_le_bytes(), &small),
-      Err(DecodeError::FrameTooLarge { len: 17, limit: 16 })
-    ));
+    let limit = LIMITS.frame_bytes(FrameKind::Peer);
+    assert_eq!(
+      split(FrameKind::Peer, &(limit + 1).to_le_bytes(), &LIMITS),
+      Err(DecodeError::FrameTooLarge {
+        len: limit + 1,
+        limit
+      })
+    );
   }
 }
