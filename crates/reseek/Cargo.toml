@@ -27,11 +27,9 @@ directories.workspace = true
 flate2.workspace = true
 form_urlencoded = "1"
 futures-util = { workspace = true, features = ["sink"] }
-glob.workspace = true
 hmac.workspace = true
 http-body-util = "0.1"
 humantime.workspace = true
-humantime-serde.workspace = true
 hyper = { version = "1", features = ["http1", "http2", "server"] }
 hyper-util = { version = "0.1", features = ["server-auto", "server-graceful", "service", "tokio"] }
 # asks the router to forward the peer port: UPnP, then NAT-PMP or PCP at the default gateway
@@ -40,7 +38,6 @@ crab_nat = { version = "0.8", features = ["tracing"] }
 netdev = { version = "0.47", default-features = false, features = ["gateway"] }
 # decodes uploaded profile pictures and encodes them as JPEG, in pure Rust
 image = { version = "0.25", default-features = false, features = ["bmp", "jpeg", "png", "gif", "webp"] }
-lofty.workspace = true
 mime_guess = "2"
 notify.workspace = true
 openidconnect = { version = "4", default-features = false, features = ["reqwest"] }
@@ -59,7 +56,6 @@ serde_html_form = "0.2"
 serde_json.workspace = true
 serde_path_to_error.workspace = true
 serde_plain.workspace = true
-sha1.workspace = true
 sha2.workspace = true
 subtle.workspace = true
 # decodes every audio format the analyzer reads, streamed
@@ -70,7 +66,6 @@ thiserror.workspace = true
 time = "0.3"
 tokio = { workspace = true, features = ["process", "rt-multi-thread", "signal"] }
 tokio-rustls.workspace = true
-tokio-tungstenite.workspace = true
 tokio-util = { workspace = true, features = ["io", "rt"] }
 toml.workspace = true
 tower = { version = "0.5", features = ["util"] }
@@ -83,7 +78,6 @@ utoipa.workspace = true
 utoipa-axum = "0.2"
 utoipa-swagger-ui = { version = "9", features = ["axum", "vendored"] }
 uuid.workspace = true
-walkdir.workspace = true
 webpki-roots.workspace = true
 
 # deletes relative to an opened directory, never through a link, and kills a script's process
