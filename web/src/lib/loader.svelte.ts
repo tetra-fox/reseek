@@ -2,9 +2,9 @@ import type { Outcome } from "./request";
 
 /**
  * Data a region shows, from `fetch`. One load runs at a time: asking while one runs loads once
- * more after it, and the answer of the load that was overtaken is dropped. A failed load keeps
- * the last data and sets `error`, so what was shown stays on screen. `kept` is handed each answer
- * that is not dropped, as it becomes `data`, for rows patched in place rather than replaced
+ * more after it, and each answer is taken as it comes, since it is newer than what is shown. A
+ * failed load keeps the last data and sets `error`, so what was shown stays on screen. `kept` is
+ * handed each answer as it becomes `data`, for rows patched in place rather than replaced
  */
 export class Loader<T> {
   data = $state.raw<T | undefined>();
@@ -35,7 +35,6 @@ export class Loader<T> {
     do {
       this.#again = false;
       const outcome = await this.#fetch();
-      if (this.#again) continue;
       if (outcome.ok) {
         this.#kept?.(outcome.data);
         this.data = outcome.data;
