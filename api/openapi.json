@@ -18629,7 +18629,7 @@
               "string",
               "null"
             ],
-            "description": "the tool that manages the files, which are then read-only, such as `nixos`"
+            "description": "the tool that manages the files, which are then read-only, such as `Nix`"
           },
           "overrides": {
             "type": "object",

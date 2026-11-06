@@ -4191,7 +4191,7 @@ export interface components {
             files: components["schemas"]["FileView"][];
             /** @description why the last reload failed, null once one succeeds */
             loadError?: string | null;
-            /** @description the tool that manages the files, which are then read-only, such as `nixos` */
+            /** @description the tool that manages the files, which are then read-only, such as `Nix` */
             managedBy?: string | null;
             /** @description the runtime overrides in effect, by key */
             overrides: {

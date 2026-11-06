@@ -177,7 +177,7 @@ impl<T: Root> Layers<T> {
     self
   }
 
-  /// The tool that manages the configuration files, such as `nixos`; the files are then never
+  /// The tool that manages the configuration files, such as `Nix`; the files are then never
   /// written.
   pub fn managed_by(mut self, tool: Option<String>) -> Self {
     self.managed_by = tool.filter(|t| !t.is_empty());

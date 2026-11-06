@@ -114,7 +114,7 @@ in
       Service = {
         ExecStart = lib.escapeShellArgs arguments;
         ExecReload = "${pkgs.coreutils}/bin/kill -HUP $MAINPID";
-        Environment = [ "RESEEK_CONFIG_MANAGED_BY=home-manager" ];
+        Environment = [ "RESEEK_CONFIG_MANAGED_BY=Nix" ];
         EnvironmentFile = environmentFiles;
         Restart = "on-failure";
         # the daemon exits 75 when a restart is asked for through the API
@@ -140,7 +140,7 @@ in
               "reseek"
             ]
             ++ arguments;
-        EnvironmentVariables.RESEEK_CONFIG_MANAGED_BY = "home-manager";
+        EnvironmentVariables.RESEEK_CONFIG_MANAGED_BY = "Nix";
         KeepAlive = true;
         RunAtLoad = true;
       };

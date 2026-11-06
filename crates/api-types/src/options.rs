@@ -206,7 +206,7 @@ pub struct ConfigView {
   pub pending_restart: Vec<String>,
   /// keys that take effect on reconnect whose value changed since the last connection
   pub pending_reconnect: Vec<String>,
-  /// the tool that manages the files, which are then read-only, such as `nixos`
+  /// the tool that manages the files, which are then read-only, such as `Nix`
   pub managed_by: Option<String>,
   /// keys, flags and variables that were ignored, each with where it was found
   pub warnings: Vec<String>,

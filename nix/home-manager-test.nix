@@ -31,7 +31,7 @@ let
 in
 runCommand "reseek-home-manager" { } ''
   grep -q '^ExecStart=.*/bin/reseek --config-file /home/someone/.config/reseek/config.toml --app-dir /home/someone/.local/share/reseek' ${unit}
-  grep -q '^Environment=RESEEK_CONFIG_MANAGED_BY=home-manager' ${unit}
+  grep -q '^Environment=RESEEK_CONFIG_MANAGED_BY=Nix' ${unit}
   grep -q '^EnvironmentFile=/run/user/1000/reseek.env' ${unit}
   grep -q '^RestartForceExitStatus=75' ${unit}
   grep -q '^RestartPreventExitStatus=3' ${unit}

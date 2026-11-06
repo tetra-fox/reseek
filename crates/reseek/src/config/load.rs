@@ -11,7 +11,7 @@ use super::Options;
 use super::validate::{Context, validate};
 use crate::paths::Defaults;
 
-/// The variable that marks the configuration files as managed by a tool, such as `nixos`.
+/// The variable that marks the configuration files as managed by a tool, such as `Nix`.
 pub const MANAGED_BY: &str = "RESEEK_CONFIG_MANAGED_BY";
 
 /// Variables starting with the prefix that are read outside the options.

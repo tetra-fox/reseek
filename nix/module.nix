@@ -350,7 +350,7 @@ let
       restartTriggers = lib.optionals instance.restartOnChange (
         [ configFile ] ++ instance.extraConfigFiles
       );
-      environment.RESEEK_CONFIG_MANAGED_BY = "nixos";
+      environment.RESEEK_CONFIG_MANAGED_BY = "Nix";
       serviceConfig = {
         ExecStart = lib.escapeShellArgs (
           [

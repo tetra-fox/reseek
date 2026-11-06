@@ -41,7 +41,7 @@ impl FileEditor<'_> {
 }
 
 /// Whether the application may write the file at `path`, and if not, why: the configuration is
-/// managed by a tool (`managed_by`, e.g. `nixos`), the file is in the Nix store, or the
+/// managed by a tool (`managed_by`, e.g. `Nix`), the file is in the Nix store, or the
 /// filesystem refuses.
 pub fn writability(path: &Path, managed_by: Option<&str>) -> Result<(), String> {
   if let Some(tool) = managed_by {

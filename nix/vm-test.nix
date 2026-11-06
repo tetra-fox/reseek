@@ -160,7 +160,7 @@ testers.runNixOSTest {
 
     with subtest("its configuration is managed by NixOS and read-only"):
         _, view = api("GET", "/options/view")
-        assert view["managedBy"] == "nixos", view["managedBy"]
+        assert view["managedBy"] == "Nix", view["managedBy"]
         assert view["files"][0]["writable"] is False, view["files"][0]
         revision = view["files"][0]["revision"]
         status, refused = api("PATCH", "/options/file", {"set": {"debug": True}, "revision": revision})
