@@ -398,7 +398,7 @@
           },
           "queued": {
             "failures": null,
-            "files": null,
+            "files": 1000,
             "megabytes": null
           },
           "weekly": {
@@ -4180,7 +4180,7 @@
       "kind": "integer",
       "doc": "Maximum number of files.",
       "choices": null,
-      "default": null,
+      "default": 1000,
       "apply": "live",
       "secret": false,
       "notApplied": null,

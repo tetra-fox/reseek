@@ -61,7 +61,8 @@ pub struct Upload {
   /// set.
   #[cascade(env = "RESEEK_UPLOAD_ALT_SPEED_LIMIT")]
   pub alt_speed_limit: Option<u32>,
-  /// Per-user queue and download limits, unless the group of the user sets its own.
+  /// Per-user queue and download limits, unless the group of the user sets its own. Only the
+  /// number of queued files is limited by default, so one user cannot queue every shared file.
   pub limits: Limits,
 }
 
@@ -71,7 +72,13 @@ impl Default for Upload {
       slots: 10,
       speed_limit: None,
       alt_speed_limit: None,
-      limits: Limits::default(),
+      limits: Limits {
+        queued: Limit {
+          files: Some(1000),
+          ..Limit::default()
+        },
+        ..Limits::default()
+      },
     }
   }
 }
