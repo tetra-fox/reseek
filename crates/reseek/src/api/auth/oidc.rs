@@ -17,7 +17,6 @@ use tracing::{debug, info, warn};
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
-use super::session::end;
 use crate::api::error::ApiError;
 use crate::app::AppState;
 use crate::auth::cookies::{self, Scope};
@@ -25,7 +24,9 @@ use crate::auth::oidc::flow::{self, LOGIN_TIME, is_local_path};
 use crate::auth::oidc::logout::{check_token, end_session_url};
 use crate::auth::oidc::{Provider, external_base};
 use crate::auth::sessions::{self, NewSession, Origin};
-use crate::auth::{Administrator, Authorized, Presented, session_cookie, start_session};
+use crate::auth::{
+  Administrator, Authorized, Presented, end_sessions, session_cookie, start_session,
+};
 
 static CALLBACK_FAILED: LogLimiter = LogLimiter::new();
 static PROVIDER_DOWN: LogLimiter = LogLimiter::new();
@@ -281,7 +282,7 @@ async fn backchannel(
     count = ids.len(),
     "identity provider ended sessions"
   );
-  end(&app, ids, None, SessionRevokeReason::Backchannel).await?;
+  end_sessions(&app, ids, None, SessionRevokeReason::Backchannel).await?;
   Ok(StatusCode::OK)
 }
 

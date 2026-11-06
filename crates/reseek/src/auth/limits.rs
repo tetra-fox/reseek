@@ -1,6 +1,8 @@
 //! Limits on failed attempts per client address: failed logins and failed API credentials, each
 //! counted over a sliding minute and kept in memory only. An IPv6 client is counted by its /64,
-//! the block one host is usually given, so it cannot spread attempts over its own addresses.
+//! the block one host is usually given, so it cannot spread attempts over its own addresses. A
+//! password login is counted when it starts and forgiven when it succeeds, so attempts made at
+//! the same time are held to the limit too.
 
 use std::collections::{HashMap, VecDeque};
 use std::net::{IpAddr, Ipv6Addr};
@@ -82,29 +84,77 @@ impl Window {
   /// Counts a failure of `ip`.
   pub fn failed(&self, ip: IpAddr) {
     let now = Instant::now();
-    let ip = counted_as(ip);
     let mut failures = lock(&self.failures);
-    if failures.len() >= TRACKED && !failures.contains_key(&ip) {
-      failures.retain(|_, times| {
-        forget_old(times, now);
-        !times.is_empty()
-      });
-      if failures.len() >= TRACKED {
-        let oldest = failures
-          .iter()
-          .min_by_key(|(_, times)| times.back().copied())
-          .map(|(ip, _)| *ip);
-        if let Some(oldest) = oldest {
-          failures.remove(&oldest);
-        }
-      }
-    }
-    let times = failures.entry(ip).or_default();
-    forget_old(times, now);
+    let times = tracked(&mut failures, counted_as(ip), now);
     if times.len() < self.limit {
       times.push_back(now);
     }
   }
+
+  /// Starts an attempt of `ip`, counted as a failure until it is forgiven; `None` when `ip` has
+  /// failed or is trying as often as it may within the window, which is logged.
+  pub fn attempt(&self, ip: IpAddr) -> Option<Attempt> {
+    let now = Instant::now();
+    let key = counted_as(ip);
+    let mut failures = lock(&self.failures);
+    let times = tracked(&mut failures, key, now);
+    if times.len() >= self.limit {
+      if let Some(suppressed) = TRIPPED.allow() {
+        warn!(%ip, kind = self.what, suppressed, "rate limit tripped");
+      }
+      return None;
+    }
+    times.push_back(now);
+    Some(Attempt { key, at: now })
+  }
+
+  /// Takes back the failure `attempt` counted, for an attempt that succeeded.
+  pub fn forgive(&self, attempt: Attempt) {
+    let mut failures = lock(&self.failures);
+    let Some(times) = failures.get_mut(&attempt.key) else {
+      // the address was forgotten to make room, so there is nothing to take back
+      return;
+    };
+    if let Some(position) = times.iter().position(|at| *at == attempt.at) {
+      times.remove(position);
+    }
+    if times.is_empty() {
+      failures.remove(&attempt.key);
+    }
+  }
+}
+
+/// An attempt [`Window::attempt`] counted.
+pub struct Attempt {
+  key: IpAddr,
+  at: Instant,
+}
+
+/// The failures of `key` with the old ones forgotten, making room for it when [`TRACKED`]
+/// addresses are tracked already.
+fn tracked(
+  failures: &mut HashMap<IpAddr, VecDeque<Instant>>,
+  key: IpAddr,
+  now: Instant,
+) -> &mut VecDeque<Instant> {
+  if failures.len() >= TRACKED && !failures.contains_key(&key) {
+    failures.retain(|_, times| {
+      forget_old(times, now);
+      !times.is_empty()
+    });
+    if failures.len() >= TRACKED {
+      let oldest = failures
+        .iter()
+        .min_by_key(|(_, times)| times.back().copied())
+        .map(|(ip, _)| *ip);
+      if let Some(oldest) = oldest {
+        failures.remove(&oldest);
+      }
+    }
+  }
+  let times = failures.entry(key).or_default();
+  forget_old(times, now);
+  times
 }
 
 /// The address failures of `ip` are counted under: an IPv4 address itself, an IPv6 address its
@@ -152,6 +202,29 @@ mod tests {
       limits.presentations.failed(other);
     }
     assert!(limits.presentations.blocked(other));
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn attempts_started_at_once_are_held_to_the_limit() {
+    let limits = Limits::default();
+    let ip: IpAddr = "192.0.2.1".parse().unwrap();
+    let started: Vec<Attempt> = (0..50).filter_map(|_| limits.logins.attempt(ip)).collect();
+    assert_eq!(
+      started.len(),
+      LOGINS,
+      "the rest are refused before any finishes"
+    );
+    assert!(limits.logins.blocked(ip));
+    let mut started = started.into_iter();
+    limits.logins.forgive(started.next().unwrap());
+    assert!(!limits.logins.blocked(ip), "a success gives its place back");
+    assert!(limits.logins.attempt(ip).is_some());
+    assert!(limits.logins.attempt(ip).is_none());
+    tokio::time::advance(WINDOW).await;
+    assert!(
+      limits.logins.attempt(ip).is_some(),
+      "the failures left the window"
+    );
   }
 
   #[tokio::test(start_paused = true)]

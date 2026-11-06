@@ -5,7 +5,7 @@ use api_types::auth::session::{
   CurrentPrincipal, CurrentSession, LocalProvider, LoginRequest, LogoutResponse, OidcProvider,
   Providers, ProxyProvider, Session,
 };
-use api_types::events::{Event, LoginFailed, SessionRevokeReason, SessionRevoked};
+use api_types::events::{Event, LoginFailed, SessionRevokeReason};
 use axum::extract::rejection::JsonRejection;
 use axum::extract::{Path, State};
 use axum::http::{StatusCode, header};
@@ -19,12 +19,13 @@ use utoipa_axum::routes;
 use crate::api::error::ApiError;
 use crate::app::AppState;
 use crate::auth::cookies::{self, Scope};
+use crate::auth::local::Busy;
 use crate::auth::oidc::external_base;
 use crate::auth::oidc::logout::end_session_url;
 use crate::auth::sessions::{self, NewSession, Origin, StoredSession};
 use crate::auth::{
-  Administrator, AnyRole, Authorized, Client, Presented, RequestSession, networks, session_cookie,
-  start_session,
+  Administrator, AnyRole, Authorized, Client, Presented, RequestSession, end_sessions, networks,
+  session_cookie, start_session,
 };
 use crate::config::Options;
 
@@ -95,9 +96,6 @@ async fn login(
     return Err(ApiError::forbidden("The web UI is disabled in headless mode").logged());
   }
   let client = &presented.client;
-  if app.auth.limits.logins.blocked(client.ip) {
-    return Err(ApiError::rate_limited());
-  }
   if !options.web.authentication.local.enabled {
     return Err(ApiError::forbidden("Password login is disabled"));
   }
@@ -106,24 +104,27 @@ async fn login(
       "Password login is not offered to this address",
     ));
   }
+  // counted as a failure from the start, so attempts made at the same time are limited too
+  let Some(attempt) = app.auth.limits.logins.attempt(client.ip) else {
+    return Err(ApiError::rate_limited());
+  };
   let username = login.username.clone();
-  let Some(account) = app
+  let checked = app
     .auth
     .accounts
     .check(&options.web.authentication, login.username, login.password)
-    .await
-  else {
-    app.auth.limits.logins.failed(client.ip);
-    if let Some(suppressed) = LOGIN_FAILED.allow() {
-      warn!(username, ip = %client.ip, suppressed, "login failed");
+    .await;
+  let account = match checked {
+    Ok(Some(account)) => {
+      app.auth.limits.logins.forgive(attempt);
+      account
     }
-    app.events.raise(Event::LoginFailed(LoginFailed {
-      version: 0,
-      provider: "local".to_string(),
-      ip: client.ip.to_string(),
-      reason: "Invalid username or password".to_string(),
-    }));
-    return Err(ApiError::unauthorized("Invalid username or password").logged());
+    Ok(None) => return Err(failed_login(&app, &username, client)),
+    Err(Busy) => {
+      // a check that never ran is not a failed one
+      app.auth.limits.logins.forgive(attempt);
+      return Err(ApiError::rate_limited());
+    }
   };
   let session = start_session(
     &app,
@@ -151,6 +152,20 @@ async fn login(
     )
       .into_response(),
   )
+}
+
+/// Logs and raises a failed password login of `username` from `client`, and the answer to it.
+fn failed_login(app: &AppState, username: &str, client: &Client) -> ApiError {
+  if let Some(suppressed) = LOGIN_FAILED.allow() {
+    warn!(username, ip = %client.ip, suppressed, "login failed");
+  }
+  app.events.raise(Event::LoginFailed(LoginFailed {
+    version: 0,
+    provider: "local".to_string(),
+    ip: client.ip.to_string(),
+    reason: "Invalid username or password".to_string(),
+  }));
+  ApiError::unauthorized("Invalid username or password").logged()
 }
 
 /// Whether there is authentication at all for the caller: false on a trusted network and when
@@ -220,7 +235,7 @@ async fn logout(
   let mut redirect = None;
   if let Some(Extension(RequestSession(session))) = session {
     redirect = provider_logout(&app, &session, &presented.client).await;
-    end(
+    end_sessions(
       &app,
       vec![session.id.clone()],
       Some(caller.principal.subject.clone()),
@@ -284,7 +299,7 @@ async fn revoke(
   let Some(session) = found else {
     return Err(ApiError::not_found("No such session"));
   };
-  end(
+  end_sessions(
     &app,
     vec![session.id],
     Some(caller.principal.subject.clone()),
@@ -316,7 +331,7 @@ async fn revoke_others(
     .filter(|id| Some(id) != keep.as_ref())
     .collect();
   let count = others.len();
-  end(
+  end_sessions(
     &app,
     others,
     Some(admin.principal.subject.clone()),
@@ -328,29 +343,6 @@ async fn revoke_others(
     count, "every other session revoked"
   );
   Ok(StatusCode::NO_CONTENT)
-}
-
-/// Revokes the sessions `ids`, raising `SessionRevoked` for each one that was still going.
-pub async fn end(
-  app: &AppState,
-  ids: Vec<String>,
-  by: Option<String>,
-  reason: SessionRevokeReason,
-) -> Result<(), ApiError> {
-  let ended = sessions::revoke(&app.auth.db, ids)
-    .await
-    .map_err(ApiError::internal)?;
-  for session in ended {
-    info!(subject = session.subject, by, ?reason, "session revoked");
-    app.events.raise(Event::SessionRevoked(SessionRevoked {
-      version: 0,
-      session_id: session.id,
-      subject: session.subject,
-      by: by.clone(),
-      reason,
-    }));
-  }
-  Ok(())
 }
 
 /// The OpenID Connect provider's logout page for `session`, when it came from a provider that

@@ -2,9 +2,11 @@
 //! `web.authentication.local.users`, each checked against an argon2id hash. A plain password
 //! from the configuration is hashed when the accounts are loaded, so every check takes the same
 //! path, and a username that has no account is checked against a stand-in hash, so the time a
-//! check takes does not tell whether the account exists.
+//! check takes does not tell whether the account exists. Only a few checks run at once, since
+//! each one holds about 19 MiB while it hashes.
 
 use std::collections::BTreeMap;
+use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use api_types::auth::Role;
@@ -12,6 +14,7 @@ use argon2::Argon2;
 use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
 use sha2::{Digest, Sha256};
 use subtle::ConstantTimeEq;
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tracing::warn;
 
 use crate::config::{Authentication, LocalUser};
@@ -35,10 +38,26 @@ impl Account {
 }
 
 /// The accounts with their password hashes, rebuilt when their configuration changes.
-#[derive(Default)]
 pub struct Accounts {
   loaded: Mutex<Option<(Settings, Arc<Hashed>)>>,
+  /// one permit per check that may run at once, moved onto the blocking thread that hashes
+  checks: Arc<Semaphore>,
 }
+
+impl Default for Accounts {
+  fn default() -> Self {
+    // one check per core; when the core count is unknown, one at a time
+    let cores = std::thread::available_parallelism().map_or(1, NonZeroUsize::get);
+    Self {
+      loaded: Mutex::default(),
+      checks: Arc::new(Semaphore::new(cores)),
+    }
+  }
+}
+
+/// Every password check that may run at once is running.
+#[derive(Debug)]
+pub struct Busy;
 
 /// The part of the configuration the accounts come from.
 #[derive(Clone, PartialEq)]
@@ -57,25 +76,39 @@ struct Hashed {
 
 impl Accounts {
   /// The account `username` with the password `password`, when there is one. Hashing runs on
-  /// a blocking thread.
+  /// a blocking thread; [`Busy`] when as many checks as may run at once are running.
   pub async fn check(
     &self,
     authentication: &Authentication,
     username: String,
     password: String,
-  ) -> Option<Account> {
-    let hashed = self.hashed(authentication).await?;
-    let result = tokio::task::spawn_blocking(move || hashed.check(&username, &password)).await;
+  ) -> Result<Option<Account>, Busy> {
+    // the semaphore is never closed, so the only error is that no permit is free
+    let permit = self.checks.clone().try_acquire_owned().map_err(|_| Busy)?;
+    let Some((hashed, permit)) = self.hashed(authentication, permit).await else {
+      return Ok(None);
+    };
+    let result = tokio::task::spawn_blocking(move || {
+      let _permit = permit;
+      hashed.check(&username, &password)
+    })
+    .await;
     match result {
-      Ok(account) => account,
+      Ok(account) => Ok(account),
       Err(e) => {
         warn!(error = %e, "a password check did not finish");
-        None
+        Ok(None)
       }
     }
   }
 
-  async fn hashed(&self, authentication: &Authentication) -> Option<Arc<Hashed>> {
+  /// The accounts for `authentication`, hashed again when it changed. `permit` is held by the
+  /// blocking thread while it hashes, and handed back.
+  async fn hashed(
+    &self,
+    authentication: &Authentication,
+    permit: OwnedSemaphorePermit,
+  ) -> Option<(Arc<Hashed>, OwnedSemaphorePermit)> {
     let settings = Settings {
       username: authentication.username.clone(),
       password: authentication.password.clone(),
@@ -85,18 +118,19 @@ impl Accounts {
     if let Some((loaded, hashed)) = &*self.lock()
       && *loaded == settings
     {
-      return Some(hashed.clone());
+      return Some((hashed.clone(), permit));
     }
     let built = settings.clone();
-    let hashed = match tokio::task::spawn_blocking(move || Hashed::new(&built)).await {
-      Ok(hashed) => Arc::new(hashed),
-      Err(e) => {
-        warn!(error = %e, "local accounts were not loaded");
-        return None;
-      }
-    };
+    let (hashed, permit) =
+      match tokio::task::spawn_blocking(move || (Hashed::new(&built), permit)).await {
+        Ok((hashed, permit)) => (Arc::new(hashed), permit),
+        Err(e) => {
+          warn!(error = %e, "local accounts were not loaded");
+          return None;
+        }
+      };
     *self.lock() = Some((settings, hashed.clone()));
-    Some(hashed)
+    Some((hashed, permit))
   }
 
   fn lock(&self) -> std::sync::MutexGuard<'_, Option<(Settings, Arc<Hashed>)>> {
@@ -226,8 +260,11 @@ mod tests {
       },
     );
     let accounts = Accounts::default();
-    let check = |user: &str, password: &str| {
-      accounts.check(&authentication, user.to_string(), password.to_string())
+    let check = async |user: &str, password: &str| {
+      accounts
+        .check(&authentication, user.to_string(), password.to_string())
+        .await
+        .expect("one check at a time is never busy")
     };
     assert_eq!(
       check("admin", "hunter2").await.unwrap().role,

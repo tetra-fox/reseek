@@ -1,12 +1,13 @@
 //! The chain that settles who a request is, in order: an API token, a configuration API key,
 //! the session cookie, a trusted reverse proxy's forwarded identity, a trusted network. A
 //! token or key that is presented but not valid fails at once; a session cookie that is not
-//! valid is cleared and the next ways are tried.
+//! valid is cleared and the next ways are tried. A session the proxy step started ends when the
+//! proxy forwards someone else or a different role for them.
 
 use std::net::{IpAddr, Ipv4Addr};
 
 use api_types::auth::{Principal, Via};
-use api_types::events::{Event, SessionCreated};
+use api_types::events::{Event, SessionCreated, SessionRevokeReason, SessionRevoked};
 use axum::http::{HeaderMap, HeaderValue, Uri, header};
 use chrono::Utc;
 use soulseek_client::LogLimiter;
@@ -170,7 +171,7 @@ pub async fn identify(
   let scope = Scope::new(&app.url_base, presented.client.https);
   let mut identified = Identified::default();
   if let Some(value) = &presented.cookie {
-    match session_of(app, value, presented).await? {
+    match cookie_session(app, value, presented, options).await? {
       Some(session) => {
         identified.principal = Some(session.principal());
         identified.session = Some(session);
@@ -218,7 +219,8 @@ fn forwarded(
 /// The `Set-Cookie` values for the web UI's page: the cookie and proxy steps of the chain.
 /// With `proxy.session` on, a page load that a trusted proxy names a user for and that has no
 /// valid session cookie starts a session, so the page's later requests work without the
-/// proxy's headers; an invalid cookie is cleared. API requests never start one.
+/// proxy's headers; an invalid cookie is cleared, as is one whose proxy session the proxy now
+/// forwards someone else or a different role for. API requests never start one.
 pub async fn page_session(
   app: &AppState,
   presented: &Presented,
@@ -228,7 +230,7 @@ pub async fn page_session(
   let scope = Scope::new(&app.url_base, presented.client.https);
   let mut cookies = Vec::new();
   if let Some(value) = &presented.cookie {
-    match session_of(app, value, presented).await? {
+    match cookie_session(app, value, presented, options).await? {
       Some(_) => return Ok(cookies),
       None => cookies.push(scope.clear(cookies::SESSION)),
     }
@@ -259,6 +261,44 @@ pub async fn page_session(
   .await?;
   cookies.push(session_cookie(app, &session, &scope));
   Ok(cookies)
+}
+
+/// The session a cookie value names, unless the proxy step started it and the proxy now forwards
+/// someone else or a different role; that session is revoked.
+async fn cookie_session(
+  app: &AppState,
+  value: &str,
+  presented: &Presented,
+  options: &crate::config::Options,
+) -> Result<Option<StoredSession>, ApiError> {
+  let Some(session) = session_of(app, value, presented).await? else {
+    return Ok(None);
+  };
+  if session.origin != Origin::Proxy {
+    return Ok(Some(session));
+  }
+  let proxy = &options.web.authentication.proxy;
+  let proxies = networks::ranges(&options.web.trusted_proxies);
+  let Some(named) = proxy::forwarded(&presented.headers, presented.peer, proxy, &proxies) else {
+    // a request with the cookie alone, which is what the session is for
+    return Ok(Some(session));
+  };
+  if named.subject() == session.subject && named.role(proxy) == Some(session.role) {
+    return Ok(Some(session));
+  }
+  debug!(
+    subject = session.subject,
+    forwarded = named.subject(),
+    "the proxy forwards another user or role than its session's"
+  );
+  end_sessions(
+    app,
+    vec![session.id],
+    None,
+    SessionRevokeReason::Backchannel,
+  )
+  .await?;
+  Ok(None)
 }
 
 /// The active session a cookie value names, recording its use when the record is stale.
@@ -329,6 +369,29 @@ pub async fn start_session(
     ip: Some(presented.client.ip.to_string()),
   }));
   Ok(session)
+}
+
+/// Revokes the sessions `ids`, raising `SessionRevoked` for each one that was still going.
+pub async fn end_sessions(
+  app: &AppState,
+  ids: Vec<String>,
+  by: Option<String>,
+  reason: SessionRevokeReason,
+) -> Result<(), ApiError> {
+  let ended = sessions::revoke(&app.auth.db, ids)
+    .await
+    .map_err(ApiError::internal)?;
+  for session in ended {
+    info!(subject = session.subject, by, ?reason, "session revoked");
+    app.events.raise(Event::SessionRevoked(SessionRevoked {
+      version: 0,
+      session_id: session.id,
+      subject: session.subject,
+      by: by.clone(),
+      reason,
+    }));
+  }
+  Ok(())
 }
 
 /// The `Set-Cookie` value that hands `session` to the browser until it expires.
@@ -565,5 +628,75 @@ mod tests {
       "the cookie is kept"
     );
     assert_eq!(rows().await, 1);
+  }
+
+  #[tokio::test]
+  async fn a_proxy_session_ends_when_the_proxy_forwards_another_user_or_role() {
+    use crate::testing::{set_cookie, with};
+    let app = app(
+      "[web]\ntrusted_proxies = [\"127.0.0.1/32\"]\n[web.authentication.proxy]\nenabled = \
+       true\n[web.authentication.proxy.role_mapping]\nreadwrite = [\"users\"]\nreadonly = \
+       [\"guests\"]\n",
+      &[],
+    )
+    .await
+    .with_page();
+    let proxied = |r, user: &str, groups: &str| {
+      with(
+        with(r, "x-authentik-username", user),
+        "x-authentik-groups",
+        groups,
+      )
+    };
+    let started = async || {
+      let page = app
+        .send(proxied(request("GET", "/", None), "alice", "users"))
+        .await;
+      set_cookie(&page.headers, "reseek_session").expect("the page starts a session")
+    };
+    let me = |cookie: &str, forwarded: Option<(&str, &str)>| {
+      let r = with(request("GET", "/api/v0/session", None), "cookie", cookie);
+      match forwarded {
+        Some((user, groups)) => proxied(r, user, groups),
+        None => r,
+      }
+    };
+
+    let cookie = started().await;
+    let same = app.send(me(&cookie, Some(("alice", "users")))).await;
+    assert_eq!(same.json()["role"], "ReadWrite");
+    assert!(set_cookie(&same.headers, "reseek_session").is_none());
+    let alone = app.send(me(&cookie, None)).await;
+    assert_eq!(
+      alone.json()["subject"],
+      "proxy:alice",
+      "the cookie alone is enough"
+    );
+
+    let other = app.send(me(&cookie, Some(("bob", "users")))).await;
+    assert_eq!(other.json()["subject"], "proxy:bob");
+    assert_eq!(
+      set_cookie(&other.headers, "reseek_session").as_deref(),
+      Some("reseek_session="),
+      "the old session's cookie is cleared"
+    );
+    assert_eq!(
+      app.send(me(&cookie, None)).await.status,
+      401,
+      "and it is revoked"
+    );
+
+    let cookie = started().await;
+    let demoted = app.send(me(&cookie, Some(("alice", "guests")))).await;
+    assert_eq!(demoted.json()["role"], "ReadOnly");
+    assert_eq!(app.send(me(&cookie, None)).await.status, 401);
+
+    let cookie = started().await;
+    let refused = app.send(me(&cookie, Some(("alice", "nobody")))).await;
+    assert_eq!(
+      refused.status, 401,
+      "a user in no group with a role keeps no session"
+    );
+    assert_eq!(app.send(me(&cookie, None)).await.status, 401);
   }
 }
