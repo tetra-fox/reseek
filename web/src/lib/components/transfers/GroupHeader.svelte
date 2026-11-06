@@ -6,6 +6,9 @@
   import FolderIcon from "@lucide/svelte/icons/folder";
   import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
   import FolderSearchIcon from "@lucide/svelte/icons/folder-search";
+  import ListChecksIcon from "@lucide/svelte/icons/list-checks";
+  import PauseIcon from "@lucide/svelte/icons/pause";
+  import PlayIcon from "@lucide/svelte/icons/play";
   import RotateCwIcon from "@lucide/svelte/icons/rotate-cw";
   import Trash2Icon from "@lucide/svelte/icons/trash-2";
   import UserXIcon from "@lucide/svelte/icons/user-x";
@@ -20,10 +23,12 @@
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Username from "#lib/components/users/Username.svelte";
+  import { confirmation } from "#lib/feedback/confirm.svelte.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { FILE_ACTIONS as A } from "#lib/files/actions.js";
   import { folderLinks, remoteFolder } from "#lib/files/links.js";
   import { formatBytes, formatDuration, plural } from "#lib/format.js";
+  import { href } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
   import { act, folderOf, openFolder } from "#lib/transfers/actions.js";
   import { encodePath } from "#lib/transfers/content.js";
@@ -100,7 +105,48 @@
     text?: boolean;
   };
 
+  /** the job a group of what was queued together is, none for the downloads of no job */
+  const jobId = $derived(group.kind === "job" ? group.key.replace(/^job:/, "") : null);
+  const job = $derived(jobId && jobId !== "none" ? jobId : null);
+  const pausable = $derived(list.filter((t) => isCancelable(t.state) && !t.paused));
+  const paused = $derived(list.filter((t) => t.paused && !t.state.includes("Completed")));
+
   const ACTIONS: Action[] = [
+    {
+      label: "Show the job",
+      icon: ListChecksIcon,
+      shown: () => job !== null,
+      run: () => void goto(href(`/jobs?job=${job}`)),
+      text: true
+    },
+    {
+      label: "Pause the group",
+      icon: PauseIcon,
+      shown: () => write && direction === "download" && pausable.length > 0,
+      run: () =>
+        confirmation.ask({
+          title: `Pause ${plural(pausable.length, "download", "downloads")}?`,
+          body: "Files in progress stop and keep what arrived; the rest wait. You lose your place in each user's queue.",
+          confirm: "Pause",
+          run: () =>
+            void act(
+              store,
+              "pause",
+              pausable.map((t) => t.id)
+            )
+        })
+    },
+    {
+      label: "Resume the group",
+      icon: PlayIcon,
+      shown: () => write && direction === "download" && paused.length > 0,
+      run: () =>
+        void act(
+          store,
+          "resume",
+          paused.map((t) => t.id)
+        )
+    },
     {
       label: "Retry the group",
       icon: RotateCwIcon,
@@ -147,11 +193,7 @@
       label: A.analyze.label,
       icon: A.analyze.icon,
       shown: () =>
-        write &&
-        direction === "download" &&
-        group.kind !== "job" &&
-        analyzerOffered() &&
-        list.some(analyzableDownload),
+        write && direction === "download" && analyzerOffered() && list.some(analyzableDownload),
       run: () => void analyzeBatch(list.map(downloadCandidate), `${group.label} has no downloads`)
     },
     {

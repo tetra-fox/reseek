@@ -84,6 +84,8 @@ export const stateChip = (t: Transfer): { text: string; tone: Tone; title: strin
   const short = why && why.length > 40 ? `${why.slice(0, 40)}...` : why;
   const reason = (word: string) => (short ? `${word}: ${short}` : word);
   const s = t.state;
+  if (t.paused && !s.includes("Completed"))
+    return { text: "Paused", tone: "neutral", title: "Waits until resumed" };
   if (s === "InProgress")
     return { text: `${Math.round(t.percentComplete)}%`, tone: "accent", title: null };
   if (s === "Completed, Succeeded") return { text: "Succeeded", tone: "success", title: null };
@@ -126,6 +128,8 @@ export const rowActions = (t: Transfer, direction: Direction) => {
     cancel: isCancelable(s),
     remove: true,
     downloadAgain: download && succeeded,
+    pause: download && isCancelable(s) && !t.paused,
+    resume: download && !!t.paused && !isRemovable(s),
     queuePosition: download && s === "Queued, Remotely",
     deny: !download && !isRemovable(s),
     bump: !download && isQueued(s)

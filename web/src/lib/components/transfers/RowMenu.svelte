@@ -4,6 +4,8 @@
   import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
   import InfoIcon from "@lucide/svelte/icons/info";
   import ListOrderedIcon from "@lucide/svelte/icons/list-ordered";
+  import PauseIcon from "@lucide/svelte/icons/pause";
+  import PlayIcon from "@lucide/svelte/icons/play";
   import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
   import RotateCwIcon from "@lucide/svelte/icons/rotate-cw";
   import Trash2Icon from "@lucide/svelte/icons/trash-2";
@@ -78,6 +80,13 @@
       <Menu.Item onSelect={() => void act(storeOf(t), "retry", [t.id])}>
         <RefreshCwIcon />Download again
       </Menu.Item>
+    {/if}
+    {#if can.pause}
+      <Menu.Item onSelect={() => void act(storeOf(t), "pause", [t.id])}
+        ><PauseIcon />Pause</Menu.Item>
+    {:else if can.resume}
+      <Menu.Item onSelect={() => void act(storeOf(t), "resume", [t.id])}
+        ><PlayIcon />Resume</Menu.Item>
     {/if}
     {#if can.cancel}
       <Menu.Item onSelect={() => void act(storeOf(t), "cancel", [t.id])}><XIcon />Cancel</Menu.Item>

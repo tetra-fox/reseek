@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { goto } from "$app/navigation";
   import DownloadIcon from "@lucide/svelte/icons/download";
   import UploadIcon from "@lucide/svelte/icons/upload";
   import { untrack } from "svelte";
@@ -17,9 +18,11 @@
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { formatBytes, getDirectoryName, getFileName, plural } from "#lib/format.js";
   import { inspector, useInspector } from "#lib/inspector/inspector.svelte.js";
+  import { jobs } from "#lib/jobs/jobs.svelte.js";
   import type { Noun } from "#lib/lists/filtered.js";
   import { heldOrder } from "#lib/lists/interaction.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
+  import { href } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
   import { useCrumbs } from "#lib/shell/crumbs.svelte.js";
   import { act, denyAndBlock, exportJson, open, openFolder } from "#lib/transfers/actions.js";
@@ -57,8 +60,12 @@
     direction: Direction;
     /** a state filter the screen opens with, from a link such as the dashboard's */
     filter?: string | null;
+    /** a download job whose downloads alone show, from its Show in Downloads link */
+    job?: string | null;
+    /** a transfer the inspector opens on, from a link to it */
+    transfer?: string | null;
   };
-  let { direction, filter = null }: Props = $props();
+  let { direction, filter = null, job = null, transfer = null }: Props = $props();
 
   // svelte-ignore state_referenced_locally
   const store = direction === "download" ? downloads : uploads;
@@ -133,16 +140,47 @@
     const byState = inStates(view.filters.states);
     const byMark =
       markLookup && view.filters.analysis ? marked(markLookup, view.filters.analysis) : null;
-    return (t: Transfer) => byState(t) && (!byMark || byMark(t)) && (!byText || byText(t));
+    return (t: Transfer) =>
+      (!job || t.jobId === job) && byState(t) && (!byMark || byMark(t)) && (!byText || byText(t));
   });
   const filtered = $derived(all.filter(keeps));
 
-  const filters = $derived(
-    activeFilters(view.filters, text, () => {
+  // the chip of one job's downloads names the job
+  let jobName = $state<string | null>(null);
+  $effect(() => {
+    const id = job;
+    jobName = null;
+    if (!id) return;
+    let current = true;
+    void jobs.detail(id).then((outcome) => {
+      // a job not read keeps the chip's general label, which still filters by it
+      if (current && outcome.ok) jobName = outcome.data.job.name;
+    });
+    return () => (current = false);
+  });
+  const filters = $derived([
+    ...(job
+      ? [
+          {
+            id: "job",
+            label: jobName ?? "One download job",
+            clear: () => void goto(href("/downloads"))
+          }
+        ]
+      : []),
+    ...activeFilters(view.filters, text, () => {
       typed = "";
       text = "";
     })
-  );
+  ]);
+  // a link to one transfer opens the inspector on it
+  $effect(() => {
+    if (!transfer) return;
+    untrack(() => {
+      shownId = transfer;
+      inspector.show();
+    });
+  });
   const noun = $derived<Noun>(
     direction === "download" ? ["download", "downloads"] : ["upload", "uploads"]
   );

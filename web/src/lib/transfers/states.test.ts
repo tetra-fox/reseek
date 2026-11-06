@@ -10,9 +10,16 @@ describe("the row menu", () => {
       Object.entries(rowActions(transfer({ state, localPath }), "download"))
         .filter(([, on]) => on)
         .map(([name]) => name);
-    expect(enabled("Queued, Remotely")).toEqual(["cancel", "remove", "queuePosition"]);
-    expect(enabled("Queued, Locally")).toEqual(["cancel", "remove"]);
-    expect(enabled("InProgress")).toEqual(["cancel", "remove"]);
+    expect(enabled("Queued, Remotely")).toEqual(["cancel", "remove", "pause", "queuePosition"]);
+    expect(enabled("Queued, Locally")).toEqual(["cancel", "remove", "pause"]);
+    expect(enabled("InProgress")).toEqual(["cancel", "remove", "pause"]);
+    // a paused download waits here until it resumes
+    expect(
+      Object.entries(rowActions(transfer({ state: "Queued, Locally", paused: true }), "download"))
+        .filter(([, on]) => on)
+        .map(([name]) => name)
+    ).toEqual(["cancel", "remove", "resume"]);
+    expect(stateChip(transfer({ state: "Queued, Locally", paused: true })).text).toBe("Paused");
     expect(enabled("Completed, Succeeded", "/dl/a.flac")).toEqual([
       "open",
       "downloadToDevice",

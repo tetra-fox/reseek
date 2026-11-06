@@ -579,4 +579,24 @@ describe("the transfers table", () => {
     await settle();
     expect(histories().map((r) => r.url.pathname.split("/").at(-1))).toEqual([files[2].id]);
   });
+  it("shows one download job's files when the Jobs page links to it", async () => {
+    listing = [
+      transfer({ id: "a", jobId: "J1" }),
+      transfer({ id: "b", jobId: "J2", filename: "@@a\\Music\\Album\\02 Two.flac" })
+    ];
+    const net = fakeNetwork((url) =>
+      url.pathname.endsWith("/api/v0/transfers/downloads") ? grouped(listing) : undefined
+    );
+    live.start();
+    net.frame("hello", { principal: { name: "a", role: "ReadOnly" } } as Schemas["Hello"]);
+    component = mount(TransfersPage, {
+      target: document.body,
+      props: { direction: "download", job: "J1" }
+    });
+    await flushFaked();
+    await flushFaked();
+    expect(row("a")).not.toBeNull();
+    expect(row("b")).toBeNull();
+    expect(document.body.textContent).toContain("One download job");
+  });
 });
