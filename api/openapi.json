@@ -13902,6 +13902,76 @@
             }
           }
         }
+      },
+      "post": {
+        "tags": [
+          "transfers"
+        ],
+        "summary": "Sends files we share to a user who did not ask for them: each is queued as an upload under\nthe usual queue and limits, as one the user asked for would be, and offered to them when its\nturn comes; their client decides whether to take it. A file not shared with the user is\nrefused.",
+        "operationId": "send_files",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the user to send the files to",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendFilesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendFilesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v0/transfers/uploads/{username}/{id}": {
@@ -25317,6 +25387,49 @@
           }
         ],
         "description": "How long a search waits for another response: a number of milliseconds, or a duration such\nas `\"15s\"` or `\"1m 30s\"`."
+      },
+      "SendFilesRequest": {
+        "type": "object",
+        "description": "Files of ours to send to a user who did not ask for them, as `POST /transfers/uploads/{u}`\ntakes them.",
+        "required": [
+          "files"
+        ],
+        "properties": {
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "the files, by the names other users see them under",
+            "example": [
+              "@@abcde\\Music\\Artist\\Album\\01 - Track.flac"
+            ]
+          }
+        }
+      },
+      "SendFilesResponse": {
+        "type": "object",
+        "description": "What sending files to a user did.",
+        "required": [
+          "queued",
+          "failed"
+        ],
+        "properties": {
+          "failed": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EnqueueFailure"
+            },
+            "description": "the files not queued, and why"
+          },
+          "queued": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "the files queued to be offered to the user"
+          }
+        }
       },
       "ServerConnectionState": {
         "type": "string",

@@ -233,6 +233,46 @@ impl Uploads {
     Ok(())
   }
 
+  /// Queues `files` to be offered to `username`, who did not ask for them, each decided as a
+  /// request of theirs would be, with the shares they see as a buddy when they are one. These
+  /// are our own sends, so the figures of the requests peers send are left alone.
+  pub async fn send(
+    &self,
+    username: &str,
+    files: Vec<String>,
+  ) -> api_types::transfers::SendFilesResponse {
+    let (sees, _) = self.users.search_sees(username, None).await;
+    let mut sent = api_types::transfers::SendFilesResponse {
+      queued: Vec::new(),
+      failed: Vec::new(),
+    };
+    let (_turn, _) = self.intake.turn(username).await;
+    for filename in files {
+      let queued = match self.decide(username, &filename, sees).await {
+        Ok(located) => self.enqueue(username, &filename, located).await,
+        Err(Refusal::Peer(reason)) => Err(ClientError::DownloadEnqueue(reason.to_string())),
+        Err(Refusal::Failed(error)) => Err(error),
+      };
+      match queued {
+        Ok(()) => {
+          info!(username, filename, "file queued to be sent");
+          sent.queued.push(filename);
+        }
+        Err(e) => {
+          debug!(username, filename, error = %e, "file not sent");
+          sent.failed.push(api_types::transfers::EnqueueFailure {
+            filename,
+            message: match e {
+              ClientError::DownloadEnqueue(reason) => reason,
+              other => other.to_string(),
+            },
+          });
+        }
+      }
+    }
+    sent
+  }
+
   /// Whether `username` may have `filename`: shared with them, on disk, and within the limits
   /// of their group unless they are privileged.
   async fn decide(

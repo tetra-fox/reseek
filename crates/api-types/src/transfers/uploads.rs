@@ -63,3 +63,23 @@ pub struct UploadLimitUsage {
   /// the limit, null when there is none
   pub limit: Option<u64>,
 }
+
+/// Files of ours to send to a user who did not ask for them, as `POST /transfers/uploads/{u}`
+/// takes them.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SendFilesRequest {
+  /// the files, by the names other users see them under
+  #[schema(example = json!(["@@abcde\\Music\\Artist\\Album\\01 - Track.flac"]))]
+  pub files: Vec<String>,
+}
+
+/// What sending files to a user did.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SendFilesResponse {
+  /// the files queued to be offered to the user
+  pub queued: Vec<String>,
+  /// the files not queued, and why
+  pub failed: Vec<super::EnqueueFailure>,
+}

@@ -16,6 +16,7 @@
   import Header from "#lib/components/shell/Header.svelte";
   import LostBanner from "#lib/components/shell/LostBanner.svelte";
   import Sidebar from "#lib/components/shell/Sidebar.svelte";
+  import SendFilesDialog from "#lib/components/transfers/SendFilesDialog.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import BlockDialog from "#lib/components/users/BlockDialog.svelte";
   import { live } from "#lib/live/live.svelte.js";
@@ -201,6 +202,7 @@
     </div>
   </div>
   <BlockDialog />
+  <SendFilesDialog />
   <ConfirmHost />
   <CommandPalette />
 {:else if app.phase === "lost"}

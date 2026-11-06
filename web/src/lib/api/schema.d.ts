@@ -2751,7 +2751,13 @@ export interface paths {
         /** The uploads to one user, grouped by remote directory; no directories when there are none. */
         get: operations["user_uploads"];
         put?: never;
-        post?: never;
+        /**
+         * Sends files we share to a user who did not ask for them: each is queued as an upload under
+         *     the usual queue and limits, as one the user asked for would be, and offered to them when its
+         *     turn comes; their client decides whether to take it. A file not shared with the user is
+         *     refused.
+         */
+        post: operations["send_files"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7291,6 +7297,26 @@ export interface components {
          *     as `"15s"` or `"1m 30s"`.
          */
         SearchTimeout: number | string;
+        /**
+         * @description Files of ours to send to a user who did not ask for them, as `POST /transfers/uploads/{u}`
+         *     takes them.
+         */
+        SendFilesRequest: {
+            /**
+             * @description the files, by the names other users see them under
+             * @example [
+             *       "@@abcde\\Music\\Artist\\Album\\01 - Track.flac"
+             *     ]
+             */
+            files: string[];
+        };
+        /** @description What sending files to a user did. */
+        SendFilesResponse: {
+            /** @description the files not queued, and why */
+            failed: components["schemas"]["EnqueueFailure"][];
+            /** @description the files queued to be offered to the user */
+            queued: string[];
+        };
         /**
          * @description the names of the set flags joined by ", "
          * @example Connected, LoggedIn
@@ -18935,6 +18961,56 @@ export interface operations {
                 };
             };
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    send_files: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description the user to send the files to */
+                username: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SendFilesRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SendFilesResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

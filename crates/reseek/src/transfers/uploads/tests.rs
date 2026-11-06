@@ -328,3 +328,18 @@ async fn blocking_a_user_cancels_their_queued_uploads() {
     Some(super::BLOCKED)
   );
 }
+
+#[tokio::test]
+async fn a_file_sent_to_a_user_unasked_is_refused_unless_it_is_shared() {
+  let app = crate::testing::app(crate::testing::TRUSTED, &[]).await;
+  let (status, answer) = app
+    .call(
+      "POST",
+      "/api/v0/transfers/uploads/alice",
+      Some(serde_json::json!({ "files": ["@@nope\\a.flac"] })),
+    )
+    .await;
+  assert_eq!(status, 200, "{answer}");
+  assert_eq!(answer["queued"], serde_json::json!([]));
+  assert_eq!(answer["failed"][0]["message"], "File not shared.");
+}

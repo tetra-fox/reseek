@@ -1,10 +1,10 @@
-//! The uploads routes: listing, why a queued upload waits, bumping it, canceling and removing.
-//! Uploads are asked for by peers, never through the API.
+//! The uploads routes: listing, why a queued upload waits, bumping it, canceling and removing,
+//! and sending our files to a user who did not ask for them.
 
 use api_types::Page;
 use api_types::transfers::{
-  BulkRequest, BulkResult, CancelQuery, Transfer, TransferListQuery, TransferQuery,
-  UploadQueueStatus, UploadsQuery, UserResponse,
+  BulkRequest, BulkResult, CancelQuery, SendFilesRequest, SendFilesResponse, Transfer,
+  TransferListQuery, TransferQuery, UploadQueueStatus, UploadsQuery, UserResponse,
 };
 use axum::extract::State;
 use axum::http::StatusCode;
@@ -25,7 +25,7 @@ pub fn routes() -> OpenApiRouter<AppState> {
   OpenApiRouter::new()
     .routes(routes!(list))
     .routes(routes!(page))
-    .routes(routes!(user_uploads))
+    .routes(routes!(user_uploads, send_files))
     .routes(routes!(upload, cancel))
     .routes(routes!(why))
     .routes(routes!(bump))
@@ -91,6 +91,42 @@ async fn user_uploads(
     .user_uploads(&username)
     .await
     .map(Json)
+}
+
+/// Sends files we share to a user who did not ask for them: each is queued as an upload under
+/// the usual queue and limits, as one the user asked for would be, and offered to them when its
+/// turn comes; their client decides whether to take it. A file not shared with the user is
+/// refused.
+#[utoipa::path(
+  post, path = "/transfers/uploads/{username}", tag = "transfers",
+  params(("username" = String, Path, description = "the user to send the files to")),
+  request_body = SendFilesRequest,
+  responses(
+    (status = 200, body = SendFilesResponse), (status = 400, body = api_types::ErrorBody),
+    (status = 401, body = api_types::ErrorBody), (status = 403, body = api_types::ErrorBody)
+  )
+)]
+async fn send_files(
+  State(app): State<AppState>,
+  caller: Authorized<ReadWrite>,
+  Path(username): Path<String>,
+  Json(body): Json<SendFilesRequest>,
+) -> Result<Json<SendFilesResponse>, ApiError> {
+  if username.trim().is_empty() {
+    return Err(ApiError::bad_request("Username is required"));
+  }
+  if body.files.is_empty() {
+    return Err(ApiError::bad_request("At least one file is required"));
+  }
+  let sent = app.uploads.send(&username, body.files).await;
+  info!(
+    by = caller.principal.subject,
+    username,
+    queued = sent.queued.len(),
+    failed = sent.failed.len(),
+    "files sent to a user"
+  );
+  Ok(Json(sent))
 }
 
 /// One upload; `includeHistory` adds the states it went through.
