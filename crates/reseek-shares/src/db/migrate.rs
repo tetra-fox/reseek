@@ -132,6 +132,7 @@ pub(super) fn run(
     };
     if known.checksum() != *checksum {
       return Err(DbError::Checksum {
+        path: path.to_path_buf(),
         database: schema.name,
         version: *version,
         name: name.clone(),
@@ -286,7 +287,7 @@ pub(super) mod tests {
   }
 
   #[tokio::test]
-  async fn foreign_files_and_edited_migrations_are_refused() {
+  async fn foreign_files_are_refused() {
     let dir = tempfile::tempdir().unwrap();
     let location = Location::on_disk(dir.path());
     let foreign = Connection::open(location.data.join("auth.db")).unwrap();
@@ -298,25 +299,69 @@ pub(super) mod tests {
       Database::open(&TEST, &location).await,
       Err(DbError::NotOurs(_))
     ));
+  }
 
-    std::fs::remove_file(location.data.join("auth.db")).unwrap();
-    drop(Database::open(&TEST, &location).await.unwrap());
-    let edited = Connection::open(location.data.join("auth.db")).unwrap();
-    edited
-      .execute("UPDATE schema_migrations SET checksum = 'x'", [])
+  #[tokio::test]
+  async fn a_database_made_with_other_migrations_is_refused_untouched() {
+    static CHAIN: Schema = Schema {
+      private: false,
+      name: "auth",
+      migrations: &[
+        Migration {
+          file: "0001_initial",
+          sql: "CREATE TABLE a (x INTEGER)",
+        },
+        Migration {
+          file: "0002_more",
+          sql: "CREATE TABLE b (y INTEGER)",
+        },
+      ],
+    };
+    static FOLDED: Schema = Schema {
+      private: false,
+      name: "auth",
+      migrations: &[Migration {
+        file: "0001_initial",
+        sql: "CREATE TABLE a (x INTEGER); CREATE TABLE b (y INTEGER)",
+      }],
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let location = Location::on_disk(dir.path());
+    let db = Database::open(&CHAIN, &location).await.unwrap();
+    db.write(|conn| conn.execute("INSERT INTO a VALUES (7)", []))
+      .await
       .unwrap();
-    edited
-      .execute(
-        "INSERT INTO schema_migrations VALUES (99, 'later', '', '')",
-        [],
-      )
-      .unwrap();
-    drop(edited);
-    let refused = Database::open(&TEST, &location).await;
+    db.close().await;
+    drop(db);
+
+    let refused = Database::open(&FOLDED, &location).await.err().unwrap();
     assert!(
-      matches!(refused, Err(DbError::Checksum { version: 1, .. })),
-      "{:?}",
-      refused.err()
+      matches!(refused, DbError::Checksum { version: 1, .. }),
+      "{refused:?}"
+    );
+    let message = refused.to_string();
+    assert!(
+      message.contains(&location.data.join("auth.db").display().to_string())
+        && message.contains("data directory"),
+      "the message names the file and what to do: {message}"
+    );
+    let kept = Connection::open(location.data.join("auth.db")).unwrap();
+    let versions: Vec<u32> = kept
+      .prepare("SELECT version FROM schema_migrations ORDER BY version")
+      .unwrap()
+      .query_map([], |row| row.get(0))
+      .unwrap()
+      .collect::<rusqlite::Result<_>>()
+      .unwrap();
+    assert_eq!(versions, [1, 2], "nothing is recorded on top");
+    let x: i64 = kept
+      .query_row("SELECT x FROM a", [], |row| row.get(0))
+      .unwrap();
+    assert_eq!(x, 7);
+    assert_eq!(
+      std::fs::read_dir(&location.backups).unwrap().count(),
+      0,
+      "nothing was applied, so nothing was backed up"
     );
   }
 

@@ -40,9 +40,17 @@ pub enum DbError {
   /// the file holds tables but no migration record, so it is not one of reseek's
   #[error("{0} is not a reseek database: it has tables but no schema_migrations table")]
   NotOurs(PathBuf),
-  /// a migration this program applied differs from the one it now carries
-  #[error("migration {version} ({name}) of {database} changed since it was applied")]
+  /// a migration recorded in the file differs from the one this program carries, so the file
+  /// cannot be brought up to date
+  #[error(
+    "{} was made with a migration {version} ({name}) of {database} that differs from this \
+     reseek's, so it cannot be brought up to date; move the data directory that holds it aside \
+     and start reseek again to make a new one",
+    path.display()
+  )]
   Checksum {
+    /// the file
+    path: PathBuf,
     /// the database
     database: &'static str,
     /// the migration's version
