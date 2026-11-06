@@ -304,6 +304,13 @@ impl Decoder {
     frames
   }
 
+  /// Whether every sample frame lasts a whole number of the container's timestamp ticks, so a
+  /// packet's timestamp and duration place its first and last frame exactly.
+  pub fn ticks_fit_frames(&self) -> bool {
+    let (numer, denom) = self.ticks();
+    denom % (numer * u128::from(self.claimed.sample_rate)) == 0
+  }
+
   /// A timestamp tick as a fraction of a second; one sample frame when the container gives none.
   fn ticks(&self) -> (u128, u128) {
     self.time_base.map_or_else(

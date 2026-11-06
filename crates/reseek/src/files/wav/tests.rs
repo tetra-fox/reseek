@@ -149,6 +149,19 @@ fn alac_whose_first_packet_cannot_be_decoded_is_refused() {
   );
 }
 
+#[test]
+fn a_track_timed_in_milliseconds_is_refused() {
+  // the media header's timescale, after its version, flags and two times; a frame of the 8000
+  // Hz tone is then an eighth of a tick
+  let mut bytes = TONE.to_vec();
+  let mdhd = box_at(&bytes, b"mdhd");
+  put(&mut bytes, mdhd + 20, 1000);
+  assert_eq!(
+    wav_length(&bytes),
+    Err("the file does not time its packets in sample frames".to_string())
+  );
+}
+
 /// The whole WAV of `bytes`.
 fn whole(bytes: &[u8]) -> Result<Vec<u8>, String> {
   wav_bytes(bytes, 0, wav_length(bytes)?)

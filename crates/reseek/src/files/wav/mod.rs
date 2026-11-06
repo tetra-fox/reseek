@@ -175,6 +175,11 @@ fn alac(
   if claimed.codec != "alac" {
     return Err(plain());
   }
+  if !decoder.ticks_fit_frames() {
+    return Err(Refused::Format(
+      "the file does not time its packets in sample frames".to_string(),
+    ));
+  }
   let frames = claimed
     .frames
     .ok_or_else(|| Refused::Format("the file does not state its length".to_string()))?;
