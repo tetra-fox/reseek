@@ -10,6 +10,7 @@
 mod running;
 mod store;
 mod suspect;
+mod wishlist;
 
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;

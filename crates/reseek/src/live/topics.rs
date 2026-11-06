@@ -122,6 +122,7 @@ pub fn routes(frame: &LiveFrame) -> Vec<Topic> {
     F::Hello(_) | F::Lagged(_) | F::Bye(_) => return Vec::new(),
     F::ChatUnread(_) | F::ChatPins(_) => return vec![Topic::Conversations, Topic::Rooms],
     F::UsersPresence(_) => return vec![Topic::Users, Topic::Application],
+    F::SearchWishlistFound(_) => return vec![Topic::Search, Topic::Application],
     F::SearchResponse(received) => Topic::SearchResponses(received.search_id),
     F::ApplicationState(_) | F::ApplicationOptions(_) | F::ApplicationServerMessage(_) => {
       Topic::Application

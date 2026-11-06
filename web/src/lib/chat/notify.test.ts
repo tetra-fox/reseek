@@ -27,7 +27,8 @@ const options: NotifyOptions = {
   buddyPresence: "both",
   scansFinished: "off",
   analysisFinished: "off",
-  maintenanceFinished: "off"
+  maintenanceFinished: "off",
+  wishlistFound: "both"
 };
 const arrival = (fields: Partial<Arrival>): Arrival => ({
   kind: "private",

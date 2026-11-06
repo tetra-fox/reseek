@@ -61,6 +61,8 @@ pub struct Notifications {
   pub buddies: BuddyNotifications,
   /// Notifications of jobs other than downloads.
   pub jobs: JobNotifications,
+  /// Search notifications.
+  pub search: SearchNotifications,
 }
 
 /// Notifications of jobs other than download jobs, which `transfers.job_finished` covers. Each
@@ -77,6 +79,24 @@ pub struct JobNotifications {
   /// How the end of a cleanup or a database vacuum is announced. A failure is always shown.
   #[cascade(env = "RESEEK_NOTIFICATIONS_JOBS_MAINTENANCE")]
   pub maintenance: NotificationMode,
+}
+
+/// Search notifications, under the same browser permission and tab visibility rules as chat
+/// notifications.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
+#[serde(default)]
+pub struct SearchNotifications {
+  /// How new files found by a wishlist search are announced.
+  #[cascade(env = "RESEEK_NOTIFICATIONS_SEARCH_WISHLIST")]
+  pub wishlist: NotificationMode,
+}
+
+impl Default for SearchNotifications {
+  fn default() -> Self {
+    Self {
+      wishlist: NotificationMode::Both,
+    }
+  }
 }
 
 /// Buddy notifications, under the same browser permission and tab visibility rules as chat

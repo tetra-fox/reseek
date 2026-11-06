@@ -18,7 +18,7 @@ use crate::messaging::rooms::{
 };
 use crate::messaging::{ChatPins, ChatUnread, ServerMessage};
 use crate::options::OptionsDocument;
-use crate::search::{Search, SearchResponseReceived};
+use crate::search::{Search, SearchResponseReceived, WishlistFound};
 use crate::state::{State, VersionInfo};
 use crate::telemetry::TransferMetrics;
 use crate::transfers::{DownloadJobFinished, Transfer, TransferRemoved};
@@ -69,6 +69,10 @@ pub enum LiveFrame {
   /// a search was deleted
   #[serde(rename = "search.delete")]
   SearchDelete(Search),
+  /// a wishlist search found files it had not found before; also on the `application` topic,
+  /// so every open page can tell of it
+  #[serde(rename = "search.wishlist_found")]
+  SearchWishlistFound(WishlistFound),
   /// a response arrived for the search the topic names
   #[serde(rename = "search.response")]
   SearchResponse(SearchResponseReceived),
@@ -240,6 +244,7 @@ mod tests {
     "search.create",
     "search.update",
     "search.delete",
+    "search.wishlist_found",
     "search.response",
     "transfers.added",
     "transfers.updated",

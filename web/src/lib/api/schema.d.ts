@@ -1826,6 +1826,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v0/searches/wishlist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The wishlist: saved searches run again one at a time on the server's wishlist interval,
+         *     each telling of the files it finds that it had not found before.
+         */
+        get: operations["wishlist"];
+        put?: never;
+        /** Adds a search to the wishlist; one with the same text, ignoring case, is answered as it is. */
+        post: operations["add_wish"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v0/searches/wishlist/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Takes a search off the wishlist. */
+        delete: operations["remove_wish"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v0/searches/{id}": {
         parameters: {
             query?: never;
@@ -3354,6 +3392,14 @@ export interface components {
             room: string;
             /** @enum {string} */
             type: "privateRoom";
+        };
+        /** @description The body of `POST /searches/wishlist`. */
+        AddWishlistItem: {
+            /**
+             * @description what to search for
+             * @example boards of canada tomorrow's harvest
+             */
+            searchText: string;
         };
         /** @description The body of `POST /analysis/batch`: the files to analyze, in the order they are to run. */
         AnalysisBatch: {
@@ -5714,6 +5760,14 @@ export interface components {
             data: components["schemas"]["Search"];
             /** @enum {string} */
             type: "search.delete";
+        } | {
+            /**
+             * @description a wishlist search found files it had not found before; also on the `application` topic,
+             *     so every open page can tell of it
+             */
+            data: components["schemas"]["WishlistFound"];
+            /** @enum {string} */
+            type: "search.wishlist_found";
         } | {
             /** @description a response arrived for the search the topic names */
             data: components["schemas"]["SearchResponseReceived"];
@@ -8735,6 +8789,64 @@ export interface components {
              * @description where the window starts, in seconds from the start of the file
              */
             t: number;
+        };
+        /**
+         * @description A wishlist search found files it had not found before, as a `search.wishlist_found` frame
+         *     carries it.
+         */
+        WishlistFound: {
+            /**
+             * Format: uuid
+             * @description the wishlist item
+             */
+            itemId: string;
+            /**
+             * Format: int32
+             * @description how many files are new
+             */
+            newFiles: number;
+            /**
+             * Format: uuid
+             * @description the search that found them
+             */
+            searchId: string;
+            /** @description what it searches for */
+            searchText: string;
+            /** @description the users the new files are from, at most five */
+            usernames: string[];
+        };
+        /** @description A saved search the wishlist runs again on the server's wishlist interval, one item a turn. */
+        WishlistItem: {
+            /**
+             * Format: date-time
+             * @description when it was added
+             */
+            addedAt: string;
+            /**
+             * Format: uuid
+             * @description the item's id
+             */
+            id: string;
+            /**
+             * Format: int32
+             * @description how many files its last search found that it had not found before
+             */
+            lastNewFiles: number;
+            /**
+             * Format: uuid
+             * @description the search it last ran, null until it ran one
+             */
+            lastSearchId?: string | null;
+            /**
+             * Format: date-time
+             * @description when it was last searched, null until it was
+             */
+            lastSearchedAt?: string | null;
+            /**
+             * @description what it searches for, as typed
+             * @example boards of canada tomorrow's harvest
+             */
+            searchText: string;
         };
     };
     responses: never;
@@ -15377,6 +15489,125 @@ export interface operations {
                 };
             };
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    wishlist: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WishlistItem"][];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    add_wish: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddWishlistItem"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WishlistItem"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    remove_wish: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description the wishlist item's id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

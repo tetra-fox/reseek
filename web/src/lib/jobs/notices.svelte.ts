@@ -1,8 +1,10 @@
 import { goto } from "$app/navigation";
 
+import type { Schemas } from "#lib/api/client.js";
 import type { NotifyMode } from "#lib/chat/modes.js";
 import { notifier, notifyOptions } from "#lib/chat/notify.svelte.js";
 import { toast } from "#lib/feedback/toast.svelte.js";
+import { plural } from "#lib/format.js";
 import { live } from "#lib/live/live.svelte.js";
 import { href } from "#lib/nav.js";
 
@@ -28,13 +30,15 @@ const modeOf = (job: Job): NotifyMode | null => {
 
 /**
  * Tells of the end of a share scan, an analysis or a maintenance run, as each kind's option
- * says; a maintenance run that failed is shown even with its option off
+ * says; a maintenance run that failed is shown even with its option off. Also tells of the files
+ * a wishlist search found that it had not found before
  */
 class JobNotices {
   #told = new Set<string>();
 
   constructor() {
     live.on("jobs.updated", (job) => this.#updated(job));
+    live.on("search.wishlist_found", (found) => this.#wishlist(found));
   }
 
   #updated(job: Job) {
@@ -51,6 +55,16 @@ class JobNotices {
       return;
     }
     notifier.other(mode, title, body, `job:${job.id}`, to);
+  }
+
+  #wishlist(found: Schemas["WishlistFound"]) {
+    notifier.other(
+      notifyOptions().wishlistFound,
+      "Wishlist found new files",
+      `${plural(found.newFiles, "new file", "new files")} for "${found.searchText}"`,
+      `wishlist:${found.itemId}`,
+      href(`/searches/${found.searchId}`)
+    );
   }
 }
 

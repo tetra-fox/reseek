@@ -364,9 +364,9 @@ mod tests {
       .await;
     assert_eq!(status, 202);
     let (status, _) = app
-      .call("POST", "/api/v0/jobs/schedules/release-check/run", None)
+      .call("POST", "/api/v0/jobs/schedules/wishlist/run", None)
       .await;
-    assert_eq!(status, 409, "a development build is not checked");
+    assert_eq!(status, 409, "the server sets how often the wishlist runs");
     let mut ended = None;
     while ended.is_none() {
       let frame = stream.until("jobs.updated").await.pop().unwrap().data;

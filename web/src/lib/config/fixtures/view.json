@@ -111,6 +111,9 @@
         "maintenance": "off",
         "scans": "off"
       },
+      "search": {
+        "wishlist": "both"
+      },
       "transfers": {
         "job_finished": "both",
         "upload_queued": "off"
@@ -1538,6 +1541,27 @@
         "both"
       ],
       "default": "off",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null,
+      "entries": []
+    },
+    "notifications.search.wishlist": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_NOTIFICATIONS_SEARCH_WISHLIST",
+      "cliFlag": null,
+      "kind": "string",
+      "doc": "How new files found by a wishlist search are announced.",
+      "choices": [
+        "off",
+        "sound",
+        "desktop",
+        "both"
+      ],
+      "default": "both",
       "apply": "live",
       "secret": false,
       "notApplied": null,

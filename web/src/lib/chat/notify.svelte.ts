@@ -22,6 +22,7 @@ export type NotifyOptions = {
   scansFinished: NotifyMode;
   analysisFinished: NotifyMode;
   maintenanceFinished: NotifyMode;
+  wishlistFound: NotifyMode;
 };
 
 /** The notification options in effect, their defaults where the options don't say */
@@ -31,6 +32,7 @@ export const notifyOptions = (): NotifyOptions => {
   const transfers = fields(others.transfers);
   const buddies = fields(others.buddies);
   const jobs = fields(others.jobs);
+  const search = fields(others.search);
   const mode = (value: unknown, otherwise: NotifyMode) => (isNotifyMode(value) ? value : otherwise);
   return {
     onlyWhenHidden: typeof chat.only_when_hidden === "boolean" ? chat.only_when_hidden : true,
@@ -42,7 +44,8 @@ export const notifyOptions = (): NotifyOptions => {
     buddyPresence: mode(buddies.presence, "both"),
     scansFinished: mode(jobs.scans, "off"),
     analysisFinished: mode(jobs.analysis, "off"),
-    maintenanceFinished: mode(jobs.maintenance, "off")
+    maintenanceFinished: mode(jobs.maintenance, "off"),
+    wishlistFound: mode(search.wishlist, "both")
   };
 };
 

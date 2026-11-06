@@ -31,7 +31,7 @@ pub use flags::Flags;
 pub use logging::{Logger, Logging, Metrics, MetricsAuthentication};
 pub use notifications::{
   BuddyNotifications, ChatNotifications, JobNotifications, NotificationMode, Notifications,
-  TransferNotifications,
+  SearchNotifications, TransferNotifications,
 };
 pub use paths::{Directories, Paths};
 pub use relay::{Relay, RelayAgent, RelayLimits, RelayTimeouts};

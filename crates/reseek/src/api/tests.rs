@@ -164,6 +164,8 @@ async fn each_route_takes_its_least_role() {
     (Method::POST, "/api/v0/jobs/{id}/pause", write),
     (Method::DELETE, "/api/v0/jobs", write),
     (Method::POST, "/api/v0/jobs/schedules/{name}/run", write),
+    (Method::GET, "/api/v0/searches/wishlist", read),
+    (Method::POST, "/api/v0/searches/wishlist", write),
     (Method::GET, "/api/v0/events", read),
     (Method::GET, "/api/v0/activity", read),
     (Method::POST, "/api/v0/events/{type}", admin),

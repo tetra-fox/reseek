@@ -476,3 +476,48 @@ mod tests {
     assert!(serde_json::from_str::<FileAttributeType>("\"Duration\"").is_err());
   }
 }
+
+/// A saved search the wishlist runs again on the server's wishlist interval, one item a turn.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct WishlistItem {
+  /// the item's id
+  pub id: Uuid,
+  /// what it searches for, as typed
+  #[schema(example = "boards of canada tomorrow's harvest")]
+  pub search_text: String,
+  /// when it was added
+  pub added_at: DateTime<Utc>,
+  /// when it was last searched, null until it was
+  pub last_searched_at: Option<DateTime<Utc>>,
+  /// the search it last ran, null until it ran one
+  pub last_search_id: Option<Uuid>,
+  /// how many files its last search found that it had not found before
+  pub last_new_files: u32,
+}
+
+/// The body of `POST /searches/wishlist`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AddWishlistItem {
+  /// what to search for
+  #[schema(example = "boards of canada tomorrow's harvest")]
+  pub search_text: String,
+}
+
+/// A wishlist search found files it had not found before, as a `search.wishlist_found` frame
+/// carries it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct WishlistFound {
+  /// the wishlist item
+  pub item_id: Uuid,
+  /// what it searches for
+  pub search_text: String,
+  /// the search that found them
+  pub search_id: Uuid,
+  /// how many files are new
+  pub new_files: u32,
+  /// the users the new files are from, at most five
+  pub usernames: Vec<String>,
+}

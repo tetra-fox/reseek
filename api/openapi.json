@@ -9043,6 +9043,155 @@
         }
       }
     },
+    "/api/v0/searches/wishlist": {
+      "get": {
+        "tags": [
+          "searches"
+        ],
+        "summary": "The wishlist: saved searches run again one at a time on the server's wishlist interval,\neach telling of the files it finds that it had not found before.",
+        "operationId": "wishlist",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WishlistItem"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "searches"
+        ],
+        "summary": "Adds a search to the wishlist; one with the same text, ignoring case, is answered as it is.",
+        "operationId": "add_wish",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddWishlistItem"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WishlistItem"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/searches/wishlist/{id}": {
+      "delete": {
+        "tags": [
+          "searches"
+        ],
+        "summary": "Takes a search off the wishlist.",
+        "operationId": "remove_wish",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "the wishlist item's id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "removed"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v0/searches/{id}": {
       "get": {
         "tags": [
@@ -16823,6 +16972,20 @@
         ],
         "description": "What another user did with us."
       },
+      "AddWishlistItem": {
+        "type": "object",
+        "description": "The body of `POST /searches/wishlist`.",
+        "required": [
+          "searchText"
+        ],
+        "properties": {
+          "searchText": {
+            "type": "string",
+            "description": "what to search for",
+            "example": "boards of canada tomorrow's harvest"
+          }
+        }
+      },
       "AnalysisBatch": {
         "type": "object",
         "description": "The body of `POST /analysis/batch`: the files to analyze, in the order they are to run.",
@@ -21879,6 +22042,26 @@
                 "type": "string",
                 "enum": [
                   "search.delete"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "a wishlist search found files it had not found before; also on the `application` topic,\nso every open page can tell of it",
+            "required": [
+              "data",
+              "type"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/WishlistFound",
+                "description": "a wishlist search found files it had not found before; also on the `application` topic,\nso every open page can tell of it"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "search.wishlist_found"
                 ]
               }
             }
@@ -27983,6 +28166,95 @@
             "type": "number",
             "format": "double",
             "description": "where the window starts, in seconds from the start of the file"
+          }
+        }
+      },
+      "WishlistFound": {
+        "type": "object",
+        "description": "A wishlist search found files it had not found before, as a `search.wishlist_found` frame\ncarries it.",
+        "required": [
+          "itemId",
+          "searchText",
+          "searchId",
+          "newFiles",
+          "usernames"
+        ],
+        "properties": {
+          "itemId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "the wishlist item"
+          },
+          "newFiles": {
+            "type": "integer",
+            "format": "int32",
+            "description": "how many files are new",
+            "minimum": 0
+          },
+          "searchId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "the search that found them"
+          },
+          "searchText": {
+            "type": "string",
+            "description": "what it searches for"
+          },
+          "usernames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "the users the new files are from, at most five"
+          }
+        }
+      },
+      "WishlistItem": {
+        "type": "object",
+        "description": "A saved search the wishlist runs again on the server's wishlist interval, one item a turn.",
+        "required": [
+          "id",
+          "searchText",
+          "addedAt",
+          "lastNewFiles"
+        ],
+        "properties": {
+          "addedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "when it was added"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "the item's id"
+          },
+          "lastNewFiles": {
+            "type": "integer",
+            "format": "int32",
+            "description": "how many files its last search found that it had not found before",
+            "minimum": 0
+          },
+          "lastSearchId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "the search it last ran, null until it ran one"
+          },
+          "lastSearchedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "when it was last searched, null until it was"
+          },
+          "searchText": {
+            "type": "string",
+            "description": "what it searches for, as typed",
+            "example": "boards of canada tomorrow's harvest"
           }
         }
       }

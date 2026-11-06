@@ -35,6 +35,8 @@ pub const CLEANUP: &str = "cleanup";
 pub const VACUUM: &str = "vacuum";
 /// The release check schedule.
 pub const RELEASE_CHECK: &str = "release-check";
+/// The wishlist schedule.
+pub const WISHLIST: &str = "wishlist";
 
 /// A schedule as the card shows it and the scheduler runs it.
 struct Entry {
@@ -65,6 +67,7 @@ fn entries(app: &AppState, options: &Options, started: DateTime<Utc>) -> Vec<Ent
   } else {
     None
   };
+  let wishlist = app.searches.wishlist_interval();
   vec![
     Entry {
       name: SHARE_RESCAN,
@@ -110,6 +113,21 @@ fn entries(app: &AppState, options: &Options, started: DateTime<Utc>) -> Vec<Ent
       note: release_off.map(str::to_string),
       never_ran_from: None,
       runnable: release_off.is_none(),
+    },
+    Entry {
+      name: WISHLIST,
+      title: "Wishlist",
+      description: "Searches the next wishlist item again, one item each time.",
+      option: None,
+      schedule: wishlist.map_or(Schedule::Off, Schedule::every),
+      note: Some(if wishlist.is_some() {
+        "The Soulseek server sets how often".to_string()
+      } else {
+        "Waits for the Soulseek server to say how often".to_string()
+      }),
+      never_ran_from: Some(started),
+      // the server sets how often a wishlist search may go out
+      runnable: false,
     },
   ]
 }
@@ -220,7 +238,7 @@ pub async fn run(app: AppState) {
       app.live.publish(LiveFrame::JobsSchedules(cards.clone()));
       pushed = Some(cards);
     }
-    // looked at again at least once a minute, so a due time that moved without a wake is kept
+    // the server's wishlist interval comes with a login, which nothing else announces
     let wait = next
       .map_or(LOOK_AGAIN, |next| {
         (next - Utc::now()).to_std().unwrap_or(Duration::ZERO)
@@ -317,6 +335,7 @@ async fn work(app: &AppState, name: &'static str, starter: JobStarter) -> RunOut
     CLEANUP => maintenance::cleanup(app, starter, listed).await,
     VACUUM => maintenance::vacuum(app, starter, listed).await,
     RELEASE_CHECK => release_check(app).await,
+    WISHLIST => app.searches.wishlist_turn().await,
     other => unreachable!("no schedule runs {other}"),
   }
 }

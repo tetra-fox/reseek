@@ -454,6 +454,9 @@ export const sections: Section[] = [
         { key: "notifications.jobs.scans", label: "Share scans finished" },
         { key: "notifications.jobs.analysis", label: "Analyses finished" },
         { key: "notifications.jobs.maintenance", label: "Cleanups and vacuums finished" }
+      ]),
+      ...under("Search", [
+        { key: "notifications.search.wishlist", label: "The wishlist found new files" }
       ])
     ]
   },

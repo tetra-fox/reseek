@@ -18,7 +18,7 @@ use uuid::Uuid;
 use crate::db::{self, Schema, read_timestamp, timestamp};
 
 /// `search.db`: the `searches` table.
-pub static SCHEMA: Schema = db::schema!("search", ["0001_initial"]);
+pub static SCHEMA: Schema = db::schema!("search", ["0001_initial", "0002_wishlist"]);
 
 /// The columns [`search`] reads, in its order: every one but the responses.
 const COLUMNS: &str = "id, search_text, token, scope_type, scope_subjects, state, started_at, \

@@ -5,6 +5,7 @@
   import SearchBar from "#lib/components/search/SearchBar.svelte";
   import SearchList from "#lib/components/search/SearchList.svelte";
   import Unreachable from "#lib/components/search/Unreachable.svelte";
+  import Wishlist from "#lib/components/search/Wishlist.svelte";
   import { href, route } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
 
@@ -24,3 +25,4 @@
 {/if}
 <Unreachable />
 <SearchList />
+<Wishlist />

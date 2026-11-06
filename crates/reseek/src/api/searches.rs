@@ -1,11 +1,12 @@
 //! The searches routes: starting a search, listing searches, reading one with its responses,
-//! and stopping and deleting it. Reading takes the ReadOnly role, the rest ReadWrite.
+//! stopping and deleting it, and the wishlist. Reading takes the ReadOnly role, the rest
+//! ReadWrite.
 
 use std::time::Duration;
 
 use api_types::search::{
-  Search, SearchGetQuery, SearchListQuery, SearchRequest, SearchResponse, SearchScopeType,
-  SearchTimeout,
+  AddWishlistItem, Search, SearchGetQuery, SearchListQuery, SearchRequest, SearchResponse,
+  SearchScopeType, SearchTimeout, WishlistItem,
 };
 use axum::extract::State;
 use axum::http::StatusCode;
@@ -32,6 +33,55 @@ pub fn routes() -> OpenApiRouter<AppState> {
     .routes(routes!(list, start))
     .routes(routes!(get, cancel, delete))
     .routes(routes!(responses))
+    .routes(routes!(wishlist, add_wish))
+    .routes(routes!(remove_wish))
+}
+
+/// The wishlist: saved searches run again one at a time on the server's wishlist interval,
+/// each telling of the files it finds that it had not found before.
+#[utoipa::path(
+  get, path = "/searches/wishlist", tag = "searches",
+  responses((status = 200, body = Vec<WishlistItem>), (status = 401, body = api_types::ErrorBody))
+)]
+async fn wishlist(
+  State(app): State<AppState>,
+  _caller: Authorized<AnyRole>,
+) -> Result<Json<Vec<WishlistItem>>, ApiError> {
+  app.searches.wishlist().await.map(Json)
+}
+
+/// Adds a search to the wishlist; one with the same text, ignoring case, is answered as it is.
+#[utoipa::path(
+  post, path = "/searches/wishlist", tag = "searches", request_body = AddWishlistItem,
+  responses(
+    (status = 200, body = WishlistItem), (status = 400, body = api_types::ErrorBody),
+    (status = 401, body = api_types::ErrorBody), (status = 403, body = api_types::ErrorBody)
+  )
+)]
+async fn add_wish(
+  State(app): State<AppState>,
+  _caller: Authorized<ReadWrite>,
+  Json(body): Json<AddWishlistItem>,
+) -> Result<Json<WishlistItem>, ApiError> {
+  app.searches.add_wish(&body.search_text).await.map(Json)
+}
+
+/// Takes a search off the wishlist.
+#[utoipa::path(
+  delete, path = "/searches/wishlist/{id}", tag = "searches",
+  params(("id" = Uuid, Path, description = "the wishlist item's id")),
+  responses(
+    (status = 204, description = "removed"), (status = 401, body = api_types::ErrorBody),
+    (status = 403, body = api_types::ErrorBody), (status = 404, body = api_types::ErrorBody)
+  )
+)]
+async fn remove_wish(
+  State(app): State<AppState>,
+  _caller: Authorized<ReadWrite>,
+  Path(id): Path<Uuid>,
+) -> Result<StatusCode, ApiError> {
+  app.searches.remove_wish(id).await?;
+  Ok(StatusCode::NO_CONTENT)
 }
 
 /// Starts a search and answers with its record before any response arrives; the responses
