@@ -35,6 +35,8 @@ pub struct State {
   pub shares: SharesState,
   /// the chat rooms we are in
   pub rooms: Vec<String>,
+  /// the jobs running and paused, and the last failure
+  pub jobs: crate::jobs::JobsSummary,
   /// the alternative speed limits are in force in place of the normal ones
   pub alternative_speed_limits: bool,
   /// the outcome of the last configuration reload

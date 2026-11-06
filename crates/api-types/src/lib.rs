@@ -19,6 +19,7 @@ pub mod auth;
 pub mod error;
 pub mod events;
 pub mod files;
+pub mod jobs;
 pub mod live;
 pub mod logs;
 pub mod messaging;

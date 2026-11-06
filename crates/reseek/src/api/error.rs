@@ -6,6 +6,9 @@ use axum::Json;
 use axum::http::{HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 
+/// The error code of a call the missing Soulseek connection refused.
+const UNAVAILABLE: &str = "soulseek_unavailable";
+
 /// What went wrong in a handler: the status that answers it, the message and its detail.
 #[derive(Debug)]
 pub struct ApiError {
@@ -126,11 +129,12 @@ impl ApiError {
 
   /// A 503: the Soulseek connection the call needs is not there.
   pub fn unavailable(detail: Option<String>) -> Self {
-    Self::new(
-      StatusCode::SERVICE_UNAVAILABLE,
-      "soulseek_unavailable",
-      detail,
-    )
+    Self::new(StatusCode::SERVICE_UNAVAILABLE, UNAVAILABLE, detail)
+  }
+
+  /// Whether this is the answer of a call the missing Soulseek connection refused.
+  pub fn is_unavailable(&self) -> bool {
+    self.error == UNAVAILABLE
   }
 
   /// A 503 for something other than the Soulseek connection that is not there now.

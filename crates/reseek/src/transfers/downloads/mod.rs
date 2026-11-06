@@ -13,6 +13,7 @@ mod complete;
 mod destination;
 mod enqueue;
 mod jobs;
+mod pause;
 mod queue;
 mod service;
 mod task;
@@ -45,6 +46,7 @@ use crate::config::Options;
 use crate::db::{Database, DbError};
 use crate::events::EventBus;
 use crate::files::Files;
+use crate::jobs::Jobs;
 use crate::live::Live;
 use crate::network::Network;
 use crate::paths::Paths;
@@ -77,6 +79,8 @@ struct InFlight {
   remove: bool,
   /// why it was canceled, when not by a plain cancel
   reason: Option<&'static str>,
+  /// canceled to be paused: it waits here again, keeping what arrived
+  pause: bool,
 }
 
 /// The download engine.
@@ -95,6 +99,8 @@ pub struct Downloads {
   relay: Option<Arc<Controller>>,
   /// told of every finished download, which it analyzes when the options ask for it
   analysis: Arc<Analysis>,
+  /// the jobs list, which each download job is kept in
+  jobs: Arc<Jobs>,
   incomplete: PathBuf,
   downloads: PathBuf,
   shutdown: CancellationToken,
@@ -117,8 +123,8 @@ impl Downloads {
   /// The engine over `transfers.db`, reaching peers through `network`, asking `users` who is
   /// blocked, marking the files it writes in `files`, reading what a download's search was for
   /// from `searches`, raising its events on `events`, pushing its records to `live`, counting the
-  /// downloads that end in `telemetry` and telling `relay` and `analysis` of each that
-  /// finished. Its tasks end when `shutdown` is canceled.
+  /// downloads that end in `telemetry`, telling `relay` and `analysis` of each that finished
+  /// and keeping each download job in `jobs`. Its tasks end when `shutdown` is canceled.
   #[allow(
     clippy::too_many_arguments,
     reason = "the engine takes each part of the daemon it uses"
@@ -135,6 +141,7 @@ impl Downloads {
     telemetry: Arc<Telemetry>,
     relay: Option<Arc<Controller>>,
     analysis: Arc<Analysis>,
+    jobs: Arc<Jobs>,
     paths: &Paths,
     shutdown: CancellationToken,
   ) -> Arc<Self> {
@@ -151,6 +158,7 @@ impl Downloads {
       telemetry,
       relay,
       analysis,
+      jobs,
       incomplete: paths.incomplete.clone(),
       downloads: paths.downloads.clone(),
       shutdown,
@@ -209,6 +217,9 @@ impl Downloads {
           self.push(record);
         }
         self.tell(finished);
+        if let (true, Some(job)) = (entered, record.job_id) {
+          self.sync_job(job).await;
+        }
       }
       Ok((false, _)) => warn!(id = %record.id, "download record gone; not written"),
       Err(e) => warn!(id = %record.id, error = %e, "download record not written"),
@@ -293,6 +304,9 @@ impl Downloads {
       removal::push(&self.live, TransferDirection::Download, &[(id, peer)]);
     }
     self.tell(finished);
+    if let Some(job) = record.job_id {
+      self.sync_job(job).await;
+    }
     Ok(())
   }
 
@@ -361,6 +375,7 @@ impl Downloads {
     };
     for (job, groups) in resumable {
       let job = job.unwrap_or_else(Uuid::new_v4);
+      self.ensure_listed(job, &groups).await;
       let asked: Vec<(String, usize)> = groups
         .iter()
         .map(|g| (g.username.clone(), g.files.len()))
@@ -375,7 +390,8 @@ impl Downloads {
             failed = enqueued.failed.len(),
             "interrupted downloads resumed"
           ),
-          Err(e) => warn!(
+          // an offline user is no fault, so this logs as a refused enqueue does
+          Err(e) => info!(
             username,
             %job,
             downloads = count,
@@ -384,6 +400,24 @@ impl Downloads {
           ),
         }
       }
+    }
+    // a job that ended or lost its downloads while the list was not told stays in step
+    match self.jobs.unended(api_types::jobs::JobKind::Download).await {
+      Ok(jobs) => {
+        for job in jobs {
+          // one stopped before its first download was written ends with nothing to show
+          if self.sync_job(job.id).await {
+            self
+              .end_empty(
+                job.id,
+                api_types::jobs::JobEnding::Failed,
+                Some("Nothing was queued".to_string()),
+              )
+              .await;
+          }
+        }
+      }
+      Err(e) => warn!(error = %e, "download jobs not checked after the restart"),
     }
   }
 

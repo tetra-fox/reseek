@@ -28,7 +28,7 @@ use soulseek_client::{ClientError, SearchOptions, SearchStateChanged};
 use soulseek_proto::SearchQuery;
 use tokio::sync::oneshot;
 use tokio_util::task::TaskTracker;
-use tracing::{Instrument, debug, info, info_span, warn};
+use tracing::{Instrument, debug, info_span, warn};
 use uuid::Uuid;
 
 use crate::api::error::ApiError;
@@ -185,30 +185,22 @@ impl Searches {
   }
 
   /// Deletes the searches that ended longer ago than `retention.search`, pushing each.
-  pub async fn prune(&self) {
+  pub async fn prune(&self) -> Result<usize, DbError> {
     let Some(age) = self.config.current().values.retention.search else {
-      return;
+      return Ok(0);
     };
     // an age too long for chrono deletes nothing, as the earliest time stored bounds it
     let age = chrono::Duration::from_std(age).unwrap_or(chrono::Duration::MAX);
     let before = shifted(Utc::now(), -age);
-    match self.db.write(move |conn| store::prune(conn, before)).await {
-      Ok(pruned) => {
-        if !pruned.is_empty() {
-          info!(
-            count = pruned.len(),
-            "searches past their retention deleted"
-          );
-        }
-        for search in pruned {
-          self.live.publish(LiveFrame::SearchDelete(search));
-        }
-      }
-      Err(e) => warn!(
-        error = %e,
-        "Encountered one or more errors while pruning searches"
-      ),
+    let pruned = self
+      .db
+      .write(move |conn| store::prune(conn, before))
+      .await?;
+    let count = pruned.len();
+    for search in pruned {
+      self.live.publish(LiveFrame::SearchDelete(search));
     }
+    Ok(count)
   }
 
   /// Every search, oldest first, without responses: the search topic's snapshot.

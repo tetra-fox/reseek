@@ -249,6 +249,18 @@ impl Downloads {
       return debug!(state = %record.state, "download ended already");
     }
     let canceled = failure.state == TransferStates::Cancelled;
+    if canceled && self.pausing(record.id) {
+      record.paused = true;
+      record.state = TransferStates::Queued | TransferStates::Locally;
+      record.started_at = None;
+      record.ended_at = None;
+      record.exception = None;
+      record.next_attempt_at = None;
+      record.place_in_queue = None;
+      record.average_speed = 0.0;
+      self.save(&record, true).await;
+      return info!("download paused");
+    }
     let reason = lock(&self.in_flight)
       .get(&record.id)
       .and_then(|entry| entry.reason);

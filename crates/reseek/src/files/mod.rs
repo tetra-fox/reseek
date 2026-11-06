@@ -120,12 +120,8 @@ impl Files {
       bucket: Arc::new(TokenBucket::for_speed(limit.unwrap_or(0))),
       shutdown: shutdown.clone(),
     };
-    tokio::spawn(follow_speed(
-      config.clone(),
-      speed.bucket.clone(),
-      shutdown.clone(),
-    ));
-    let files = Arc::new(Self {
+    tokio::spawn(follow_speed(config.clone(), speed.bucket.clone(), shutdown));
+    Arc::new(Self {
       config,
       transfers,
       downloads: paths.downloads.clone(),
@@ -136,9 +132,7 @@ impl Files {
       writing: Writing::default(),
       archives: Slots::default(),
       speed,
-    });
-    prune::spawn(files.clone(), shutdown);
-    files
+    })
   }
 
   /// Marks the file at `path`, which a download is writing, so it is not served, deleted or

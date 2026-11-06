@@ -81,6 +81,8 @@ fn setup(dir: &Path, cache: &Path) -> (Setup, watch::Receiver<SharesState>) {
     force_scan: false,
     volatile: false,
     case_sensitive: false,
+    rescan_on_schedule: true,
+    scans: Box::new(|_| Box::pin(async {})),
     publish: Box::new(move |shares| {
       told.send_replace(shares);
     }),
@@ -262,12 +264,15 @@ async fn a_scan_is_one_at_a_time_and_only_a_running_one_cancels() {
   let shares = &engine.shares;
   let held = CancellationToken::new();
   *lock(&shares.running) = Some(held.clone());
-  assert_eq!(shares.scan(false), Err(ScanConflict::Running));
+  assert_eq!(
+    shares.scan(false, ScanOrigin::Asked),
+    Err(ScanConflict::Running)
+  );
   assert_eq!(shares.cancel_scan(), Ok(()));
   assert!(held.is_cancelled());
   *lock(&shares.running) = None;
   assert_eq!(shares.cancel_scan(), Err(ScanConflict::NotRunning));
-  assert_eq!(shares.scan(true), Ok(()));
+  assert_eq!(shares.scan(true, ScanOrigin::Asked), Ok(()));
   eventually(async || lock(&shares.running).is_none()).await;
   assert!(engine.state().ready);
 }
@@ -390,12 +395,12 @@ async fn a_restart_loads_the_backup_and_scans_once() {
     "the scan after loading runs in the background"
   );
   eventually(async || lock(&again.running).is_none()).await;
-  let scans = again
+  let scans: i64 = again
     .db
-    .read(|conn| repository::scans_since(conn, 0))
+    .read(|conn| conn.query_row("SELECT COUNT(*) FROM scans", [], |row| row.get(0)))
     .await
     .unwrap();
-  assert_eq!(scans.len(), 2, "the loaded scan and the one after loading");
+  assert_eq!(scans, 2, "the loaded scan and the one after loading");
   assert_eq!(names(&again, "album").await, ["Music\\Album\\01.mp3"]);
   drop(files);
 }
@@ -569,7 +574,7 @@ async fn a_canceled_scan_leaves_the_engine_idle_at_full_progress() {
   eventually(async || lock(&shares.running).is_none()).await;
   let cancel = shares.take_slot().unwrap();
   cancel.cancel();
-  assert!(!shares.run_scan(false, cancel).await);
+  assert!(!shares.run_scan(false, ScanOrigin::Asked, cancel).await);
   let shown = engine.state();
   assert!(shown.cancelled && shown.scan_pending && !shown.scanning);
   assert_eq!(shown.scan_progress, 1.0);
@@ -640,7 +645,7 @@ async fn options_changed_while_a_scan_runs_stay_pending_and_uncounted() {
     })
   };
   writer_taken.await.unwrap();
-  shares.scan(false).unwrap();
+  shares.scan(false, ScanOrigin::Asked).unwrap();
   eventually(async || engine.state().scanning).await;
   add_other(&engine, files.path());
   release.send(()).unwrap();
@@ -651,7 +656,7 @@ async fn options_changed_while_a_scan_runs_stay_pending_and_uncounted() {
   assert!(shown.scan_pending, "the scan did not cover the share added");
   assert_eq!(counts(&shares, "Other"), (None, None));
   assert_eq!(counts(&shares, "Music"), (Some(2), Some(1)));
-  shares.scan(false).unwrap();
+  shares.scan(false, ScanOrigin::Asked).unwrap();
   eventually(async || lock(&shares.running).is_none()).await;
   assert!(!engine.state().scan_pending);
   assert_eq!(counts(&shares, "Other"), (Some(1), Some(1)));
@@ -675,7 +680,7 @@ async fn serves_an_agent(extra: &str) {
   let (agent_files, agent) = shared_engine().await;
   std::fs::create_dir_all(agent_files.path().join("music/Other")).unwrap();
   std::fs::write(agent_files.path().join("music/Other/02.flac"), "agent").unwrap();
-  agent.shares.scan(false).unwrap();
+  agent.shares.scan(false, ScanOrigin::Asked).unwrap();
   eventually(async || lock(&agent.shares.running).is_none() && agent.state().files == 2).await;
   let dump = agent_files.path().join("dump.db");
   agent.shares.dump(&dump).await.unwrap();

@@ -45,9 +45,4 @@ pub trait ApplicationService: Send + Sync {
   async fn databases(&self) -> Result<Vec<DatabaseFile>, ApiError> {
     Err(not_yet(DOMAIN))
   }
-
-  /// Rebuilds the database file `name` without its free pages; 404 for a name no file has.
-  async fn vacuum(&self, name: &str) -> Result<(), ApiError> {
-    Err(not_yet(DOMAIN))
-  }
 }

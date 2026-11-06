@@ -197,8 +197,11 @@ mod tests {
       .send(request("DELETE", "/api/v0/users/mallory/block", None))
       .await;
     assert!(unblocked.status.is_success(), "{:?}", unblocked.body);
+    // the share scan at the start is a job of its own, told of as it ends
+    let mut types = logged(&app, 8).await;
+    types.retain(|kind| kind != "JobFinished");
     assert_eq!(
-      logged(&app, 7).await,
+      types,
       [
         "LoginFailed",
         "SessionCreated",

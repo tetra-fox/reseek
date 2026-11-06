@@ -25,6 +25,11 @@ pub enum BulkAction {
   /// enqueue a completed download again, as a new transfer with the same destination and search;
   /// the downloads retried in one call make one new download job
   Retry,
+  /// pause a download that has not completed: it stops, keeps what arrived and waits until
+  /// resumed; its user forgets its place in their queue
+  Pause,
+  /// resume a paused download
+  Resume,
 }
 
 /// One action applied to several transfers of one direction.

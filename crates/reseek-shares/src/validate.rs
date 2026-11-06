@@ -10,7 +10,7 @@ use std::path::Path;
 use std::sync::LazyLock;
 
 use cascade::Invalid;
-use cascade::checks::{duration_at_least, range};
+use cascade::checks::range;
 use regex::Regex;
 
 use crate::options::{MAX_SCAN_WORKERS, ShareCache, Shares};
@@ -147,9 +147,7 @@ fn check_cache(cache: &ShareCache, report: &mut Vec<Invalid>) {
     report.push(Invalid::new(key, message));
   }
   let key = "shares.cache.retention";
-  if let Some(retention) = cache.retention
-    && let Err(message) = duration_at_least(key, retention, std::time::Duration::from_secs(3600))
-  {
+  if let Err(message) = cache.retention.check(std::time::Duration::from_secs(3600)) {
     report.push(Invalid::new(key, message));
   }
 }

@@ -13,13 +13,14 @@ use api_types::analysis::{
 use api_types::auth::{Role, Via};
 use api_types::events::{
   BuddyPresenceChanged, DownloadDirectoryComplete, DownloadFailureStage, DownloadFileComplete,
-  DownloadFileFailed, Event, EventType, FileAnalysisComplete, LoginFailed, NoFields,
+  DownloadFileFailed, Event, EventType, FileAnalysisComplete, JobFinished, LoginFailed, NoFields,
   PrivateMessageReceived, RelayAgentConnected, RelayAgentDisconnected, RelayAgentSharesUpdated,
   RoomMessageReceivedEvent, SessionCreated, SessionRevokeReason, SessionRevoked,
   SoulseekClientDisconnected, TokenChanged, UnblockReason, UploadFileComplete, UserBlocked,
   UserUnblocked,
 };
 use api_types::files::FileRoot;
+use api_types::jobs::{JobCounts, JobEnding, JobKind, JobStarter};
 use api_types::messaging::conversations::{MessageDirection, PrivateMessage};
 use api_types::messaging::rooms::RoomMessage;
 use api_types::transfers::{Transfer, TransferDirection, TransferStates};
@@ -171,6 +172,17 @@ pub fn sample(kind: EventType, d: &str, now: DateTime<Utc>) -> Option<Event> {
       files: 0,
       directories: 0,
     }),
+    EventType::JobFinished => Event::JobFinished(JobFinished {
+      version: 0,
+      id: Uuid::nil(),
+      kind: JobKind::Download,
+      name: text("name"),
+      starter: JobStarter::you(),
+      ending: JobEnding::Succeeded,
+      error: None,
+      summary: Some(text("summary")),
+      counts: JobCounts::default(),
+    }),
     EventType::ScriptRunCompleted => return None,
   })
 }
@@ -206,6 +218,7 @@ fn blank_transfer() -> Transfer {
     percent_complete: 0.0,
     remaining_time: None,
     local_path: None,
+    paused: false,
     state_history: None,
   }
 }

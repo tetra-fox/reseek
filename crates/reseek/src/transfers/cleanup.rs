@@ -23,9 +23,9 @@ pub const SHUT_DOWN: &str = "Application shut down";
 /// order they were asked for; downloads from before jobs were kept are under none.
 pub type Resumable = BTreeMap<Option<Uuid>, Vec<Group>>;
 
-/// Ends every transfer left unfinished, removed ones included, as `Completed, Errored` with
-/// [`SHUT_DOWN`] at the time of this call, marking the downloads among them resumable. Returns
-/// how many it ended.
+/// Ends every transfer left unfinished but the paused downloads, removed ones included, as
+/// `Completed, Errored` with [`SHUT_DOWN`] at the time of this call, marking the downloads
+/// among them resumable. Returns how many it ended.
 pub async fn end_unfinished(db: &Database) -> Result<usize, DbError> {
   let errored = TransferStates::Completed | TransferStates::Errored;
   let ended = db
@@ -33,7 +33,7 @@ pub async fn end_unfinished(db: &Database) -> Result<usize, DbError> {
       let tx = conn.transaction()?;
       let unfinished = {
         let mut select = tx.prepare(&format!(
-          "SELECT Id, Direction FROM Transfers WHERE {UNFINISHED}"
+          "SELECT Id, Direction FROM Transfers WHERE {UNFINISHED} AND Paused = 0"
         ))?;
         select
           .query_map([], |row| {
@@ -45,7 +45,7 @@ pub async fn end_unfinished(db: &Database) -> Result<usize, DbError> {
         &format!(
           "UPDATE Transfers SET State = ?1, StateDescription = ?2, EndedAt = ?3, \
            Exception = ?4, Resumable = (Direction = ?5 OR Resumable), NextAttemptAt = NULL, \
-           PlaceInQueue = NULL WHERE {UNFINISHED}"
+           PlaceInQueue = NULL WHERE {UNFINISHED} AND Paused = 0"
         ),
         params![
           errored.bits(),

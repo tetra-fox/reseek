@@ -137,6 +137,8 @@ pub struct Transfer {
   /// the absolute local path of a download's file once it was moved into the downloads
   /// directory, null before that and for uploads
   pub local_path: Option<String>,
+  /// a download the user paused: it waits here, keeping what arrived, until resumed
+  pub paused: bool,
   /// the states the transfer went through, oldest first; null unless asked for
   pub state_history: Option<Vec<TransferStateChange>>,
 }

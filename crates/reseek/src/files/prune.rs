@@ -1,19 +1,15 @@
-//! Deleting files left in the download directories for longer than their retention, every 30
-//! minutes. Links are never followed or deleted, hidden entries are left alone, and a directory
-//! emptied by the pruning goes too; the directory itself always stays.
+//! Deleting files left in the download directories for longer than their retention. Links are
+//! never followed or deleted, hidden entries are left alone, and a directory emptied by the
+//! pruning goes too; the directory itself always stays.
 
 use std::path::Path;
-use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use tracing::{Instrument, debug, info_span, warn};
+use tracing::{debug, warn};
 
 use super::Files;
 use super::writing::Writing;
 use crate::entries;
-
-/// How often old files are looked for.
-const EVERY: Duration = Duration::from_secs(30 * 60);
 
 /// What one pruning of a directory did.
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -24,37 +20,40 @@ pub(super) struct Pruned {
   pub errors: u32,
 }
 
-/// Prunes both download directories every 30 minutes until the daemon stops.
-pub(super) fn spawn(files: Arc<Files>, shutdown: tokio_util::sync::CancellationToken) {
-  let task = async move {
-    let mut every = tokio::time::interval(EVERY);
-    loop {
-      tokio::select! {
-        () = shutdown.cancelled() => return,
-        _ = every.tick() => {}
-      }
-      let retention = files.config.current().values.retention.files.clone();
-      for (age, dir) in [
-        (retention.incomplete, files.incomplete.clone()),
-        (retention.complete, files.downloads.clone()),
-      ] {
-        let Some(age) = age else {
-          continue;
-        };
-        let writing = files.writing.clone();
-        let pruned = tokio::task::spawn_blocking(move || {
-          debug!(dir = %dir.display(), minutes = age.as_secs() / 60, "Pruning files older than the retention");
-          let pruned = prune(&dir, age, SystemTime::now(), &writing);
-          debug!(dir = %dir.display(), deleted = pruned.deleted, errors = pruned.errors, "Pruning complete");
-        })
-        .await;
-        if let Err(e) = pruned {
-          warn!(error = %e, "file pruning did not finish");
-        }
-      }
+impl Files {
+  /// Deletes the files in both download directories last written longer ago than their
+  /// retention; returns how many were deleted, or how many could not be.
+  pub async fn prune(&self) -> Result<u32, String> {
+    let retention = self.config.current().values.retention.files.clone();
+    let mut deleted = 0;
+    let mut errors = 0;
+    for (age, dir) in [
+      (retention.incomplete, self.incomplete.clone()),
+      (retention.complete, self.downloads.clone()),
+    ] {
+      let Some(age) = age else {
+        continue;
+      };
+      let writing = self.writing.clone();
+      let pruned = tokio::task::spawn_blocking(move || {
+        debug!(dir = %dir.display(), minutes = age.as_secs() / 60, "Pruning files older than the retention");
+        let pruned = prune(&dir, age, SystemTime::now(), &writing);
+        debug!(dir = %dir.display(), deleted = pruned.deleted, errors = pruned.errors, "Pruning complete");
+        pruned
+      })
+      .await
+      .map_err(|e| format!("file pruning did not finish: {e}"))?;
+      deleted += pruned.deleted;
+      errors += pruned.errors;
     }
-  };
-  tokio::spawn(task.instrument(info_span!("file_pruning")));
+    if errors > 0 {
+      return Err(format!(
+        "{} could not be deleted and {deleted} were",
+        crate::jobs::counted(errors, "file", "files")
+      ));
+    }
+    Ok(deleted)
+  }
 }
 
 /// Deletes the files under `dir` last written `age` or longer before `now`, except those

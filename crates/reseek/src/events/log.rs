@@ -10,17 +10,14 @@ use std::time::Duration;
 use api_types::Page;
 use api_types::events::{Event, EventRecord, EventType, EventsQuery};
 use async_trait::async_trait;
-use cascade::Watcher;
 use chrono::{DateTime, Utc};
 use rusqlite::types::Value;
 use rusqlite::{Connection, params, params_from_iter};
 use soulseek_client::LogLimiter;
-use tokio_util::sync::CancellationToken;
-use tracing::{Instrument, debug, error, info_span, warn};
+use tracing::{error, warn};
 
 use super::{EventBus, samples};
 use crate::api::error::ApiError;
-use crate::config::{Options, RETENTION_SWEEP};
 use crate::db::{self, Database, DbError, Location, Schema};
 use crate::services::EventService;
 
@@ -37,22 +34,9 @@ pub struct EventLog {
 }
 
 impl EventLog {
-  /// Opens `events.db` in `location`, writes every event raised on `bus` from now on into it,
-  /// and deletes events past `retention.events` and `retention.events_max_rows` every five
-  /// minutes until `shutdown`.
-  pub async fn open(
-    location: &Location,
-    bus: &EventBus,
-    config: Watcher<Options>,
-    shutdown: CancellationToken,
-  ) -> Result<Arc<Self>, DbError> {
-    let log = Self::subscribed(location, bus).await?;
-    tokio::spawn(sweep(log.clone(), config, shutdown).instrument(info_span!("event_retention")));
-    Ok(log)
-  }
-
-  /// Opens `events.db` and writes every event raised on `bus` into it, without the sweep.
-  async fn subscribed(location: &Location, bus: &EventBus) -> Result<Arc<Self>, DbError> {
+  /// Opens `events.db` in `location` and writes every event raised on `bus` from now on into
+  /// it.
+  pub async fn open(location: &Location, bus: &EventBus) -> Result<Arc<Self>, DbError> {
     let db = Database::open(&SCHEMA, location).await?;
     let writer = db.clone();
     bus.subscribe("event log", None, move |record: Arc<EventRecord>| {
@@ -85,7 +69,7 @@ impl EventLog {
 
   /// Deletes the events older than `max_age` before `now` (none when it is zero) and the
   /// oldest beyond `max_rows` (none when it is zero); returns how many went each way.
-  async fn prune(
+  pub async fn prune(
     &self,
     now: DateTime<Utc>,
     max_age: Duration,
@@ -282,29 +266,6 @@ fn record(
   })
 }
 
-/// Every five minutes, deletes the events past the configured age and count.
-async fn sweep(log: Arc<EventLog>, config: Watcher<Options>, shutdown: CancellationToken) {
-  let mut every = tokio::time::interval_at(
-    tokio::time::Instant::now() + RETENTION_SWEEP,
-    RETENTION_SWEEP,
-  );
-  loop {
-    tokio::select! {
-      () = shutdown.cancelled() => return,
-      _ = every.tick() => {}
-    }
-    let retention = config.current().values.retention.clone();
-    match log
-      .prune(Utc::now(), retention.events, retention.events_max_rows)
-      .await
-    {
-      Ok((0, 0)) => {}
-      Ok((aged, capped)) => debug!(aged, capped, "old events deleted"),
-      Err(e) => warn!(error = %e, "old events not deleted"),
-    }
-  }
-}
-
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -313,9 +274,7 @@ mod tests {
 
   async fn log() -> (Arc<EventLog>, EventBus) {
     let bus = EventBus::new();
-    let log = EventLog::subscribed(&Location::memory(), &bus)
-      .await
-      .unwrap();
+    let log = EventLog::open(&Location::memory(), &bus).await.unwrap();
     (log, bus)
   }
 

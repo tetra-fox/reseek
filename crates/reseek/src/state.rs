@@ -164,6 +164,7 @@ fn initial(loaded: &Loaded<Options>, paths: &Paths) -> State {
       files: 0,
     },
     rooms: Vec::new(),
+    jobs: Default::default(),
     alternative_speed_limits: false,
     configuration: configuration(loaded),
     directories: DirectoriesState {

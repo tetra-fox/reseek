@@ -8,7 +8,7 @@ mod restart;
 mod service;
 mod signals;
 mod startup;
-mod tasks;
+pub(crate) mod tasks;
 
 use std::ffi::OsString;
 use std::io::Write;
@@ -26,7 +26,6 @@ use crate::activity::Activity;
 use crate::analysis::Analysis;
 use crate::auth::Auth;
 use crate::cli::{self, Command, Invocation};
-use crate::clock::Clock;
 use crate::config::api_key::PrimaryApiKey;
 use crate::config::load::{self, ConfigFiles, Sources};
 use crate::config::{Options, redact};
@@ -35,6 +34,7 @@ use crate::db::Database;
 use crate::events::{EventBus, EventLog};
 use crate::files::Files;
 use crate::http::{self, pipeline};
+use crate::jobs::Jobs;
 use crate::live::Live;
 use crate::logging::{self, LogBuffer, Logging, Sinks};
 use crate::messaging::Messaging;
@@ -137,10 +137,14 @@ pub struct AppState {
   pub messaging: Arc<Messaging>,
   /// the download engine
   pub downloads: Arc<Downloads>,
+  /// audio analysis and its queue of analysis jobs
+  pub analysis: Arc<Analysis>,
   /// the upload engine
   pub uploads: Arc<Uploads>,
-  /// the jobs that run at fixed intervals
-  pub clock: Clock,
+  /// every job, its history and the schedules' last runs
+  pub jobs: Arc<Jobs>,
+  /// the event log, which the cleanup prunes
+  pub event_log: Arc<EventLog>,
   /// the release feed the version is checked against
   pub releases: Arc<Releases>,
   /// the engine of every domain
@@ -191,6 +195,9 @@ impl AppState {
       shutdown.clone(),
     );
     let location = paths.databases(&startup.values);
+    let jobs = Jobs::open(&location, live.clone(), events.clone(), state.clone())
+      .await
+      .map_err(|e| StartError::Open(format!("jobs.db: {e}")))?;
     let transfers = crate::transfers::open(&location)
       .await
       .map_err(|e| StartError::Open(format!("transfers.db: {e}")))?;
@@ -210,6 +217,7 @@ impl AppState {
       &location,
       &paths.data,
       files.clone(),
+      jobs.clone(),
       config.clone(),
       live.clone(),
       events.clone(),
@@ -217,7 +225,7 @@ impl AppState {
     )
     .await
     .map_err(|e| StartError::Open(format!("analysis.db: {e}")))?;
-    let event_log = EventLog::open(&location, &events, config.clone(), shutdown.clone())
+    let event_log = EventLog::open(&location, &events)
       .await
       .map_err(|e| StartError::Open(format!("events.db: {e}")))?;
     let messaging_db = crate::messaging::open(&location)
@@ -239,7 +247,7 @@ impl AppState {
     let shares = Shares::open(
       &config,
       |options: &Options| &options.shares,
-      crate::shares::setup(&config.current().values, &paths, &state),
+      crate::shares::setup(&config.current().values, &paths, &state, &jobs),
       shutdown.clone(),
     )
     .await
@@ -296,6 +304,7 @@ impl AppState {
       telemetry.clone(),
       relay.controller.clone(),
       analysis.clone(),
+      jobs.clone(),
       &paths,
       shutdown.clone(),
     );
@@ -313,14 +322,13 @@ impl AppState {
     );
     network.attach_uploads(uploads.clone());
     uploads.switch_speed_limits(alternative);
-    let clock = Clock::new(shutdown.clone());
     let mut services = Services::unavailable();
     services.transfers = Arc::new(Transfers {
       downloads: downloads.clone(),
       uploads: uploads.clone(),
     });
     services.shares = shares.clone();
-    services.events = event_log;
+    services.events = event_log.clone();
     services.files = files.clone();
     services.analysis = analysis.clone();
     services.reports = telemetry.clone();
@@ -344,6 +352,7 @@ impl AppState {
       searches.database().clone(),
       messaging_db,
       analysis.database().clone(),
+      jobs.database().clone(),
     ]));
     services.application = Arc::new(Application {
       network: network.clone(),
@@ -377,8 +386,10 @@ impl AppState {
       searches,
       messaging,
       downloads,
+      analysis,
       uploads,
-      clock,
+      jobs,
+      event_log,
       releases,
       services,
       profile_writes: Arc::new(tokio::sync::Mutex::new(())),
@@ -398,14 +409,14 @@ impl AppState {
   }
 
   /// Starts the background work every request relies on: the state and the stream follow the
-  /// configuration and the log, and ended sessions are pruned.
+  /// configuration and the log.
   pub fn spawn_tasks(&self) {
     tasks::spawn(self);
   }
 
   /// Ends the transfers and searches the last run left unfinished, then starts the daemon's
   /// own work in the background: following the client and the options, the startup tasks, the
-  /// clock, and connecting to the Soulseek server.
+  /// schedules, and connecting to the Soulseek server.
   pub async fn start(&self) {
     lifecycle::start(self).await;
   }

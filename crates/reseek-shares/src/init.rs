@@ -12,9 +12,12 @@ use tokio::sync::broadcast::error::RecvError;
 use tracing::{Instrument, debug, error, info, info_span, warn};
 
 use super::scanner::{self, Settings};
-use super::{Shares, View, repository, share, storage};
+use super::schedule::Schedule;
+use super::{ScanOrigin, Shares, View, repository, share, storage};
+use crate::db::DbError;
 use crate::lock;
 use crate::options::{self, StorageMode};
+use chrono::{DateTime, Local, Utc};
 
 /// How often the scheduled rescan checks whether one is due, and how soon after startup it
 /// first does.
@@ -29,6 +32,7 @@ pub(super) fn start<O: cascade::Root>(
   select: fn(&O) -> &options::Shares,
   scan: bool,
   force: bool,
+  rescan_on_schedule: bool,
 ) {
   if scan {
     let mode = select(&config.current().values).cache.storage_mode;
@@ -37,8 +41,10 @@ pub(super) fn start<O: cascade::Root>(
       async move { engine.initialize(force, mode).await }.instrument(info_span!("shares")),
     );
   }
-  let engine = shares.clone();
-  tokio::spawn(async move { engine.retention().await }.instrument(info_span!("shares")));
+  if rescan_on_schedule {
+    let engine = shares.clone();
+    tokio::spawn(async move { engine.retention().await }.instrument(info_span!("shares")));
+  }
   let engine = shares.clone();
   let changes = config.changes();
   tokio::spawn(
@@ -74,7 +80,7 @@ impl Shares {
           self.initialized.send_replace(true);
           let shares = self.clone();
           tokio::spawn(
-            async move { shares.run_scan(false, cancel).await }
+            async move { shares.run_scan(false, ScanOrigin::Startup, cancel).await }
               .instrument(info_span!("scan", force = false)),
           );
           return;
@@ -84,7 +90,7 @@ impl Shares {
           info!("Re-attempting initialization");
           // the index that failed to load is not trusted, so no row of it is reused
           let repaired = self
-            .run_scan(true, cancel)
+            .run_scan(true, ScanOrigin::Startup, cancel)
             .instrument(info_span!("scan", force = true))
             .await;
           if !repaired {
@@ -109,7 +115,7 @@ impl Shares {
       return true;
     };
     self
-      .run_scan(force, cancel)
+      .run_scan(force, ScanOrigin::Startup, cancel)
       .instrument(info_span!("scan", force))
       .await
   }
@@ -183,8 +189,7 @@ impl Shares {
     Ok(settings)
   }
 
-  /// Every hour, scans when `shares.cache.retention` is set and no complete, trusted scan
-  /// started within it.
+  /// Every hour, scans when `shares.cache.retention` finds a scan due.
   async fn retention(self: &Arc<Self>) {
     let start = tokio::time::Instant::now() + RETENTION_FIRST;
     let mut every = tokio::time::interval_at(start, RETENTION_CHECK);
@@ -197,42 +202,42 @@ impl Shares {
     }
   }
 
-  /// Starts a scan when `shares.cache.retention` is set and no complete, trusted scan started
-  /// within it; true when one was started.
+  /// Starts a scan when `shares.cache.retention` finds one due after the last complete,
+  /// trusted scan; true when one was started.
   pub(super) async fn retention_tick(self: &Arc<Self>) -> bool {
     if lock(&self.status).scanning {
       return false;
     }
-    let Some(retention) = (self.options)().cache.retention else {
+    let schedule = (self.options)().cache.retention;
+    if schedule == Schedule::Off {
       return false;
-    };
-    // a retention too long for the clock's milliseconds reaches back past every scan
-    let cutoff = scanner::now_ms() - i64::try_from(retention.as_millis()).unwrap_or(i64::MAX);
-    let scans = match self
-      .db
-      .read(move |conn| repository::scans_since(conn, cutoff))
-      .await
-    {
-      Ok(scans) => scans,
+    }
+    let last = match self.last_trusted_scan().await {
+      Ok(last) => last,
       Err(e) => {
         warn!(error = %e, "scheduled share rescan not checked");
         return false;
       }
     };
-    if scans.iter().any(|s| s.ended_at.is_some() && !s.suspect) {
+    let now = Utc::now();
+    if schedule.next(last, now, &Local).is_none_or(|due| due > now) {
       return false;
     }
-    info!(
-      minutes = retention.as_secs() / 60,
-      "Beginning scheduled re-scan of shares (previous scan is older than the retention)"
-    );
-    match self.scan(false) {
+    info!(%schedule, "Beginning scheduled re-scan of shares (previous scan is older than the retention)");
+    match self.scan(false, ScanOrigin::Scheduled) {
       Ok(()) => true,
       Err(e) => {
         info!(?e, "scheduled share rescan not started");
         false
       }
     }
+  }
+
+  /// When the last scan that completed and is trusted started, none when there is none.
+  pub async fn last_trusted_scan(&self) -> Result<Option<DateTime<Utc>>, DbError> {
+    let started = self.db.read(repository::latest_trusted_scan).await?;
+    // the scan wrote its start from the clock, which is always within the range of a time
+    Ok(started.and_then(DateTime::from_timestamp_millis))
   }
 
   /// Marks a rescan pending when the shared directories, the filters or link following

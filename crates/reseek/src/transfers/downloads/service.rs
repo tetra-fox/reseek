@@ -13,10 +13,13 @@ use serde_json::json;
 use tracing::{error, info};
 use uuid::Uuid;
 
+use api_types::jobs::JobStarter;
+
 use super::{Downloads, FileRequest, Group, internal};
 use crate::api::error::ApiError;
 use crate::services::TransferService;
-use crate::transfers::{Record, listing, removal, store};
+use crate::transfers::categories::UNFINISHED;
+use crate::transfers::{COLUMNS, Record, listing, removal, store};
 
 /// What a refused enqueue call is told when every one allowed at once runs already.
 const BUSY: &str =
@@ -52,16 +55,20 @@ impl Downloads {
       .map_err(|_| ApiError::too_many(BUSY))
   }
 
-  /// Enqueues the completed downloads of `records` again as one new job, each with its
-  /// destination and search, and says for each whether it was.
-  async fn retry(&self, records: Vec<Record>) -> Vec<Result<Uuid, BulkFailure>> {
+  /// Enqueues the completed downloads of `records` again as one new job started by the user,
+  /// each with its destination and search; returns the job, none when nothing could be retried,
+  /// and says for each download whether it was.
+  async fn retry(&self, records: Vec<Record>) -> (Option<Uuid>, Vec<Result<Uuid, BulkFailure>>) {
     let (groups, refused) = retry_groups(records);
     let mut results: Vec<Result<Uuid, BulkFailure>> = refused.into_iter().map(Err).collect();
+    if groups.is_empty() {
+      return (None, results);
+    }
     let (asked, retried): (Vec<_>, Vec<_>) = groups
       .into_iter()
       .map(|retried| (retried.group, retried.records))
       .unzip();
-    let outcomes = self.enqueue(Uuid::new_v4(), asked).await;
+    let (job, outcomes) = self.enqueue_new(JobStarter::you(), asked).await;
     for (records, outcome) in retried.into_iter().zip(outcomes) {
       match outcome {
         Ok(enqueued) => {
@@ -87,7 +94,32 @@ impl Downloads {
         })),
       }
     }
-    results
+    (Some(job), results)
+  }
+
+  /// Queues again, as a new job started by the user, the downloads of the job `job` that failed
+  /// or were canceled; returns the new job. 409 when none did.
+  pub async fn run_again(&self, job: Uuid) -> Result<Uuid, ApiError> {
+    let records = self
+      .db
+      .read(move |conn| {
+        let mut statement = conn.prepare(&format!(
+          "SELECT {COLUMNS} FROM Transfers WHERE JobId = ?1 AND Removed = 0 \
+           AND NOT {UNFINISHED} AND State <> 48 ORDER BY RequestedAt, Id"
+        ))?;
+        statement
+          .query_map([job.to_string()], Record::read)?
+          .collect::<rusqlite::Result<Vec<_>>>()
+      })
+      .await
+      .map_err(internal)?;
+    if records.is_empty() {
+      return Err(ApiError::conflict("No download of the job failed", None));
+    }
+    let (new, results) = self.retry(records).await;
+    let refused = results.iter().filter(|result| result.is_err()).count();
+    info!(%job, ?new, refused, "download job run again");
+    new.ok_or_else(|| ApiError::conflict("No download of the job could be queued again", None))
   }
 }
 
@@ -214,10 +246,9 @@ impl TransferService for Downloads {
     request: EnqueueDownloadJobRequest,
   ) -> Result<EnqueueDownloadJobResponse, ApiError> {
     let _call = self.enqueue_call()?;
-    let job = Uuid::new_v4();
     let groups: Vec<Group> = request.groups.into_iter().map(group).collect();
     let usernames: Vec<String> = groups.iter().map(|g| g.username.clone()).collect();
-    let outcomes = self.enqueue(job, groups).await;
+    let (job, outcomes) = self.enqueue_new(JobStarter::you(), groups).await;
     let groups = usernames
       .into_iter()
       .zip(outcomes)
@@ -288,7 +319,13 @@ impl TransferService for Downloads {
       }
     }
     let outcomes: Vec<Result<Uuid, BulkFailure>> = match request.action {
-      BulkAction::Retry => self.retry(records).await,
+      BulkAction::Retry => self.retry(records).await.1,
+      BulkAction::Pause => self.pause(records.iter().map(|r| r.id).collect()).await,
+      BulkAction::Resume => {
+        self
+          .resume_paused(records.iter().map(|r| r.id).collect())
+          .await
+      }
       BulkAction::Cancel | BulkAction::Remove => {
         let remove = request.action == BulkAction::Remove;
         let mut outcomes = Vec::new();

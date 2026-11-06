@@ -1,7 +1,5 @@
 //! The running version, and the check of the release feed for a newer one.
 
-use std::time::Duration;
-
 use api_types::state::VersionInfo;
 use tracing::info;
 
@@ -12,9 +10,6 @@ const REVISION: Option<&str> = option_env!("RESEEK_GIT_REVISION");
 
 /// The feed that names the latest release.
 pub const RELEASE_FEED: &str = "https://api.github.com/repos/tetra-fox/reseek/releases/latest";
-
-/// How often a running daemon reads the release feed again.
-pub const RECHECK: Duration = Duration::from_secs(24 * 3600);
 
 /// The running version: `full` is `<semver> (<semver>+<revision>)`, the revision left out when
 /// the build does not name one. A debug build is a development build.

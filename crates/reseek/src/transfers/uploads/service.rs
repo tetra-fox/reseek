@@ -109,6 +109,9 @@ impl TransferService for Uploads {
           id,
           "an upload is not retried; its peer asks for the file again",
         )),
+        BulkAction::Pause | BulkAction::Resume => {
+          Err(failed(id, "an upload is not paused; cancel it instead"))
+        }
         BulkAction::Cancel if record.is_completed() => Err(failed(id, "the upload has completed")),
         BulkAction::Cancel | BulkAction::Remove => {
           let remove = request.action == BulkAction::Remove;

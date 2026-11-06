@@ -7,20 +7,20 @@
 //! and never changes one.
 
 mod analyzer;
-mod backlog;
+mod eviction;
 mod jobs;
 mod kept;
 mod report;
 mod store;
 mod tiles;
 mod uploads;
+mod worker;
 
 #[cfg(test)]
 mod service_tests;
 
 use std::collections::HashSet;
 use std::path::PathBuf;
-use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
@@ -46,12 +46,13 @@ use crate::config::Options;
 use crate::db::{Database, DbError, Location};
 use crate::events::EventBus;
 use crate::files::Files;
+use crate::jobs::Jobs;
 use crate::live::Live;
 use crate::services::{AnalysisService, FileTarget, Piece};
 use crate::sync::{Slots, lock};
 pub(crate) use analyzer::decode::Decoder;
 use analyzer::{engine, picture, reading};
-use jobs::{Job, QUEUE_LIMIT, Queue, Queued};
+use jobs::{Queued, Running};
 use report::modified_text;
 pub use store::SCHEMA;
 pub use uploads::uploads_dir;
@@ -72,28 +73,33 @@ pub struct Analysis {
   held: Mutex<uploads::Uploads>,
   /// the principals uploading a file now
   uploading: Slots,
-  queue: Mutex<Queue>,
-  /// the files of batches waiting for room in the queue
-  backlog: tokio::sync::Mutex<backlog::Backlog>,
-  /// held while a file of the backlog is on its way into the queue
-  feeding: tokio::sync::Mutex<()>,
-  /// paths of reports and spectrogram files that did not read, so each is warned about once
+  /// the analysis jobs, whose parts are the files waiting
+  jobs: Arc<Jobs>,
+  /// the files being analyzed
+  running: Mutex<Vec<Running>>,
+  /// held while the job that follows a download job is found or made
+  making: tokio::sync::Mutex<()>,
+  /// paths of reports and spectrogram files, and ids of job parts, that did not read, so each
+  /// is warned about once
   unreadable: Mutex<HashSet<String>>,
-  /// woken when a job is queued or one ends
+  /// woken when a file is queued or one ends
   wake: Notify,
-  /// a finished download was dropped from the full queue and not queued since
-  full: AtomicBool,
   shutdown: CancellationToken,
 }
 
 impl Analysis {
   /// Opens `analysis.db` at `location`, keeps spectrogram and waveform files under
   /// `data`/analysis, removing what an older version kept there and every upload of the last run,
-  /// and starts the queue, which runs until `shutdown`.
+  /// and starts the queue of the analysis jobs in `jobs`, which runs until `shutdown`.
+  #[allow(
+    clippy::too_many_arguments,
+    reason = "the service takes each part of the daemon it uses"
+  )]
   pub async fn open(
     location: &Location,
     data: &std::path::Path,
     files: Arc<Files>,
+    jobs: Arc<Jobs>,
     config: Watcher<Options>,
     live: Live,
     events: EventBus,
@@ -115,16 +121,15 @@ impl Analysis {
       held: Mutex::default(),
       uploading: Slots::default(),
       dir,
-      queue: Mutex::new(Queue::default()),
-      backlog: tokio::sync::Mutex::default(),
-      feeding: tokio::sync::Mutex::default(),
+      jobs,
+      running: Mutex::default(),
+      making: tokio::sync::Mutex::default(),
       unreadable: Mutex::default(),
       wake: Notify::new(),
-      full: AtomicBool::new(false),
       shutdown,
     });
     analysis.clear_uploads().await?;
-    tokio::spawn(jobs::dispatch(analysis.clone()));
+    tokio::spawn(worker::dispatch(analysis.clone()));
     Ok(analysis)
   }
 
@@ -185,8 +190,7 @@ fn current(stored: &store::Stored, size: u64, modified: SystemTime) -> bool {
 #[async_trait]
 impl AnalysisService for Analysis {
   async fn run(&self, target: FileTarget, force: bool) -> Result<AnalysisJobCreated, ApiError> {
-    let file = self.files.local_file(&target).await?;
-    match self.enqueue(file, force).await? {
+    match self.enqueue_one(&target, force).await? {
       Queued::Job(id) => Ok(AnalysisJobCreated { job_id: id }),
       Queued::Current => Err(ApiError::conflict(
         "The file has already been analyzed",
@@ -196,9 +200,6 @@ impl AnalysisService for Analysis {
         "The file is queued or being analyzed",
         None,
       )),
-      Queued::Full => Err(ApiError::too_many(format!(
-        "The analysis queue is full ({QUEUE_LIMIT} files)"
-      ))),
     }
   }
 
@@ -357,45 +358,17 @@ impl AnalysisService for Analysis {
   }
 
   async fn jobs(&self) -> Result<AnalysisQueue, ApiError> {
-    let jobs = {
-      let queue = lock(&self.queue);
-      queue
-        .running
-        .iter()
-        .chain(&queue.waiting)
-        .map(Job::listed)
-        .collect()
-    };
-    Ok(AnalysisQueue {
-      jobs,
-      // at most the backlog's limit
-      backlog: self.backlog_len().await as u32,
-    })
+    self.queue().await
   }
 
   async fn clear_jobs(&self) -> Result<(), ApiError> {
-    let (waiting, backlog) = self.clear_waiting().await;
-    debug!(waiting, backlog, "waiting analyses and the backlog cleared");
+    self.cancel_waiting().await?;
+    debug!("waiting analyses canceled");
     Ok(())
   }
 
   async fn cancel_job(&self, id: Uuid) -> Result<(), ApiError> {
-    let mut queue = lock(&self.queue);
-    if let Some(at) = queue.waiting.iter().position(|job| job.id == id) {
-      queue.waiting.remove(at);
-      debug!(job = %id, "queued analysis taken off the queue");
-      // the room it leaves can take a file of the backlog
-      self.wake.notify_one();
-      return Ok(());
-    }
-    match queue.running.iter().find(|job| job.id == id) {
-      Some(job) => {
-        // the worker sees it at its next window and takes the job off the queue itself
-        job.cancel.cancel();
-        Ok(())
-      }
-      None => Err(ApiError::not_found(format!("No analysis job {id}"))),
-    }
+    self.cancel_part(id).await
   }
 
   async fn window(&self, target: FileTarget, index: u32) -> Result<WindowSpectrum, ApiError> {

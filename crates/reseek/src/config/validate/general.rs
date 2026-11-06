@@ -99,6 +99,14 @@ pub(super) fn check(options: &Options, context: &Context, report: &mut Report) {
     report.check(key, range(key, value, min, max));
   }
   check_retention(&options.retention, report);
+  let schedules = &options.schedules;
+  for (key, schedule, least) in [
+    ("schedules.cleanup", schedules.cleanup, MINUTE),
+    ("schedules.vacuum", schedules.vacuum, HOUR),
+    ("schedules.release_check", schedules.release_check, HOUR),
+  ] {
+    report.check(key, schedule.check(least));
+  }
   for scope in &options.blocking.default_scopes {
     if let Err(message) = scope.parse::<api_types::users::blocking::BlockScope>() {
       report.add("blocking.default_scopes", message);

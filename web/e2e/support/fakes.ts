@@ -720,11 +720,11 @@ type BatchFile =
 /** Answers the batch analysis call: `each` says what became of each file it names, in order */
 export const fakeBatch = async (
   page: Page,
-  each: (file: BatchFile) => "queued" | "following" | "current" | "refused"
+  each: (file: BatchFile) => "queued" | "current" | "refused"
 ) => {
   await page.route("**/api/v0/analysis/batch", (route) => {
     const { files } = route.request().postDataJSON() as { files: BatchFile[] };
-    const result = { queued: 0, following: 0, current: 0, refused: [] as unknown[] };
+    const result = { queued: 0, current: 0, refused: [] as unknown[], jobId: null };
     files.forEach((file, index) => {
       const outcome = each(file);
       if (outcome === "refused") result.refused.push({ index, error: "The file is gone" });

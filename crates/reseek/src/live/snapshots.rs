@@ -55,6 +55,13 @@ pub async fn frames(topic: Topic, app: &AppState) -> Vec<LiveFrame> {
       frames.extend(shared(app).await);
       frames
     }
+    Topic::Jobs => match crate::jobs::schedules::cards(app).await {
+      Ok(cards) => vec![LiveFrame::JobsSchedules(cards)],
+      Err(e) => {
+        warn!(error = ?e, "schedules not read for a stream's snapshot");
+        Vec::new()
+      }
+    },
     Topic::Metrics => vec![LiveFrame::MetricsUpdate(
       app.telemetry.metrics().transfers().figures(),
     )],

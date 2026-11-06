@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use api_types::transfers::TransferDirection;
 use chrono::Utc;
-use tracing::{debug, info, warn};
+use tracing::debug;
 
 use super::categories::{CANCELLED, ERRORED, FAILED, SUCCESSFUL};
 use super::removal::{self, Removed};
@@ -31,9 +31,15 @@ fn outcomes(retention: &TransferRetention) -> [(&'static str, Option<Duration>, 
 }
 
 /// Removes what `retention` no longer keeps and deletes what was removed long enough ago,
-/// pushing each removal. A failure is logged and the rest of the sweep goes on.
-pub async fn prune(db: &Database, live: &Live, retention: &TransfersRetention) {
-  let mut failed = false;
+/// pushing each removal; returns how many transfers were removed or deleted. A failure does not
+/// stop the rest of the sweep, and the first one is returned at its end.
+pub async fn prune(
+  db: &Database,
+  live: &Live,
+  retention: &TransfersRetention,
+) -> Result<usize, DbError> {
+  let mut first_error = None;
+  let mut count = 0;
   for (direction, kept) in [
     (TransferDirection::Upload, &retention.upload),
     (TransferDirection::Download, &retention.download),
@@ -50,27 +56,32 @@ pub async fn prune(db: &Database, live: &Live, retention: &TransfersRetention) {
               "transfers past retention removed"
             );
           }
+          count += removed.len();
           removal::push(live, direction, &removed);
         }
         Err(e) => {
-          warn!(?direction, outcome, error = %e, "transfers past retention not removed");
-          failed = true;
+          debug!(?direction, outcome, error = %e, "transfers past retention not removed");
+          first_error.get_or_insert(e);
         }
       }
     }
   }
   if let Some(after) = retention.purge_removed_after {
     match purge(db, after).await {
-      Ok(0) => {}
-      Ok(deleted) => info!(deleted, "removed transfers deleted for good"),
+      Ok(deleted) => {
+        if deleted > 0 {
+          debug!(deleted, "removed transfers deleted for good");
+        }
+        count += deleted;
+      }
       Err(e) => {
-        warn!(error = %e, "removed transfers not deleted");
-        failed = true;
+        first_error.get_or_insert(e);
       }
     }
   }
-  if failed {
-    warn!("Encountered one or more errors while pruning transfers");
+  match first_error {
+    Some(e) => Err(e),
+    None => Ok(count),
   }
 }
 
@@ -169,7 +180,7 @@ mod tests {
       },
       ..TransfersRetention::default()
     };
-    prune(&db, &live, &retention).await;
+    prune(&db, &live, &retention).await.unwrap();
     assert_eq!(removed(&db).await, ["old-rejected", "old-success"]);
   }
 
@@ -207,7 +218,7 @@ mod tests {
       purge_removed_after: Some(HOUR),
       ..TransfersRetention::default()
     };
-    prune(&db, &live, &retention).await;
+    prune(&db, &live, &retention).await.unwrap();
     let left: Vec<String> = db
       .read(|conn| {
         conn

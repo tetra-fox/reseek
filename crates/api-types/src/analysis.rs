@@ -294,7 +294,7 @@ pub struct RunAnalysisQuery {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AnalysisJobCreated {
-  /// the job's id
+  /// the analysis job's id, as the jobs list shows it
   pub job_id: Uuid,
 }
 
@@ -343,15 +343,14 @@ pub struct AnalysisBatchRefusal {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AnalysisBatchQueued {
-  /// files put in the analysis queue now
+  /// files put in the analysis job
   pub queued: u32,
-  /// files kept past the queue's limit, which join it in their order as it drains; one whose
-  /// report is current by then is left alone
-  pub following: u32,
   /// files left alone because their report is current or they are queued or running already
   pub current: u32,
   /// files that were not queued, each with its reason
   pub refused: Vec<AnalysisBatchRefusal>,
+  /// the analysis job the files were queued in, null when none was
+  pub job_id: Option<Uuid>,
 }
 
 /// The query of `GET .../analysis`, which reads a file's report.
@@ -497,7 +496,7 @@ pub enum AnalysisJobState {
 pub struct AnalysisQueue {
   /// the files being analyzed, then those waiting, in the order they run
   pub jobs: Vec<AnalysisJob>,
-  /// the files of batches past the queue's limit, which join it in their order as it drains
+  /// how many more files wait than are listed
   pub backlog: u32,
 }
 
@@ -505,7 +504,7 @@ pub struct AnalysisQueue {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AnalysisJob {
-  /// the job's id
+  /// the file's id in its analysis job, which cancels it
   pub id: Uuid,
   /// the file's local path
   pub path: String,

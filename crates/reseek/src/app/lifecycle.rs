@@ -4,8 +4,8 @@
 //! marked to resume after the login, and the searches it left running are ended, before
 //! anything can start new ones; then, in the background, the client's events and the options
 //! are followed, whether other users can reach us is judged and the router is asked to forward
-//! our peer port while we are logged in, the release feed is read, the shares are initialized,
-//! and the clock starts. Then the watchdog connects, unless connecting is turned off or there are
+//! our peer port while we are logged in, the shares are initialized, and the upkeep and the
+//! schedules start. Then the watchdog connects, unless connecting is turned off or there are
 //! no credentials.
 //!
 //! Stopping, once the HTTP host has stopped: the running searches end as canceled, the
@@ -17,11 +17,12 @@
 
 use tracing::{Instrument, debug, info, info_span, warn};
 
+use std::time::Duration;
+
 use super::{AppState, figures};
-use crate::clock::Every;
+use crate::jobs::schedules::{self, upkeep};
 use crate::network;
-use crate::transfers::{cleanup, prune};
-use crate::version::RECHECK;
+use crate::transfers::cleanup;
 
 /// Ends what the last run left unfinished, then starts the daemon's work in order, in the
 /// background.
@@ -39,6 +40,7 @@ pub(super) async fn start(app: &AppState) {
 }
 
 async fn run(app: AppState) {
+  let app = &app;
   info!("Application started");
   let options = app.config.current().values.clone();
   // the flags take a restart, so they are read as the daemon started with
@@ -53,81 +55,65 @@ async fn run(app: AppState) {
   if proxy.enabled {
     info!(address = ?proxy.address, port = ?proxy.port, "Using Proxy");
   }
-  if !flags.no_version_check {
-    tokio::spawn(check_versions(app.clone()).in_current_span());
-  }
   app.shares.initialized().await;
 
-  let observed = app.clone();
-  app.clock.every(Every::Minute, "client figures", move |_| {
-    network::observe_client(&observed);
-    async {}
-  });
-  let intake = app.uploads.clone();
-  app.clock.every(Every::Minute, "enqueue turns", move |_| {
-    intake.collect_idle_turns();
-    async {}
-  });
-  let counted = app.clone();
-  app
-    .clock
-    .every(Every::FiveSeconds, "transfer figures", move |_| {
-      network::observe_transfers(&counted);
+  upkeep(app, Duration::from_secs(60), "client figures", {
+    let app = app.clone();
+    move || {
+      network::observe_client(&app);
       async {}
-    });
-  let pushed = app.clone();
-  app
-    .clock
-    .every(Every::Second, "transfer figures pushed", move |_| {
-      figures::push_transfers(&pushed);
+    }
+  });
+  upkeep(app, Duration::from_secs(60), "enqueue turns", {
+    let intake = app.uploads.clone();
+    move || {
+      intake.collect_idle_turns();
       async {}
-    });
-  let sampled = app.clone();
-  app
-    .clock
-    .every(Every::ThirtySeconds, "health sample", move |_| {
-      let app = sampled.clone();
+    }
+  });
+  upkeep(app, Duration::from_secs(5), "transfer figures", {
+    let app = app.clone();
+    move || {
+      network::observe_transfers(&app);
+      async {}
+    }
+  });
+  upkeep(app, Duration::from_secs(1), "transfer figures pushed", {
+    let app = app.clone();
+    move || {
+      figures::push_transfers(&app);
+      async {}
+    }
+  });
+  upkeep(app, Duration::from_secs(30), "health sample", {
+    let app = app.clone();
+    move || {
+      let app = app.clone();
       async move { figures::sample_health(&app).await }
-    });
-  let pruned = app.clone();
-  app
-    .clock
-    .every(Every::FiveMinutes, "prune transfers", move |_| {
-      let app = pruned.clone();
-      async move {
-        let retention = app.config.current().values.retention.transfers.clone();
-        prune::prune(&app.transfers, &app.live, &retention).await;
-      }
-    });
-  let searches = app.searches.clone();
-  app
-    .clock
-    .every(Every::FiveMinutes, "prune searches", move |_| {
-      let searches = searches.clone();
-      async move { searches.prune().await }
-    });
-  let messaging = app.messaging.clone();
-  app
-    .clock
-    .every(Every::Minute, "session heartbeat", move |_| {
+    }
+  });
+  upkeep(app, Duration::from_secs(60), "session heartbeat", {
+    let messaging = app.messaging.clone();
+    move || {
       let messaging = messaging.clone();
       async move { messaging.heartbeat().await }
-    });
-  let messaging = app.messaging.clone();
-  app
-    .clock
-    .every(Every::FiveMinutes, "prune private messages", move |_| {
-      let messaging = messaging.clone();
-      async move { messaging.prune_private().await }
-    });
-  let messaging = app.messaging.clone();
-  app
-    .clock
-    .every(Every::Hour, "prune room messages", move |_| {
-      let messaging = messaging.clone();
-      async move { messaging.prune_rooms().await }
-    });
-  app.clock.start();
+    }
+  });
+  upkeep(app, Duration::from_secs(60), "expired blocks", {
+    let users = app.users.clone();
+    move || {
+      let users = users.clone();
+      async move { users.expire_blocks().await }
+    }
+  });
+  upkeep(app, Duration::from_secs(3600), "lapsed sessions", {
+    let app = app.clone();
+    move || {
+      let app = app.clone();
+      async move { super::tasks::end_lapsed_sessions(&app).await }
+    }
+  });
+  tokio::spawn(schedules::run(app.clone()).instrument(info_span!("schedules")));
 
   if options.relay.enabled {
     info!("Running in Controller relay mode.  Listening for incoming Agent connections.");
@@ -138,20 +124,6 @@ async fn run(app: AppState) {
     network::warn_no_credentials();
   } else {
     app.network.watchdog().start();
-  }
-}
-
-/// Reads the release feed now and once a day until the daemon stops.
-async fn check_versions(app: AppState) {
-  let mut every = tokio::time::interval(RECHECK);
-  loop {
-    tokio::select! {
-      () = app.shutdown.cancelled() => return,
-      _ = every.tick() => {}
-    }
-    if let Err(e) = app.releases.update(&app.state).await {
-      warn!(error = e, "Failed to check version");
-    }
   }
 }
 

@@ -20,9 +20,9 @@ pub fn insert(conn: &Connection, record: &Record) -> rusqlite::Result<()> {
     "INSERT INTO Transfers (Id, JobId, Username, Direction, Filename, Size, State, \
      StateDescription, RequestedAt, EnqueuedAt, StartedAt, EndedAt, BytesTransferred, \
      AverageSpeed, PlaceInQueue, Exception, Removed, Attempts, NextAttemptAt, LocalPath, \
-     Destination, SearchId) \
+     Destination, SearchId, Paused) \
      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, \
-     ?19, ?20, ?21, ?22)",
+     ?19, ?20, ?21, ?22, ?23)",
     params![
       record.id.to_string(),
       record.job_id.map(|id| id.to_string()),
@@ -46,6 +46,7 @@ pub fn insert(conn: &Connection, record: &Record) -> rusqlite::Result<()> {
       record.local_path,
       record.destination,
       record.search_id.map(|id| id.to_string()),
+      record.paused,
     ],
   )?;
   entered(conn, record.id, record.state, record.requested_at)
@@ -58,8 +59,8 @@ pub fn save(conn: &Connection, record: &Record) -> rusqlite::Result<bool> {
     "UPDATE Transfers SET Size = ?2, State = ?3, StateDescription = ?4, EnqueuedAt = ?5, \
      StartedAt = ?6, EndedAt = ?7, BytesTransferred = ?8, AverageSpeed = ?9, \
      PlaceInQueue = ?10, Exception = ?11, Attempts = ?12, NextAttemptAt = ?13, Removed = ?14, \
-     RemovedAt = CASE WHEN ?14 THEN coalesce(RemovedAt, ?15) END, LocalPath = ?16 \
-     WHERE Id = ?1",
+     RemovedAt = CASE WHEN ?14 THEN coalesce(RemovedAt, ?15) END, LocalPath = ?16, \
+     Paused = ?17 WHERE Id = ?1",
     params![
       record.id.to_string(),
       i64::try_from(record.size).unwrap_or(i64::MAX),
@@ -77,6 +78,7 @@ pub fn save(conn: &Connection, record: &Record) -> rusqlite::Result<bool> {
       record.removed,
       timestamp(Utc::now()),
       record.local_path,
+      record.paused,
     ],
   )?;
   Ok(changed > 0)

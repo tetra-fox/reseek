@@ -17,6 +17,7 @@ export const transfer = (fields: Partial<Transfer> = {}): Transfer => ({
   percentComplete: 0,
   attempts: 1,
   removed: false,
+  paused: false,
   ...fields
 });
 

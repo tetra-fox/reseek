@@ -496,8 +496,8 @@ async fn upload(
   Ok((StatusCode::CREATED, Json(upload)).into_response())
 }
 
-/// Queues many files for analysis in their order, each left alone when its report is current.
-/// What the queue has no room for is kept and joins it as it drains.
+/// Queues many files for analysis in their order as one analysis job, each left alone when its
+/// report is current or it is queued already.
 #[utoipa::path(
   post, path = "/analysis/batch", tag = "analysis",
   request_body = AnalysisBatch,
@@ -535,7 +535,6 @@ async fn run_batch(
   info!(
     by = caller.principal.subject,
     queued = queued.queued,
-    following = queued.following,
     current = queued.current,
     refused = queued.refused.len(),
     "analysis batch queued"
@@ -543,7 +542,7 @@ async fn run_batch(
   Ok((StatusCode::ACCEPTED, Json(queued)).into_response())
 }
 
-/// The analyses queued and running, and how many files of batches wait for room in the queue.
+/// The files being analyzed and the first of those waiting, and how many more wait.
 #[utoipa::path(
   get, path = "/analysis/jobs", tag = "analysis",
   responses(

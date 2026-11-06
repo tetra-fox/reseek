@@ -1,10 +1,10 @@
 //! The share options: the `[shares]` section of the daemon's and the relay agent's
 //! configuration.
 
-use std::time::Duration;
-
 use cascade::Cascade;
 use serde::{Deserialize, Serialize};
+
+use crate::schedule::Schedule;
 
 cascade::option_enum! {
   /// Where the share index is kept.
@@ -72,11 +72,11 @@ pub struct ShareCache {
     apply = "restart"
   )]
   pub workers: Option<u32>,
-  /// Interval between automatic rescans of the shares. Minimum: 1 hour. No automatic rescans
-  /// when not set.
+  /// How often the shares are scanned again on their own: `off`, an interval such as `12h`, or
+  /// whole days at a time of day such as `7d at 04:00`. A scan is due that long after the last
+  /// complete one. Minimum: 1 hour.
   #[cascade(env = "RESEEK_SHARE_CACHE_RETENTION", cli = "--share-cache-retention")]
-  #[serde(with = "cascade::duration")]
-  pub retention: Option<Duration>,
+  pub retention: Schedule,
 }
 
 /// The most scan workers there may be.

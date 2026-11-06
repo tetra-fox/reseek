@@ -17,6 +17,7 @@ soulseek-client.workspace = true
 soulseek-proto.workspace = true
 
 chrono.workspace = true
+humantime.workspace = true
 lofty.workspace = true
 notify.workspace = true
 rand.workspace = true

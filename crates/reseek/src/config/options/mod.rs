@@ -11,6 +11,7 @@ mod notifications;
 mod paths;
 mod relay;
 mod retention;
+mod schedules;
 mod search;
 mod soulseek;
 mod transfers;
@@ -29,15 +30,16 @@ pub use authentication::{
 pub use flags::Flags;
 pub use logging::{Logger, Logging, Metrics, MetricsAuthentication};
 pub use notifications::{
-  BuddyNotifications, ChatNotifications, NotificationMode, Notifications, TransferNotifications,
+  BuddyNotifications, ChatNotifications, JobNotifications, NotificationMode, Notifications,
+  TransferNotifications,
 };
 pub use paths::{Directories, Paths};
 pub use relay::{Relay, RelayAgent, RelayLimits, RelayTimeouts};
 pub use reseek_shares::options::{MAX_SCAN_WORKERS, ShareCache, Shares};
 pub use retention::{
-  FileRetention, MessageRetention, RETENTION_SWEEP, Retention, TransferRetention,
-  TransfersRetention,
+  FileRetention, JobRetention, MessageRetention, Retention, TransferRetention, TransfersRetention,
 };
+pub use schedules::Schedules;
 pub use search::{FilterPreset, Search};
 pub use soulseek::{
   ConnectionBuffers, ConnectionTimeouts, DistributedNetwork, ServerKeepalive, Soulseek,
@@ -108,6 +110,8 @@ pub struct Options {
   pub web: Web,
   /// Retention of finished items.
   pub retention: Retention,
+  /// How often the recurring work runs.
+  pub schedules: Schedules,
   /// Limits on answering other users.
   pub throttling: Throttling,
   /// Log outputs.
@@ -158,6 +162,7 @@ impl Default for Options {
       rooms: Vec::new(),
       web: Web::default(),
       retention: Retention::default(),
+      schedules: Schedules::default(),
       throttling: Throttling::default(),
       logger: Logger::default(),
       logging: Logging::default(),

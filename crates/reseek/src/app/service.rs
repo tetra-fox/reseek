@@ -54,8 +54,4 @@ impl ApplicationService for Application {
   async fn databases(&self) -> Result<Vec<DatabaseFile>, ApiError> {
     self.databases.databases().await
   }
-
-  async fn vacuum(&self, name: &str) -> Result<(), ApiError> {
-    self.databases.vacuum(name).await
-  }
 }

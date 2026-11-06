@@ -37,7 +37,11 @@ export const SCOPES = {
 
 /** Whether `action` applies to a transfer in `state`, so it is worth sending */
 export const applies = (action: BulkAction, state: string) =>
-  action === "retry" ? isRetryable(state) : action === "cancel" ? isCancelable(state) : true;
+  action === "retry"
+    ? isRetryable(state)
+    : action === "cancel" || action === "pause" || action === "resume"
+      ? isCancelable(state)
+      : true;
 
 /** The bulk call for `action` on the transfers it applies to, null when there are none */
 export const bulkRequest = (
@@ -52,7 +56,13 @@ export const bulkRequest = (
 export const activeAmong = (transfers: Transfer[]) =>
   transfers.filter((t) => t.state === "InProgress").length;
 
-const PAST = { cancel: "canceled", remove: "removed", retry: "retried" } as const;
+const PAST = {
+  cancel: "canceled",
+  remove: "removed",
+  retry: "retried",
+  pause: "paused",
+  resume: "resumed"
+} as const;
 
 /** One line for what a bulk call did: "12 removed, 1 failed: <why>" */
 export const summary = (action: BulkAction, result: Schemas["BulkResult"]): string => {

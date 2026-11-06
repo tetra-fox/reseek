@@ -3521,6 +3521,7 @@ dependencies = [
  "api-types",
  "cascade",
  "chrono",
+ "humantime",
  "lofty",
  "notify",
  "rand 0.9.5",

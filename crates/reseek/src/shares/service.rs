@@ -62,7 +62,7 @@ impl ShareService for Shares {
   }
 
   async fn scan(&self, force: bool) -> Result<(), ApiError> {
-    Shares::scan(self, force)
+    Shares::scan(self, force, reseek_shares::ScanOrigin::Asked)
       .map_err(|_| ApiError::conflict("A share scan is already in progress", None))
   }
 

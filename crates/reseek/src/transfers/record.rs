@@ -14,7 +14,7 @@ use crate::db::{self, read_timestamp};
 pub const COLUMNS: &str = "Id, JobId, Username, Direction, Filename, Size, State, RequestedAt, \
                            EnqueuedAt, StartedAt, EndedAt, BytesTransferred, AverageSpeed, \
                            PlaceInQueue, Exception, Attempts, NextAttemptAt, Removed, LocalPath, \
-                           Destination, SearchId";
+                           Destination, SearchId, Paused";
 
 /// One transfer's row.
 #[derive(Clone, Debug, PartialEq)]
@@ -62,6 +62,8 @@ pub struct Record {
   pub removed: bool,
   /// where a download's file was moved to
   pub local_path: Option<String>,
+  /// a download the user paused, waiting here until resumed
+  pub paused: bool,
 }
 
 impl Record {
@@ -89,6 +91,7 @@ impl Record {
       next_attempt_at: None,
       removed: false,
       local_path: None,
+      paused: false,
     }
   }
 
@@ -142,6 +145,7 @@ impl Record {
       next_attempt_at: time(16)?,
       removed: row.get(17)?,
       local_path: text(18)?,
+      paused: row.get(21)?,
     })
   }
 
@@ -184,6 +188,7 @@ impl Record {
       percent_complete,
       remaining_time,
       local_path: self.local_path.clone(),
+      paused: self.paused,
       state_history: None,
     }
   }

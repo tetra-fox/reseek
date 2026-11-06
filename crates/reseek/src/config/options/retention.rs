@@ -6,9 +6,6 @@ use std::time::Duration;
 use cascade::Cascade;
 use serde::{Deserialize, Serialize};
 
-/// How often the retention job deletes what is past the retention options.
-pub const RETENTION_SWEEP: Duration = Duration::from_secs(300);
-
 /// Retention of finished items.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
@@ -39,6 +36,8 @@ pub struct Retention {
   /// them.
   #[cascade(env = "RESEEK_RETENTION_EVENTS_MAX_ROWS")]
   pub events_max_rows: u32,
+  /// Ended jobs in the jobs list.
+  pub jobs: JobRetention,
 }
 
 impl Default for Retention {
@@ -52,6 +51,7 @@ impl Default for Retention {
       users: None,
       events: Duration::from_secs(30 * 24 * 3600),
       events_max_rows: 100_000,
+      jobs: JobRetention::default(),
     }
   }
 }
@@ -90,16 +90,16 @@ pub struct TransferRetention {
 }
 
 /// Ages after which files in the download directories are deleted, by last write time, each at
-/// least 30 minutes.
+/// least 30 minutes. The directories are walked at every cleanup (`schedules.cleanup`).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct FileRetention {
-  /// Age after which files in the downloads directory are deleted, by last write time.
-  /// Minimum: 30 minutes.
+  /// Age after which files in the downloads directory are deleted, by last write time. The
+  /// directory is walked at every cleanup (`schedules.cleanup`). Minimum: 30 minutes.
   #[serde(with = "crate::config::duration")]
   pub complete: Option<Duration>,
-  /// Age after which files in the incomplete directory are deleted, by last write time.
-  /// Minimum: 30 minutes.
+  /// Age after which files in the incomplete directory are deleted, by last write time. The
+  /// directory is walked at every cleanup (`schedules.cleanup`). Minimum: 30 minutes.
   #[serde(with = "crate::config::duration")]
   pub incomplete: Option<Duration>,
 }
@@ -140,6 +140,29 @@ impl Default for MessageRetention {
       rooms: days(90),
       mentions: days(180),
       max_per_room: 100_000,
+    }
+  }
+}
+
+/// Ended jobs in the jobs list. A job is deleted when it passes the age or the count, whichever
+/// comes first. `0` disables a limit.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
+#[serde(default)]
+pub struct JobRetention {
+  /// Age after which an ended job is deleted. `0` for no limit.
+  #[cascade(env = "RESEEK_RETENTION_JOBS_AGE")]
+  #[serde(with = "crate::config::duration")]
+  pub age: Duration,
+  /// Maximum number of ended jobs kept. The oldest beyond it are deleted. `0` for no limit.
+  #[cascade(env = "RESEEK_RETENTION_JOBS_COUNT")]
+  pub count: u32,
+}
+
+impl Default for JobRetention {
+  fn default() -> Self {
+    Self {
+      age: Duration::from_secs(30 * 24 * 3600),
+      count: 1000,
     }
   }
 }

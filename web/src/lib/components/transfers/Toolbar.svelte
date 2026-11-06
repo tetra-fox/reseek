@@ -95,7 +95,7 @@
     view.filters.states = states.includes(id) ? states.filter((s) => s !== id) : [...states, id];
   };
 
-  const scoped = (action: BulkAction, id: string) => {
+  const scoped = (action: keyof typeof SCOPES, id: string) => {
     const scope = SCOPES[action].find((s) => s.id === id)!;
     onbulk(action, scope.test, scope.id);
   };

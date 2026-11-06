@@ -8,11 +8,10 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use rusqlite::{Connection, params};
-use tracing::{info, warn};
 
 use super::Messaging;
 use crate::config::MessageRetention;
-use crate::db::{shifted, timestamp};
+use crate::db::{DbError, shifted, timestamp};
 
 /// `now` less `age`, `None` for an age of `0`, which keeps everything.
 fn cutoff(now: DateTime<Utc>, age: Duration) -> Option<String> {
@@ -113,38 +112,30 @@ pub fn prune_rooms(
 }
 
 impl Messaging {
-  /// Every five minutes: the private messages past their retention go.
-  pub async fn prune_private(&self) {
+  /// Deletes the private messages past their retention; returns how many.
+  pub async fn prune_private(&self) -> Result<usize, DbError> {
     let retention = self.config.current().values.retention.messages.clone();
-    match self
+    let deleted = self
       .db
       .write(move |conn| prune_private(conn, &retention, Utc::now()))
-      .await
-    {
-      Ok(0) => {}
-      Ok(deleted) => {
-        info!(deleted, "private messages past their retention deleted");
-        self.unread.changed();
-      }
-      Err(e) => warn!(error = %e, "private messages past their retention not deleted"),
+      .await?;
+    if deleted > 0 {
+      self.unread.changed();
     }
+    Ok(deleted)
   }
 
-  /// Every hour: the room messages past their retention go.
-  pub async fn prune_rooms(&self) {
+  /// Deletes the room messages past their retention; returns how many.
+  pub async fn prune_rooms(&self) -> Result<usize, DbError> {
     let retention = self.config.current().values.retention.messages.clone();
-    match self
+    let deleted = self
       .db
       .write(move |conn| prune_rooms(conn, &retention, Utc::now()))
-      .await
-    {
-      Ok(0) => {}
-      Ok(deleted) => {
-        info!(deleted, "room messages past their retention deleted");
-        self.unread.changed();
-      }
-      Err(e) => warn!(error = %e, "room messages past their retention not deleted"),
+      .await?;
+    if deleted > 0 {
+      self.unread.changed();
     }
+    Ok(deleted)
   }
 }
 

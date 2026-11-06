@@ -581,27 +581,6 @@ test("queues a user's downloads, a folder and a selection for analysis", async (
   expect(queued).toHaveLength(2);
 });
 
-test("says how many more follow when a batch passes the queue's limit", async ({ page }) => {
-  await fakeDownloads(page);
-  await fakeAnalysis(page);
-  await fakeBatch(page, (file) =>
-    file.kind === "download" && file.id === ANALYZED_DOWNLOAD ? "following" : "queued"
-  );
-  await login(page, "/downloads");
-  const grid = page.getByRole("treegrid", { name: "Downloads" });
-  await grid.getByRole("checkbox", { name: "Select 2.flac" }).check();
-  await grid.getByRole("checkbox", { name: "Select 3.flac" }).check();
-  await page
-    .getByRole("toolbar", { name: "Selected transfers" })
-    .getByRole("button", { name: "Analyze" })
-    .click();
-  await expect(
-    page.getByText("1 file queued for analysis, 1 more will follow as the queue drains", {
-      exact: true
-    })
-  ).toBeVisible();
-});
-
 test("analyzes a file and queues a folder from the Files screen", async ({ page }) => {
   await fakeAnalysis(page);
   const at = "2026-10-27T18:00:00Z";

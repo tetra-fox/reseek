@@ -24,7 +24,10 @@ const options: NotifyOptions = {
   roomMessages: "off",
   jobFinished: "both",
   uploadQueued: "off",
-  buddyPresence: "both"
+  buddyPresence: "both",
+  scansFinished: "off",
+  analysisFinished: "off",
+  maintenanceFinished: "off"
 };
 const arrival = (fields: Partial<Arrival>): Arrival => ({
   kind: "private",

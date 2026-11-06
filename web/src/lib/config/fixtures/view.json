@@ -106,6 +106,11 @@
       "buddies": {
         "presence": "both"
       },
+      "jobs": {
+        "analysis": "off",
+        "maintenance": "off",
+        "scans": "off"
+      },
       "transfers": {
         "job_finished": "both",
         "upload_queued": "off"
@@ -140,6 +145,10 @@
         "complete": null,
         "incomplete": null
       },
+      "jobs": {
+        "age": "30d",
+        "count": 1000
+      },
       "logs": "14d",
       "messages": {
         "max_per_conversation": 100000,
@@ -167,6 +176,11 @@
       "users": null
     },
     "rooms": [],
+    "schedules": {
+      "cleanup": "5m",
+      "release_check": "1d",
+      "vacuum": "off"
+    },
     "search": {
       "filter_presets": [
         {
@@ -202,7 +216,7 @@
     "shares": {
       "buddies_only": [],
       "cache": {
-        "retention": null,
+        "retention": "off",
         "storage_mode": "memory",
         "workers": null
       },
@@ -1466,6 +1480,69 @@
       "notApplied": null,
       "entries": []
     },
+    "notifications.jobs.analysis": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_NOTIFICATIONS_JOBS_ANALYSIS",
+      "cliFlag": null,
+      "kind": "string",
+      "doc": "How the end of an analysis job is announced.",
+      "choices": [
+        "off",
+        "sound",
+        "desktop",
+        "both"
+      ],
+      "default": "off",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null,
+      "entries": []
+    },
+    "notifications.jobs.maintenance": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_NOTIFICATIONS_JOBS_MAINTENANCE",
+      "cliFlag": null,
+      "kind": "string",
+      "doc": "How the end of a cleanup or a database vacuum is announced. A failure is always shown.",
+      "choices": [
+        "off",
+        "sound",
+        "desktop",
+        "both"
+      ],
+      "default": "off",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null,
+      "entries": []
+    },
+    "notifications.jobs.scans": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_NOTIFICATIONS_JOBS_SCANS",
+      "cliFlag": null,
+      "kind": "string",
+      "doc": "How the end of a share scan is announced.",
+      "choices": [
+        "off",
+        "sound",
+        "desktop",
+        "both"
+      ],
+      "default": "off",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null,
+      "entries": []
+    },
     "notifications.transfers.job_finished": {
       "source": {
         "layer": "default"
@@ -1799,7 +1876,7 @@
       "envVar": null,
       "cliFlag": null,
       "kind": "duration",
-      "doc": "Age after which files in the downloads directory are deleted, by last write time. Minimum: 30 minutes.",
+      "doc": "Age after which files in the downloads directory are deleted, by last write time. The directory is walked at every cleanup (`schedules.cleanup`). Minimum: 30 minutes.",
       "choices": null,
       "default": null,
       "apply": "live",
@@ -1815,9 +1892,41 @@
       "envVar": null,
       "cliFlag": null,
       "kind": "duration",
-      "doc": "Age after which files in the incomplete directory are deleted, by last write time. Minimum: 30 minutes.",
+      "doc": "Age after which files in the incomplete directory are deleted, by last write time. The directory is walked at every cleanup (`schedules.cleanup`). Minimum: 30 minutes.",
       "choices": null,
       "default": null,
+      "apply": "live",
+      "secret": false,
+      "notApplied": null,
+      "entries": []
+    },
+    "retention.jobs.age": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_RETENTION_JOBS_AGE",
+      "cliFlag": null,
+      "kind": "duration",
+      "doc": "Age after which an ended job is deleted. `0` for no limit.",
+      "choices": null,
+      "default": "30d",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null,
+      "entries": []
+    },
+    "retention.jobs.count": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_RETENTION_JOBS_COUNT",
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "Maximum number of ended jobs kept. The oldest beyond it are deleted. `0` for no limit.",
+      "choices": null,
+      "default": 1000,
       "apply": "live",
       "secret": false,
       "notApplied": null,
@@ -2113,6 +2222,54 @@
       "notApplied": null,
       "entries": []
     },
+    "schedules.cleanup": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SCHEDULES_CLEANUP",
+      "cliFlag": null,
+      "kind": "string",
+      "doc": "How often the cleanup deletes what the retention options let go: finished transfers and searches, chat history, events, users, files in the download directories, ended sessions and ended jobs. Minimum: 1 minute.",
+      "choices": null,
+      "default": "5m",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null,
+      "entries": []
+    },
+    "schedules.release_check": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SCHEDULES_RELEASE_CHECK",
+      "cliFlag": null,
+      "kind": "string",
+      "doc": "How often the release feed is read for a newer version. Minimum: 1 hour.",
+      "choices": null,
+      "default": "1d",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null,
+      "entries": []
+    },
+    "schedules.vacuum": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SCHEDULES_VACUUM",
+      "cliFlag": null,
+      "kind": "string",
+      "doc": "How often every database is rebuilt without its free pages. A database is vacuumed once nothing else writes it.",
+      "choices": null,
+      "default": "off",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null,
+      "entries": []
+    },
     "search.filter_presets": {
       "source": {
         "layer": "default"
@@ -2202,10 +2359,10 @@
       "file": "config.toml",
       "envVar": "RESEEK_SHARE_CACHE_RETENTION",
       "cliFlag": "--share-cache-retention",
-      "kind": "duration",
-      "doc": "Interval between automatic rescans of the shares. Minimum: 1 hour. No automatic rescans when not set.",
+      "kind": "string",
+      "doc": "How often the shares are scanned again on their own: `off`, an interval such as `12h`, or whole days at a time of day such as `7d at 04:00`. A scan is due that long after the last complete one. Minimum: 1 hour.",
       "choices": null,
-      "default": null,
+      "default": "off",
       "apply": "live",
       "secret": false,
       "notApplied": null,

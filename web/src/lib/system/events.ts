@@ -23,6 +23,7 @@ const TYPES: Record<Schemas["EventType"], true> = {
   RelayAgentConnected: true,
   RelayAgentDisconnected: true,
   RelayAgentSharesUpdated: true,
+  JobFinished: true,
   Noop: true
 };
 

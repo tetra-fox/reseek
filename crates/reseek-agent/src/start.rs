@@ -253,6 +253,9 @@ async fn serve(config: Watcher<Options>, paths: Paths) -> ExitCode {
     force_scan: options.flags.force_share_scan,
     volatile: options.flags.volatile,
     case_sensitive: options.flags.case_sensitive_regex,
+    rescan_on_schedule: true,
+    // nothing but the engine's own log follows the scans
+    scans: Box::new(|_| Box::pin(async {})),
     // nothing shows the share state but the log the engine writes
     publish: Box::new(|_| {}),
   };

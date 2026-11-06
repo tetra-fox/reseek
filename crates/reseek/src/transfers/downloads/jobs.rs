@@ -4,17 +4,24 @@
 //! download tells of it with a `transfers.job_finished` frame, or the close does when every
 //! download ended before it. Each check runs inside a write of `transfers.db`, whose one
 //! writer orders them, so exactly one of them finds the job over.
+//!
+//! Each download job is also a job in the jobs list, kept in step after every write that
+//! changes where one of its downloads is: its counts and whether it is paused while it runs,
+//! and its files by name, outcome and error once it ended. A job whose every download was
+//! removed ends canceled.
 
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
+use api_types::jobs::{JobCounts, JobKind, JobPart, JobPartState, JobStarter, JobState};
 use api_types::live::LiveFrame;
 use api_types::transfers::{DownloadJobFinished, TransferStates};
 use rusqlite::{Connection, OptionalExtension};
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 use uuid::Uuid;
 
-use super::Downloads;
+use super::{Downloads, Group};
+use crate::jobs::{Ended, NewJob, NewPart};
 use crate::sync::lock;
 use crate::transfers::categories::UNFINISHED;
 use crate::transfers::listing::remote_directory;
@@ -141,7 +148,435 @@ fn common_folder<'a>(mut filenames: impl Iterator<Item = &'a str>) -> &'a str {
   common
 }
 
+/// The name of a download job of `groups`: its file or its folder from its user when it has one
+/// user, else whom its files come from.
+pub(super) fn job_name(groups: &[Group]) -> String {
+  let usernames: Vec<&str> = groups.iter().map(|g| g.username.as_str()).collect();
+  let files: Vec<&str> = groups
+    .iter()
+    .flat_map(|g| g.files.iter().map(|f| f.filename.as_str()))
+    .collect();
+  let mut users: Vec<&str> = Vec::new();
+  for username in usernames {
+    if !users.contains(&username) {
+      users.push(username);
+    }
+  }
+  let from = from_whom(&users);
+  if let [only] = files.as_slice() {
+    return format!("{} from {from}", last_segment(only));
+  }
+  let folder = common_folder(files.iter().copied());
+  // a folder of one segment is the top of a share, which names nothing
+  if users.len() == 1 && folder.contains(['\\', '/']) {
+    return format!("{} from {from}", last_segment(folder));
+  }
+  format!("Downloads from {from}")
+}
+
+/// The last segment of a remote path.
+fn last_segment(path: &str) -> &str {
+  path.rsplit(['\\', '/']).next().unwrap_or(path)
+}
+
+/// Whom files come from: `alice`, `alice and bob`, `alice and 2 others`.
+fn from_whom(users: &[&str]) -> String {
+  match users {
+    [] => "nobody".to_string(),
+    [one] => (*one).to_string(),
+    [one, two] => format!("{one} and {two}"),
+    [one, rest @ ..] => format!("{one} and {} others", rest.len()),
+  }
+}
+
+/// The counts of the downloads of the job `job` still listed: every one, how each that ended
+/// ended, and those paused.
+fn counts(conn: &Connection, job: Uuid) -> rusqlite::Result<JobCounts> {
+  conn
+    .prepare_cached(&format!(
+      "SELECT COUNT(*), \
+       COALESCE(SUM(NOT {UNFINISHED} AND State = 48), 0), \
+       COALESCE(SUM(NOT {UNFINISHED} AND State NOT IN (48, 80)), 0), \
+       COALESCE(SUM(NOT {UNFINISHED} AND State = 80), 0), \
+       COALESCE(SUM({UNFINISHED} AND Paused = 1), 0) \
+       FROM Transfers WHERE JobId = ?1 AND Removed = 0"
+    ))?
+    .query_row([job.to_string()], |row| {
+      let at =
+        |i| -> rusqlite::Result<u32> { Ok(u32::try_from(row.get::<_, i64>(i)?).unwrap_or(0)) };
+      Ok(JobCounts {
+        total: at(0)?,
+        succeeded: at(1)?,
+        failed: at(2)?,
+        canceled: at(3)?,
+        paused: at(4)?,
+      })
+    })
+}
+
+/// A download as a part of its job.
+#[derive(Clone, Debug)]
+pub(super) struct Part {
+  id: Uuid,
+  username: String,
+  filename: String,
+  state: TransferStates,
+  paused: bool,
+  exception: Option<String>,
+}
+
+impl Part {
+  fn state(&self) -> JobPartState {
+    let finished = self.state.contains(TransferStates::Completed);
+    if finished && self.state.contains(TransferStates::Succeeded) {
+      JobPartState::Succeeded
+    } else if finished && self.state.contains(TransferStates::Cancelled) {
+      JobPartState::Canceled
+    } else if finished {
+      JobPartState::Failed
+    } else if self.paused {
+      JobPartState::Paused
+    } else if self
+      .state
+      .intersects(TransferStates::InProgress | TransferStates::Initializing)
+    {
+      JobPartState::Running
+    } else {
+      JobPartState::Waiting
+    }
+  }
+
+  /// The part as the job's history keeps it, named by its path under `folder`.
+  fn kept(&self, folder: &str) -> NewPart {
+    let state = self.state();
+    NewPart {
+      name: name_under(&self.filename, folder).to_string(),
+      state,
+      error: (state == JobPartState::Failed)
+        .then(|| self.exception.clone())
+        .flatten(),
+      target: None,
+      key: None,
+    }
+  }
+
+  /// The part as a running job lists it, with its download.
+  fn listed(&self, folder: &str) -> JobPart {
+    let state = self.state();
+    JobPart {
+      name: name_under(&self.filename, folder).to_string(),
+      state,
+      error: (state == JobPartState::Failed)
+        .then(|| self.exception.clone())
+        .flatten(),
+      transfer_id: Some(self.id),
+      username: Some(self.username.clone()),
+    }
+  }
+}
+
+/// `filename` without the folder `folder` holding it.
+fn name_under<'a>(filename: &'a str, folder: &str) -> &'a str {
+  if folder.is_empty() {
+    return filename;
+  }
+  filename
+    .strip_prefix(folder)
+    .map_or(filename, |rest| rest.trim_start_matches(['\\', '/']))
+}
+
+/// The downloads of the job `job` still listed, in the order they were asked for.
+fn parts(conn: &Connection, job: Uuid) -> rusqlite::Result<Vec<Part>> {
+  conn
+    .prepare_cached(
+      "SELECT Id, Username, Filename, State, Paused, Exception FROM Transfers \
+       WHERE JobId = ?1 AND Removed = 0 ORDER BY RequestedAt, Id",
+    )?
+    .query_map([job.to_string()], |row| {
+      let id: String = row.get(0)?;
+      Ok(Part {
+        id: id.parse().map_err(|e: uuid::Error| {
+          rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, e.into())
+        })?,
+        username: text_at(row, 1)?,
+        filename: text_at(row, 2)?,
+        state: TransferStates::from_bits_retain(row.get(3)?),
+        paused: row.get(4)?,
+        exception: row.get(5)?,
+      })
+    })?
+    .collect()
+}
+
+/// The folder every part of a job is under, when they come from one user.
+fn parts_folder(parts: &[Part]) -> &str {
+  let one_user = parts
+    .windows(2)
+    .all(|pair| pair[0].username == pair[1].username);
+  if one_user && parts.len() > 1 {
+    common_folder(parts.iter().map(|p| p.filename.as_str()))
+  } else {
+    ""
+  }
+}
+
 impl Downloads {
+  /// Enqueues `groups` as a new download job started by `starter`, listed in the jobs list;
+  /// returns its id and what came of each group. A job of which no download was made ends
+  /// failed with the groups' reasons.
+  pub async fn enqueue_new(
+    &self,
+    starter: JobStarter,
+    groups: Vec<Group>,
+  ) -> (
+    Uuid,
+    Vec<Result<super::Enqueued, crate::api::error::ApiError>>,
+  ) {
+    let job = Uuid::new_v4();
+    let new = NewJob {
+      id: job,
+      kind: JobKind::Download,
+      name: job_name(&groups),
+      starter,
+      state: JobState::Running,
+      follows: None,
+      data: None,
+    };
+    if let Err(e) = self.jobs.create(new).await {
+      warn!(%job, error = %e, "download job not listed");
+    }
+    let results = self.enqueue(job, groups).await;
+    let made = results.iter().any(|result| {
+      result
+        .as_ref()
+        .is_ok_and(|enqueued| !enqueued.enqueued.is_empty())
+    });
+    if !made {
+      let reasons: Vec<String> = results
+        .iter()
+        .map(|result| match result {
+          Ok(enqueued) => enqueued
+            .failed
+            .iter()
+            .map(|f| f.message.clone())
+            .collect::<Vec<_>>()
+            .join("; "),
+          // the code of a refusal for want of the server is no sentence to show
+          Err(e) if e.is_unavailable() => "Not connected to the Soulseek server".to_string(),
+          Err(e) => e.message().to_string(),
+        })
+        .filter(|reason| !reason.is_empty())
+        .collect();
+      let ended = Ended {
+        ending: Some(api_types::jobs::JobEnding::Failed),
+        error: Some(if reasons.is_empty() {
+          "Nothing was queued".to_string()
+        } else {
+          reasons.join("; ")
+        }),
+        ..Ended::default()
+      };
+      if let Err(e) = self.jobs.end(job, ended).await {
+        warn!(%job, error = %e, "download job that queued nothing not ended");
+      }
+    }
+    (job, results)
+  }
+
+  /// Makes the job `job` in the jobs list as started by a restart when it is not there, for
+  /// downloads queued before the list kept them.
+  pub(super) async fn ensure_listed(&self, job: Uuid, groups: &[Group]) {
+    match self.jobs.get(job).await {
+      Ok(Some(_)) => {}
+      Ok(None) => {
+        let new = NewJob {
+          id: job,
+          kind: JobKind::Download,
+          name: job_name(groups),
+          starter: JobStarter::of(api_types::jobs::JobStarterKind::Resumed),
+          state: JobState::Running,
+          follows: None,
+          data: None,
+        };
+        if let Err(e) = self.jobs.create(new).await {
+          warn!(%job, error = %e, "resumed download job not listed");
+        }
+      }
+      Err(e) => warn!(%job, error = %e, "resumed download job not read"),
+    }
+  }
+
+  /// Brings the job `job` in the jobs list in step with its downloads: ended with its files
+  /// once every one of them ended and it is not being enqueued, canceled when every one was
+  /// removed, else its counts and whether it is paused. A job that never had a download is left
+  /// as it is, for the caller to end with its reason; returns whether it was one.
+  pub(super) async fn sync_job(&self, job: Uuid) -> bool {
+    let open = lock(&self.open_jobs).contains(&job);
+    let read = self
+      .db
+      .read(move |conn| Ok((counts(conn, job)?, parts(conn, job)?)))
+      .await;
+    let (counts, rows) = match read {
+      Ok(read) => read,
+      Err(e) => {
+        warn!(%job, error = %e, "download job not read for the jobs list");
+        return false;
+      }
+    };
+    let ended = counts.ended();
+    if counts.total == 0 && !open {
+      // a job whose every download was removed ends canceled; one that never had any is ended
+      // by its caller, which knows why
+      match self.jobs.get(job).await {
+        Ok(Some(listed)) if listed.counts.total == 0 => return true,
+        Ok(_) => {}
+        Err(e) => {
+          warn!(%job, error = %e, "download job not read from the jobs list");
+          return false;
+        }
+      }
+    }
+    let result = if !open && (counts.total == 0 || ended == counts.total) {
+      let folder = parts_folder(&rows).to_string();
+      let end = Ended {
+        ending: (counts.total == 0).then_some(api_types::jobs::JobEnding::Canceled),
+        counts: Some(counts),
+        parts: Some(rows.iter().map(|part| part.kept(&folder)).collect()),
+        ..Ended::default()
+      };
+      match self.jobs.end(job, end).await {
+        Ok(Some(_)) => {
+          self.analysis.download_job_ended(job).await;
+          Ok(())
+        }
+        Ok(None) => Ok(()),
+        Err(e) => Err(e),
+      }
+    } else {
+      let open_files = counts.total.saturating_sub(ended);
+      let state = if open_files > 0 && counts.paused == open_files {
+        JobState::Paused
+      } else {
+        JobState::Running
+      };
+      self.jobs.set_counts(job, counts, state).await.map(drop)
+    };
+    if let Err(e) = result {
+      warn!(%job, error = %e, "download job not brought in step in the jobs list");
+    }
+    false
+  }
+
+  /// Ends the job `job`, which never had a download and is not being enqueued, as `ending`
+  /// with `error`.
+  pub(super) async fn end_empty(
+    &self,
+    job: Uuid,
+    ending: api_types::jobs::JobEnding,
+    error: Option<String>,
+  ) {
+    if lock(&self.open_jobs).contains(&job) {
+      return;
+    }
+    let ended = Ended {
+      ending: Some(ending),
+      error,
+      counts: Some(JobCounts::default()),
+      ..Ended::default()
+    };
+    if let Err(e) = self.jobs.end(job, ended).await {
+      warn!(%job, error = %e, "download job with no download not ended");
+    }
+  }
+
+  /// The downloads of the job `job` as its parts.
+  pub async fn job_parts(&self, job: Uuid) -> Result<Vec<JobPart>, crate::api::error::ApiError> {
+    let rows = self
+      .db
+      .read(move |conn| parts(conn, job))
+      .await
+      .map_err(crate::api::error::ApiError::internal)?;
+    let folder = parts_folder(&rows);
+    Ok(rows.iter().map(|part| part.listed(folder)).collect())
+  }
+
+  /// The downloads of the job `job` that are not finished, with their users.
+  async fn unfinished_of(&self, job: Uuid) -> Result<Vec<Part>, crate::api::error::ApiError> {
+    let rows = self
+      .db
+      .read(move |conn| parts(conn, job))
+      .await
+      .map_err(crate::api::error::ApiError::internal)?;
+    Ok(
+      rows
+        .into_iter()
+        .filter(|part| !part.state.contains(TransferStates::Completed))
+        .collect(),
+    )
+  }
+
+  /// Cancels every download of the job `job` that has not finished; a job with none to
+  /// cancel is brought in step, and one that never had a download ends canceled.
+  pub async fn cancel_job(&self, job: Uuid) -> Result<(), crate::api::error::ApiError> {
+    let unfinished = self.unfinished_of(job).await?;
+    for part in &unfinished {
+      self.cancel(&part.username, part.id, false).await?;
+    }
+    if unfinished.is_empty() && self.sync_job(job).await {
+      self
+        .end_empty(job, api_types::jobs::JobEnding::Canceled, None)
+        .await;
+    }
+    info!(%job, downloads = unfinished.len(), "download job canceled");
+    Ok(())
+  }
+
+  /// Pauses every download of the job `job` that has not finished.
+  pub async fn pause_job(&self, job: Uuid) -> Result<(), crate::api::error::ApiError> {
+    let ids = self
+      .unfinished_of(job)
+      .await?
+      .into_iter()
+      .filter(|part| !part.paused)
+      .map(|part| part.id)
+      .collect();
+    let outcomes = self.pause(ids).await;
+    let changed = outcomes.iter().filter(|outcome| outcome.is_ok()).count();
+    let failed: Vec<_> = outcomes.into_iter().filter_map(Result::err).collect();
+    if changed == 0 {
+      debug!(%job, failed = failed.len(), "no download of the job paused");
+    } else {
+      info!(%job, downloads = changed, failed = failed.len(), "download job paused");
+    }
+    if let Some(first) = failed.first() {
+      debug!(%job, error = first.error, "first download of the job not paused");
+    }
+    Ok(())
+  }
+
+  /// Resumes every paused download of the job `job`.
+  pub async fn resume_job(&self, job: Uuid) -> Result<(), crate::api::error::ApiError> {
+    let ids = self
+      .unfinished_of(job)
+      .await?
+      .into_iter()
+      .filter(|part| part.paused)
+      .map(|part| part.id)
+      .collect();
+    let outcomes = self.resume_paused(ids).await;
+    let changed = outcomes.iter().filter(|outcome| outcome.is_ok()).count();
+    let failed: Vec<_> = outcomes.into_iter().filter_map(Result::err).collect();
+    if changed == 0 {
+      debug!(%job, failed = failed.len(), "no download of the job resumed");
+    } else {
+      info!(%job, downloads = changed, failed = failed.len(), "download job resumed");
+    }
+    if let Some(first) = failed.first() {
+      debug!(%job, error = first.error, "first download of the job not resumed");
+    }
+    Ok(())
+  }
+
   /// Opens the job `job` while its files are being enqueued.
   pub(super) fn open_job(&self, job: Uuid) {
     lock(&self.open_jobs).insert(job);
@@ -162,6 +597,8 @@ impl Downloads {
       Ok(finished) => self.tell(finished),
       Err(e) => warn!(%job, error = %e, "download job not checked once enqueued"),
     }
+    // a job that never had a download is ended by `enqueue_new`, which knows why
+    self.sync_job(job).await;
   }
 
   /// Tells of a job that ended, when one did.
@@ -330,6 +767,46 @@ mod tests {
     })
     .await
     .unwrap();
+  }
+
+  #[test]
+  fn a_download_job_is_named_by_its_file_its_folder_or_its_users() {
+    let group = |username: &str, files: &[&str]| Group {
+      username: username.to_string(),
+      files: files
+        .iter()
+        .map(|f| super::super::FileRequest {
+          filename: (*f).to_string(),
+          size: 1,
+        })
+        .collect(),
+      destination: None,
+      search_id: None,
+    };
+    assert_eq!(
+      job_name(&[group("alice", &["@@a\\Music\\Song.flac"])]),
+      "Song.flac from alice"
+    );
+    assert_eq!(
+      job_name(&[group(
+        "alice",
+        &["@@a\\M\\Album\\1.flac", "@@a\\M\\Album\\2.flac"]
+      )]),
+      "Album from alice"
+    );
+    assert_eq!(
+      job_name(&[group("alice", &["@@a\\1.flac", "@@a\\2.flac"])]),
+      "Downloads from alice",
+      "the top of a share names nothing"
+    );
+    assert_eq!(
+      job_name(&[
+        group("alice", &["@@a\\A\\1.flac"]),
+        group("bob", &["@@b\\A\\1.flac"]),
+        group("carol", &["@@c\\A\\1.flac"])
+      ]),
+      "Downloads from alice and 2 others"
+    );
   }
 
   #[test]

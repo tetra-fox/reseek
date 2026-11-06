@@ -125,13 +125,13 @@ pub fn latest_scan(conn: &Connection) -> rusqlite::Result<Option<Scan>> {
     .optional()
 }
 
-/// The scans started at or after `since`, oldest first.
-pub fn scans_since(conn: &Connection, since: i64) -> rusqlite::Result<Vec<Scan>> {
-  let mut statement = conn.prepare(
-    "SELECT timestamp, options, \"end\", suspect FROM scans WHERE timestamp >= ?1 \
-     ORDER BY timestamp",
-  )?;
-  statement.query_map([since], scan)?.collect()
+/// When the last scan that completed and is not suspect started, in epoch milliseconds.
+pub fn latest_trusted_scan(conn: &Connection) -> rusqlite::Result<Option<i64>> {
+  conn.query_row(
+    "SELECT MAX(timestamp) FROM scans WHERE \"end\" IS NOT NULL AND suspect = 0",
+    [],
+    |row| row.get(0),
+  )
 }
 
 /// The rows of the files directly in the directory `name`, by remote name.
@@ -536,7 +536,13 @@ pub(super) mod tests {
       let latest = latest_scan(conn)?.unwrap();
       assert_eq!(latest.ended_at, Some(25));
       assert!(latest.suspect);
-      assert_eq!(scans_since(conn, 15)?.len(), 1);
+      assert_eq!(
+        latest_trusted_scan(conn)?,
+        None,
+        "the ended scan is suspect"
+      );
+      end_scan(conn, 10, 12)?;
+      assert_eq!(latest_trusted_scan(conn)?, Some(10));
       Ok(())
     })
     .await

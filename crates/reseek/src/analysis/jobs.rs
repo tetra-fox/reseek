@@ -1,153 +1,341 @@
-//! The analysis queue: files wait in the order they were asked for, by the API, by a batch's
-//! backlog as the queue drains, or by a download that finished while `analysis.on_download` is
-//! on, and as many run as `analysis.workers` allows, each on a blocking thread of its own. A
-//! finished analysis is stored with its spectrogram and waveform, pushed to the event stream and,
-//! unless its file was uploaded for it, raised as an event; one canceled by shutdown leaves
-//! nothing behind.
+//! The analysis queue, kept as analysis jobs: each request, a file, a batch or the files of a
+//! download job while `analysis.on_download` is on, is a job whose parts are its files, waiting
+//! in `jobs.db` so they carry on after a restart. A paused job finishes the file it is on and
+//! holds the rest. The workers that take the files are in `worker.rs`.
 
-use std::collections::VecDeque;
-use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::time::Instant;
 
-use api_types::analysis::{AnalysisCompleted, AnalysisJob, AnalysisJobState};
-use api_types::events::{Event, FileAnalysisComplete};
+use api_types::analysis::{
+  AnalysisBatchQueued, AnalysisBatchRefusal, AnalysisJob, AnalysisJobState, AnalysisQueue,
+  AnalysisTarget,
+};
 use api_types::files::FileRoot;
+use api_types::jobs::{JobKind, JobPartState, JobStarter, JobStarterKind, JobState};
 use api_types::live::LiveFrame;
 use chrono::{DateTime, Utc};
-use tokio::sync::broadcast::error::RecvError;
+use serde::{Deserialize, Serialize};
 use tokio_util::sync::CancellationToken;
-use tracing::{Instrument, debug, error, info, info_span, warn};
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-use super::analyzer::engine::{self, Settings};
-use super::analyzer::reading;
-use super::report::{assemble, kept_name, layout, modified_text};
-use super::{Analysis, current, kept, store, uploads};
+use super::{Analysis, current, store};
 use crate::api::error::ApiError;
-use crate::config::Options;
 use crate::files::LocalFile;
+use crate::jobs::{Ended, NewJob, NewPart, StoredPart, store as job_store};
 use crate::services::FileTarget;
 use crate::sync::lock;
 
-/// The most files that may wait in the queue. A test fills it with a few.
-pub(super) const QUEUE_LIMIT: usize = if cfg!(test) { 4 } else { 1000 };
+/// The most files one batch may name.
+pub(super) const BATCH_LIMIT: usize = 100_000;
 
-/// A file waiting for or under analysis.
+/// The most waiting files the queue listing names; the rest are counted.
+const LISTED: usize = 1000;
+
+/// A file of an analysis job as its part keeps it: what names it and where it was found.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct Target {
+  /// what names the file
+  pub target: AnalysisTarget,
+  /// the directory it is under
+  pub root: FileRoot,
+  /// its path under the root
+  pub relative: String,
+  /// its local path
+  pub path: String,
+  /// the download it belongs to
+  pub transfer_id: Option<Uuid>,
+}
+
+impl Target {
+  /// The part target of `file`, named by `target`.
+  fn of(target: &FileTarget, file: &LocalFile) -> Self {
+    Self {
+      target: match target {
+        FileTarget::File { root, path } => AnalysisTarget::File {
+          root: *root,
+          path: path.clone(),
+        },
+        FileTarget::Download { username, id } => AnalysisTarget::Download {
+          username: username.clone(),
+          id: *id,
+        },
+      },
+      root: file.root,
+      relative: file.relative.clone(),
+      path: file.path.to_string_lossy().into_owned(),
+      transfer_id: file.transfer_id,
+    }
+  }
+
+  /// The file target this names.
+  pub(super) fn file_target(&self) -> FileTarget {
+    match &self.target {
+      AnalysisTarget::File { root, path } => FileTarget::File {
+        root: *root,
+        path: path.clone(),
+      },
+      AnalysisTarget::Download { username, id } => FileTarget::Download {
+        username: username.clone(),
+        id: *id,
+      },
+    }
+  }
+
+  /// The part of a job this file is, waiting.
+  fn part(&self) -> NewPart {
+    NewPart {
+      name: file_name(&self.relative).to_string(),
+      state: JobPartState::Waiting,
+      error: None,
+      target: Some(
+        serde_json::to_string(self).expect("a target of text, ids and a root is written as JSON"),
+      ),
+      key: Some(self.path.clone()),
+    }
+  }
+
+  /// The listing of this file waiting as the part `id` of a job made at `queued_at`.
+  pub(super) fn listed(&self, id: Uuid, queued_at: DateTime<Utc>) -> AnalysisJob {
+    AnalysisJob {
+      id,
+      path: self.path.clone(),
+      root: self.root,
+      relative_path: self.relative.clone(),
+      transfer_id: self.transfer_id,
+      state: AnalysisJobState::Queued,
+      queued_at,
+      started_at: None,
+      progress: None,
+    }
+  }
+}
+
+/// The last segment of a `/`-separated path.
+fn file_name(relative: &str) -> &str {
+  relative.rsplit('/').next().unwrap_or(relative)
+}
+
+/// A file under analysis.
 #[derive(Clone, Debug)]
-pub(super) struct Job {
-  pub id: Uuid,
+pub(super) struct Running {
+  /// its part
+  pub part: Uuid,
+  /// its job
+  pub job: Uuid,
   pub file: LocalFile,
   pub queued_at: DateTime<Utc>,
-  pub started_at: Option<DateTime<Utc>>,
-  /// canceled when the job is canceled or the daemon stops
+  pub started_at: DateTime<Utc>,
+  /// canceled when its part or job is canceled or the daemon stops
   pub cancel: CancellationToken,
   /// how far the worker is, in thousandths of the file
   pub progress: Arc<AtomicU32>,
 }
 
-impl Job {
-  /// The job as the queue listing shows it.
-  pub fn listed(&self) -> AnalysisJob {
+impl Running {
+  /// The file as the queue listing shows it.
+  fn listed(&self) -> AnalysisJob {
     AnalysisJob {
-      id: self.id,
+      id: self.part,
       path: self.file.path.to_string_lossy().into_owned(),
       root: self.file.root,
       relative_path: self.file.relative.clone(),
       transfer_id: self.file.transfer_id,
-      state: if self.started_at.is_some() {
-        AnalysisJobState::Running
-      } else {
-        AnalysisJobState::Queued
-      },
+      state: AnalysisJobState::Running,
       queued_at: self.queued_at,
-      started_at: self.started_at,
-      progress: self
-        .started_at
-        .map(|_| f64::from(self.progress.load(Ordering::Relaxed)) / 1000.0),
+      started_at: Some(self.started_at),
+      progress: Some(f64::from(self.progress.load(Ordering::Relaxed)) / 1000.0),
     }
   }
 }
 
-/// The jobs waiting and running.
-#[derive(Debug, Default)]
-pub(super) struct Queue {
-  pub waiting: VecDeque<Job>,
-  pub running: Vec<Job>,
-}
-
-impl Queue {
-  /// Whether `path` is waiting or running.
-  pub fn holds(&self, path: &Path) -> bool {
-    self
-      .waiting
-      .iter()
-      .chain(&self.running)
-      .any(|job| job.file.path == path)
-  }
-}
-
-/// What asking for a file's analysis came to.
+/// What asking for one file's analysis came to.
 pub(super) enum Queued {
-  /// queued as this job
+  /// queued in this job
   Job(Uuid),
   /// its report is current, so it was left alone
   Current,
   /// it is queued or running already
   Already,
-  /// the queue holds as many files as it may
-  Full,
+}
+
+/// The name of an analysis job of `targets`: its file, its folder or how many files.
+fn job_name(targets: &[Target]) -> String {
+  match targets {
+    [one] => format!("Analyze {}", file_name(&one.relative)),
+    _ => {
+      let folder = common_folder(targets.iter().map(|t| t.relative.as_str()));
+      match folder.rsplit('/').next().filter(|name| !name.is_empty()) {
+        Some(name) => format!("Analyze {name}"),
+        None => format!("Analyze {} files", targets.len()),
+      }
+    }
+  }
+}
+
+/// The deepest folder holding every one of `paths`, `/`-separated; empty when none does.
+fn common_folder<'a>(mut paths: impl Iterator<Item = &'a str>) -> &'a str {
+  let parent = |path: &'a str| path.rsplit_once('/').map_or("", |(dir, _)| dir);
+  let Some(first) = paths.next() else {
+    return "";
+  };
+  let mut common = parent(first);
+  for path in paths {
+    while !common.is_empty()
+      && !path
+        .strip_prefix(common)
+        .is_some_and(|rest| rest.starts_with('/'))
+    {
+      common = parent(common);
+    }
+  }
+  common
 }
 
 impl Analysis {
-  /// Queues `file`, unless its report is current and not `force`d, it is in the queue already
-  /// or the queue is full.
-  pub(super) async fn enqueue(&self, file: LocalFile, force: bool) -> Result<Queued, ApiError> {
-    if !force {
-      let path = file.path.to_string_lossy().into_owned();
-      let stored = store::find(&self.db, &path)
-        .await
-        .map_err(ApiError::internal)?;
-      // a stale report is no reading of the file, so it is analyzed again
-      let current =
-        |stored: &store::Stored| !stored.report.stale && current(stored, file.size, file.modified);
-      if stored.as_ref().is_some_and(current) {
-        return Ok(Queued::Current);
+  /// The target the stored part `part` keeps, none when it keeps none that reads, which is
+  /// said once per part.
+  pub(super) fn target_of(&self, part: &StoredPart) -> Option<Target> {
+    let read = part
+      .target
+      .as_deref()
+      .map(serde_json::from_str::<Target>)
+      .transpose();
+    match read {
+      Ok(target) => target,
+      Err(e) => {
+        if lock(&self.unreadable).insert(part.id.to_string()) {
+          warn!(part = %part.id, job = %part.job, error = %e, "a file of an analysis job does not read");
+        }
+        None
       }
     }
-    let id = Uuid::new_v4();
-    let listed;
-    {
-      let mut queue = lock(&self.queue);
-      if queue.holds(&file.path) {
-        return Ok(Queued::Already);
-      }
-      if queue.waiting.len() >= QUEUE_LIMIT {
-        return Ok(Queued::Full);
-      }
-      debug!(job = %id, path = %file.path.display(), waiting = queue.waiting.len(), "analysis queued");
-      let job = Job {
-        id,
-        file,
-        queued_at: Utc::now(),
-        started_at: None,
-        cancel: self.shutdown.child_token(),
-        progress: Arc::default(),
-      };
-      listed = job.listed();
-      queue.waiting.push_back(job);
-    }
-    // a client that sees nothing waiting or running stops reading the queue until this says
-    self.live.publish(LiveFrame::FilesAnalysisQueued(listed));
-    self.wake.notify_one();
-    Ok(Queued::Job(id))
   }
 
-  /// Queues the file the download `id` from `username` finished into at `path`, when
-  /// `analysis.on_download` is on and the file's extension is in `analysis.extensions`. A full
-  /// queue drops it, said once until the queue takes a download's file again.
-  pub async fn downloaded(&self, username: &str, id: Uuid, path: &Path) {
+  /// Whether `path` is waiting or running in any analysis job.
+  async fn holds(&self, path: &std::path::Path) -> Result<bool, ApiError> {
+    if lock(&self.running).iter().any(|r| r.file.path == path) {
+      return Ok(true);
+    }
+    let text = path.to_string_lossy().into_owned();
+    self
+      .jobs
+      .database()
+      .read(move |conn| {
+        conn.query_row(
+          "SELECT EXISTS (SELECT 1 FROM job_parts p JOIN jobs j ON j.id = p.job_id \
+           WHERE p.key = ?1 AND j.kind = 'analysis' \
+           AND p.state IN ('waiting', 'paused', 'running'))",
+          [text],
+          |row| row.get(0),
+        )
+      })
+      .await
+      .map_err(ApiError::internal)
+  }
+
+  /// Whether the report of `file` is current.
+  pub(super) async fn is_current(&self, file: &LocalFile) -> Result<bool, ApiError> {
+    let path = file.path.to_string_lossy().into_owned();
+    let stored = store::find(&self.db, &path)
+      .await
+      .map_err(ApiError::internal)?;
+    // a stale report is no reading of the file, so it is analyzed again
+    Ok(
+      stored
+        .as_ref()
+        .is_some_and(|stored| !stored.report.stale && current(stored, file.size, file.modified)),
+    )
+  }
+
+  /// Queues the file `target` names as a job of its own started by the user, unless its report
+  /// is current and not `force`d or it is queued already.
+  pub(super) async fn enqueue_one(
+    &self,
+    target: &FileTarget,
+    force: bool,
+  ) -> Result<Queued, ApiError> {
+    let file = self.files.local_file(target).await?;
+    if !force && self.is_current(&file).await? {
+      return Ok(Queued::Current);
+    }
+    if self.holds(&file.path).await? {
+      return Ok(Queued::Already);
+    }
+    let target = Target::of(target, &file);
+    let job = self
+      .start_job(vec![target], force, JobStarter::you(), None)
+      .await?;
+    Ok(Queued::Job(job))
+  }
+
+  /// Queues the files of a batch as one job started by the user, each named with its place in
+  /// the batch; files whose report is current or that are queued already are left alone, and
+  /// those that cannot be found refused.
+  pub(super) async fn batch(&self, files: Vec<(u32, FileTarget)>) -> AnalysisBatchQueued {
+    let mut result = AnalysisBatchQueued {
+      queued: 0,
+      current: 0,
+      refused: Vec::new(),
+      job_id: None,
+    };
+    let mut targets = Vec::new();
+    for (index, target) in files {
+      if targets.len() >= BATCH_LIMIT {
+        result.refused.push(AnalysisBatchRefusal {
+          index,
+          error: format!("A batch analyzes at most {BATCH_LIMIT} files"),
+        });
+        continue;
+      }
+      let checked = async {
+        let file = self.files.local_file(&target).await?;
+        let skip = self.is_current(&file).await? || self.holds(&file.path).await?;
+        Ok::<_, ApiError>((file, skip))
+      };
+      match checked.await {
+        Ok((_, true)) => result.current += 1,
+        Ok((file, false)) => targets.push(Target::of(&target, &file)),
+        Err(e) => result.refused.push(AnalysisBatchRefusal {
+          index,
+          error: e.message().to_string(),
+        }),
+      }
+    }
+    if targets.is_empty() {
+      return result;
+    }
+    let count = u32::try_from(targets.len()).unwrap_or(u32::MAX);
+    match self
+      .start_job(targets, false, JobStarter::you(), None)
+      .await
+    {
+      Ok(job) => {
+        result.queued = count;
+        result.job_id = Some(job);
+      }
+      Err(e) => {
+        error!(error = ?e, files = count, "batch analysis not queued");
+        result.refused.push(AnalysisBatchRefusal {
+          index: 0,
+          error: e.message().to_string(),
+        });
+      }
+    }
+    result
+  }
+
+  /// Queues the file the download `id` from `username` of the download job `job` finished into
+  /// at `path`, when `analysis.on_download` is on and the file's extension is in
+  /// `analysis.extensions`: a part of the one analysis job that follows the download job.
+  pub async fn downloaded(
+    &self,
+    username: &str,
+    id: Uuid,
+    job: Option<Uuid>,
+    path: &std::path::Path,
+  ) {
     let options = self.config.current();
     let analysis = &options.values.analysis;
     if !analysis.on_download || !listed(&analysis.extensions, path) {
@@ -157,35 +345,400 @@ impl Analysis {
       username: username.to_string(),
       id,
     };
-    let queued = match self.files.local_file(&target).await {
-      Ok(file) => self.enqueue(file, false).await,
-      Err(e) => Err(e),
+    let file = match self.files.local_file(&target).await {
+      Ok(file) => file,
+      Err(e) => {
+        return warn!(path = %path.display(), error = ?e, "finished download not queued for analysis");
+      }
     };
-    match queued {
-      Ok(Queued::Job(_)) => {
-        self.full.store(false, Ordering::Relaxed);
+    match self.is_current(&file).await {
+      Ok(true) => return debug!(path = %path.display(), "finished download analyzed already"),
+      Ok(false) => {}
+      Err(e) => {
+        return warn!(path = %path.display(), error = ?e, "finished download not queued for analysis");
       }
-      Ok(Queued::Current | Queued::Already) => {
-        debug!(path = %path.display(), "finished download analyzed or queued already");
-      }
-      Ok(Queued::Full) => {
-        if !self.full.swap(true, Ordering::Relaxed) {
-          warn!(
-            path = %path.display(),
-            limit = QUEUE_LIMIT,
-            "analysis queue full; finished downloads are not analyzed until it has room"
-          );
+    }
+    let part = Target::of(&target, &file);
+    let added = match job {
+      Some(download_job) => self.follow(download_job, part).await,
+      None => self
+        .start_job(
+          vec![part],
+          false,
+          JobStarter::of(JobStarterKind::Download),
+          None,
+        )
+        .await
+        .map(drop),
+    };
+    if let Err(e) = added {
+      warn!(path = %path.display(), error = ?e, "finished download not queued for analysis");
+    }
+  }
+
+  /// Adds `part` to the analysis job that follows the download job `download_job`, made when
+  /// there is none yet.
+  async fn follow(&self, download_job: Uuid, part: Target) -> Result<(), ApiError> {
+    // one follower is made at a time, so two files of a job do not make two
+    let _making = self.making.lock().await;
+    let followers = self
+      .jobs
+      .unended(JobKind::Analysis)
+      .await
+      .map_err(ApiError::internal)?;
+    let Some(follower) = followers
+      .into_iter()
+      .find(|job| job.follows == Some(download_job))
+    else {
+      let name = match self.jobs.get(download_job).await {
+        Ok(Some(job)) => format!("Analyze {}", job.name),
+        _ => job_name(std::slice::from_ref(&part)),
+      };
+      return self
+        .start_named(
+          name,
+          vec![part],
+          false,
+          JobStarter::of(JobStarterKind::Download),
+          Some(download_job),
+        )
+        .await
+        .map(drop);
+    };
+    let mut new = part.part();
+    // a file joining a paused job is held with the rest
+    if follower.state == JobState::Paused {
+      new.state = JobPartState::Paused;
+    }
+    let job = follower.id;
+    let ids = self
+      .jobs
+      .database()
+      .write(move |conn| job_store::add_parts(conn, job, &[new]))
+      .await
+      .map_err(ApiError::internal)?;
+    let queued = part.listed(ids[0], follower.created_at);
+    self.settle(job).await;
+    self.live.publish(LiveFrame::FilesAnalysisQueued(queued));
+    self.wake.notify_one();
+    Ok(())
+  }
+
+  /// Tells that the download job `job` ended, so the analysis job following it ends once its
+  /// files are done.
+  pub async fn download_job_ended(&self, job: Uuid) {
+    match self.jobs.unended(JobKind::Analysis).await {
+      Ok(followers) => {
+        for follower in followers.into_iter().filter(|f| f.follows == Some(job)) {
+          self.settle(follower.id).await;
         }
       }
-      Err(e) => {
-        warn!(path = %path.display(), error = ?e, "finished download not queued for analysis")
-      }
+      Err(e) => warn!(%job, error = %e, "the analysis following a download job not checked"),
+    }
+  }
+
+  /// Makes a job of `targets` named after them and wakes the queue; returns its id.
+  async fn start_job(
+    &self,
+    targets: Vec<Target>,
+    force: bool,
+    starter: JobStarter,
+    follows: Option<Uuid>,
+  ) -> Result<Uuid, ApiError> {
+    let name = job_name(&targets);
+    self
+      .start_named(name, targets, force, starter, follows)
+      .await
+  }
+
+  async fn start_named(
+    &self,
+    name: String,
+    targets: Vec<Target>,
+    force: bool,
+    starter: JobStarter,
+    follows: Option<Uuid>,
+  ) -> Result<Uuid, ApiError> {
+    let first = targets.first().cloned();
+    let parts: Vec<NewPart> = targets.iter().map(Target::part).collect();
+    let new = NewJob {
+      id: Uuid::new_v4(),
+      kind: JobKind::Analysis,
+      name,
+      starter,
+      state: JobState::Queued,
+      follows,
+      data: Some(serde_json::json!({ "force": force })),
+    };
+    let (job, ids) = self
+      .jobs
+      .create_with_parts(new, parts)
+      .await
+      .map_err(ApiError::internal)?;
+    debug!(job = %job.id, files = job.counts.total, "analysis queued");
+    // a client that sees nothing waiting or running stops reading the queue until this says
+    if let (Some(first), Some(id)) = (first, ids.first()) {
+      self.live.publish(LiveFrame::FilesAnalysisQueued(
+        first.listed(*id, job.created_at),
+      ));
+    }
+    self.wake.notify_one();
+    Ok(job.id)
+  }
+
+  /// The queue: the files being analyzed, then the first of those waiting, and how many more
+  /// wait.
+  pub(super) async fn queue(&self) -> Result<AnalysisQueue, ApiError> {
+    let mut jobs: Vec<AnalysisJob> = lock(&self.running).iter().map(Running::listed).collect();
+    let (taken, (waiting, total)) = self
+      .jobs
+      .database()
+      .read(|conn| {
+        let total: i64 = conn.query_row(
+          "SELECT COUNT(*) FROM job_parts p JOIN jobs j ON j.id = p.job_id \
+           WHERE j.kind = 'analysis' AND p.state = 'waiting'",
+          [],
+          |row| row.get(0),
+        )?;
+        let waiting = job_store::parts_in(
+          conn,
+          JobPartState::Waiting,
+          &[JobState::Queued, JobState::Running],
+          LISTED,
+        )?;
+        let mut listed = Vec::with_capacity(waiting.len());
+        for part in waiting {
+          let at = job_store::get(conn, part.job)?.map_or_else(Utc::now, |job| job.created_at);
+          listed.push((part, at));
+        }
+        // a file is running here from when it is taken until its worker starts
+        let taken = job_store::parts_in(
+          conn,
+          JobPartState::Running,
+          &[JobState::Queued, JobState::Running, JobState::Paused],
+          LISTED,
+        )?;
+        Ok((taken, (listed, total)))
+      })
+      .await
+      .map_err(ApiError::internal)?;
+    let started: Vec<Uuid> = jobs.iter().map(|j| j.id).collect();
+    jobs.extend(
+      taken
+        .into_iter()
+        .filter(|part| !started.contains(&part.id))
+        .filter_map(|part| {
+          let target = self.target_of(&part)?;
+          Some(AnalysisJob {
+            state: AnalysisJobState::Running,
+            ..target.listed(part.id, Utc::now())
+          })
+        }),
+    );
+    let shown = waiting.len();
+    jobs.extend(
+      waiting
+        .into_iter()
+        .filter_map(|(part, at)| Some(self.target_of(&part)?.listed(part.id, at))),
+    );
+    let more = usize::try_from(total).unwrap_or(0).saturating_sub(shown);
+    Ok(AnalysisQueue {
+      jobs,
+      backlog: u32::try_from(more).unwrap_or(u32::MAX),
+    })
+  }
+
+  /// Cancels the waiting or running file `part`, or every file of the analysis job `part`
+  /// names; 404 when it is neither.
+  pub(super) async fn cancel_part(&self, part: Uuid) -> Result<(), ApiError> {
+    if let Ok(Some(job)) = self.jobs.get(part).await
+      && job.kind == JobKind::Analysis
+      && job.state != JobState::Ended
+    {
+      return self.cancel_job_files(part).await;
+    }
+    if let Some(running) = lock(&self.running).iter().find(|r| r.part == part) {
+      // the worker sees it at its next window and ends the part itself
+      running.cancel.cancel();
+      return Ok(());
+    }
+    let ended = self
+      .jobs
+      .database()
+      .write(move |conn| {
+        let Some(stored) = job_store::part_by_id(conn, part)? else {
+          return Ok(None);
+        };
+        if !matches!(
+          stored.part.state,
+          JobPartState::Waiting | JobPartState::Paused
+        ) {
+          return Ok(None);
+        }
+        job_store::set_part(conn, part, JobPartState::Canceled, None)?;
+        Ok(Some(stored.job))
+      })
+      .await
+      .map_err(ApiError::internal)?;
+    let job = ended.ok_or_else(|| ApiError::not_found(format!("No analysis job {part}")))?;
+    debug!(%part, "queued analysis taken off the queue");
+    self.settle(job).await;
+    Ok(())
+  }
+
+  /// Cancels every waiting file of every analysis job; the running ones go on.
+  pub(super) async fn cancel_waiting(&self) -> Result<(), ApiError> {
+    let jobs = self
+      .jobs
+      .unended(JobKind::Analysis)
+      .await
+      .map_err(ApiError::internal)?;
+    for job in jobs {
+      let id = job.id;
+      self
+        .jobs
+        .database()
+        .write(move |conn| {
+          job_store::set_parts(conn, id, JobPartState::Waiting, JobPartState::Canceled)?;
+          job_store::set_parts(conn, id, JobPartState::Paused, JobPartState::Canceled)
+        })
+        .await
+        .map_err(ApiError::internal)?;
+      self.settle(id).await;
+    }
+    Ok(())
+  }
+
+  /// Cancels the analysis job `job`: its waiting files and the one running.
+  pub async fn cancel_job_files(&self, job: Uuid) -> Result<(), ApiError> {
+    self
+      .jobs
+      .database()
+      .write(move |conn| {
+        job_store::set_parts(conn, job, JobPartState::Waiting, JobPartState::Canceled)?;
+        job_store::set_parts(conn, job, JobPartState::Paused, JobPartState::Canceled)
+      })
+      .await
+      .map_err(ApiError::internal)?;
+    for running in lock(&self.running).iter().filter(|r| r.job == job) {
+      running.cancel.cancel();
+    }
+    info!(%job, "analysis job canceled");
+    self.settle(job).await;
+    Ok(())
+  }
+
+  /// Pauses the analysis job `job`: the file it is on is finished and the rest held.
+  pub async fn pause_job(&self, job: Uuid) -> Result<(), ApiError> {
+    self
+      .jobs
+      .database()
+      .write(move |conn| {
+        job_store::set_parts(conn, job, JobPartState::Waiting, JobPartState::Paused)
+      })
+      .await
+      .map_err(ApiError::internal)?;
+    self.settle(job).await;
+    info!(%job, "analysis job paused");
+    Ok(())
+  }
+
+  /// Resumes the paused analysis job `job`.
+  pub async fn resume_job(&self, job: Uuid) -> Result<(), ApiError> {
+    self
+      .jobs
+      .database()
+      .write(move |conn| {
+        job_store::set_parts(conn, job, JobPartState::Paused, JobPartState::Waiting)
+      })
+      .await
+      .map_err(ApiError::internal)?;
+    self.settle(job).await;
+    info!(%job, "analysis job resumed");
+    self.wake.notify_one();
+    Ok(())
+  }
+
+  /// Analyzes the files of the ended analysis job `job` that failed or were canceled again, as
+  /// a new job started by the user; returns its id. 409 when there are none.
+  pub async fn run_again(&self, job: Uuid) -> Result<Uuid, ApiError> {
+    let parts = self
+      .jobs
+      .database()
+      .read(move |conn| job_store::parts(conn, job))
+      .await
+      .map_err(ApiError::internal)?;
+    let targets: Vec<Target> = parts
+      .into_iter()
+      .filter(|p| matches!(p.part.state, JobPartState::Failed | JobPartState::Canceled))
+      .filter_map(|p| self.target_of(&p))
+      .collect();
+    if targets.is_empty() {
+      return Err(ApiError::conflict("No file of the job failed", None));
+    }
+    self.start_job(targets, true, JobStarter::you(), None).await
+  }
+
+  /// Ends the job `job` when no file of it waits or runs and the download job it follows, if
+  /// any, has ended; else brings its counts up to date.
+  pub(super) async fn settle(&self, job: Uuid) {
+    let started = lock(&self.running).iter().any(|r| r.job == job);
+    let found = self
+      .jobs
+      .database()
+      .read(move |conn| {
+        let Some(found) = job_store::get(conn, job)? else {
+          return Ok(None);
+        };
+        let counts = job_store::counts(conn, job)?;
+        let (waiting, taken) = job_store::open_parts(conn, job)?;
+        let follows_open = match found.follows {
+          Some(followed) => {
+            job_store::get(conn, followed)?.is_some_and(|f| f.state != JobState::Ended)
+          }
+          None => false,
+        };
+        Ok(Some((counts, waiting, taken, follows_open)))
+      })
+      .await;
+    let (counts, waiting, taken, follows_open) = match found {
+      Ok(Some(found)) => found,
+      Ok(None) => return,
+      Err(e) => return warn!(%job, error = %e, "analysis job not checked"),
+    };
+    // a file taken but not yet started is running in the database alone
+    let running = started || taken > 0;
+    let open = counts.total.saturating_sub(counts.ended());
+    let result = if open == 0 && !running && !follows_open {
+      self
+        .jobs
+        .end(
+          job,
+          Ended {
+            counts: Some(counts),
+            ..Ended::default()
+          },
+        )
+        .await
+        .map(drop)
+    } else {
+      let state = if counts.paused > 0 && waiting == 0 {
+        JobState::Paused
+      } else if running {
+        JobState::Running
+      } else {
+        JobState::Queued
+      };
+      self.jobs.set_counts(job, counts, state).await.map(drop)
+    };
+    if let Err(e) = result {
+      warn!(%job, error = %e, "analysis job not updated");
     }
   }
 }
 
 /// Whether the extension of `path` is one of `extensions`, ignoring case.
-fn listed(extensions: &[String], path: &Path) -> bool {
+fn listed(extensions: &[String], path: &std::path::Path) -> bool {
   path
     .extension()
     .and_then(|extension| extension.to_str())
@@ -196,270 +749,11 @@ fn listed(extensions: &[String], path: &Path) -> bool {
     })
 }
 
-/// Starts queued jobs whenever a worker is free, until the daemon stops.
-pub(super) async fn dispatch(analysis: Arc<Analysis>) {
-  let mut changes = analysis.config.changes();
-  loop {
-    start_free(&analysis);
-    if analysis.feed().await {
-      start_free(&analysis);
-    }
-    tokio::select! {
-      () = analysis.shutdown.cancelled() => return,
-      () = analysis.wake.notified() => {}
-      change = changes.recv() => match change {
-        Ok(change) => {
-          let limits = |options: &Options| {
-            let analysis = &options.analysis;
-            (analysis.cache_max_bytes, analysis.upload_cache_max_bytes)
-          };
-          let (pictures, uploads) = limits(&change.current.values);
-          let (were_pictures, were_uploads) = limits(&change.previous.values);
-          if pictures < were_pictures || uploads < were_uploads {
-            analysis.evict().await;
-          }
-        }
-        Err(RecvError::Lagged(_)) => analysis.evict().await,
-        Err(RecvError::Closed) => return,
-      },
-    }
-  }
-}
-
-/// Starts as many waiting jobs as there are free workers.
-fn start_free(analysis: &Arc<Analysis>) {
-  // validation keeps a set count between 1 and the number of processors
-  let workers = analysis.config.current().values.analysis.workers.count() as usize;
-  loop {
-    let job = {
-      let mut queue = lock(&analysis.queue);
-      if queue.running.len() >= workers {
-        return;
-      }
-      let Some(mut job) = queue.waiting.pop_front() else {
-        return;
-      };
-      job.started_at = Some(Utc::now());
-      queue.running.push(job.clone());
-      debug!(job = %job.id, running = queue.running.len(), workers, "analysis job taken");
-      job
-    };
-    let span = info_span!("analysis", job = %job.id, path = %job.file.path.display());
-    tokio::spawn(run(analysis.clone(), job).instrument(span));
-  }
-}
-
-/// How an analysis runs under the options now.
-fn settings(options: &Options, progress: Arc<AtomicU32>) -> Settings {
-  let analysis = &options.analysis;
-  Settings {
-    max_full_seconds: f64::from(analysis.max_full_minutes) * 60.0,
-    sampled_windows: analysis.sampled_windows as usize,
-    deadline: Instant::now() + analysis.timeout,
-    progress: Some(progress),
-  }
-}
-
-/// Runs one job and takes it off the queue.
-async fn run(analysis: Arc<Analysis>, job: Job) {
-  let started = Instant::now();
-  info!("analysis of a file started");
-  finish(&analysis, &job, started).await;
-  lock(&analysis.queue)
-    .running
-    .retain(|running| running.id != job.id);
-  analysis.wake.notify_one();
-}
-
-async fn finish(analysis: &Analysis, job: &Job, started: Instant) {
-  let current = analysis.config.current();
-  let settings = settings(&current.values, job.progress.clone());
-  let scale = current.values.analysis.spectrogram.scale.into();
-  let cancel = job.cancel.clone();
-  let file = job.file.clone();
-  let dir = analysis.dir.clone();
-  let modified = modified_text(file.modified);
-  let temporary = file.root == FileRoot::Temporary;
-  let hash = kept_name(&file.path.to_string_lossy(), file.size, &modified);
-  let name = if temporary {
-    uploads::kept_name(&file.relative, &hash)
-  } else {
-    hash
-  };
-  let kept_as = name.clone();
-  let span = tracing::Span::current();
-  let worked = tokio::task::spawn_blocking(move || {
-    let _entered = span.enter();
-    let measured = engine::run(&file.resolved, &settings, &cancel)?;
-    // a job canceled since its last window leaves nothing behind
-    if cancel.is_cancelled() {
-      return Err(engine::Canceled);
-    }
-    let read = reading::read(&measured);
-    let mut problem = None;
-    let drawn = measured.claimed.as_ref().and_then(|claimed| {
-      let max_hz = f64::from(claimed.sample_rate) / 2.0;
-      let contents = kept::contents(&measured.windows, measured.duration, max_hz);
-      match kept::write(&dir, &kept_as, &contents) {
-        Ok(bytes) => {
-          let layout = layout(
-            measured.duration,
-            max_hz,
-            measured.sampled,
-            read.cutoff_hz,
-            scale,
-          );
-          Some((layout, bytes))
-        }
-        Err(e) => {
-          warn!(error = e, "spectrogram not kept");
-          problem = Some(format!("The spectrogram could not be stored: {e}"));
-          None
-        }
-      }
-    });
-    let (layout, bytes) = drawn.unzip();
-    let mut report = assemble(&file, &measured, read, layout, Utc::now());
-    report.limitations.extend(problem);
-    Ok((report, bytes))
-  })
-  .await;
-  let (report, bytes) = match worked {
-    Ok(Ok(done)) => done,
-    Ok(Err(engine::Canceled)) => {
-      debug!("analysis canceled");
-      return;
-    }
-    Err(e) => {
-      error!(error = %e, "analysis worker failed");
-      return;
-    }
-  };
-  let saved = store::save(
-    &analysis.db,
-    store::NewReport {
-      report: &report,
-      modified: &modified,
-      kept: &name,
-    },
-  )
-  .await;
-  if let Err(e) = saved {
-    error!(error = %e, "analysis report not stored");
-    return;
-  }
-  match bytes {
-    Some(bytes) if temporary => {
-      lock(&analysis.held).drawn(&job.file.relative, bytes);
-      analysis.evict_uploads(None).await;
-    }
-    Some(bytes) => keep(analysis, &name, bytes).await,
-    None => {}
-  }
-  info!(
-    verdict = ?report.verdict,
-    confidence = report.confidence,
-    seconds = started.elapsed().as_secs_f64(),
-    "analysis of a file finished"
-  );
-  analysis
-    .live
-    .publish(LiveFrame::FilesAnalysis(AnalysisCompleted {
-      transfer_id: job.file.transfer_id,
-      path: report.path.clone(),
-      verdict: report.verdict,
-      confidence: report.confidence,
-      flags: report.flags.clone(),
-    }));
-  // the event log is history, which a file uploaded for one look stays out of
-  if temporary {
-    return;
-  }
-  let judged = store::find(&analysis.db, &report.path).await;
-  let judgment = match judged {
-    Ok(found) => found.and_then(|stored| stored.report.judgment),
-    Err(e) => {
-      warn!(error = %e, "the judgment of an analyzed file not read for its event");
-      None
-    }
-  };
-  analysis
-    .events
-    .raise(Event::FileAnalysisComplete(FileAnalysisComplete {
-      version: 0,
-      report: Box::new(api_types::analysis::AudioAnalysis {
-        windows: None,
-        judgment,
-        ..report
-      }),
-    }));
-}
-
-/// Records a new spectrogram and waveform file and removes the least recently viewed beyond
-/// `analysis.cache_max_bytes`.
-async fn keep(analysis: &Analysis, name: &str, bytes: u64) {
-  if let Err(e) = store::used(&analysis.db, name, Some(bytes), Utc::now()).await {
-    error!(error = %e, "spectrogram not recorded");
-    return;
-  }
-  analysis.evict_pictures().await;
-}
-
-impl Analysis {
-  /// Removes the oldest uploads beyond `analysis.upload_cache_max_bytes` and the least recently
-  /// viewed spectrogram and waveform files beyond `analysis.cache_max_bytes`.
-  pub(super) async fn evict(&self) {
-    self.evict_uploads(None).await;
-    self.evict_pictures().await;
-  }
-
-  /// Removes the least recently viewed spectrogram and waveform files of real files beyond
-  /// `analysis.cache_max_bytes`.
-  async fn evict_pictures(&self) {
-    let limit = self
-      .config
-      .current()
-      .values
-      .analysis
-      .cache_max_bytes
-      .as_u64();
-    let gone = match store::evict(&self.db, limit).await {
-      Ok(gone) => gone,
-      Err(e) => {
-        error!(error = %e, "spectrograms over the limit not removed");
-        return;
-      }
-    };
-    if gone.is_empty() {
-      return;
-    }
-    debug!(
-      files = gone.len(),
-      limit, "spectrograms over the limit removed"
-    );
-    let dir = self.dir.clone();
-    let removed = tokio::task::spawn_blocking(move || {
-      for name in gone {
-        let path = kept::path(&dir, &name);
-        if let Err(e) = std::fs::remove_file(&path)
-          && e.kind() != std::io::ErrorKind::NotFound
-        {
-          warn!(path = %path.display(), error = %e, "spectrogram not removed");
-        }
-      }
-    })
-    .await;
-    if let Err(e) = removed {
-      error!(error = %e, "removing spectrograms failed");
-    }
-  }
-}
-
 #[cfg(test)]
 mod tests {
   use std::path::Path;
 
-  use super::listed;
+  use super::{common_folder, listed};
 
   #[test]
   fn listed_extensions_match_without_case_and_only_the_last_one() {
@@ -469,5 +763,13 @@ mod tests {
     assert!(!listed(&extensions, Path::new("/d/a.flac.mp3")));
     assert!(!listed(&extensions, Path::new("/d/flac")));
     assert!(!listed(&[], Path::new("/d/a.flac")));
+  }
+
+  #[test]
+  fn a_batch_is_named_by_its_deepest_common_folder() {
+    let folder = |paths: &[&'static str]| common_folder(paths.iter().copied());
+    assert_eq!(folder(&["A/Album/1.flac", "A/Album/CD2/1.flac"]), "A/Album");
+    assert_eq!(folder(&["A/Album/1.flac", "A/Albums/1.flac"]), "A");
+    assert_eq!(folder(&["1.flac", "A/2.flac"]), "");
   }
 }

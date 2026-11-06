@@ -5,7 +5,7 @@ use std::path::Path;
 
 use api_types::application::DatabaseFile;
 use async_trait::async_trait;
-use tracing::{info, warn};
+use tracing::{debug, warn};
 
 use crate::api::error::ApiError;
 use crate::db::Database;
@@ -78,16 +78,41 @@ impl ApplicationService for Databases {
     }
     Ok(files)
   }
+}
 
-  async fn vacuum(&self, name: &str) -> Result<(), ApiError> {
+impl Databases {
+  /// The names of the database files, as the Data tab lists them.
+  pub fn names(&self) -> Vec<String> {
+    self
+      .list
+      .iter()
+      .filter_map(|db| db.path().and_then(stem))
+      .collect()
+  }
+
+  /// Rebuilds the database file `name` without its free pages; returns how many bytes the
+  /// file and its write-ahead log shrank by. 404 for a name no file has.
+  pub async fn vacuum(&self, name: &str) -> Result<u64, ApiError> {
     let db = self
       .named(name)
       .ok_or_else(|| ApiError::not_found(format!("No database named {name}")))?;
+    let before = on_disk(db).await;
     db.vacuum().await.map_err(|e| {
       warn!(database = name, error = %e, "database not vacuumed");
       ApiError::internal(e).logged()
     })?;
-    info!(database = name, "database vacuumed");
-    Ok(())
+    let freed = before.saturating_sub(on_disk(db).await);
+    debug!(database = name, freed, "database vacuumed");
+    Ok(freed)
   }
+}
+
+/// The size of `db`'s file and its write-ahead log.
+async fn on_disk(db: &Database) -> u64 {
+  let Some(path) = db.path() else {
+    return 0;
+  };
+  let mut wal = path.as_os_str().to_owned();
+  wal.push("-wal");
+  size(path).await + size(Path::new(&wal)).await
 }

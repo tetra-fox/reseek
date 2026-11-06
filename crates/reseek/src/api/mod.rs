@@ -9,6 +9,7 @@ pub mod error;
 mod events;
 pub mod extract;
 mod files;
+mod jobs;
 mod live;
 mod messaging;
 mod options;
@@ -67,6 +68,7 @@ use crate::app::AppState;
     (name = "live", description = "The event stream"),
     (name = "searches", description = "Searches we start on the network"),
     (name = "transfers", description = "Downloads and uploads"),
+    (name = "jobs", description = "Downloads, share scans, analyses and maintenance as jobs, and the schedules"),
     (name = "users", description = "Other users and the directory of users we know"),
     (name = "blocking", description = "Blocked users"),
     (name = "conversations", description = "Private messages"),
@@ -90,6 +92,7 @@ fn routes() -> OpenApiRouter<AppState> {
     .merge(application::routes())
     .merge(searches::routes())
     .merge(transfers::routes())
+    .merge(jobs::routes())
     .merge(users::routes())
     .merge(messaging::routes())
     .merge(shares::routes())

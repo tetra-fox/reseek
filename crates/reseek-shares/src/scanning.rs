@@ -5,15 +5,17 @@
 use super::*;
 
 impl Shares {
-  /// Starts a scan in the background, reading every file again with `force`.
-  pub fn scan(&self, force: bool) -> Result<(), ScanConflict> {
+  /// Starts a scan in the background, reading every file again with `force`, told to
+  /// [`Setup::scans`](crate::Setup::scans) as started by `origin`.
+  pub fn scan(&self, force: bool, origin: ScanOrigin) -> Result<(), ScanConflict> {
     let shares = self
       .this
       .upgrade()
       .expect("the engine is only made inside the Arc it refers to");
     let cancel = self.take_slot().ok_or(ScanConflict::Running)?;
     tokio::spawn(
-      async move { shares.run_scan(force, cancel).await }.instrument(info_span!("scan", force)),
+      async move { shares.run_scan(force, origin, cancel).await }
+        .instrument(info_span!("scan", force)),
     );
     Ok(())
   }
@@ -41,16 +43,25 @@ impl Shares {
     }
   }
 
-  /// Runs a scan whose slot is taken, and frees it at the end.
-  pub(super) async fn run_scan(self: &Arc<Self>, force: bool, cancel: CancellationToken) -> bool {
-    let completed = self.scan_now(force, cancel).await;
+  /// Runs a scan whose slot is taken, telling the hook as it starts and ends, and frees the
+  /// slot once the hook was told of the end.
+  pub(super) async fn run_scan(
+    self: &Arc<Self>,
+    force: bool,
+    origin: ScanOrigin,
+    cancel: CancellationToken,
+  ) -> bool {
+    (self.scans)(ScanNotice::Started { force, origin }).await;
+    let ended = self.scan_now(force, cancel).await;
+    let completed = matches!(ended, ScanEnded::Completed(_));
+    // the hook hears of the end while the slot is held, so no scan starts between the two
+    (self.scans)(ScanNotice::Ended(ended)).await;
     *lock(&self.running) = None;
     completed
   }
 
-  /// One scan of the configured shares, its outcome put into the state; true when it
-  /// completed.
-  async fn scan_now(self: &Arc<Self>, force: bool, cancel: CancellationToken) -> bool {
+  /// One scan of the configured shares, its outcome put into the state.
+  async fn scan_now(self: &Arc<Self>, force: bool, cancel: CancellationToken) -> ScanEnded {
     let started = Instant::now();
     // a scan that does not complete leaves the index served before it, so its state stays
     let before = lock(&self.status).clone();
@@ -132,11 +143,11 @@ impl Shares {
             self.counts.send_replace(self.server_counts());
             *lock(&self.counts_throttle.last) = Some(Instant::now());
             self.changed.send_modify(|n| *n += 1);
-            true
+            ScanEnded::Completed(totals)
           }
           Err(e) => {
             self.faulted(&e.to_string(), &before);
-            false
+            ScanEnded::Failed(e.to_string())
           }
         }
       }
@@ -151,17 +162,17 @@ impl Shares {
           status.directories = before.directories;
           status.files = before.files;
         });
-        false
+        ScanEnded::Canceled
       }
       Err(e) => {
         self.faulted(&e.to_string(), &before);
-        false
+        ScanEnded::Failed(e.to_string())
       }
     };
     self.check_unmatched();
     self.refresh_browse_caches().await;
     *lock(&self.browse_throttle.last) = Some(Instant::now());
-    if completed {
+    if matches!(completed, ScanEnded::Completed(_)) {
       self.watch_shares(settings).await;
     }
     completed

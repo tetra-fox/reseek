@@ -16,7 +16,6 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use serde_json::{Value, json};
 
 use super::analyzer::fixtures::{flac, music, pink, write_flac};
-use super::jobs::QUEUE_LIMIT;
 use crate::testing::{TRUSTED, TestApp, app, request, with};
 use crate::transfers::{Record, store as transfers};
 
@@ -118,7 +117,7 @@ async fn a_download_is_analyzed_reported_drawn_and_announced_once() {
     .iter()
     .find(|frame| frame.event == "files.analysis_queued")
     .unwrap_or_else(|| panic!("no frame said the file was queued: {frames:?}"));
-  assert_eq!(queued.data["id"], created["jobId"]);
+  assert_eq!(queued.data["relativePath"], "Album/01.flac");
   assert_eq!(queued.data["relativePath"], "Album/01.flac");
   let frame = &frames.last().unwrap().data;
   assert_eq!(frame["transferId"], json!(id));
@@ -435,18 +434,21 @@ async fn a_queued_analysis_can_be_canceled_and_a_window_read() {
     .as_array()
     .unwrap()
     .iter()
-    .map(|j| j["id"].as_str().unwrap())
+    .map(|j| j["relativePath"].as_str().unwrap())
     .collect();
-  assert!(!listed.contains(&ids[2].as_str()), "{jobs}");
-  // a job names its file as the request did, so any client can find the file's job
+  assert!(
+    !listed.contains(&"c.flac"),
+    "the canceled job's file left the queue: {jobs}"
+  );
+  // a file in the queue is named as the request named it, so any client can find it
   let waiting = jobs
     .as_array()
     .unwrap()
     .iter()
-    .find(|j| j["id"] == ids[1].as_str())
+    .find(|j| j["relativePath"] == "b.flac")
     .unwrap();
   assert_eq!(waiting["root"], "downloads");
-  assert_eq!(waiting["relativePath"], "b.flac");
+  assert_eq!(waiting["state"], "queued");
   let unknown = format!("/api/v0/analysis/jobs/{}", uuid::Uuid::new_v4());
   assert_eq!(app.call("DELETE", &unknown, None).await.0, 404);
   settled(&app).await;
@@ -515,13 +517,9 @@ async fn a_report_from_an_older_version_lists_as_stale_keeps_its_judgment_and_is
 }
 
 #[tokio::test]
-async fn a_batch_past_the_queue_limit_joins_the_queue_as_it_drains() {
+async fn a_batch_is_one_job_whose_files_are_analyzed_in_turn_and_kept_by_name() {
   let app = app(&format!("{TRUSTED}{ONE_WORKER}"), &[]).await;
-  // the queue holds its limit and the worker one more, so three follow unless the worker
-  // finishes three analyses while the batch is queued; every file is analyzed in turn
-  let names: Vec<String> = (0..QUEUE_LIMIT + 4)
-    .map(|n| format!("batch/{n:02}.flac"))
-    .collect();
+  let names: Vec<String> = (0..6).map(|n| format!("batch/{n:02}.flac")).collect();
   for name in &names {
     lossless(&app, name);
   }
@@ -538,16 +536,7 @@ async fn a_batch_past_the_queue_limit_joins_the_queue_as_it_drains() {
     )
     .await;
   assert_eq!(status, 202, "{answer}");
-  let count = |key: &str| answer[key].as_u64().unwrap();
-  assert_eq!(
-    count("queued") + count("following"),
-    names.len() as u64,
-    "{answer}"
-  );
-  assert!(
-    count("following") > 0,
-    "the queue took every file: {answer}"
-  );
+  assert_eq!(answer["queued"], 6, "{answer}");
   let refused: Vec<u64> = answer["refused"]
     .as_array()
     .unwrap()
@@ -555,20 +544,35 @@ async fn a_batch_past_the_queue_limit_joins_the_queue_as_it_drains() {
     .map(|refusal| refusal["index"].as_u64().unwrap())
     .collect();
   assert_eq!(refused, [0, 1], "{answer}");
+  let job = answer["jobId"].as_str().unwrap().to_string();
 
   settled(&app).await;
   for name in &names {
     let (status, report) = app.call("GET", &route(name), None).await;
     assert_eq!(status, 200, "{name} was not analyzed: {report}");
   }
+  let (_, detail) = app.call("GET", &format!("/api/v0/jobs/{job}"), None).await;
+  assert_eq!(detail["job"]["name"], "Analyze batch", "{detail}");
+  assert_eq!(detail["job"]["ending"], "succeeded", "{detail}");
+  assert_eq!(detail["job"]["counts"]["succeeded"], 6, "{detail}");
+  let parts: Vec<&str> = detail["parts"]
+    .as_array()
+    .unwrap()
+    .iter()
+    .map(|part| part["name"].as_str().unwrap())
+    .collect();
+  assert_eq!(
+    parts,
+    [
+      "00.flac", "01.flac", "02.flac", "03.flac", "04.flac", "05.flac"
+    ]
+  );
 }
 
 #[tokio::test]
-async fn a_batchs_backlog_shows_in_the_queue_and_goes_when_it_is_cleared() {
+async fn clearing_the_queue_cancels_the_waiting_files_and_the_running_one_goes_on() {
   let app = app(&format!("{TRUSTED}{ONE_WORKER}"), &[]).await;
-  let names: Vec<String> = (0..QUEUE_LIMIT + 20)
-    .map(|n| format!("batch/{n:02}.flac"))
-    .collect();
+  let names: Vec<String> = (0..20).map(|n| format!("batch/{n:02}.flac")).collect();
   for name in &names {
     lossless(&app, name);
   }
@@ -584,10 +588,6 @@ async fn a_batchs_backlog_shows_in_the_queue_and_goes_when_it_is_cleared() {
     )
     .await;
   assert_eq!(status, 202, "{answer}");
-  let (_, queue) = app.call("GET", "/api/v0/analysis/jobs", None).await;
-  // the worker may have finished a file or two since, each making room for one
-  assert!(queue["backlog"].as_u64().unwrap() > 10, "{queue}");
-
   let (status, _) = app.call("DELETE", "/api/v0/analysis/jobs", None).await;
   assert_eq!(status, 204);
   let (_, queue) = app.call("GET", "/api/v0/analysis/jobs", None).await;
@@ -599,7 +599,16 @@ async fn a_batchs_backlog_shows_in_the_queue_and_goes_when_it_is_cleared() {
   );
   settled(&app).await;
   let (status, _) = app.call("GET", &route(names.last().unwrap()), None).await;
-  assert_eq!(status, 404, "a file of the backlog was not analyzed");
+  assert_eq!(status, 404, "a waiting file was not analyzed");
+  let job = answer["jobId"].as_str().unwrap();
+  let (_, detail) = app.call("GET", &format!("/api/v0/jobs/{job}"), None).await;
+  let counts = &detail["job"]["counts"];
+  assert_eq!(detail["job"]["state"], "ended", "{detail}");
+  assert_eq!(
+    counts["canceled"].as_u64().unwrap() + counts["succeeded"].as_u64().unwrap(),
+    20,
+    "{detail}"
+  );
 }
 
 /// Uploads `body` for analysis as a file named `name`.

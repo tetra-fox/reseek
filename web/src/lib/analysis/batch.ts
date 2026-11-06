@@ -25,8 +25,6 @@ export const analyzableDownload = (t: Transfer) =>
 /** What queuing a batch came to: how many were queued and why the rest were not */
 type BatchResult = {
   queued: number;
-  /** kept past the queue's limit by the daemon, which queues them as the queue drains */
-  following: number;
   /** downloads that have not succeeded */
   unfinished: number;
   /** files whose extension is not in the analysis extensions */
@@ -48,12 +46,11 @@ const named = (t: Target): Schemas["AnalysisTarget"] =>
 
 /**
  * Queues every finished candidate whose extension the analyzer is offered for, in the order they
- * were given; the daemon keeps what its queue has no room for and queues it as the queue drains
+ * were given, as an analysis job of each call
  */
 const queueBatch = async (candidates: Candidate[]): Promise<BatchResult> => {
   const result: BatchResult = {
     queued: 0,
-    following: 0,
     unfinished: 0,
     otherType: 0,
     current: 0,
@@ -77,7 +74,6 @@ const queueBatch = async (candidates: Candidate[]): Promise<BatchResult> => {
       continue;
     }
     result.queued += outcome.data.queued;
-    result.following += outcome.data.following;
     result.current += outcome.data.current;
     for (const refusal of outcome.data.refused) {
       result.failed.push(`${part[refusal.index]?.name ?? "a file"}: ${refusal.error}`);
@@ -86,7 +82,7 @@ const queueBatch = async (candidates: Candidate[]): Promise<BatchResult> => {
   return result;
 };
 
-/** A batch's result in words: what was queued and what follows, then what was skipped and why */
+/** A batch's result in words: what was queued, then what was skipped and why */
 const batchSummary = (r: BatchResult): string => {
   const reasons = [
     r.unfinished ? `${r.unfinished} not finished` : "",
@@ -97,12 +93,9 @@ const batchSummary = (r: BatchResult): string => {
   const queued = r.queued
     ? `${plural(r.queued, "file", "files")} queued for analysis`
     : "No files queued for analysis";
-  const following = r.following
-    ? `, ${r.following.toLocaleString()} more will follow as the queue drains`
-    : "";
   return skipped
-    ? `${queued}${following}. ${plural(skipped, "file", "files")} skipped: ${listText(reasons)}.`
-    : `${queued}${following}`;
+    ? `${queued}. ${plural(skipped, "file", "files")} skipped: ${listText(reasons)}.`
+    : queued;
 };
 
 /**
@@ -114,5 +107,5 @@ export const analyzeBatch = async (candidates: Candidate[], empty: string) => {
   const result = await queueBatch(candidates);
   void jobs.refresh();
   if (result.failed.length) toast(`Could not queue ${result.failed.join("; ")}`, "error");
-  if (result.queued || result.following || !result.failed.length) toast(batchSummary(result));
+  if (result.queued || !result.failed.length) toast(batchSummary(result));
 };

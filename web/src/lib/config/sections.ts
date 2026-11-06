@@ -290,7 +290,7 @@ export const sections: Section[] = [
       { key: "shares.trusted_only", label: "Shares only trusted buddies see, by alias" },
       { key: "shares.filters", label: "Excluded files", control: "regex-list" },
       { key: "shares.follow_symlinks", label: "Follow symbolic links" },
-      { key: "shares.cache.retention", label: "Rescan interval", placeholder: "never" },
+      { key: "shares.cache.retention", label: "Rescan", placeholder: "off, 12h or 7d at 04:00" },
       {
         key: "shares.cache.storage_mode",
         label: "Share index storage"
@@ -449,6 +449,11 @@ export const sections: Section[] = [
           key: "notifications.buddies.presence",
           label: "A buddy came online, went away or offline"
         }
+      ]),
+      ...under("Jobs", [
+        { key: "notifications.jobs.scans", label: "Share scans finished" },
+        { key: "notifications.jobs.analysis", label: "Analyses finished" },
+        { key: "notifications.jobs.maintenance", label: "Cleanups and vacuums finished" }
       ])
     ]
   },
@@ -573,11 +578,25 @@ export const sections: Section[] = [
         { key: "retention.messages.mentions", label: "Mentions" },
         { key: "retention.messages.max_per_room", label: "Maximum per room", min: 0 }
       ]),
+      ...under("Jobs", [
+        { key: "retention.jobs.age", label: "Ended jobs" },
+        { key: "retention.jobs.count", label: "Maximum ended jobs", min: 0 }
+      ]),
       ...under("Users", [
         { key: "retention.users", label: "Users not seen" },
         { key: "users.cache_pictures", label: "Keep profile pictures" },
         { key: "users.picture_max_bytes", label: "Largest profile picture kept" }
       ])
+    ]
+  },
+  {
+    id: "schedules",
+    title: "Schedules",
+    group: "Storage",
+    fields: [
+      { key: "schedules.cleanup", label: "Cleanup", placeholder: "off, 5m or 1d at 04:00" },
+      { key: "schedules.vacuum", label: "Database vacuum", placeholder: "off, 7d at 04:00" },
+      { key: "schedules.release_check", label: "Release check", placeholder: "off, 1d" }
     ]
   },
   {

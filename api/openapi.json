@@ -156,7 +156,7 @@
         "tags": [
           "analysis"
         ],
-        "summary": "Queues many files for analysis in their order, each left alone when its report is current.\nWhat the queue has no room for is kept and joins it as it drains.",
+        "summary": "Queues many files for analysis in their order as one analysis job, each left alone when its\nreport is current or it is queued already.",
         "operationId": "run_batch",
         "requestBody": {
           "content": {
@@ -227,7 +227,7 @@
         "tags": [
           "analysis"
         ],
-        "summary": "The analyses queued and running, and how many files of batches wait for room in the queue.",
+        "summary": "The files being analyzed and the first of those waiting, and how many more wait.",
         "operationId": "jobs",
         "responses": {
           "200": {
@@ -632,7 +632,7 @@
         "tags": [
           "application"
         ],
-        "summary": "Rebuilds a database file without its free pages, then empties its write-ahead log into\nit.",
+        "summary": "Rebuilds a database file without its free pages, then empties its write-ahead log into\nit, as a maintenance job of its own; answers once the job has ended.",
         "operationId": "vacuum_database",
         "parameters": [
           {
@@ -4550,6 +4550,604 @@
         }
       }
     },
+    "/api/v0/jobs": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Every job: running and paused ones first, then queued ones, then the ended ones newest\nfirst, as many as `retention.jobs` keeps.",
+        "operationId": "list_jobs",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "query",
+            "description": "only jobs of this kind",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/JobKind"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "description": "only jobs in this state",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/JobState"
+            }
+          },
+          {
+            "name": "starter",
+            "in": "query",
+            "description": "only jobs started by this kind of starter",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/JobStarterKind"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "only jobs whose name holds this text, ignoring case",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Takes every ended job out of the list.",
+        "operationId": "clear_ended_jobs",
+        "responses": {
+          "204": {
+            "description": "cleared"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/jobs/schedules": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Every schedule, as the schedules card shows it: what it does, how often, its last and its\nnext run.",
+        "operationId": "list_schedules",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/JobSchedule"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/jobs/schedules/{name}/run": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Runs a schedule now, started by the user; its next run stays where it was. 409 while it\nruns.",
+        "operationId": "run_schedule",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "the schedule's name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "started"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/jobs/{id}": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "A job with its parts; a running download job's parts are its downloads.",
+        "operationId": "job_detail",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "the job's id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Takes an ended job out of the list; 409 for a job that has not ended.",
+        "operationId": "remove_job",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "the job's id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "removed"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/jobs/{id}/cancel": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Cancels a job: a download job's downloads, an analysis job's files, the share scan, or a\nmaintenance run between its steps. 409 for a job that has ended.",
+        "operationId": "cancel_any_job",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "the job's id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "canceled"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/jobs/{id}/pause": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Pauses a download or analysis job. A download job stops the files in progress, keeping what\narrived, and holds the rest; each user forgets its place in their queue. An analysis job\nfinishes the file it is on and holds the rest. 409 for any other job.",
+        "operationId": "pause_job",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "the job's id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "paused"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/jobs/{id}/resume": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Resumes a paused download or analysis job; 409 for any other job.",
+        "operationId": "resume_job",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "the job's id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "resumed"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/jobs/{id}/run-again": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Starts a job that did not succeed again, as a new job; the old one stays in the list. A\ndownload job queues its failed and canceled files again, an analysis job analyzes its failed\nfiles again, a scan or maintenance run runs again. The new job's id is given when it is\nknown at once; a scan's and a maintenance run's show in the list as they start.",
+        "operationId": "run_job_again",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "the job's id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobStarted"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v0/live": {
       "get": {
         "tags": [
@@ -4561,7 +5159,7 @@
           {
             "name": "topics",
             "in": "query",
-            "description": "the topics to follow, comma-separated: `application`, `logs`, `metrics`, `search`,\n`search:<id>`, `transfers`, `conversations`, `rooms`, `users`, `events`, `activity`;\n`application` when left out",
+            "description": "the topics to follow, comma-separated: `application`, `logs`, `metrics`, `search`,\n`search:<id>`, `transfers`, `jobs`, `conversations`, `rooms`, `users`, `events`, `activity`;\n`application` when left out",
             "required": false,
             "schema": {
               "type": "string"
@@ -16246,7 +16844,6 @@
         "description": "The answer to `POST /analysis/batch`: what became of its files.",
         "required": [
           "queued",
-          "following",
           "current",
           "refused"
         ],
@@ -16257,16 +16854,18 @@
             "description": "files left alone because their report is current or they are queued or running already",
             "minimum": 0
           },
-          "following": {
-            "type": "integer",
-            "format": "int32",
-            "description": "files kept past the queue's limit, which join it in their order as it drains; one whose\nreport is current by then is left alone",
-            "minimum": 0
+          "jobId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "the analysis job the files were queued in, null when none was"
           },
           "queued": {
             "type": "integer",
             "format": "int32",
-            "description": "files put in the analysis queue now",
+            "description": "files put in the analysis job",
             "minimum": 0
           },
           "refused": {
@@ -16362,7 +16961,7 @@
           "id": {
             "type": "string",
             "format": "uuid",
-            "description": "the job's id"
+            "description": "the file's id in its analysis job, which cancels it"
           },
           "path": {
             "type": "string",
@@ -16421,7 +17020,7 @@
           "jobId": {
             "type": "string",
             "format": "uuid",
-            "description": "the job's id"
+            "description": "the analysis job's id, as the jobs list shows it"
           }
         }
       },
@@ -16606,7 +17205,7 @@
           "backlog": {
             "type": "integer",
             "format": "int32",
-            "description": "the files of batches past the queue's limit, which join it in their order as it drains",
+            "description": "how many more files wait than are listed",
             "minimum": 0
           },
           "jobs": {
@@ -17314,7 +17913,9 @@
         "enum": [
           "cancel",
           "remove",
-          "retry"
+          "retry",
+          "pause",
+          "resume"
         ]
       },
       "BulkFailure": {
@@ -19191,6 +19792,26 @@
           },
           {
             "type": "object",
+            "description": "a job ended: a download job, a share scan, an analysis or a maintenance run that is listed",
+            "required": [
+              "data",
+              "type"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/JobFinished",
+                "description": "a job ended: a download job, a share scan, an analysis or a maintenance run that is listed"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "JobFinished"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "a test event with no fields, for trying scripts",
             "required": [
               "data",
@@ -19284,6 +19905,7 @@
           "RelayAgentConnected",
           "RelayAgentDisconnected",
           "RelayAgentSharesUpdated",
+          "JobFinished",
           "Noop"
         ]
       },
@@ -20113,6 +20735,538 @@
           }
         }
       },
+      "Job": {
+        "type": "object",
+        "description": "A job, as the list shows it.",
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "starter",
+          "state",
+          "counts",
+          "pausable",
+          "createdAt"
+        ],
+        "properties": {
+          "counts": {
+            "$ref": "#/components/schemas/JobCounts",
+            "description": "how many parts it has and how they ended"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "when it was made"
+          },
+          "endedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "when it ended, null until it does"
+          },
+          "ending": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JobEnding",
+                "description": "how it ended, null until it does"
+              }
+            ]
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "why it failed, when the job itself did"
+          },
+          "follows": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "the download job an analysis job analyzes the files of, null otherwise"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "the job's id; a download job's is the `jobId` of its downloads"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/JobKind",
+            "description": "what it does"
+          },
+          "name": {
+            "type": "string",
+            "description": "what it works on, made from its kind and subject",
+            "example": "Album from alice"
+          },
+          "pausable": {
+            "type": "boolean",
+            "description": "whether it can be paused: a running download or analysis job"
+          },
+          "progress": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "how far a job without parts is, from 0 to 1; null when it does not say"
+          },
+          "startedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "when it first ran, null while queued"
+          },
+          "starter": {
+            "$ref": "#/components/schemas/JobStarter",
+            "description": "who or what started it"
+          },
+          "state": {
+            "$ref": "#/components/schemas/JobState",
+            "description": "where it is"
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "what it came to in words, such as how much a cleanup removed; null when there is nothing\nto say",
+            "example": "Removed 12 finished transfers"
+          }
+        }
+      },
+      "JobCounts": {
+        "type": "object",
+        "description": "How many of a job's parts ended which way.",
+        "required": [
+          "total",
+          "succeeded",
+          "failed",
+          "canceled",
+          "paused"
+        ],
+        "properties": {
+          "canceled": {
+            "type": "integer",
+            "format": "int32",
+            "description": "parts that were canceled",
+            "minimum": 0
+          },
+          "failed": {
+            "type": "integer",
+            "format": "int32",
+            "description": "parts that failed",
+            "minimum": 0
+          },
+          "paused": {
+            "type": "integer",
+            "format": "int32",
+            "description": "parts held by a pause",
+            "minimum": 0
+          },
+          "succeeded": {
+            "type": "integer",
+            "format": "int32",
+            "description": "parts that succeeded",
+            "minimum": 0
+          },
+          "total": {
+            "type": "integer",
+            "format": "int32",
+            "description": "every part",
+            "minimum": 0
+          }
+        }
+      },
+      "JobDetail": {
+        "type": "object",
+        "description": "A job with its parts, as `GET /jobs/{id}` answers it.",
+        "required": [
+          "job",
+          "parts"
+        ],
+        "properties": {
+          "job": {
+            "$ref": "#/components/schemas/Job",
+            "description": "the job"
+          },
+          "parts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/JobPart"
+            },
+            "description": "its parts in their order; a running download job's are read from its downloads"
+          }
+        }
+      },
+      "JobEnding": {
+        "type": "string",
+        "description": "How a job ended.",
+        "enum": [
+          "succeeded",
+          "finished_with_failures",
+          "failed",
+          "canceled"
+        ]
+      },
+      "JobFinished": {
+        "type": "object",
+        "description": "The data of `JobFinished`.",
+        "required": [
+          "version",
+          "id",
+          "kind",
+          "name",
+          "starter",
+          "ending",
+          "counts"
+        ],
+        "properties": {
+          "counts": {
+            "$ref": "#/components/schemas/JobCounts",
+            "description": "how many parts it had and how they ended"
+          },
+          "ending": {
+            "$ref": "#/components/schemas/JobEnding",
+            "description": "how it ended"
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "why it failed, when the job itself did"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "the job's id"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/JobKind",
+            "description": "what it did"
+          },
+          "name": {
+            "type": "string",
+            "description": "what it worked on",
+            "example": "Album from alice"
+          },
+          "starter": {
+            "$ref": "#/components/schemas/JobStarter",
+            "description": "who or what started it"
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "what it came to in words"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32",
+            "description": "the shape version of this event type, 0",
+            "minimum": 0
+          }
+        }
+      },
+      "JobKind": {
+        "type": "string",
+        "description": "What a job does.",
+        "enum": [
+          "download",
+          "scan",
+          "analysis",
+          "maintenance"
+        ]
+      },
+      "JobList": {
+        "type": "object",
+        "description": "The jobs, as `GET /jobs` answers them: running and paused ones first, then queued ones in\ntheir order, then the ended ones, newest first.",
+        "required": [
+          "jobs"
+        ],
+        "properties": {
+          "jobs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Job"
+            },
+            "description": "the jobs"
+          }
+        }
+      },
+      "JobPart": {
+        "type": "object",
+        "description": "One part of a job: a file of a download or analysis job, an area of a cleanup, a database\nof a vacuum.",
+        "required": [
+          "name",
+          "state"
+        ],
+        "properties": {
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "why it failed, null when it did not"
+          },
+          "name": {
+            "type": "string",
+            "description": "what it works on",
+            "example": "01 - Track.flac"
+          },
+          "state": {
+            "$ref": "#/components/schemas/JobPartState",
+            "description": "where it is"
+          },
+          "transferId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "the download a part of a download job is, while the job runs; null otherwise"
+          },
+          "username": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "the user a part of a download job downloads from, while the job runs; null otherwise"
+          }
+        }
+      },
+      "JobPartState": {
+        "type": "string",
+        "description": "Where a part of a job is.",
+        "enum": [
+          "waiting",
+          "running",
+          "paused",
+          "succeeded",
+          "failed",
+          "canceled"
+        ]
+      },
+      "JobSchedule": {
+        "type": "object",
+        "description": "A recurring piece of work, as the schedules card shows it.",
+        "required": [
+          "name",
+          "title",
+          "description",
+          "runnable",
+          "running"
+        ],
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "what one run does"
+          },
+          "every": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "how often it runs, as written in its option, such as `5m` or `7d at 04:00`; null when it\nis off",
+            "example": "7d at 04:00"
+          },
+          "lastEnding": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JobEnding",
+                "description": "how its last run ended"
+              }
+            ]
+          },
+          "lastError": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "why its last run failed"
+          },
+          "lastJobId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "the job of its last run, when that run is in the list"
+          },
+          "lastRunAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "when it last ran, null when it never did"
+          },
+          "lastSummary": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "what its last run came to in words"
+          },
+          "name": {
+            "type": "string",
+            "description": "the schedule's name, which its jobs' starter carries",
+            "example": "cleanup"
+          },
+          "nextRunAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "when it runs next, null when it is off"
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "why it is fixed or off, when it is"
+          },
+          "option": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "the option that sets it, null when it cannot be changed",
+            "example": "schedules.cleanup"
+          },
+          "runnable": {
+            "type": "boolean",
+            "description": "whether it can be run now"
+          },
+          "running": {
+            "type": "boolean",
+            "description": "whether a run is going on now"
+          },
+          "title": {
+            "type": "string",
+            "description": "what it is called",
+            "example": "Cleanup"
+          }
+        }
+      },
+      "JobStarted": {
+        "type": "object",
+        "description": "What `POST /jobs/{id}/run-again` started.",
+        "properties": {
+          "id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "the new job's id; null for a scan or maintenance run, which is listed as it starts"
+          }
+        }
+      },
+      "JobStarter": {
+        "type": "object",
+        "description": "Who or what started a job.",
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/JobStarterKind",
+            "description": "the kind of starter"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "the schedule that started it; null for the other kinds",
+            "example": "cleanup"
+          }
+        }
+      },
+      "JobStarterKind": {
+        "type": "string",
+        "description": "Who or what started a job.",
+        "enum": [
+          "you",
+          "schedule",
+          "download",
+          "resumed"
+        ]
+      },
+      "JobState": {
+        "type": "string",
+        "description": "Where a job is.",
+        "enum": [
+          "queued",
+          "running",
+          "paused",
+          "ended"
+        ]
+      },
+      "JobsRemoved": {
+        "type": "object",
+        "description": "Jobs taken out of the list, as a `jobs.removed` frame carries them.",
+        "required": [
+          "ids"
+        ],
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "the ids of the jobs removed"
+          }
+        }
+      },
+      "JobsSummary": {
+        "type": "object",
+        "description": "The jobs at a glance, as the bottom bar shows them.",
+        "required": [
+          "running",
+          "paused"
+        ],
+        "properties": {
+          "lastFailedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "when a job last ended failed or finished with failures, null when none in the list did"
+          },
+          "paused": {
+            "type": "integer",
+            "format": "int32",
+            "description": "jobs paused",
+            "minimum": 0
+          },
+          "running": {
+            "type": "integer",
+            "format": "int32",
+            "description": "jobs running or queued",
+            "minimum": 0
+          }
+        }
+      },
       "JoinRoom": {
         "type": "object",
         "description": "A room to join, the body of `POST /rooms/joined`. Joining a room that does not exist creates\nit.",
@@ -20825,6 +21979,69 @@
                 "type": "string",
                 "enum": [
                   "transfers.job_finished"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "a job was added or changed",
+            "required": [
+              "data",
+              "type"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/Job",
+                "description": "a job was added or changed"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "jobs.updated"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "jobs were taken out of the list",
+            "required": [
+              "data",
+              "type"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/JobsRemoved",
+                "description": "jobs were taken out of the list"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "jobs.removed"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "every schedule, on open and whenever one runs or its option changes",
+            "required": [
+              "data",
+              "type"
+            ],
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/JobSchedule"
+                },
+                "description": "every schedule, on open and whenever one runs or its option changes"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "jobs.schedules"
                 ]
               }
             }
@@ -22151,7 +23368,8 @@
                 "attempts",
                 "removed",
                 "bytesRemaining",
-                "percentComplete"
+                "percentComplete",
+                "paused"
               ],
               "properties": {
                 "attempts": {
@@ -22245,6 +23463,10 @@
                   ],
                   "format": "date-time",
                   "description": "when a download waiting to be retried starts its next attempt, null when no retry is\nwaiting"
+                },
+                "paused": {
+                  "type": "boolean",
+                  "description": "a download the user paused: it waits here, keeping what arrived, until resumed"
                 },
                 "percentComplete": {
                   "type": "number",
@@ -24613,6 +25835,7 @@
           "distributedNetwork",
           "shares",
           "rooms",
+          "jobs",
           "alternativeSpeedLimits",
           "configuration",
           "directories",
@@ -24644,6 +25867,10 @@
           "health": {
             "$ref": "#/components/schemas/HealthState",
             "description": "sampled health figures"
+          },
+          "jobs": {
+            "$ref": "#/components/schemas/JobsSummary",
+            "description": "the jobs running and paused, and the last failure"
           },
           "listeners": {
             "type": "array",
@@ -25101,7 +26328,8 @@
           "attempts",
           "removed",
           "bytesRemaining",
-          "percentComplete"
+          "percentComplete",
+          "paused"
         ],
         "properties": {
           "attempts": {
@@ -25195,6 +26423,10 @@
             ],
             "format": "date-time",
             "description": "when a download waiting to be retried starts its next attempt, null when no retry is\nwaiting"
+          },
+          "paused": {
+            "type": "boolean",
+            "description": "a download the user paused: it waits here, keeping what arrived, until resumed"
           },
           "percentComplete": {
             "type": "number",
@@ -26800,6 +28032,10 @@
     {
       "name": "transfers",
       "description": "Downloads and uploads"
+    },
+    {
+      "name": "jobs",
+      "description": "Downloads, share scans, analyses and maintenance as jobs, and the schedules"
     },
     {
       "name": "users",

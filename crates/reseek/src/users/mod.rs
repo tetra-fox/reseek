@@ -56,7 +56,7 @@ pub use network::Users;
 pub(crate) use service::{picture_response, picture_tag};
 pub use touch::Touch;
 
-use crate::config::{Options, RETENTION_SWEEP};
+use crate::config::Options;
 use crate::db::{Database, DbError, Location};
 use crate::events::EventBus;
 use crate::live::Live;
@@ -73,8 +73,6 @@ use transfers::FigureCache;
 
 /// How long a summary is served again without being built anew.
 const SUMMARY_FOR: Duration = Duration::from_secs(60);
-/// How often expired blocks are removed.
-const EXPIRY_SWEEP: Duration = Duration::from_secs(60);
 /// How long the stop waits for statistics being fetched again.
 const STOPPING: Duration = Duration::from_secs(5);
 
@@ -111,9 +109,9 @@ pub struct Directory {
 
 impl Directory {
   /// Opens `users.db` in `location` and loads the blocks, the groups we put users in and the
-  /// blocklist file, then starts the touch writer, the expiry and retention sweeps and the
-  /// follower of the configuration, which all stop when `shutdown` is canceled. A user's
-  /// figures are read from `transfers` and `messaging`.
+  /// blocklist file, then starts the touch writer and the follower of the configuration, which
+  /// all stop when `shutdown` is canceled. A user's figures are read from `transfers` and
+  /// `messaging`.
   pub async fn open(
     location: &Location,
     transfers: Database,
@@ -173,12 +171,6 @@ impl Directory {
         .clone()
         .write_touches(receiver, shutdown.clone())
         .instrument(info_span!("user_touches")),
-    );
-    tokio::spawn(
-      directory
-        .clone()
-        .sweep(shutdown.clone())
-        .instrument(info_span!("user_sweeps")),
     );
     tokio::spawn(
       directory
@@ -424,23 +416,9 @@ impl Directory {
     }
   }
 
-  /// Every minute removes the blocks that expired; every five minutes forgets the users past
-  /// `retention.users`.
-  async fn sweep(self: Arc<Self>, shutdown: CancellationToken) {
-    let mut expiry = tokio::time::interval(EXPIRY_SWEEP);
-    let mut retention = tokio::time::interval(RETENTION_SWEEP);
-    loop {
-      tokio::select! {
-        () = shutdown.cancelled() => return,
-        _ = expiry.tick() => self.expire_blocks().await,
-        _ = retention.tick() => self.forget_unseen().await,
-      }
-    }
-  }
-
   /// Removes the blocks that expired, raising `UserUnblocked` for each, and forgets the
   /// remembered answers past their time.
-  async fn expire_blocks(&self) {
+  pub async fn expire_blocks(&self) {
     self.blocks.forget_stale();
     let now = Utc::now();
     let expired = match self.db.write(move |conn| blocking::expire(conn, now)).await {
@@ -463,29 +441,24 @@ impl Directory {
     }
   }
 
-  /// Forgets the users not seen for `retention.users` that have nothing of ours.
-  async fn forget_unseen(&self) {
+  /// Forgets the users not seen for `retention.users` that have nothing of ours; returns how
+  /// many.
+  pub async fn forget_unseen(&self) -> Result<usize, DbError> {
     let Some(age) = self.config.current().values.retention.users else {
-      return;
+      return Ok(0);
     };
     // an age too long for chrono forgets no one, as the earliest time stored bounds it
     let age = chrono::Duration::from_std(age).unwrap_or(chrono::Duration::MAX);
     let before = crate::db::shifted(Utc::now(), -age);
-    match self
+    let pruned = self
       .db
       .write(move |conn| retention::prune(conn, before))
-      .await
-    {
-      Ok(pruned) => {
-        if !pruned.is_empty() {
-          info!(count = pruned.len(), "users not seen lately forgotten");
-        }
-        for username in pruned {
-          self.removed(&username);
-        }
-      }
-      Err(e) => warn!(error = %e, "users not seen lately not forgotten"),
+      .await?;
+    let count = pruned.len();
+    for username in pruned {
+      self.removed(&username);
     }
+    Ok(count)
   }
 
   /// Takes every configuration change: the blacklist is compiled again, the blocklist file

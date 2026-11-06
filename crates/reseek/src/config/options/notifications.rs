@@ -59,6 +59,24 @@ pub struct Notifications {
   pub transfers: TransferNotifications,
   /// Buddy notifications.
   pub buddies: BuddyNotifications,
+  /// Notifications of jobs other than downloads.
+  pub jobs: JobNotifications,
+}
+
+/// Notifications of jobs other than download jobs, which `transfers.job_finished` covers. Each
+/// type is `off`, or announced by `sound`, by a `desktop` notification, or by `both`.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Cascade)]
+#[serde(default)]
+pub struct JobNotifications {
+  /// How the end of a share scan is announced.
+  #[cascade(env = "RESEEK_NOTIFICATIONS_JOBS_SCANS")]
+  pub scans: NotificationMode,
+  /// How the end of an analysis job is announced.
+  #[cascade(env = "RESEEK_NOTIFICATIONS_JOBS_ANALYSIS")]
+  pub analysis: NotificationMode,
+  /// How the end of a cleanup or a database vacuum is announced. A failure is always shown.
+  #[cascade(env = "RESEEK_NOTIFICATIONS_JOBS_MAINTENANCE")]
+  pub maintenance: NotificationMode,
 }
 
 /// Buddy notifications, under the same browser permission and tab visibility rules as chat

@@ -229,7 +229,7 @@ async fn get_databases(
 }
 
 /// Rebuilds a database file without its free pages, then empties its write-ahead log into
-/// it.
+/// it, as a maintenance job of its own; answers once the job has ended.
 #[utoipa::path(
   post, path = "/application/data/{name}/vacuum", tag = "application",
   params(("name" = String, Path, description = "the database's name, as the listing gives it")),
@@ -243,7 +243,7 @@ async fn vacuum_database(
   _admin: Authorized<Administrator>,
   Path(name): Path<String>,
 ) -> Result<StatusCode, ApiError> {
-  app.services.application.vacuum(&name).await?;
+  crate::jobs::maintenance::vacuum_one(&app, &name).await?;
   Ok(StatusCode::NO_CONTENT)
 }
 

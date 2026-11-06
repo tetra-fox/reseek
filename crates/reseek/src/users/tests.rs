@@ -261,7 +261,11 @@ async fn users_not_seen_for_the_retention_are_forgotten_unless_they_hold_somethi
     })
     .await
     .unwrap();
-  directory.forget_unseen().await;
+  assert_eq!(
+    directory.forget_unseen().await.unwrap(),
+    1,
+    "the user seen long ago with nothing of ours"
+  );
   let left: Vec<String> = directory
     .db
     .read(|conn| {

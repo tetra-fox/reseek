@@ -9,6 +9,7 @@ use crate::activity::ActivityEntry;
 use crate::analysis::{AnalysisCompleted, AnalysisJob};
 use crate::auth::PrincipalSummary;
 use crate::events::{BuddyPresenceChanged, EventRecord};
+use crate::jobs::{Job, JobSchedule, JobsRemoved};
 use crate::logs::LogRecord;
 use crate::messaging::conversations::{Conversation, ConversationMessage, ConversationUpdate};
 use crate::messaging::rooms::{
@@ -83,6 +84,15 @@ pub enum LiveFrame {
   /// every download queued in one go has ended; sent once per job
   #[serde(rename = "transfers.job_finished")]
   TransfersJobFinished(DownloadJobFinished),
+  /// a job was added or changed
+  #[serde(rename = "jobs.updated")]
+  JobsUpdated(Box<Job>),
+  /// jobs were taken out of the list
+  #[serde(rename = "jobs.removed")]
+  JobsRemoved(JobsRemoved),
+  /// every schedule, on open and whenever one runs or its option changes
+  #[serde(rename = "jobs.schedules")]
+  JobsSchedules(Vec<JobSchedule>),
   /// a file was queued for audio analysis, by anyone
   #[serde(rename = "files.analysis_queued")]
   FilesAnalysisQueued(AnalysisJob),
@@ -161,7 +171,7 @@ pub enum LiveFrame {
 #[into_params(parameter_in = Query)]
 pub struct LiveQuery {
   /// the topics to follow, comma-separated: `application`, `logs`, `metrics`, `search`,
-  /// `search:<id>`, `transfers`, `conversations`, `rooms`, `users`, `events`, `activity`;
+  /// `search:<id>`, `transfers`, `jobs`, `conversations`, `rooms`, `users`, `events`, `activity`;
   /// `application` when left out
   #[param(example = "application,transfers")]
   pub topics: Option<String>,
@@ -235,6 +245,9 @@ mod tests {
     "transfers.updated",
     "transfers.removed",
     "transfers.job_finished",
+    "jobs.updated",
+    "jobs.removed",
+    "jobs.schedules",
     "files.analysis_queued",
     "files.analysis",
     "conversations.list",

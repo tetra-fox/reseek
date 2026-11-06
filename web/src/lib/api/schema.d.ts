@@ -52,8 +52,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Queues many files for analysis in their order, each left alone when its report is current.
-         *     What the queue has no room for is kept and joins it as it drains.
+         * Queues many files for analysis in their order as one analysis job, each left alone when its
+         *     report is current or it is queued already.
          */
         post: operations["run_batch"];
         delete?: never;
@@ -69,7 +69,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The analyses queued and running, and how many files of batches wait for room in the queue. */
+        /** The files being analyzed and the first of those waiting, and how many more wait. */
         get: operations["jobs"];
         put?: never;
         post?: never;
@@ -176,7 +176,7 @@ export interface paths {
         put?: never;
         /**
          * Rebuilds a database file without its free pages, then empties its write-ahead log into
-         *     it.
+         *     it, as a maintenance job of its own; answers once the job has ended.
          */
         post: operations["vacuum_database"];
         delete?: never;
@@ -879,6 +879,165 @@ export interface paths {
         get: operations["liked_by"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v0/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every job: running and paused ones first, then queued ones, then the ended ones newest
+         *     first, as many as `retention.jobs` keeps.
+         */
+        get: operations["list_jobs"];
+        put?: never;
+        post?: never;
+        /** Takes every ended job out of the list. */
+        delete: operations["clear_ended_jobs"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v0/jobs/schedules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every schedule, as the schedules card shows it: what it does, how often, its last and its
+         *     next run.
+         */
+        get: operations["list_schedules"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v0/jobs/schedules/{name}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Runs a schedule now, started by the user; its next run stays where it was. 409 while it
+         *     runs.
+         */
+        post: operations["run_schedule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v0/jobs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A job with its parts; a running download job's parts are its downloads. */
+        get: operations["job_detail"];
+        put?: never;
+        post?: never;
+        /** Takes an ended job out of the list; 409 for a job that has not ended. */
+        delete: operations["remove_job"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v0/jobs/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancels a job: a download job's downloads, an analysis job's files, the share scan, or a
+         *     maintenance run between its steps. 409 for a job that has ended.
+         */
+        post: operations["cancel_any_job"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v0/jobs/{id}/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pauses a download or analysis job. A download job stops the files in progress, keeping what
+         *     arrived, and holds the rest; each user forgets its place in their queue. An analysis job
+         *     finishes the file it is on and holds the rest. 409 for any other job.
+         */
+        post: operations["pause_job"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v0/jobs/{id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resumes a paused download or analysis job; 409 for any other job. */
+        post: operations["resume_job"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v0/jobs/{id}/run-again": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Starts a job that did not succeed again, as a new job; the old one stays in the list. A
+         *     download job queues its failed and canceled files again, an analysis job analyzes its failed
+         *     files again, a scan or maintenance run runs again. The new job's id is given when it is
+         *     known at once; a scan's and a maintenance run's show in the list as they start.
+         */
+        post: operations["run_job_again"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3209,14 +3368,13 @@ export interface components {
              */
             current: number;
             /**
-             * Format: int32
-             * @description files kept past the queue's limit, which join it in their order as it drains; one whose
-             *     report is current by then is left alone
+             * Format: uuid
+             * @description the analysis job the files were queued in, null when none was
              */
-            following: number;
+            jobId?: string | null;
             /**
              * Format: int32
-             * @description files put in the analysis queue now
+             * @description files put in the analysis job
              */
             queued: number;
             /** @description files that were not queued, each with its reason */
@@ -3263,7 +3421,7 @@ export interface components {
         AnalysisJob: {
             /**
              * Format: uuid
-             * @description the job's id
+             * @description the file's id in its analysis job, which cancels it
              */
             id: string;
             /** @description the file's local path */
@@ -3299,7 +3457,7 @@ export interface components {
         AnalysisJobCreated: {
             /**
              * Format: uuid
-             * @description the job's id
+             * @description the analysis job's id, as the jobs list shows it
              */
             jobId: string;
         };
@@ -3415,7 +3573,7 @@ export interface components {
         AnalysisQueue: {
             /**
              * Format: int32
-             * @description the files of batches past the queue's limit, which join it in their order as it drains
+             * @description how many more files wait than are listed
              */
             backlog: number;
             /** @description the files being analyzed, then those waiting, in the order they run */
@@ -3774,7 +3932,7 @@ export interface components {
          * @description What a bulk call does to each of its transfers.
          * @enum {string}
          */
-        BulkAction: "cancel" | "remove" | "retry";
+        BulkAction: "cancel" | "remove" | "retry" | "pause" | "resume";
         /** @description A transfer a bulk action could not be applied to. */
         BulkFailure: {
             /** @description why the action failed for it */
@@ -4619,6 +4777,11 @@ export interface components {
             /** @enum {string} */
             type: "RelayAgentSharesUpdated";
         } | {
+            /** @description a job ended: a download job, a share scan, an analysis or a maintenance run that is listed */
+            data: components["schemas"]["JobFinished"];
+            /** @enum {string} */
+            type: "JobFinished";
+        } | {
             /** @description a test event with no fields, for trying scripts */
             data: components["schemas"]["NoFields"];
             /** @enum {string} */
@@ -4651,7 +4814,7 @@ export interface components {
          * @description What kind of event something is, written as its name and read ignoring case.
          * @enum {string}
          */
-        EventType: "DownloadFileComplete" | "DownloadDirectoryComplete" | "UploadFileComplete" | "PrivateMessageReceived" | "RoomMessageReceived" | "UserBlocked" | "UserUnblocked" | "BuddyPresenceChanged" | "TokenCreated" | "TokenRevoked" | "SessionCreated" | "SessionRevoked" | "LoginFailed" | "FileAnalysisComplete" | "DownloadFileFailed" | "ScriptRunCompleted" | "SoulseekClientConnected" | "SoulseekClientDisconnected" | "RelayAgentConnected" | "RelayAgentDisconnected" | "RelayAgentSharesUpdated" | "Noop";
+        EventType: "DownloadFileComplete" | "DownloadDirectoryComplete" | "UploadFileComplete" | "PrivateMessageReceived" | "RoomMessageReceived" | "UserBlocked" | "UserUnblocked" | "BuddyPresenceChanged" | "TokenCreated" | "TokenRevoked" | "SessionCreated" | "SessionRevoked" | "LoginFailed" | "FileAnalysisComplete" | "DownloadFileFailed" | "ScriptRunCompleted" | "SoulseekClientConnected" | "SoulseekClientDisconnected" | "RelayAgentConnected" | "RelayAgentDisconnected" | "RelayAgentSharesUpdated" | "JobFinished" | "Noop";
         /**
          * @description How often one error message occurred, a row of
          *     `GET /telemetry/reports/transfers/exceptions/pareto` and of a user report.
@@ -5066,6 +5229,276 @@ export interface components {
             /** @description what we like */
             liked: string[];
         };
+        /** @description A job, as the list shows it. */
+        Job: {
+            /** @description how many parts it has and how they ended */
+            counts: components["schemas"]["JobCounts"];
+            /**
+             * Format: date-time
+             * @description when it was made
+             */
+            createdAt: string;
+            /**
+             * Format: date-time
+             * @description when it ended, null until it does
+             */
+            endedAt?: string | null;
+            ending?: null | components["schemas"]["JobEnding"];
+            /** @description why it failed, when the job itself did */
+            error?: string | null;
+            /**
+             * Format: uuid
+             * @description the download job an analysis job analyzes the files of, null otherwise
+             */
+            follows?: string | null;
+            /**
+             * Format: uuid
+             * @description the job's id; a download job's is the `jobId` of its downloads
+             */
+            id: string;
+            /** @description what it does */
+            kind: components["schemas"]["JobKind"];
+            /**
+             * @description what it works on, made from its kind and subject
+             * @example Album from alice
+             */
+            name: string;
+            /** @description whether it can be paused: a running download or analysis job */
+            pausable: boolean;
+            /**
+             * Format: double
+             * @description how far a job without parts is, from 0 to 1; null when it does not say
+             */
+            progress?: number | null;
+            /**
+             * Format: date-time
+             * @description when it first ran, null while queued
+             */
+            startedAt?: string | null;
+            /** @description who or what started it */
+            starter: components["schemas"]["JobStarter"];
+            /** @description where it is */
+            state: components["schemas"]["JobState"];
+            /**
+             * @description what it came to in words, such as how much a cleanup removed; null when there is nothing
+             *     to say
+             * @example Removed 12 finished transfers
+             */
+            summary?: string | null;
+        };
+        /** @description How many of a job's parts ended which way. */
+        JobCounts: {
+            /**
+             * Format: int32
+             * @description parts that were canceled
+             */
+            canceled: number;
+            /**
+             * Format: int32
+             * @description parts that failed
+             */
+            failed: number;
+            /**
+             * Format: int32
+             * @description parts held by a pause
+             */
+            paused: number;
+            /**
+             * Format: int32
+             * @description parts that succeeded
+             */
+            succeeded: number;
+            /**
+             * Format: int32
+             * @description every part
+             */
+            total: number;
+        };
+        /** @description A job with its parts, as `GET /jobs/{id}` answers it. */
+        JobDetail: {
+            /** @description the job */
+            job: components["schemas"]["Job"];
+            /** @description its parts in their order; a running download job's are read from its downloads */
+            parts: components["schemas"]["JobPart"][];
+        };
+        /**
+         * @description How a job ended.
+         * @enum {string}
+         */
+        JobEnding: "succeeded" | "finished_with_failures" | "failed" | "canceled";
+        /** @description The data of `JobFinished`. */
+        JobFinished: {
+            /** @description how many parts it had and how they ended */
+            counts: components["schemas"]["JobCounts"];
+            /** @description how it ended */
+            ending: components["schemas"]["JobEnding"];
+            /** @description why it failed, when the job itself did */
+            error?: string | null;
+            /**
+             * Format: uuid
+             * @description the job's id
+             */
+            id: string;
+            /** @description what it did */
+            kind: components["schemas"]["JobKind"];
+            /**
+             * @description what it worked on
+             * @example Album from alice
+             */
+            name: string;
+            /** @description who or what started it */
+            starter: components["schemas"]["JobStarter"];
+            /** @description what it came to in words */
+            summary?: string | null;
+            /**
+             * Format: int32
+             * @description the shape version of this event type, 0
+             */
+            version: number;
+        };
+        /**
+         * @description What a job does.
+         * @enum {string}
+         */
+        JobKind: "download" | "scan" | "analysis" | "maintenance";
+        /**
+         * @description The jobs, as `GET /jobs` answers them: running and paused ones first, then queued ones in
+         *     their order, then the ended ones, newest first.
+         */
+        JobList: {
+            /** @description the jobs */
+            jobs: components["schemas"]["Job"][];
+        };
+        /**
+         * @description One part of a job: a file of a download or analysis job, an area of a cleanup, a database
+         *     of a vacuum.
+         */
+        JobPart: {
+            /** @description why it failed, null when it did not */
+            error?: string | null;
+            /**
+             * @description what it works on
+             * @example 01 - Track.flac
+             */
+            name: string;
+            /** @description where it is */
+            state: components["schemas"]["JobPartState"];
+            /**
+             * Format: uuid
+             * @description the download a part of a download job is, while the job runs; null otherwise
+             */
+            transferId?: string | null;
+            /** @description the user a part of a download job downloads from, while the job runs; null otherwise */
+            username?: string | null;
+        };
+        /**
+         * @description Where a part of a job is.
+         * @enum {string}
+         */
+        JobPartState: "waiting" | "running" | "paused" | "succeeded" | "failed" | "canceled";
+        /** @description A recurring piece of work, as the schedules card shows it. */
+        JobSchedule: {
+            /** @description what one run does */
+            description: string;
+            /**
+             * @description how often it runs, as written in its option, such as `5m` or `7d at 04:00`; null when it
+             *     is off
+             * @example 7d at 04:00
+             */
+            every?: string | null;
+            lastEnding?: null | components["schemas"]["JobEnding"];
+            /** @description why its last run failed */
+            lastError?: string | null;
+            /**
+             * Format: uuid
+             * @description the job of its last run, when that run is in the list
+             */
+            lastJobId?: string | null;
+            /**
+             * Format: date-time
+             * @description when it last ran, null when it never did
+             */
+            lastRunAt?: string | null;
+            /** @description what its last run came to in words */
+            lastSummary?: string | null;
+            /**
+             * @description the schedule's name, which its jobs' starter carries
+             * @example cleanup
+             */
+            name: string;
+            /**
+             * Format: date-time
+             * @description when it runs next, null when it is off
+             */
+            nextRunAt?: string | null;
+            /** @description why it is fixed or off, when it is */
+            note?: string | null;
+            /**
+             * @description the option that sets it, null when it cannot be changed
+             * @example schedules.cleanup
+             */
+            option?: string | null;
+            /** @description whether it can be run now */
+            runnable: boolean;
+            /** @description whether a run is going on now */
+            running: boolean;
+            /**
+             * @description what it is called
+             * @example Cleanup
+             */
+            title: string;
+        };
+        /** @description What `POST /jobs/{id}/run-again` started. */
+        JobStarted: {
+            /**
+             * Format: uuid
+             * @description the new job's id; null for a scan or maintenance run, which is listed as it starts
+             */
+            id?: string | null;
+        };
+        /** @description Who or what started a job. */
+        JobStarter: {
+            /** @description the kind of starter */
+            kind: components["schemas"]["JobStarterKind"];
+            /**
+             * @description the schedule that started it; null for the other kinds
+             * @example cleanup
+             */
+            name?: string | null;
+        };
+        /**
+         * @description Who or what started a job.
+         * @enum {string}
+         */
+        JobStarterKind: "you" | "schedule" | "download" | "resumed";
+        /**
+         * @description Where a job is.
+         * @enum {string}
+         */
+        JobState: "queued" | "running" | "paused" | "ended";
+        /** @description Jobs taken out of the list, as a `jobs.removed` frame carries them. */
+        JobsRemoved: {
+            /** @description the ids of the jobs removed */
+            ids: string[];
+        };
+        /** @description The jobs at a glance, as the bottom bar shows them. */
+        JobsSummary: {
+            /**
+             * Format: date-time
+             * @description when a job last ended failed or finished with failures, null when none in the list did
+             */
+            lastFailedAt?: string | null;
+            /**
+             * Format: int32
+             * @description jobs paused
+             */
+            paused: number;
+            /**
+             * Format: int32
+             * @description jobs running or queued
+             */
+            running: number;
+        };
         /**
          * @description A room to join, the body of `POST /rooms/joined`. Joining a room that does not exist creates
          *     it.
@@ -5306,6 +5739,21 @@ export interface components {
             data: components["schemas"]["DownloadJobFinished"];
             /** @enum {string} */
             type: "transfers.job_finished";
+        } | {
+            /** @description a job was added or changed */
+            data: components["schemas"]["Job"];
+            /** @enum {string} */
+            type: "jobs.updated";
+        } | {
+            /** @description jobs were taken out of the list */
+            data: components["schemas"]["JobsRemoved"];
+            /** @enum {string} */
+            type: "jobs.removed";
+        } | {
+            /** @description every schedule, on open and whenever one runs or its option changes */
+            data: components["schemas"]["JobSchedule"][];
+            /** @enum {string} */
+            type: "jobs.schedules";
         } | {
             /** @description a file was queued for audio analysis, by anyone */
             data: components["schemas"]["AnalysisJob"];
@@ -5874,6 +6322,8 @@ export interface components {
                  *     waiting
                  */
                 nextAttemptAt?: string | null;
+                /** @description a download the user paused: it waits here, keeping what arrived, until resumed */
+                paused: boolean;
                 /**
                  * Format: double
                  * @description how much of the file has moved, from 0 to 100; 0 for an empty file
@@ -7188,6 +7638,8 @@ export interface components {
             distributedNetwork: components["schemas"]["DistributedNetworkState"];
             /** @description sampled health figures */
             health: components["schemas"]["HealthState"];
+            /** @description the jobs running and paused, and the last failure */
+            jobs: components["schemas"]["JobsSummary"];
             /**
              * @description where the web UI and the API take requests: a URL per HTTP and HTTPS address, and
              *     `unix:` with the path of the unix domain socket
@@ -7503,6 +7955,8 @@ export interface components {
              *     waiting
              */
             nextAttemptAt?: string | null;
+            /** @description a download the user paused: it waits here, keeping what arrived, until resumed */
+            paused: boolean;
             /**
              * Format: double
              * @description how much of the file has moved, from 0 to 100; 0 for an empty file
@@ -11618,12 +12072,474 @@ export interface operations {
             };
         };
     };
+    list_jobs: {
+        parameters: {
+            query?: {
+                /** @description only jobs of this kind */
+                kind?: components["schemas"]["JobKind"];
+                /** @description only jobs in this state */
+                state?: components["schemas"]["JobState"];
+                /** @description only jobs started by this kind of starter */
+                starter?: components["schemas"]["JobStarterKind"];
+                /** @description only jobs whose name holds this text, ignoring case */
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobList"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    clear_ended_jobs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description cleared */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    list_schedules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobSchedule"][];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    run_schedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description the schedule's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description started */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    job_detail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description the job's id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobDetail"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    remove_job: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description the job's id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    cancel_any_job: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description the job's id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description canceled */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    pause_job: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description the job's id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description paused */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    resume_job: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description the job's id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description resumed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    run_job_again: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description the job's id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobStarted"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     stream: {
         parameters: {
             query?: {
                 /**
                  * @description the topics to follow, comma-separated: `application`, `logs`, `metrics`, `search`,
-                 *     `search:<id>`, `transfers`, `conversations`, `rooms`, `users`, `events`, `activity`;
+                 *     `search:<id>`, `transfers`, `jobs`, `conversations`, `rooms`, `users`, `events`, `activity`;
                  *     `application` when left out
                  * @example application,transfers
                  */

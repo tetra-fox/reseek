@@ -74,7 +74,7 @@ impl Downloads {
     );
     self
       .analysis
-      .downloaded(&record.username, record.id, &path)
+      .downloaded(&record.username, record.id, record.job_id, &path)
       .await;
     self.directory_complete(&record, &directory).await;
   }

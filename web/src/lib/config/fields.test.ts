@@ -27,6 +27,7 @@ describe("the settings forms", () => {
       "Folders",
       "Analysis",
       "Retention",
+      "Schedules",
       "Web",
       "Authentication",
       "Integrations",

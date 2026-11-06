@@ -8,6 +8,7 @@ use uuid::Uuid;
 use super::EventType;
 use crate::analysis::AudioAnalysis;
 use crate::auth::{Role, Via};
+use crate::jobs::{JobCounts, JobEnding, JobKind, JobStarter};
 use crate::messaging::conversations::PrivateMessage;
 use crate::messaging::rooms::RoomMessage;
 use crate::transfers::Transfer;
@@ -358,4 +359,29 @@ pub struct BuddyPresenceChanged {
   pub presence: UserPresence,
   /// their presence before
   pub previous: UserPresence,
+}
+
+/// The data of `JobFinished`.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct JobFinished {
+  /// the shape version of this event type, 0
+  pub version: u32,
+  /// the job's id
+  pub id: Uuid,
+  /// what it did
+  pub kind: JobKind,
+  /// what it worked on
+  #[schema(example = "Album from alice")]
+  pub name: String,
+  /// who or what started it
+  pub starter: JobStarter,
+  /// how it ended
+  pub ending: JobEnding,
+  /// why it failed, when the job itself did
+  pub error: Option<String>,
+  /// what it came to in words
+  pub summary: Option<String>,
+  /// how many parts it had and how they ended
+  pub counts: JobCounts,
 }

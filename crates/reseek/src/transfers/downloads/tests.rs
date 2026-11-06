@@ -332,3 +332,201 @@ async fn a_download_removed_by_its_cancel_is_left_out_of_the_job_it_ends() {
     "the removed download is not counted"
   );
 }
+
+/// Lists the download job `job` in the jobs list, as an enqueue does.
+async fn listed_job(app: &TestApp, job: Uuid, name: &str) {
+  let new = crate::jobs::NewJob {
+    id: job,
+    ..crate::jobs::NewJob::running(
+      api_types::jobs::JobKind::Download,
+      name,
+      api_types::jobs::JobStarter::you(),
+    )
+  };
+  app.state.jobs.create(new).await.unwrap();
+}
+
+#[tokio::test]
+async fn a_paused_download_holds_its_job_paused_and_stays_paused_across_a_stop() {
+  let app = app(TRUSTED, &[]).await;
+  let job = Uuid::new_v4();
+  listed_job(&app, job, "Album from alice").await;
+  let mut waiting = Record::download("alice", "@@a\\Album\\1.flac", 10);
+  waiting.job_id = Some(job);
+  insert(&app, &waiting).await;
+  let pause = json!({ "ids": [waiting.id], "action": "pause" });
+  let (status, answer) = app
+    .call("POST", "/api/v0/transfers/downloads/bulk", Some(pause))
+    .await;
+  assert_eq!(status, 200, "{answer}");
+  assert_eq!(answer["ok"][0], waiting.id.to_string());
+  let paused = read(&app, waiting.id).await;
+  assert!(paused.paused);
+  assert_eq!(
+    paused.state,
+    TransferStates::Queued | TransferStates::Locally
+  );
+  let listed = app.state.jobs.get(job).await.unwrap().unwrap();
+  assert_eq!(listed.state, api_types::jobs::JobState::Paused);
+  assert_eq!(listed.counts.paused, 1);
+
+  crate::transfers::cleanup::end_unfinished(&app.state.transfers)
+    .await
+    .unwrap();
+  let kept = read(&app, waiting.id).await;
+  assert!(
+    kept.paused && kept.ended_at.is_none(),
+    "a stop leaves it paused"
+  );
+
+  let again = json!({ "ids": [waiting.id], "action": "pause" });
+  let (_, answer) = app
+    .call("POST", "/api/v0/transfers/downloads/bulk", Some(again))
+    .await;
+  assert_eq!(
+    answer["failed"][0]["error"],
+    "the download is paused already"
+  );
+  let resume = json!({ "ids": [waiting.id], "action": "resume" });
+  let (_, answer) = app
+    .call("POST", "/api/v0/transfers/downloads/bulk", Some(resume))
+    .await;
+  assert_eq!(answer["ok"][0], waiting.id.to_string(), "{answer}");
+  assert!(!read(&app, waiting.id).await.paused);
+}
+
+#[tokio::test]
+async fn a_download_job_ends_in_the_list_with_its_files_named_under_its_folder() {
+  let app = app(TRUSTED, &[]).await;
+  let job = Uuid::new_v4();
+  listed_job(&app, job, "Album from alice").await;
+  let mut arrived = done("alice", "@@a\\Album\\CD1\\1.flac");
+  arrived.job_id = Some(job);
+  let mut waiting = Record::download("alice", "@@a\\Album\\CD2\\1.flac", 10);
+  waiting.job_id = Some(job);
+  insert(&app, &arrived).await;
+  insert(&app, &waiting).await;
+  let uri = format!("/api/v0/transfers/downloads/alice/{}", waiting.id);
+  let (status, _) = app.call("DELETE", &uri, None).await;
+  assert_eq!(status, 204);
+  let (_, detail) = app.call("GET", &format!("/api/v0/jobs/{job}"), None).await;
+  assert_eq!(detail["job"]["state"], "ended", "{detail}");
+  assert_eq!(
+    detail["job"]["ending"], "succeeded",
+    "a canceled file was the user's choice"
+  );
+  let parts: Vec<(&str, &str)> = detail["parts"]
+    .as_array()
+    .unwrap()
+    .iter()
+    .map(|p| (p["name"].as_str().unwrap(), p["state"].as_str().unwrap()))
+    .collect();
+  assert_eq!(
+    parts,
+    [("CD1\\1.flac", "succeeded"), ("CD2\\1.flac", "canceled")]
+  );
+}
+
+/// Reads the download `id` until `done` holds for it, for ten seconds at most.
+async fn read_until(app: &TestApp, id: Uuid, done: impl Fn(&Record) -> bool) -> Record {
+  for _ in 0..1000 {
+    let record = read(app, id).await;
+    if done(&record) {
+      return record;
+    }
+    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+  }
+  panic!("the download never came to the state asked for");
+}
+
+#[tokio::test]
+async fn a_download_paused_while_its_task_runs_waits_here_without_failing() {
+  let config = format!("[transfers.download.retry]\ndelay = \"1h\"\nmax_delay = \"1h\"\n{TRUSTED}");
+  let app = app(&config, &[]).await;
+  let failed = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+  let counted = failed.clone();
+  app.state.events.subscribe(
+    "test",
+    Some(api_types::events::EventType::DownloadFileFailed),
+    move |_| {
+      counted.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+      async { Ok(()) }
+    },
+  );
+  let mut held = Record::download("alice", "@@a\\Album\\1.flac", 10);
+  held.paused = true;
+  insert(&app, &held).await;
+  let id = held.id;
+  // resumed, its task tries the peer, which cannot be reached, and waits to try again
+  let resume = json!({ "ids": [id], "action": "resume" });
+  app
+    .call("POST", "/api/v0/transfers/downloads/bulk", Some(resume))
+    .await;
+  read_until(&app, id, |r| r.next_attempt_at.is_some()).await;
+
+  let pause = json!({ "ids": [id], "action": "pause" });
+  let (_, answer) = app
+    .call("POST", "/api/v0/transfers/downloads/bulk", Some(pause))
+    .await;
+  assert_eq!(answer["ok"][0], id.to_string(), "{answer}");
+  let paused = read_until(&app, id, |r| r.paused).await;
+  assert_eq!(
+    paused.state,
+    TransferStates::Queued | TransferStates::Locally
+  );
+  assert_eq!(
+    (paused.exception, paused.next_attempt_at, paused.ended_at),
+    (None, None, None)
+  );
+  assert_eq!(
+    app
+      .state
+      .telemetry
+      .metrics()
+      .transfers()
+      .downloads
+      .completed_failed
+      .get(),
+    0.0,
+    "a pause is no failure"
+  );
+  tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+  assert_eq!(failed.load(std::sync::atomic::Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn a_download_job_that_never_had_a_download_ends_on_cancel_and_after_a_restart() {
+  let app = app(TRUSTED, &[]).await;
+  let (canceled, stranded) = (Uuid::new_v4(), Uuid::new_v4());
+  listed_job(&app, canceled, "Album from alice").await;
+  listed_job(&app, stranded, "Album from bob").await;
+  let (status, _) = app
+    .call("POST", &format!("/api/v0/jobs/{canceled}/cancel"), None)
+    .await;
+  assert_eq!(status, 204);
+  let job = app.state.jobs.get(canceled).await.unwrap().unwrap();
+  assert_eq!(job.ending, Some(api_types::jobs::JobEnding::Canceled));
+
+  app.state.downloads.resume().await;
+  let job = app.state.jobs.get(stranded).await.unwrap().unwrap();
+  assert_eq!(job.ending, Some(api_types::jobs::JobEnding::Failed));
+  assert_eq!(job.error.as_deref(), Some("Nothing was queued"));
+}
+
+#[tokio::test]
+async fn a_job_refused_for_want_of_the_server_says_so_in_words() {
+  let app = app(TRUSTED, &[]).await;
+  let request = json!({
+    "groups": [{ "username": "alice", "files": [{ "filename": "@@a\\1.flac", "size": 1 }] }]
+  });
+  let (_, answer) = app
+    .call("POST", "/api/v0/transfers/downloads/jobs", Some(request))
+    .await;
+  let id: Uuid = answer["id"].as_str().unwrap().parse().unwrap();
+  let job = app.state.jobs.get(id).await.unwrap().unwrap();
+  assert_eq!(job.ending, Some(api_types::jobs::JobEnding::Failed));
+  assert_eq!(
+    job.error.as_deref(),
+    Some("Not connected to the Soulseek server")
+  );
+}

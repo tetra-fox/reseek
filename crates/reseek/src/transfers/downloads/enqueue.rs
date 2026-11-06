@@ -31,6 +31,11 @@ const ALL_AT_ONCE: usize = 30;
 /// How many files of a larger request ask their peer at once.
 const AT_ONCE: usize = 5;
 
+/// How many of `files` files of one request ask their peer at once.
+pub(super) fn gate_for(files: usize) -> usize {
+  if files <= ALL_AT_ONCE { files } else { AT_ONCE }
+}
+
 /// What scripts read as a file already downloading.
 const ALREADY_RUNNING: &str = "Skipped: Already in progress";
 
@@ -224,6 +229,7 @@ impl Downloads {
             cancel: self.shutdown.child_token(),
             remove: false,
             reason: None,
+            pause: false,
           },
         );
       }
@@ -255,11 +261,7 @@ impl Downloads {
     if !written.inserted.is_empty() {
       self.users.touch(username, Touch::Transfer).await;
     }
-    let gate = Arc::new(Semaphore::new(if files.len() <= ALL_AT_ONCE {
-      files.len()
-    } else {
-      AT_ONCE
-    }));
+    let gate = Arc::new(Semaphore::new(gate_for(files.len())));
     let mut enqueued = Vec::new();
     for record in written.inserted {
       let transfer = record.transfer();

@@ -22,6 +22,8 @@ pub enum Topic {
   SearchResponses(Uuid),
   /// downloads and uploads
   Transfers,
+  /// jobs and the schedules
+  Jobs,
   /// private messages
   Conversations,
   /// chat rooms
@@ -56,6 +58,7 @@ impl FromStr for Topic {
       "metrics" => Topic::Metrics,
       "search" => Topic::Search,
       "transfers" => Topic::Transfers,
+      "jobs" => Topic::Jobs,
       "conversations" => Topic::Conversations,
       "rooms" => Topic::Rooms,
       "public_rooms" => Topic::PublicRooms,
@@ -82,6 +85,7 @@ impl fmt::Display for Topic {
       Topic::Search => f.write_str("search"),
       Topic::SearchResponses(id) => write!(f, "search:{id}"),
       Topic::Transfers => f.write_str("transfers"),
+      Topic::Jobs => f.write_str("jobs"),
       Topic::Conversations => f.write_str("conversations"),
       Topic::Rooms => f.write_str("rooms"),
       Topic::PublicRooms => f.write_str("public_rooms"),
@@ -133,6 +137,7 @@ pub fn routes(frame: &LiveFrame) -> Vec<Topic> {
     | F::TransfersJobFinished(_)
     | F::FilesAnalysisQueued(_)
     | F::FilesAnalysis(_) => Topic::Transfers,
+    F::JobsUpdated(_) | F::JobsRemoved(_) | F::JobsSchedules(_) => Topic::Jobs,
     F::ConversationsList(_) | F::ConversationsMessage(_) | F::ConversationsUpdate(_) => {
       Topic::Conversations
     }

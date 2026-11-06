@@ -96,6 +96,8 @@ event_catalog! {
   RelayAgentDisconnected(RelayAgentDisconnected),
   /// a relay agent's shares were loaded
   RelayAgentSharesUpdated(RelayAgentSharesUpdated),
+  /// a job ended: a download job, a share scan, an analysis or a maintenance run that is listed
+  JobFinished(JobFinished),
   /// a test event with no fields, for trying scripts
   Noop(NoFields),
 }

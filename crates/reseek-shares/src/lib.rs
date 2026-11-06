@@ -27,6 +27,7 @@ pub mod patterns;
 mod repository;
 mod scanner;
 mod scanning;
+pub mod schedule;
 mod search;
 mod share;
 mod storage;
@@ -133,6 +134,47 @@ pub enum ScanConflict {
   NotRunning,
 }
 
+/// What started a scan.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ScanOrigin {
+  /// someone asked for it
+  Asked,
+  /// `shares.cache.retention` found it due
+  Scheduled,
+  /// the start of the engine: the first scan, or the one that finds what changed while the
+  /// program was not running
+  Startup,
+}
+
+/// How a scan ended.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ScanEnded {
+  /// every directory was scanned and the index holds these totals
+  Completed(SharedCounts),
+  /// it was canceled, and the index from before is served
+  Canceled,
+  /// it failed for this reason, and the index from before is served
+  Failed(String),
+}
+
+/// A scan starting or ending, as [`Setup::scans`] is told of it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ScanNotice {
+  /// a scan started, reading every file again when `force`d
+  Started {
+    /// whether every file is read again
+    force: bool,
+    /// what started it
+    origin: ScanOrigin,
+  },
+  /// the scan that started last ended
+  Ended(ScanEnded),
+}
+
+/// Told of every scan as it starts and as it ends, in that order, before the scan goes on.
+pub type ScanHook =
+  Box<dyn Fn(ScanNotice) -> std::pin::Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>;
+
 /// The share state as this engine keeps it, told to [`Setup::publish`] as it changes.
 #[derive(Clone, Debug, Default, PartialEq)]
 struct Status {
@@ -195,6 +237,11 @@ pub struct Setup {
   pub volatile: bool,
   /// the share filters match case
   pub case_sensitive: bool,
+  /// scan again when `shares.cache.retention` finds it due; off when the program schedules the
+  /// rescans itself through [`Shares::scan`]
+  pub rescan_on_schedule: bool,
+  /// told of every scan as it starts and ends
+  pub scans: ScanHook,
   /// told the share state each time it changes, while the engine's lock on it is held, so the
   /// states arrive in the order they were made
   pub publish: Box<dyn Fn(SharesState) + Send + Sync>,
@@ -209,6 +256,8 @@ pub struct Shares {
   options: Box<dyn Fn() -> options::Shares + Send + Sync>,
   /// where the share state is told
   state: Box<dyn Fn(SharesState) + Send + Sync>,
+  /// told of every scan as it starts and ends
+  scans: ScanHook,
   /// the cache directory, which holds the browse cache and the index's backup
   cache: PathBuf,
   /// the downloads directory, shared with `shares.share_downloads`
@@ -293,6 +342,7 @@ impl Shares {
       shares: Mutex::new(share::configure(&startup, &setup.downloads)),
       options: Box::new(move || select(&current.current().values).clone()),
       state: setup.publish,
+      scans: setup.scans,
       cache: setup.cache,
       downloads: setup.downloads,
       backup: storage.backup,
@@ -323,6 +373,7 @@ impl Shares {
       select,
       setup.scan_at_startup,
       setup.force_scan,
+      setup.rescan_on_schedule,
     );
     // the startup load or scan checks again; without one this is the only check until a change
     shares.check_unmatched();
