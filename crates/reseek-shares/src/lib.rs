@@ -57,6 +57,7 @@ use tracing::{Instrument, debug, info, info_span, trace, warn};
 use crate::db::{Database, DbError};
 pub use folders::FolderError;
 pub use hosts::{HostError, remove_agent_hosts};
+pub use reseek_relay_proto::LOCAL_HOST;
 use scanner::{Outcome, Settings};
 use share::Share;
 pub use visibility::View;
@@ -121,9 +122,6 @@ pub struct Resolved {
   /// its size when it was indexed
   pub size: u64,
 }
-
-/// The name the local host's shares go by.
-pub const LOCAL_HOST: &str = "local";
 
 /// Why a scan could not be started or stopped.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

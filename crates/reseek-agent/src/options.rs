@@ -156,16 +156,10 @@ pub fn validate(
       report.push(Invalid::new(key, message));
     }
   };
-  let name = &options.instance_name;
-  if name == reseek_shares::LOCAL_HOST {
-    check(
-      "instance_name",
-      Err(format!(
-        "The field instance_name must not be '{name}', which names the controller's own shares."
-      )),
-    );
-  }
-  check("instance_name", check_instance_name("instance_name", name));
+  check(
+    "instance_name",
+    check_instance_name("instance_name", &options.instance_name),
+  );
   let controller = &options.relay.controller;
   let key = "relay.controller.address";
   match controller.address.as_deref() {
