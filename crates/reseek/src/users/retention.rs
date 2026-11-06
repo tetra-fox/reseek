@@ -1,5 +1,5 @@
 //! Forgetting users not seen for `retention.users`, unless we keep something about them: a
-//! block, notes, tags, a group or being a buddy.
+//! block, notes, tags, a group, being a buddy or being muted.
 
 use chrono::{DateTime, Utc};
 use rusqlite::Connection;
@@ -10,7 +10,7 @@ use crate::db::timestamp;
 pub fn prune(conn: &Connection, before: DateTime<Utc>) -> rusqlite::Result<Vec<String>> {
   let mut statement = conn.prepare_cached(
     "DELETE FROM users WHERE last_seen_at < ?1 AND notes = '' AND tags = '[]' \
-     AND group_override IS NULL AND buddy = 0 \
+     AND group_override IS NULL AND buddy = 0 AND muted = 0 \
      AND username NOT IN (SELECT username FROM blocks) RETURNING username",
   )?;
   let rows = statement.query_map([timestamp(before)], |row| row.get(0))?;
@@ -31,7 +31,9 @@ mod tests {
     let old: DateTime<Utc> = "2026-01-01T00:00:00Z".parse().unwrap();
     let mut pruned = db
       .write(move |conn| {
-        for name in ["plain", "noted", "tagged", "grouped", "buddy", "blocked"] {
+        for name in [
+          "plain", "noted", "tagged", "grouped", "buddy", "muted", "blocked",
+        ] {
           ensure(conn, name, old)?;
         }
         ensure(conn, "recent", old + chrono::Duration::days(60))?;
@@ -39,6 +41,7 @@ mod tests {
         change(conn, "tagged", &Change::Tags(vec!["t".into()]), old)?;
         change(conn, "grouped", &Change::Group(Some("friends".into())), old)?;
         change(conn, "buddy", &Change::Buddy(Some(Default::default())), old)?;
+        change(conn, "muted", &Change::Muted(true), old)?;
         let block = Block {
           username: "blocked".into(),
           reason: String::new(),
