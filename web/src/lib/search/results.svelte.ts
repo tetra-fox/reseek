@@ -8,10 +8,15 @@ import { type Result, ResultKeys, type SearchResponse } from "./results";
 /** How long to wait before asking once more for the responses of a search that had some */
 export const RETRY_EMPTY_MS = 1_000;
 
+/** How long streamed responses gather before they are added to the results together */
+export const STREAM_MS = 250;
+
 /**
  * The responses of one search: appended as the `search:<id>` topic streams them while the
  * search runs, then replaced once by the stored responses when it completes, which are the
- * ones that count. Each response keeps its key across both, so its card stays where it is
+ * ones that count. Each response keeps its key across both, so its card stays where it is.
+ * Streamed responses are added at most every `STREAM_MS`, since every change to `results` runs
+ * the page's filters and counts over all of them
  */
 export class Results {
   readonly id: string;
@@ -22,6 +27,8 @@ export class Results {
   error = $state("");
   #keys = new ResultKeys();
   #stop: () => void;
+  #waiting: Result[] = [];
+  #timer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(id: string) {
     this.id = id;
@@ -30,9 +37,25 @@ export class Results {
     });
   }
 
-  /** Adds one streamed response at the end */
+  /** Adds one streamed response at the end, with the others that come within `STREAM_MS` */
   add(response: SearchResponse) {
-    this.results = [...this.results, this.#keys.next(response)];
+    this.#waiting.push(this.#keys.next(response));
+    this.#timer ??= setTimeout(this.#flush, STREAM_MS);
+  }
+
+  #flush = () => {
+    clearTimeout(this.#timer);
+    this.#timer = undefined;
+    if (!this.#waiting.length) return;
+    this.results = [...this.results, ...this.#waiting];
+    this.#waiting = [];
+  };
+
+  /** Drops the streamed responses not yet added, which the stored ones replace */
+  #drop() {
+    clearTimeout(this.#timer);
+    this.#timer = undefined;
+    this.#waiting = [];
   }
 
   /**
@@ -42,6 +65,8 @@ export class Results {
    */
   fetch = async (responseCount: number) => {
     if (this.stored || this.loading) return;
+    // the streamed responses show while the stored ones load, and stay if they fail to
+    this.#flush();
     this.loading = true;
     let outcome = await this.#get();
     if (outcome.ok && outcome.data.length === 0 && responseCount > 0) {
@@ -53,6 +78,7 @@ export class Results {
       this.error = outcome.error;
       return;
     }
+    this.#drop();
     const keys = new ResultKeys();
     this.results = outcome.data.map((response) => keys.next(response));
     this.#keys = keys;
@@ -63,6 +89,7 @@ export class Results {
   /** Stops following the stream */
   close() {
     this.#stop();
+    this.#drop();
   }
 
   #get() {

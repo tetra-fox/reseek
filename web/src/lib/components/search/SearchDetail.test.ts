@@ -8,6 +8,7 @@ import { toasts } from "#lib/feedback/toast.svelte.js";
 import { UNDO_MS } from "#lib/feedback/undo.js";
 import { inspectorPrefs } from "#lib/inspector/inspector.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
+import { STREAM_MS } from "#lib/search/results.svelte.js";
 import { searches } from "#lib/search/searches.svelte.js";
 import { session } from "#lib/session.svelte.js";
 import { searchOptions } from "#lib/settings.svelte.js";
@@ -63,6 +64,12 @@ const search = (fields: Partial<Schemas["Search"]>): Schemas["Search"] => ({
   ...fields
 });
 
+/** Lets the streamed responses be added to the results, then updates the page */
+const streamed = async () => {
+  await vi.advanceTimersByTimeAsync(STREAM_MS);
+  flushSync();
+};
+
 describe("search results", () => {
   let component: ReturnType<typeof mount> | null = null;
 
@@ -99,7 +106,7 @@ describe("search results", () => {
 
     net.frame("search.response", { searchId: ID, response: stored[0] });
     net.frame("search.response", { searchId: ID, response: stored[1] });
-    await flushFaked();
+    await streamed();
     const cards = () => [
       ...document.querySelectorAll('[role=treegrid] [role=rowgroup] [data-line^="folder:user:"]')
     ];
@@ -119,7 +126,7 @@ describe("search results", () => {
     expect(selected).toContain("01 One.flac");
 
     net.frame("search.response", { searchId: ID, response: stored[2] });
-    await flushFaked();
+    await streamed();
     expect(cards()).toHaveLength(3);
     expect(cards()[0]).toBe(alice);
     expect(cards()[1]).toBe(bob);
@@ -172,7 +179,7 @@ describe("search results", () => {
     const net = await open(stored);
     net.frame("search.response", { searchId: ID, response: stored[0] });
     net.frame("search.response", { searchId: ID, response: stored[1] });
-    await flushFaked();
+    await streamed();
     const grid = document.querySelector('[role=grid][aria-label^="Search results"]')!;
     const rows = () => [...grid.querySelectorAll("[role=row][data-line]")];
     expect(rows()).toHaveLength(4);
@@ -184,7 +191,7 @@ describe("search results", () => {
     expect(selected).toContain("01 One.flac");
 
     net.frame("search.response", { searchId: ID, response: stored[2] });
-    await flushFaked();
+    await streamed();
     expect(rows()).toHaveLength(6);
     expect(rows()[0]).toBe(first);
     expect(rows()[2]).toBe(third);
@@ -212,7 +219,7 @@ describe("search results", () => {
     const net = await open(stored);
     const pane = mount(InspectorPane, { target: document.body });
     net.frame("search.response", { searchId: ID, response: stored[0] });
-    await flushFaked();
+    await streamed();
     const grid = document.querySelector('[role=grid][aria-label^="Search results"]')!;
     const details = () => document.querySelector('aside[aria-label="Details"]');
     press(grid, "ArrowDown");
@@ -238,7 +245,7 @@ describe("search results", () => {
     ]);
     const net = await open([two]);
     net.frame("search.response", { searchId: ID, response: two });
-    await flushFaked();
+    await streamed();
     const toggle = (name: string) =>
       document.querySelector<HTMLButtonElement>(`button[aria-label$=" ${name}"][aria-expanded]`)!;
     const files = () =>
@@ -264,7 +271,7 @@ describe("search results", () => {
     const stored = [response("alice", 300), response("bob", 200)];
     const net = await open(stored);
     for (const r of stored) net.frame("search.response", { searchId: ID, response: r });
-    await flushFaked();
+    await streamed();
     const text = () => document.body.textContent?.replace(/\s+/g, " ") ?? "";
     const button = (label: string) =>
       [...document.querySelectorAll("button")].filter((b) => b.textContent?.trim() === label);
@@ -305,7 +312,7 @@ describe("search results", () => {
     ];
     const net = await open(stored);
     for (const r of stored) net.frame("search.response", { searchId: ID, response: r });
-    await flushFaked();
+    await streamed();
     const text = () => document.body.textContent?.replace(/\s+/g, " ") ?? "";
     const button = (label: string) =>
       [...document.querySelectorAll("button")].filter((b) => b.textContent?.trim() === label);
@@ -341,7 +348,7 @@ describe("search results", () => {
     ]);
     const net = await open([mixed]);
     net.frame("search.response", { searchId: ID, response: mixed });
-    await flushFaked();
+    await streamed();
     const names = () =>
       [...document.querySelectorAll("[role=treegrid] [role=row][aria-selected]")].map(
         (r) => r.textContent?.match(/\d\.\w+/)?.[0]
@@ -369,7 +376,7 @@ describe("search results", () => {
     const one = response("alice", 1);
     const net = await open([one]);
     net.frame("search.response", { searchId: ID, response: one });
-    await flushFaked();
+    await streamed();
     const chips = () =>
       [...document.querySelectorAll('[aria-label="Filter presets"] button[aria-pressed]')].map(
         (b) => b.textContent?.trim()
@@ -415,7 +422,7 @@ describe("search results", () => {
     const one = response("alice", 1);
     const net = await open([one]);
     net.frame("search.response", { searchId: ID, response: one });
-    await flushFaked();
+    await streamed();
     const chips = () =>
       [...document.querySelectorAll('[aria-label="Filter presets"] button[aria-pressed]')].map(
         (b) => b.textContent?.trim()
