@@ -154,6 +154,7 @@ fn body(method: &Method, route: &str) -> Option<Payload> {
       "groups": [{ "username": "alice", "files": [{ "filename": "a\\b.flac", "size": 1 }] }]
     })),
     ("POST", r) if r.ends_with("/bulk") => json(json!({ "ids": [ID], "action": "cancel" })),
+    ("POST", r) if r == format!("{downloads}/queue") => json(json!({ "ids": [ID] })),
     ("POST", "/api/v0/transfers/uploads/{username}") => json(json!({ "files": ["@@a\\b.flac"] })),
     ("POST", "/api/v0/searches/wishlist") => json(json!({ "searchText": "animals" })),
     ("POST", "/api/v0/users/{username}/directory") => json(json!({ "directory": "@@a\\Music" })),

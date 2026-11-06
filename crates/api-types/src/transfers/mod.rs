@@ -153,6 +153,26 @@ pub struct TransferStateChange {
   pub at: DateTime<Utc>,
 }
 
+/// The downloads waiting in the local queue, in the order they start, as
+/// `GET /transfers/downloads/queue` answers and a `transfers.queue` frame carries them.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DownloadQueue {
+  /// the waiting downloads' ids, first to start first
+  pub ids: Vec<Uuid>,
+}
+
+/// Moves waiting downloads in the local queue, as `POST /transfers/downloads/queue` takes it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct MoveQueuedDownloads {
+  /// the downloads to move, in the order they are to start
+  pub ids: Vec<Uuid>,
+  /// the waiting download they go just before; null for the end of the queue
+  #[serde(default)]
+  pub before: Option<Uuid>,
+}
+
 /// A transfer that was removed from the listings, as a `transfers.removed` frame carries it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]

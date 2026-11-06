@@ -1,13 +1,13 @@
 //! The downloads routes: listing, enqueueing as a download job, the place in a peer's queue,
-//! canceling and removing.
+//! the order of the local queue, canceling and removing.
 
 use std::collections::HashSet;
 
 use api_types::Page;
 use api_types::transfers::{
-  BulkRequest, BulkResult, CancelQuery, EnqueueDownloadGroup, EnqueueDownloadJobRequest,
-  EnqueueDownloadJobResponse, IncludeRemovedQuery, Transfer, TransferListQuery, TransferQuery,
-  UserResponse,
+  BulkRequest, BulkResult, CancelQuery, DownloadQueue, EnqueueDownloadGroup,
+  EnqueueDownloadJobRequest, EnqueueDownloadJobResponse, IncludeRemovedQuery, MoveQueuedDownloads,
+  Transfer, TransferListQuery, TransferQuery, UserResponse,
 };
 use axum::extract::State;
 use axum::http::StatusCode;
@@ -36,6 +36,43 @@ pub fn routes() -> OpenApiRouter<AppState> {
     .routes(routes!(enqueue_job))
     .routes(routes!(remove_completed))
     .routes(routes!(bulk))
+    .routes(routes!(queue_order, move_queued))
+}
+
+/// The downloads waiting in the local queue, in the order they start.
+#[utoipa::path(
+  get, path = "/transfers/downloads/queue", tag = "transfers",
+  responses((status = 200, body = DownloadQueue), (status = 401, body = api_types::ErrorBody))
+)]
+async fn queue_order(
+  State(app): State<AppState>,
+  _caller: Authorized<AnyRole>,
+) -> Json<DownloadQueue> {
+  Json(DownloadQueue {
+    ids: app.downloads.queue_order(),
+  })
+}
+
+/// Moves waiting downloads in the local queue, in the order given, to just before another
+/// waiting download or to the end; downloads not waiting are left where they are. Answers with
+/// the new order, which a `transfers.queue` frame also carries.
+#[utoipa::path(
+  post, path = "/transfers/downloads/queue", tag = "transfers",
+  request_body = MoveQueuedDownloads,
+  responses(
+    (status = 200, body = DownloadQueue), (status = 401, body = api_types::ErrorBody),
+    (status = 403, body = api_types::ErrorBody)
+  )
+)]
+async fn move_queued(
+  State(app): State<AppState>,
+  _caller: Authorized<ReadWrite>,
+  Json(body): Json<MoveQueuedDownloads>,
+) -> Json<DownloadQueue> {
+  app.downloads.move_queued(&body.ids, body.before);
+  Json(DownloadQueue {
+    ids: app.downloads.queue_order(),
+  })
 }
 
 /// Every download, grouped by user and remote directory.

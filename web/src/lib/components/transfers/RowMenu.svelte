@@ -1,4 +1,6 @@
 <script lang="ts">
+  import ArrowDownToLineIcon from "@lucide/svelte/icons/arrow-down-to-line";
+  import ArrowUpToLineIcon from "@lucide/svelte/icons/arrow-up-to-line";
   import BanIcon from "@lucide/svelte/icons/ban";
   import ChevronsUpIcon from "@lucide/svelte/icons/chevrons-up";
   import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
@@ -32,6 +34,7 @@
     storeOf
   } from "#lib/transfers/actions.js";
   import { type Direction, rowActions, type Transfer } from "#lib/transfers/states.js";
+  import { downloads } from "#lib/transfers/transfers.svelte.js";
 
   type Props = {
     transfer: Transfer;
@@ -52,6 +55,9 @@
   const write = $derived(session.can("ReadWrite"));
   const admin = $derived(session.can("Administrator"));
   const folder = $derived(remoteFolder(t.username, t.filename));
+  /** the download waiting first in the local queue, which Start next goes before */
+  const firstWaiting = () =>
+    [...downloads.places.entries()].find(([, place]) => place === 1)?.[0] ?? null;
 </script>
 
 <!-- the whole row's actions; placed in a Menu.Root or Menu.LazyRoot by the caller -->
@@ -87,6 +93,12 @@
     {:else if can.resume}
       <Menu.Item onSelect={() => void act(storeOf(t), "resume", [t.id])}
         ><PlayIcon />Resume</Menu.Item>
+    {/if}
+    {#if can.reorder}
+      <Menu.Item onSelect={() => void downloads.move([t.id], firstWaiting())}
+        ><ArrowUpToLineIcon />Start next</Menu.Item>
+      <Menu.Item onSelect={() => void downloads.move([t.id], null)}
+        ><ArrowDownToLineIcon />Start last</Menu.Item>
     {/if}
     {#if can.cancel}
       <Menu.Item onSelect={() => void act(storeOf(t), "cancel", [t.id])}><XIcon />Cancel</Menu.Item>

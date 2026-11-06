@@ -4,10 +4,8 @@
 //! starts its task again on the same record, which carries on from the bytes it has.
 
 use std::collections::BTreeMap;
-use std::sync::Arc;
 
 use api_types::transfers::{BulkFailure, TransferStates};
-use tokio::sync::Semaphore;
 use tracing::{debug, info};
 use uuid::Uuid;
 
@@ -113,7 +111,7 @@ impl Downloads {
       }
     }
     for (username, records) in by_user {
-      let gate = Arc::new(Semaphore::new(gate_for(records.len())));
+      let request = (self.starts.request(), gate_for(records.len()));
       for mut record in records {
         if lock(&self.in_flight).contains_key(&record.id) {
           outcomes.push(Err(failure(record.id, "the download is still stopping")));
@@ -134,7 +132,7 @@ impl Downloads {
         self.save(&record, true).await;
         info!(id = %record.id, username, "download resumed");
         let id = record.id;
-        self.spawn(record, gate.clone(), cancel);
+        self.spawn(record, request, cancel);
         outcomes.push(Ok(id));
       }
     }

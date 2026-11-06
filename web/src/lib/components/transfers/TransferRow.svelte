@@ -5,6 +5,7 @@
   import FileAudioIcon from "@lucide/svelte/icons/file-audio";
   import FileVideoIcon from "@lucide/svelte/icons/file-video";
   import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
+  import GripVerticalIcon from "@lucide/svelte/icons/grip-vertical";
   import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
   import RotateCwIcon from "@lucide/svelte/icons/rotate-cw";
   import Trash2Icon from "@lucide/svelte/icons/trash-2";
@@ -44,6 +45,7 @@
   } from "#lib/transfers/actions.js";
   import { type ColumnId, SELECT_REM } from "#lib/transfers/grid/columns.js";
   import { type Direction, rowActions, stateChip, type Transfer } from "#lib/transfers/states.js";
+  import { downloads } from "#lib/transfers/transfers.svelte.js";
   import { placeText, waits, whyText } from "#lib/transfers/why.svelte.js";
   import { itemStart, lineStart, TICK_REM } from "#lib/tree/indent.js";
   import { viewport } from "#lib/ui/viewport.svelte.js";
@@ -92,6 +94,27 @@
   const user = $derived(users.get(t.username));
   const wait = $derived(direction === "upload" ? waits.get(t.id) : undefined);
   const retryIn = $derived(t.nextAttemptAt ? ago(t.nextAttemptAt) : null);
+  // a download waiting here has a place in the local queue, which dragging its handle onto
+  // another waiting download's moves it before that one
+  const localPlace = $derived(direction === "download" ? downloads.places.get(t.id) : undefined);
+  const DRAGGED = "application/x-reseek-downloads";
+  let dropping = $state(false);
+  const dragStart = (e: DragEvent) => {
+    e.dataTransfer?.setData(DRAGGED, JSON.stringify([t.id]));
+    if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
+  };
+  const dragOver = (e: DragEvent) => {
+    if (!can.reorder || !e.dataTransfer?.types.includes(DRAGGED)) return;
+    e.preventDefault();
+    dropping = true;
+  };
+  const drop = (e: DragEvent) => {
+    dropping = false;
+    const ids = JSON.parse(e.dataTransfer?.getData(DRAGGED) || "[]") as string[];
+    if (!ids.length || ids.includes(t.id)) return;
+    e.preventDefault();
+    void downloads.move(ids, t.id);
+  };
   // under a group header the file's icon and name start where a header at the row's depth has its
   // own, past its tick and toggle, the select column holding the row's tick. A phone's row has no
   // tick or toggle to pass, so it starts under the header's tick and keeps its width for the name
@@ -137,6 +160,25 @@
     </div>
     <span class="text-xs tabular-nums">{chip.text}</span>
   {:else}
+    {#if write && can.reorder}
+      <!-- a download waiting here is dragged onto another to start before it; the keyboard has
+           the row menu's Start next and Start last -->
+      <span
+        role="presentation"
+        draggable="true"
+        class={[
+          "flex shrink-0 cursor-grab items-center gap-1 rounded-badge text-fg-muted",
+          dropping && "ring-2 ring-accent"
+        ]}
+        title="Drag onto another waiting download to start before it"
+        ondragstart={dragStart}
+        ondragover={dragOver}
+        ondragleave={() => (dropping = false)}
+        ondrop={drop}>
+        <GripVerticalIcon class="size-3.5" />
+        {#if localPlace}<span class="text-xs tabular-nums">#{localPlace} here</span>{/if}
+      </span>
+    {/if}
     <Tooltip text={chip.title ?? (retryIn ? `next attempt ${retryIn}` : undefined)}>
       {#snippet child({ props })}
         <span {...props} class="min-w-0">

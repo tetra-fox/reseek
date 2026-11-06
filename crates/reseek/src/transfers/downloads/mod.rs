@@ -16,6 +16,7 @@ mod jobs;
 mod pause;
 mod queue;
 mod service;
+mod starts;
 mod task;
 #[cfg(test)]
 mod tests;
@@ -35,7 +36,7 @@ use tokio::sync::Semaphore;
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
-use tracing::{debug, info, warn};
+use tracing::{Instrument, debug, info, warn};
 use uuid::Uuid;
 
 use super::categories::UNFINISHED;
@@ -109,6 +110,8 @@ pub struct Downloads {
   in_flight: Mutex<HashMap<Uuid, InFlight>>,
   /// one enqueue per user at a time
   turns: Turns,
+  /// the local queue: the order waiting downloads start in
+  starts: starts::Starts,
   /// the jobs whose files are still being enqueued
   open_jobs: jobs::Open,
   /// the enqueue calls of the API that may run at once
@@ -145,7 +148,7 @@ impl Downloads {
     paths: &Paths,
     shutdown: CancellationToken,
   ) -> Arc<Self> {
-    Arc::new_cyclic(|this| Self {
+    let engine = Arc::new_cyclic(|this| Self {
       this: this.clone(),
       db,
       config,
@@ -165,11 +168,58 @@ impl Downloads {
       tasks: TaskTracker::new(),
       in_flight: Mutex::new(HashMap::new()),
       turns: Turns::default(),
+      starts: starts::Starts::default(),
       open_jobs: jobs::Open::default(),
       enqueue_calls: Semaphore::new(ENQUEUE_CALLS),
       resumed: AtomicBool::new(false),
       asked: Mutex::new(HashMap::new()),
-    })
+    });
+    let slots = |options: &Options| options.transfers.download.slots.map(|n| n as usize);
+    engine
+      .starts
+      .set_limit(slots(&engine.config.current().values));
+    let followed = engine.clone();
+    tokio::spawn(
+      async move {
+        let mut changes = followed.config.changes();
+        loop {
+          let change = tokio::select! {
+            () = followed.shutdown.cancelled() => return,
+            change = changes.recv() => change,
+          };
+          match change {
+            Ok(_) | Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
+              followed
+                .starts
+                .set_limit(slots(&followed.config.current().values));
+            }
+            Err(tokio::sync::broadcast::error::RecvError::Closed) => return,
+          }
+        }
+      }
+      .in_current_span(),
+    );
+    engine
+  }
+
+  /// The downloads waiting in the local queue, in the order they start.
+  pub fn queue_order(&self) -> Vec<Uuid> {
+    self.starts.order()
+  }
+
+  /// Moves the waiting downloads `ids` to just before `before`, or to the end of the local
+  /// queue, and pushes the new order; returns those moved.
+  pub fn move_queued(&self, ids: &[Uuid], before: Option<Uuid>) -> Vec<Uuid> {
+    let moved = self.starts.move_to(ids, before);
+    if !moved.is_empty() {
+      info!(moved = moved.len(), ?before, "queued downloads moved");
+      self.live.publish(LiveFrame::TransfersQueue(
+        api_types::transfers::DownloadQueue {
+          ids: self.starts.order(),
+        },
+      ));
+    }
+    moved
   }
 
   /// This engine, for its tasks to hold.

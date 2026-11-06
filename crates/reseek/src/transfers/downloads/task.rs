@@ -1,7 +1,7 @@
-//! One download's task: it waits its turn among the files of its request, checks its record,
-//! then tries the download, waiting longer before each new try, until the file arrives, the
-//! download fails for good or it is canceled, and writes how it ended. A stop of the daemon
-//! leaves the record as it is, for the stop to end.
+//! One download's task: it waits its turn in the local queue, checks its record, then tries
+//! the download, waiting longer before each new try and for a slot before each, until the file
+//! arrives, the download fails for good or it is canceled, and writes how it ended. A stop of
+//! the daemon leaves the record as it is, for the stop to end.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -10,7 +10,6 @@ use std::time::Duration;
 use api_types::events::{DownloadFailureStage, DownloadFileFailed, Event};
 use api_types::transfers::TransferStates;
 use chrono::Utc;
-use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, info, info_span, warn};
@@ -19,6 +18,7 @@ use uuid::Uuid;
 use super::Downloads;
 use super::attempt::{Attempted, Failure};
 use super::destination::incomplete_path;
+use super::starts::Turn;
 use crate::safety::Os;
 use crate::sync::lock;
 use crate::transfers::{Record, removal, store};
@@ -31,7 +31,7 @@ const HARD_LIMIT: Duration = Duration::from_secs(180);
 /// A download's turn among the files of its request, held from the start of its task until
 /// its peer has it queued or it ends, and for [`HARD_LIMIT`] at most.
 pub(super) struct Gate {
-  _permit: OwnedSemaphorePermit,
+  _turn: Turn,
   /// when the download is stopped if it still holds the turn
   pub deadline: Instant,
 }
@@ -71,9 +71,9 @@ fn retry_wait(attempt: u32, delay: Duration, max: Duration) -> Duration {
 }
 
 impl Downloads {
-  /// Starts the task of the download `record`, which takes its turn in `gate` and stops when
-  /// `cancel` is canceled.
-  pub(super) fn spawn(&self, record: Record, gate: Arc<Semaphore>, cancel: CancellationToken) {
+  /// Starts the task of the download `record`, which takes a turn of `request`, whose files
+  /// hold that many at once, and stops when `cancel` is canceled.
+  pub(super) fn spawn(&self, record: Record, request: (u64, usize), cancel: CancellationToken) {
     let this = self.this();
     let span = info_span!(
       "transfer",
@@ -83,11 +83,11 @@ impl Downloads {
     );
     self
       .tasks
-      .spawn(async move { this.run(record.id, gate, cancel).await }.instrument(span));
+      .spawn(async move { this.run(record.id, request, cancel).await }.instrument(span));
   }
 
-  async fn run(self: Arc<Self>, id: Uuid, gate: Arc<Semaphore>, cancel: CancellationToken) {
-    match self.download(id, gate, &cancel).await {
+  async fn run(self: Arc<Self>, id: Uuid, request: (u64, usize), cancel: CancellationToken) {
+    match self.download(id, request, &cancel).await {
       Ended::Succeeded(record, incomplete) => self.complete(record, incomplete).await,
       Ended::Failed(failed) => self.fail(failed).await,
       Ended::Abandoned => debug!("download left for the stop to end"),
@@ -95,14 +95,15 @@ impl Downloads {
     self.forget(id).await;
   }
 
-  /// The download's tries, from its turn in `gate` to how it ended.
-  async fn download(&self, id: Uuid, gate: Arc<Semaphore>, cancel: &CancellationToken) -> Ended {
-    let permit = tokio::select! {
-      permit = gate.acquire_owned() => permit.expect("the gate of a request is never closed"),
+  /// The download's tries, from its turn in the local queue to how it ended.
+  async fn download(&self, id: Uuid, request: (u64, usize), cancel: &CancellationToken) -> Ended {
+    let first = tokio::select! {
+      grant = self.starts.wait(id, Some(request)) => grant,
       () = cancel.cancelled() => return self.canceled(id, None).await,
     };
-    let mut gate = Some(Gate {
-      _permit: permit,
+    let mut first_slot = Some(first.slot);
+    let mut gate = first.turn.map(|turn| Gate {
+      _turn: turn,
       deadline: Instant::now() + HARD_LIMIT,
     });
     let mut record = match self.db.read(move |conn| store::get(conn, id)).await {
@@ -175,6 +176,15 @@ impl Downloads {
         record.next_attempt_at = None;
         self.save(&record, false).await;
       }
+      // held for this try; a retry waits for one in its place in the queue, keeping its
+      // request's turn
+      let _slot = match first_slot.take() {
+        Some(slot) => slot,
+        None => tokio::select! {
+          grant = self.starts.wait(id, None) => grant.slot,
+          () = cancel.cancelled() => return self.canceled(id, Some(incomplete)).await,
+        },
+      };
       match self
         .attempt(&mut record, &incomplete, cancel, &mut gate)
         .await
@@ -304,6 +314,7 @@ impl Downloads {
   /// listings when that was asked for meanwhile.
   async fn forget(&self, id: Uuid) {
     lock(&self.asked).remove(&id);
+    self.starts.forget(id);
     let entry = lock(&self.in_flight).remove(&id);
     if entry.is_some_and(|entry| entry.remove) {
       let download = api_types::transfers::TransferDirection::Download;

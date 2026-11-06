@@ -36,6 +36,11 @@ export class Transfers {
   /** transfers removed on screen whose removal waits until it can no longer be undone */
   hidden = new SvelteSet<string>();
   /**
+   * The place of each download waiting in the local queue, 1 first, by id; set from the
+   * daemon's order when it is read or moved, so downloads queued since come after
+   */
+  places = $state.raw(new Map<string, number>());
+  /**
    * Each transfer by `fileKey`, the newest when a file was transferred more than once, leaving
    * out those removed on screen. Made again only when a transfer comes, goes or is hidden: a
    * transfer's progress patches the row it finds in place
@@ -62,6 +67,7 @@ export class Transfers {
         );
       }
     });
+    live.on("transfers.queue", ({ ids }) => this.#ordered(ids));
     live.on("transfers.removed", (t) => {
       if (!mine(t)) return;
       this.list.remove(t.id);
@@ -71,7 +77,26 @@ export class Transfers {
     });
   }
 
+  #ordered(ids: string[]) {
+    this.places = new Map(ids.map((id, i) => [id, i + 1]));
+  }
+
+  /** Moves waiting downloads to start just before `before`, or last when it is null */
+  move = async (ids: string[], before: string | null) => {
+    const outcome = await call(() =>
+      api.POST("/api/v0/transfers/downloads/queue", { body: { ids, before } })
+    );
+    if (outcome.ok) this.#ordered(outcome.data.ids);
+    else toast(outcome.error, "error");
+  };
+
   load = async () => {
+    if (this.direction === "download") {
+      void call(() => api.GET("/api/v0/transfers/downloads/queue")).then((order) => {
+        if (order.ok) this.#ordered(order.data.ids);
+        else toast(`The local queue's order was not read: ${order.error}`, "error");
+      });
+    }
     const turn = this.list.reading();
     const outcome =
       this.direction === "download"

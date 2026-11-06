@@ -130,6 +130,7 @@ export const rowActions = (t: Transfer, direction: Direction) => {
     downloadAgain: download && succeeded,
     pause: download && isCancelable(s) && !t.paused,
     resume: download && !!t.paused && !isRemovable(s),
+    reorder: download && s === "Queued, Locally" && !t.paused,
     queuePosition: download && s === "Queued, Remotely",
     deny: !download && !isRemovable(s),
     bump: !download && isQueued(s)

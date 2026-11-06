@@ -2461,6 +2461,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v0/transfers/downloads/queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The downloads waiting in the local queue, in the order they start. */
+        get: operations["queue_order"];
+        put?: never;
+        /**
+         * Moves waiting downloads in the local queue, in the order given, to just before another
+         *     waiting download or to the end; downloads not waiting are left where they are. Answers with
+         *     the new order, which a `transfers.queue` frame also carries.
+         */
+        post: operations["move_queued"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v0/transfers/downloads/{username}": {
         parameters: {
             query?: never;
@@ -4604,6 +4626,14 @@ export interface components {
             /** @description the users the files came from, in the order they were asked of */
             usernames: string[];
         };
+        /**
+         * @description The downloads waiting in the local queue, in the order they start, as
+         *     `GET /transfers/downloads/queue` answers and a `transfers.queue` frame carries them.
+         */
+        DownloadQueue: {
+            /** @description the waiting downloads' ids, first to start first */
+            ids: string[];
+        };
         /** @description An encoder profile the measured cutoff matches. */
         EncoderGuess: {
             /**
@@ -5795,6 +5825,11 @@ export interface components {
             /** @enum {string} */
             type: "transfers.removed";
         } | {
+            /** @description the order of the downloads waiting in the local queue changed */
+            data: components["schemas"]["DownloadQueue"];
+            /** @enum {string} */
+            type: "transfers.queue";
+        } | {
             /** @description every download queued in one go has ended; sent once per job */
             data: components["schemas"]["DownloadJobFinished"];
             /** @enum {string} */
@@ -6096,6 +6131,16 @@ export interface components {
          * @enum {string}
          */
         MetricType: "counter" | "gauge" | "histogram" | "summary" | "untyped";
+        /** @description Moves waiting downloads in the local queue, as `POST /transfers/downloads/queue` takes it. */
+        MoveQueuedDownloads: {
+            /**
+             * Format: uuid
+             * @description the waiting download they go just before; null for the end of the queue
+             */
+            before?: string | null;
+            /** @description the downloads to move, in the order they are to start */
+            ids: string[];
+        };
         /** @description The data of an event that has no fields of its own. */
         NoFields: {
             /**
@@ -17540,6 +17585,72 @@ export interface operations {
                 };
             };
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    queue_order: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DownloadQueue"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    move_queued: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveQueuedDownloads"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DownloadQueue"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

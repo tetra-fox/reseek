@@ -21,7 +21,7 @@ use crate::options::OptionsDocument;
 use crate::search::{Search, SearchResponseReceived, WishlistFound};
 use crate::state::{State, VersionInfo};
 use crate::telemetry::TransferMetrics;
-use crate::transfers::{DownloadJobFinished, Transfer, TransferRemoved};
+use crate::transfers::{DownloadJobFinished, DownloadQueue, Transfer, TransferRemoved};
 use crate::users::{BrowseProgress, UserRemoved, UserStatusChanged, UserSummary};
 
 /// One frame of the event stream. Frames are named `<topic>.<event>`; the control frames
@@ -85,6 +85,9 @@ pub enum LiveFrame {
   /// a transfer was removed
   #[serde(rename = "transfers.removed")]
   TransfersRemoved(TransferRemoved),
+  /// the order of the downloads waiting in the local queue changed
+  #[serde(rename = "transfers.queue")]
+  TransfersQueue(DownloadQueue),
   /// every download queued in one go has ended; sent once per job
   #[serde(rename = "transfers.job_finished")]
   TransfersJobFinished(DownloadJobFinished),
@@ -249,6 +252,7 @@ mod tests {
     "transfers.added",
     "transfers.updated",
     "transfers.removed",
+    "transfers.queue",
     "transfers.job_finished",
     "jobs.updated",
     "jobs.removed",

@@ -11891,6 +11891,86 @@
         }
       }
     },
+    "/api/v0/transfers/downloads/queue": {
+      "get": {
+        "tags": [
+          "transfers"
+        ],
+        "summary": "The downloads waiting in the local queue, in the order they start.",
+        "operationId": "queue_order",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadQueue"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "transfers"
+        ],
+        "summary": "Moves waiting downloads in the local queue, in the order given, to just before another\nwaiting download or to the end; downloads not waiting are left where they are. Answers with\nthe new order, which a `transfers.queue` frame also carries.",
+        "operationId": "move_queued",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveQueuedDownloads"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadQueue"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v0/transfers/downloads/{username}": {
       "get": {
         "tags": [
@@ -19362,6 +19442,23 @@
           }
         }
       },
+      "DownloadQueue": {
+        "type": "object",
+        "description": "The downloads waiting in the local queue, in the order they start, as\n`GET /transfers/downloads/queue` answers and a `transfers.queue` frame carries them.",
+        "required": [
+          "ids"
+        ],
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "the waiting downloads' ids, first to start first"
+          }
+        }
+      },
       "EncoderGuess": {
         "type": "object",
         "description": "An encoder profile the measured cutoff matches.",
@@ -22218,6 +22315,26 @@
           },
           {
             "type": "object",
+            "description": "the order of the downloads waiting in the local queue changed",
+            "required": [
+              "data",
+              "type"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/DownloadQueue",
+                "description": "the order of the downloads waiting in the local queue changed"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "transfers.queue"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "every download queued in one go has ended; sent once per job",
             "required": [
               "data",
@@ -23063,6 +23180,31 @@
           "summary",
           "untyped"
         ]
+      },
+      "MoveQueuedDownloads": {
+        "type": "object",
+        "description": "Moves waiting downloads in the local queue, as `POST /transfers/downloads/queue` takes it.",
+        "required": [
+          "ids"
+        ],
+        "properties": {
+          "before": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "the waiting download they go just before; null for the end of the queue"
+          },
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "the downloads to move, in the order they are to start"
+          }
+        }
       },
       "NoFields": {
         "type": "object",

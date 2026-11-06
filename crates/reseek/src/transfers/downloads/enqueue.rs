@@ -5,14 +5,12 @@
 //! closed. A record for a file that finished earlier is superseded by the new one.
 
 use std::collections::HashSet;
-use std::sync::Arc;
 
 use api_types::live::LiveFrame;
 use api_types::transfers::{EnqueueFailure, Transfer, TransferDirection};
 use api_types::users::blocking::BlockScope;
 use rusqlite::params;
 use soulseek_client::ClientError;
-use tokio::sync::Semaphore;
 use tracing::{Instrument, debug, info, warn};
 use uuid::Uuid;
 
@@ -261,7 +259,7 @@ impl Downloads {
     if !written.inserted.is_empty() {
       self.users.touch(username, Touch::Transfer).await;
     }
-    let gate = Arc::new(Semaphore::new(gate_for(files.len())));
+    let request = (self.starts.request(), gate_for(files.len()));
     let mut enqueued = Vec::new();
     for record in written.inserted {
       let transfer = record.transfer();
@@ -273,7 +271,7 @@ impl Downloads {
         .get(&record.id)
         .map(|entry| entry.cancel.clone())
         .expect("the handle of an inserted download is kept");
-      self.spawn(record, gate.clone(), cancel);
+      self.spawn(record, request, cancel);
       enqueued.push(transfer);
     }
     Ok(Enqueued {

@@ -11,9 +11,9 @@ describe("the row menu", () => {
         .filter(([, on]) => on)
         .map(([name]) => name);
     expect(enabled("Queued, Remotely")).toEqual(["cancel", "remove", "pause", "queuePosition"]);
-    expect(enabled("Queued, Locally")).toEqual(["cancel", "remove", "pause"]);
+    expect(enabled("Queued, Locally")).toEqual(["cancel", "remove", "pause", "reorder"]);
     expect(enabled("InProgress")).toEqual(["cancel", "remove", "pause"]);
-    // a paused download waits here until it resumes
+    // a paused download waits here: it resumes, and holds its place out of the queue's order
     expect(
       Object.entries(rowActions(transfer({ state: "Queued, Locally", paused: true }), "download"))
         .filter(([, on]) => on)
