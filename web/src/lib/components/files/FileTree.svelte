@@ -119,6 +119,7 @@
   /** where the lines start in the scrolled content, under the column header */
   let rowsTop = $state(0);
   let boxHeight = $state(0);
+  let boxWidth = $state(0);
 
   const nest = $derived(
     nesting(
@@ -295,7 +296,13 @@
       {@render folder(line.node, line.depth)}
     </div>
   {:else}
-    <div class="h-full min-w-0 flex-1">{@render folder(line.node, line.depth)}</div>
+    <!-- the folder's own line stays in the part of the box that shows, its actions at the right
+         edge, when the columns are wider than the box -->
+    <div
+      class="sticky left-0 h-full min-w-0 flex-1"
+      style:max-width={boxWidth ? `${boxWidth}px` : undefined}>
+      {@render folder(line.node, line.depth)}
+    </div>
   {/if}
 {/snippet}
 
@@ -316,6 +323,7 @@
   tabindex="0"
   onscroll={(e) => (scrollTop = e.currentTarget.scrollTop)}
   bind:clientHeight={boxHeight}
+  bind:clientWidth={boxWidth}
   {@attach view.attach}
   {@attach list.attach}>
   <!-- the pinned folder lines are drawn under the column header, which a pushed one goes under,
