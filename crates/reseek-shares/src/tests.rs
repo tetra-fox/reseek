@@ -676,7 +676,7 @@ async fn serves_an_agent(extra: &str) {
   std::fs::create_dir_all(agent_files.path().join("music/Other")).unwrap();
   std::fs::write(agent_files.path().join("music/Other/02.flac"), "agent").unwrap();
   agent.shares.scan(false).unwrap();
-  eventually(async || agent.state().files == 2).await;
+  eventually(async || lock(&agent.shares.running).is_none() && agent.state().files == 2).await;
   let dump = agent_files.path().join("dump.db");
   agent.shares.dump(&dump).await.unwrap();
   let listed = agent.shares.local_shares();
