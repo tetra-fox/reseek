@@ -9,7 +9,7 @@
   let { rows }: { rows: Schemas["DirectoryCount"][] } = $props();
 </script>
 
-<h3 class="flex items-center gap-1.5 text-sm font-semibold">
+<h3 class="flex items-center gap-1.5 text-sm font-medium">
   <FolderOpenIcon class="size-4" />Most uploaded folders
 </h3>
 <table class="w-full text-sm">

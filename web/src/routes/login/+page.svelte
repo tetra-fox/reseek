@@ -76,7 +76,7 @@
     <div class="flex flex-col items-center gap-3 text-center">
       <Logo class="size-11" />
       <div class="flex flex-col gap-0.5">
-        <h1 class="text-xl font-semibold tracking-tight">reseek</h1>
+        <h1 class="text-xl font-medium">reseek</h1>
         <p class="text-sm text-fg-muted">Soulseek daemon</p>
       </div>
     </div>

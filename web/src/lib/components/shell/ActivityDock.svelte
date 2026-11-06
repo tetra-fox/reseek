@@ -116,7 +116,7 @@
       class="absolute inset-x-0 -top-1 z-10 h-2" />
   {/if}
   <header class="flex flex-wrap items-center gap-2 border-b px-gutter py-1.5">
-    <h2 class="text-sm font-semibold">Activity</h2>
+    <h2 class="text-sm font-medium">Activity</h2>
     <div class="ml-auto flex flex-wrap items-center gap-1">
       <Filter.Group label="Show">
         {#each KINDS as k (k.type)}

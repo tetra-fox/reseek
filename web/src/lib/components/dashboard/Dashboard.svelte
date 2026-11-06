@@ -1,6 +1,4 @@
 <script lang="ts">
-  import ArrowDownIcon from "@lucide/svelte/icons/arrow-down";
-  import ArrowUpIcon from "@lucide/svelte/icons/arrow-up";
   import { untrack } from "svelte";
 
   import type { Schemas } from "#lib/api/client.js";
@@ -19,7 +17,6 @@
     windowOf
   } from "#lib/dashboard/reports.js";
   import { VIEWS } from "#lib/dashboard/series.js";
-  import { formatBytes, formatSpeed } from "#lib/format.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
 
   import AreaChart from "./AreaChart.svelte";

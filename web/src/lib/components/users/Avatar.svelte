@@ -29,7 +29,7 @@
   <span
     aria-hidden="true"
     class={cn(
-      "flex shrink-0 items-center justify-center rounded-full text-sm font-semibold text-accent-fg",
+      "flex shrink-0 items-center justify-center rounded-full text-sm font-medium text-accent-fg",
       className
     )}
     style:background-color={`oklch(0.6 0.12 ${hue})`}>

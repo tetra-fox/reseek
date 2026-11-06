@@ -105,7 +105,7 @@
 
 <section class="flex flex-col gap-2">
   <div class="flex flex-wrap items-center gap-inline">
-    <h3 class="text-sm font-semibold">Errors by type</h3>
+    <h3 class="text-sm font-medium">Errors by type</h3>
     {@render which(paretoWhich, (w) => (paretoWhich = w), "Direction of the error counts")}
   </div>
   {#if paretoError}<p class="text-sm text-danger">
@@ -148,7 +148,7 @@
                 </div>
               </div>
             </td>
-            <td class="px-2 py-1 text-right font-semibold tabular-nums"
+            <td class="px-2 py-1 text-right font-medium tabular-nums"
               >{row.count.toLocaleString()}</td>
             <td class="px-2 py-1 text-right tabular-nums">{row.distinctUsers.toLocaleString()}</td>
           </tr>
@@ -162,7 +162,7 @@
 
 <section class="flex flex-col gap-2">
   <div class="flex flex-wrap items-center gap-inline">
-    <h3 class="text-sm font-semibold">Recent errors</h3>
+    <h3 class="text-sm font-medium">Recent errors</h3>
     {@render which(recentWhich, (w) => (recentWhich = w), "Direction of the recent errors")}
     {#if exception}
       <Button size="sm" variant="ghost" onclick={() => (exception = null)}>Show all errors</Button>

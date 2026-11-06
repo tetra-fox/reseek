@@ -11,33 +11,25 @@
     options: readonly { id: Id; label: string }[];
     chosen: Id;
     icon: Component;
-    variant?: "primary" | "outline" | "danger";
     disabled?: boolean;
     onclick: (id: Id) => void;
   };
 
-  let {
-    options,
-    chosen = $bindable(),
-    icon: Icon,
-    variant = "outline",
-    disabled = false,
-    onclick
-  }: Props = $props();
+  let { options, chosen = $bindable(), icon: Icon, disabled = false, onclick }: Props = $props();
 
   const label = $derived(options.find((o) => o.id === chosen)?.label ?? options[0].label);
 </script>
 
 <!-- an action with a scope picked from its menu; narrow screens show the icon with the words in a
-     tooltip. An outline's border divides the two halves, a filled one gets a line of its own -->
+     tooltip -->
 <div class="inline-flex">
   <Tooltip text={label}>
     {#snippet child({ props })}
       <Button
         {...props}
-        {variant}
+        variant="outline"
         size="sm"
-        class={["rounded-r-none", variant !== "outline" && "border-r-current/25"]}
+        class="rounded-r-none"
         {disabled}
         aria-label={label}
         onclick={() => onclick(chosen)}>
@@ -51,7 +43,7 @@
       {#snippet child({ props })}
         <Button
           {...props}
-          {variant}
+          variant="outline"
           size="icon-sm"
           class="rounded-l-none border-l-0"
           {disabled}

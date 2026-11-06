@@ -64,10 +64,10 @@ describe("the dashboard", () => {
     component = mount(Dashboard, { target: document.body });
     await flush();
     const text = () => document.body.textContent?.replace(/\s+/g, " ") ?? "";
-    expect(text()).toContain("3GB Downloaded · 3 files");
-    expect(text()).toContain("1.5GB Uploaded · 6 files");
-    expect(text()).toContain("0.50 Share ratio");
-    expect(text()).toContain("5 Users transferred with");
+    expect(text()).toContain("Downloaded 3GB 3 files");
+    expect(text()).toContain("Uploaded 1.5GB 6 files");
+    expect(text()).toContain("Share ratio 0.50");
+    expect(text()).toContain("Users transferred with 5");
     // two series drawn by default, which the chart names with their peaks
     const history = document.querySelector('[role=img][aria-label^="Transfers over time"]')!;
     expect(history.getAttribute("aria-label")).toMatch(

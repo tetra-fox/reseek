@@ -13,6 +13,9 @@ export type Series = {
 /** What a history chart plots: lines of one unit, which share its axis */
 export type ChartView = { unit: Unit; series: Series[] };
 
+const DOWNLOAD = "var(--color-download)";
+const UPLOAD = "var(--color-upload)";
+
 export type ViewId = "size" | "count" | "speed" | "errorRate" | "wait" | "ratio";
 
 /** The choices of Transfers over time. Error counts are the Errors chart's */
@@ -26,13 +29,13 @@ export const VIEWS: (ChartView & { id: ViewId; label: string })[] = [
         key: "uploadBytes",
         name: "Upload size",
         direction: "Upload",
-        color: "var(--color-series-upload-bytes)"
+        color: UPLOAD
       },
       {
         key: "downloadBytes",
         name: "Download size",
         direction: "Download",
-        color: "var(--color-series-download-bytes)"
+        color: DOWNLOAD
       }
     ]
   },
@@ -45,13 +48,13 @@ export const VIEWS: (ChartView & { id: ViewId; label: string })[] = [
         key: "uploadCount",
         name: "Upload count",
         direction: "Upload",
-        color: "var(--color-series-upload-count)"
+        color: UPLOAD
       },
       {
         key: "downloadCount",
         name: "Download count",
         direction: "Download",
-        color: "var(--color-series-download-count)"
+        color: DOWNLOAD
       }
     ]
   },
@@ -64,13 +67,13 @@ export const VIEWS: (ChartView & { id: ViewId; label: string })[] = [
         key: "uploadSpeed",
         name: "Upload speed",
         direction: "Upload",
-        color: "var(--color-series-upload-speed)"
+        color: UPLOAD
       },
       {
         key: "downloadSpeed",
         name: "Download speed",
         direction: "Download",
-        color: "var(--color-series-download-speed)"
+        color: DOWNLOAD
       }
     ]
   },
@@ -83,13 +86,13 @@ export const VIEWS: (ChartView & { id: ViewId; label: string })[] = [
         key: "uploadErrorRate",
         name: "Upload error rate",
         direction: "Upload",
-        color: "var(--color-series-upload-error-rate)"
+        color: UPLOAD
       },
       {
         key: "downloadErrorRate",
         name: "Download error rate",
         direction: "Download",
-        color: "var(--color-series-download-error-rate)"
+        color: DOWNLOAD
       }
     ]
   },
@@ -97,15 +100,13 @@ export const VIEWS: (ChartView & { id: ViewId; label: string })[] = [
     id: "wait",
     label: "Queue wait",
     unit: "seconds",
-    series: [
-      { key: "uploadWait", name: "Upload queue wait", color: "var(--color-series-upload-wait)" }
-    ]
+    series: [{ key: "uploadWait", name: "Upload queue wait", color: UPLOAD }]
   },
   {
     id: "ratio",
     label: "Share ratio",
     unit: "ratio",
-    series: [{ key: "shareRatio", name: "Share ratio", color: "var(--color-series-share-ratio)" }]
+    series: [{ key: "shareRatio", name: "Share ratio", color: "var(--color-fg)" }]
   }
 ];
 
@@ -117,13 +118,13 @@ export const ERRORS: ChartView = {
       key: "uploadErrors",
       name: "Upload errors",
       direction: "Upload",
-      color: "var(--color-series-upload-errors)"
+      color: UPLOAD
     },
     {
       key: "downloadErrors",
       name: "Download errors",
       direction: "Download",
-      color: "var(--color-series-download-errors)"
+      color: DOWNLOAD
     }
   ]
 };

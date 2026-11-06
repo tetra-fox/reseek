@@ -29,53 +29,63 @@
 
 {#snippet tile(
   Icon: Component,
-  value: string,
-  unit: string,
-  label: string,
-  color: string,
+  stat: {
+    icon?: string;
+    label: string;
+    value: string;
+    unit?: string;
+    tone?: string;
+    note?: string;
+  },
   to: string
 )}
   <a
     href={href(to)}
-    class="group flex flex-col gap-1 rounded-card border bg-surface p-4 shadow-card transition-colors duration-(--motion-fast) hover:border-fg-subtle/40">
-    <span class={["flex items-baseline gap-1 text-2xl font-semibold tabular-nums", color]}>
-      <Icon class="size-4 self-center" />{value}<span class="text-sm font-normal">{unit}</span>
-    </span>
-    <span class="text-xs text-fg-muted group-hover:text-fg">{label}</span>
+    class="group flex flex-col gap-1.5 rounded-card border bg-surface p-4 shadow-card transition-colors duration-(--motion-fast) hover:border-fg-subtle/40">
+    <span class="flex items-center gap-1.5 text-xs text-fg-muted group-hover:text-fg"
+      ><Icon class={["size-3.5", stat.icon]} />{stat.label}</span>
+    <span class={["flex items-baseline gap-1 text-2xl font-medium tabular-nums", stat.tone]}
+      >{stat.value}{#if stat.unit}<span class="text-sm text-fg-muted">{stat.unit}</span>{/if}</span>
+    {#if stat.note}<span class="truncate text-xs text-fg-subtle">{stat.note}</span>{/if}
   </a>
 {/snippet}
 
 <div class="grid grid-cols-2 gap-section lg:grid-cols-4">
   {@render tile(
     ArrowDownIcon,
-    down[0],
-    down[1],
-    `Downloaded · ${plural(t.downloadedFiles, "file", "files")}`,
-    "text-info",
+    {
+      icon: "text-download",
+      label: "Downloaded",
+      value: down[0],
+      unit: down[1],
+      note: plural(t.downloadedFiles, "file", "files")
+    },
     "/downloads?state=completed"
   )}
   {@render tile(
     ArrowUpIcon,
-    up[0],
-    up[1],
-    `Uploaded · ${plural(t.uploadedFiles, "file", "files")}`,
-    "text-success",
+    {
+      icon: "text-upload",
+      label: "Uploaded",
+      value: up[0],
+      unit: up[1],
+      note: plural(t.uploadedFiles, "file", "files")
+    },
     "/uploads?state=completed"
   )}
   {@render tile(
     ChartPieIcon,
-    t.ratio === null ? NONE : t.ratio.toFixed(2),
-    "",
-    "Share ratio (↑/↓)",
-    TONES[tone],
+    {
+      label: "Share ratio",
+      value: t.ratio === null ? NONE : t.ratio.toFixed(2),
+      tone: TONES[tone],
+      note: "Uploaded / downloaded"
+    },
     "/uploads"
   )}
   {@render tile(
     UserIcon,
-    t.peers.toLocaleString(),
-    "",
-    "Users transferred with",
-    "",
+    { label: "Users transferred with", value: t.peers.toLocaleString() },
     "/users?has=transfers"
   )}
 </div>

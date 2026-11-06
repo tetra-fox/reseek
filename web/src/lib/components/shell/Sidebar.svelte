@@ -84,7 +84,7 @@
     <a href={href("/dashboard")} class="flex h-control items-center gap-2.5" aria-label="reseek">
       <Logo />
       <span class={["flex flex-col leading-none", sidebar.collapsed && "hidden"]}>
-        <span class="text-sm font-semibold tracking-tight">reseek</span>
+        <span class="text-sm font-medium">reseek</span>
         <span class="text-[0.6875rem] text-fg-muted">Soulseek daemon</span>
       </span>
     </a>

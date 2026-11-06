@@ -45,7 +45,7 @@
         className
       )}>
       <div class="flex flex-col gap-1 py-4 pr-14 pl-5">
-        <Dialog.Title class="text-base font-semibold wrap-anywhere">{title}</Dialog.Title>
+        <Dialog.Title class="text-base font-medium wrap-anywhere">{title}</Dialog.Title>
         {#if description}
           <Dialog.Description class="text-sm text-fg-muted">{description}</Dialog.Description>
         {/if}

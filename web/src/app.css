@@ -66,7 +66,6 @@
   --color-selection: oklch(0.9 0.06 var(--accent-hue));
   --color-scrollbar: oklch(0.82 0.008 255);
   --color-scrim: oklch(0.15 0.006 255 / 0.45);
-  --color-glow: color-mix(in oklab, var(--color-accent) 7%, transparent);
   --color-thumb: oklch(1 0 0);
 
   --shadow-card: var(--elevation-card);
@@ -169,19 +168,9 @@
     }
   }
 
-  /* the dashboard chart's series, readable on both themes */
-  --color-series-upload-bytes: #21ba45;
-  --color-series-download-bytes: #2185d0;
-  --color-series-upload-count: #6435c9;
-  --color-series-download-count: #e03997;
-  --color-series-upload-speed: #f2711c;
-  --color-series-download-speed: #fbbd08;
-  --color-series-upload-errors: #db2828;
-  --color-series-download-errors: #a333c8;
-  --color-series-upload-error-rate: #d4500a;
-  --color-series-download-error-rate: #1aa9b0;
-  --color-series-upload-wait: #8e44ad;
-  --color-series-share-ratio: #b5cc18;
+  /* the two directions of a transfer, the same on every chart, arrow and figure */
+  --color-download: var(--color-accent);
+  --color-upload: var(--color-fg-muted);
 
   /* the spectrogram's plot and the text on it, dark on both themes */
   --color-plot: #101014;
@@ -276,7 +265,6 @@
   --color-selection: oklch(0.38 0.09 var(--accent-hue));
   --color-scrollbar: oklch(0.36 0.012 255);
   --color-scrim: oklch(0.08 0.006 255 / 0.6);
-  --color-glow: color-mix(in oklab, var(--color-accent) 9%, transparent);
   --color-thumb: oklch(0.3 0.01 255);
   --elevation-card: inset 0 1px 0 0 oklch(1 0 0 / 0.03), 0 1px 2px 0 oklch(0 0 0 / 0.35);
   --elevation-raised: inset 0 1px 0 0 oklch(1 0 0 / 0.05), 0 12px 32px -8px oklch(0 0 0 / 0.6);
@@ -289,15 +277,8 @@
     scrollbar-color: var(--color-scrollbar) transparent;
   }
 
-  /* a faint accent glow at the top of every page, behind the content */
   body {
     @apply bg-page font-sans text-fg antialiased;
-    background-image: radial-gradient(
-      ellipse 70rem 24rem at 60% -10rem,
-      var(--color-glow),
-      transparent 70%
-    );
-    background-repeat: no-repeat;
   }
 
   code {

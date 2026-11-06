@@ -46,7 +46,7 @@
           href={href(p.to)}
           class={[
             "underline-offset-2 hover:underline",
-            p.strong ? "text-lg font-semibold tabular-nums" : "text-fg-muted"
+            p.strong ? "text-lg font-medium tabular-nums" : "text-fg-muted"
           ]}>{p.text}</a>
       {/each}
     </span>
@@ -57,7 +57,7 @@
 <section aria-label="Current activity" class="grid grid-cols-2 gap-section lg:grid-cols-5">
   {@render tile(
     ArrowDownIcon,
-    "text-info",
+    "text-download",
     "Downloading",
     [
       { text: `${down.active} active`, to: "/downloads?state=active", strong: true },
@@ -67,7 +67,7 @@
   )}
   {@render tile(
     ArrowUpIcon,
-    "text-success",
+    "text-upload",
     "Uploading",
     [
       { text: `${up.active} active`, to: "/uploads?state=active", strong: true },

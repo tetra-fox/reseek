@@ -72,7 +72,7 @@
 </script>
 
 <header class="flex items-center gap-2 px-4 pt-3">
-  <h2 class="min-w-0 flex-1 truncate font-semibold" title={path}>{name}</h2>
+  <h2 class="min-w-0 flex-1 truncate font-medium" title={path}>{name}</h2>
   {#if menu}
     <Menu.Root>
       <Menu.Trigger>

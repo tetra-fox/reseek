@@ -63,7 +63,7 @@
       : !connected
         ? away
           ? "You will show as away once connected. Click to show as online."
-          : "Click to show as away once connected."
+          : "Click to show as away once connected"
         : away
           ? "Others see you as away. Click to show as online."
           : "Others see you as online. Click to show as away."}>
@@ -87,13 +87,13 @@
   </Tooltip>
   <SpeedLimits>
     <span class="flex shrink-0 items-center gap-1.5" aria-label="Downloads">
-      <ArrowDownIcon class="size-3.5 text-info" />
+      <ArrowDownIcon class="size-3.5 text-download" />
       <span class="font-mono whitespace-pre tabular-nums">{downloads.speed}</span>
       <span class="text-fg-muted max-md:hidden"
         >{downloads.active} active · {downloads.queued} queued</span>
     </span>
     <span class="flex shrink-0 items-center gap-1.5" aria-label="Uploads">
-      <ArrowUpIcon class="size-3.5 text-success" />
+      <ArrowUpIcon class="size-3.5 text-upload" />
       <span class="font-mono whitespace-pre tabular-nums">{uploads.speed}</span>
       <span class="text-fg-muted max-md:hidden"
         >{uploads.active} active · {uploads.queued} queued</span>
@@ -103,7 +103,7 @@
     <a
       href={href("/jobs")}
       class="flex h-control-sm shrink-0 items-center gap-1.5 rounded-badge px-2 text-fg-muted hover:bg-hover hover:text-fg"
-      title={failed ? "A job failed. Open Jobs to see it." : "Open Jobs"}>
+      title={failed ? "A job failed" : undefined}>
       <ListChecksIcon class="size-3.5" />
       <span class="max-md:hidden">{jobsText ?? "A job failed"}</span>
       <span class="md:hidden">{jobsShort ?? "A job failed"}</span>

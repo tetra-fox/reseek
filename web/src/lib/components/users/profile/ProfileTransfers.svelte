@@ -157,8 +157,8 @@
           ]}
           style:grid-template-columns={template}>
           <span role="gridcell" title={t.direction}>
-            {#if t.direction === "Upload"}<ArrowUpIcon class="size-4 text-success" />{:else}
-              <ArrowDownIcon class="size-4 text-info" />{/if}
+            {#if t.direction === "Upload"}<ArrowUpIcon class="size-4 text-upload" />{:else}
+              <ArrowDownIcon class="size-4 text-download" />{/if}
           </span>
           <TransferRow
             transfer={t}

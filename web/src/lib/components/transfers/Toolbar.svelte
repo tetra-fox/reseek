@@ -223,7 +223,6 @@
           options={SCOPES.cancel}
           bind:chosen={cancel}
           icon={XIcon}
-          variant="danger"
           {disabled}
           onclick={(id) => scoped("cancel", id)} />
         <SplitButton
@@ -253,9 +252,9 @@
   {#if metrics}
     <p class="text-xs text-fg-muted tabular-nums">
       {metrics.inProgress.files} active · {formatSpeed(metrics.inProgress.totalSpeed)} ·
-      {metrics.queued.files} queued · {metrics.completed.failed} failed · {formatBytes(
-        metrics.completed.bytes
-      )} since reseek started
+      {metrics.queued.files} queued · {formatBytes(metrics.completed.bytes)}
+      {direction === "download" ? "downloaded" : "uploaded"}, {metrics.completed.failed} failed since
+      reseek started
     </p>
   {/if}
 </div>

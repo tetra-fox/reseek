@@ -31,7 +31,7 @@
       ]}>
       <div class="flex min-w-0 flex-col gap-1">
         {#if title}
-          <h3 class="text-sm leading-tight font-semibold select-none">{title}</h3>
+          <h3 class="text-sm leading-tight font-medium select-none">{title}</h3>
         {/if}
         {#if typeof description === "function"}
           <p class="text-sm text-fg-muted">{@render description()}</p>
