@@ -26,16 +26,7 @@ pub use record::{ASKED_ORDER, COLUMNS, NEWEST_FIRST, Record, transfer};
 
 /// `transfers.db`: the `Transfers` table, each transfer's state history, and which speed limits
 /// are in force.
-pub static SCHEMA: Schema = db::schema!(
-  "transfers",
-  [
-    "0001_initial",
-    "0002_jobs",
-    "0003_fold_batches",
-    "0004_speed_limits",
-    "0005_paused",
-  ]
-);
+pub static SCHEMA: Schema = db::schema!("transfers", ["0001_initial"]);
 
 /// Opens `transfers.db` in `location`.
 pub async fn open(location: &Location) -> Result<Database, DbError> {
