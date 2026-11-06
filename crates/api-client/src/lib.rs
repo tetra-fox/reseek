@@ -1,8 +1,8 @@
 //! A typed client of reseek's HTTP API and its event stream, over the same `api-types` the
 //! daemon answers with, so a test or a tool and the daemon cannot disagree about a field.
 //!
-//! [`Client`] has a method for every API call, named after what it does and documented with its
-//! route. A call that is the same for downloads and uploads takes the direction, and a route that
+//! [`Client`] has a method for every API call a test or tool makes, named after what it does and
+//! documented with its route; the relay agent's own routes are left to the agent. A call that is the same for downloads and uploads takes the direction, and a route that
 //! answers in two forms, or as headers alone, has a method for each. [`Client::live`] opens the
 //! event stream, which reconnects with `Last-Event-ID` on its own. A call that is answered with
 //! an error returns [`Error::Api`] with the status and the error body.
@@ -46,7 +46,6 @@ use serde::de::DeserializeOwned;
 
 pub use files::LocalFile;
 pub use live::{Live, LiveEvent, LiveStream};
-pub use relay::AgentCall;
 pub use relay_socket::{RelayReceived, RelaySocket};
 
 /// What a call that failed failed with.
