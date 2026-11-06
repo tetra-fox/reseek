@@ -424,8 +424,6 @@ impl Decoder {
   }
 }
 
-/// Whether a codec keeps every bit: the lossless codecs and plain PCM, but not the companded
-/// telephone formats.
 /// The bits per sample `params` state. A container says nothing of them for ALAC, whose magic
 /// cookie does; the decoder made from `params` read the same cookie, so a cookie that does not
 /// read here never gets this far.
@@ -437,6 +435,8 @@ fn stated_bits(params: &AudioCodecParameters) -> Option<u32> {
   })
 }
 
+/// Whether a codec keeps every bit: the lossless codecs and plain PCM, but not the companded
+/// telephone formats.
 fn lossless(codec: AudioCodecId) -> bool {
   if codec == CODEC_ID_FLAC || codec == CODEC_ID_ALAC {
     return true;

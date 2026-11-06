@@ -96,8 +96,8 @@ impl Source {
             None => Ok(None),
           };
         };
-        // a seek places a frame by the packets' stated durations, so samples a packet holds past
-        // its own would reach into a later packet's place only when read from the start
+        // the container's spans are what a seek uses, so a packet's samples stop where its span
+        // does
         let stated = (frames.end - frames.start).saturating_mul(u64::from(format.channels));
         if stated < samples.len() as u64 {
           samples.truncate(stated as usize);
