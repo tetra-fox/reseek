@@ -74,8 +74,8 @@ async fn run(app: AppState) {
   upkeep(app, Duration::from_secs(5), "transfer figures", {
     let app = app.clone();
     move || {
-      network::observe_transfers(&app);
-      async {}
+      let app = app.clone();
+      async move { network::observe_transfers(&app).await }
     }
   });
   upkeep(app, Duration::from_secs(1), "transfer figures pushed", {

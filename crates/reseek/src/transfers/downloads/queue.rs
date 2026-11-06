@@ -14,7 +14,9 @@ use uuid::Uuid;
 
 use super::Downloads;
 use crate::api::error::ApiError;
+use crate::db::DbError;
 use crate::sync::lock;
+use crate::transfers::categories::{IN_PROGRESS, QUEUED, UNFINISHED};
 use crate::transfers::store;
 
 /// How long a place a peer gave is answered again without asking it.
@@ -132,6 +134,32 @@ impl Downloads {
       Ok(None) => debug!(%id, "download left the peer's queue before its place was written"),
       Err(e) => debug!(%id, error = %e, "place in queue not written"),
     }
+  }
+
+  /// The downloads not finished as the gauges count them: those queued, here or by their peer,
+  /// and those in progress, each as users, files and bytes. Paused ones are neither.
+  pub async fn tallies(&self) -> Result<((u64, u64, u64), (u64, u64, u64)), DbError> {
+    self
+      .db
+      .read(|conn| {
+        let tally = |condition: &str| -> rusqlite::Result<(u64, u64, u64)> {
+          conn.query_row(
+            &format!(
+              "SELECT COUNT(DISTINCT Username), COUNT(*), COALESCE(SUM(Size), 0) FROM Transfers \
+               WHERE Direction = 'Download' AND Removed = 0 AND Paused = 0 AND {UNFINISHED} \
+               AND {condition}"
+            ),
+            [],
+            |row| {
+              let at =
+                |i| -> rusqlite::Result<u64> { Ok(row.get::<_, i64>(i)?.max(0).unsigned_abs()) };
+              Ok((at(0)?, at(1)?, at(2)?))
+            },
+          )
+        };
+        Ok((tally(QUEUED)?, tally(IN_PROGRESS)?))
+      })
+      .await
   }
 
   /// Whether the download `id` has a task running.

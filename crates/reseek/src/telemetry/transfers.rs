@@ -190,6 +190,19 @@ impl TransferMetrics {
     self.in_progress_bytes.set(bytes);
   }
 
+  /// The queued and in-progress gauges from counts made elsewhere, each users, files and
+  /// bytes.
+  pub fn set_counts(&self, queued: (u64, u64, u64), in_progress: (u64, u64, u64)) {
+    let (users, files, bytes) = queued;
+    self.queued_users.set(users as f64);
+    self.queued_files.set(files as f64);
+    self.queued_bytes.set(bytes as f64);
+    let (users, files, bytes) = in_progress;
+    self.in_progress_users.set(users as f64);
+    self.in_progress_files.set(files as f64);
+    self.in_progress_bytes.set(bytes as f64);
+  }
+
   /// The figures of this direction as the event stream carries them.
   pub fn figures(&self) -> figures::DirectionMetrics {
     // gauges and counters hold whole counts

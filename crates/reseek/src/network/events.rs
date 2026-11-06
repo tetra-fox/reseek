@@ -806,14 +806,19 @@ pub fn observe_client(app: &AppState) {
 
 /// Counts both directions' queued and in-progress transfers again from the client's, and moves
 /// their speed averages; run every five seconds.
-pub fn observe_transfers(app: &AppState) {
+pub async fn observe_transfers(app: &AppState) {
+  // downloads waiting here are queued too, which the client does not hold yet
+  let tallies = app.downloads.tallies().await;
   let client = app.network.client();
   let (uploads, downloads) = (client.uploads(), client.downloads());
   let family = app.telemetry.metrics().transfers();
   family.uploads.count(&uploads);
   family.uploads.pace(&uploads);
-  family.downloads.count(&downloads);
   family.downloads.pace(&downloads);
+  match tallies {
+    Ok((queued, in_progress)) => family.downloads.set_counts(queued, in_progress),
+    Err(e) => debug!(error = %e, "download counts not read; the gauges keep the last ones"),
+  }
 }
 
 #[cfg(test)]

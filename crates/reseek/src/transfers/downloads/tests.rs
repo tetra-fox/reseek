@@ -461,6 +461,41 @@ async fn a_folder_download_skips_the_files_the_filters_match_before_asking_its_u
   }
 }
 
+#[tokio::test]
+async fn the_gauges_count_the_downloads_waiting_here_but_not_the_paused_ones() {
+  let app = app(TRUSTED, &[]).await;
+  let with = |username: &str, state: TransferStates, paused: bool| {
+    let mut record = Record::download(username, &format!("{username}.flac"), 100);
+    record.state = state;
+    record.paused = paused;
+    record
+  };
+  for record in [
+    with(
+      "alice",
+      TransferStates::Queued | TransferStates::Locally,
+      false,
+    ),
+    with(
+      "bob",
+      TransferStates::Queued | TransferStates::Remotely,
+      false,
+    ),
+    with(
+      "carol",
+      TransferStates::Queued | TransferStates::Locally,
+      true,
+    ),
+    with("dave", TransferStates::InProgress, false),
+    done("erin", "e.flac"),
+  ] {
+    insert(&app, &record).await;
+  }
+  let (queued, in_progress) = app.state.downloads.tallies().await.unwrap();
+  assert_eq!(queued, (2, 2, 200));
+  assert_eq!(in_progress, (1, 1, 100));
+}
+
 /// Reads the download `id` until `done` holds for it, for ten seconds at most.
 async fn read_until(app: &TestApp, id: Uuid, done: impl Fn(&Record) -> bool) -> Record {
   for _ in 0..1000 {
