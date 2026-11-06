@@ -1,4 +1,5 @@
 import { parseSlsk, type SlskLink } from "#lib/files/slsk.js";
+import { linkPattern, links } from "#lib/text.js";
 
 /**
  * A run of a chat message starting at `at`: plain text, a web link, a `slsk://` link, or a
@@ -9,9 +10,7 @@ export type Rich =
   | { at: number; text: string; kind: "url"; url: string }
   | { at: number; text: string; kind: "slsk"; link: SlskLink };
 
-/** http(s) and slsk links, up to the first space; trailing punctuation stays text */
-const LINK = /(?:https?|slsk):\/\/[^\s<>"]+/gi;
-const TRAILING = /[.,;:!?)\]}'"]+$/;
+const LINK = linkPattern("https?|slsk");
 
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -51,9 +50,7 @@ export const richText = (text: string, watch: string[] = []): Rich[] => {
   const pattern = watching(watch);
   const parts: Rich[] = [];
   let last = 0;
-  for (const match of text.matchAll(LINK)) {
-    const raw = match[0].replace(TRAILING, "");
-    const at = match.index;
+  for (const { at, url: raw } of links(text, LINK)) {
     const slsk = raw.toLowerCase().startsWith("slsk:") ? parseSlsk(raw) : null;
     const isUrl = !raw.toLowerCase().startsWith("slsk:");
     if (!slsk && !isUrl) continue;

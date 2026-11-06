@@ -1,9 +1,17 @@
 /** A run of text starting at `at`: plain, or a web link to render as one */
 export type TextPart = { at: number; text: string; url?: string };
 
-/** http(s) links, up to the first space; trailing punctuation stays text */
-const URL_PATTERN = /https?:\/\/[^\s<>"]+/g;
+/** Links with a scheme `schemes` matches, such as `https?`, each up to the first space */
+export const linkPattern = (schemes: string) => new RegExp(`(?:${schemes}):\\/\\/[^\\s<>"]+`, "gi");
+const WEB = linkPattern("https?");
 const TRAILING = /[.,;:!?)\]}'"]+$/;
+
+/** The links `pattern` finds in `text`, where each starts, trailing punctuation left out */
+export const links = (text: string, pattern: RegExp): { at: number; url: string }[] =>
+  Array.from(text.matchAll(pattern), (match) => ({
+    at: match.index,
+    url: match[0].replace(TRAILING, "")
+  }));
 
 /**
  * Splits text into plain runs and `http(s)://` links, for text from other users rendered as
@@ -12,9 +20,7 @@ const TRAILING = /[.,;:!?)\]}'"]+$/;
 export const linkify = (text: string): TextPart[] => {
   const parts: TextPart[] = [];
   let last = 0;
-  for (const match of text.matchAll(URL_PATTERN)) {
-    const url = match[0].replace(TRAILING, "");
-    const at = match.index;
+  for (const { at, url } of links(text, WEB)) {
     if (at > last) parts.push({ at: last, text: text.slice(last, at) });
     parts.push({ at, text: url, url });
     last = at + url.length;
