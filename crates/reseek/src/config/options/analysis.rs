@@ -11,33 +11,31 @@ use crate::config::enums::SpectrogramScale;
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Analysis {
-  /// Analyze each finished download whose file type is listed in Extensions.
+  /// Analyzes each finished download whose extension is listed in Extensions.
   #[cascade(env = "RESEEK_ANALYSIS_ON_DOWNLOAD", cli = "--analysis-on-download")]
   pub on_download: bool,
-  /// File extensions, without the dot, that the UI offers to analyze and that are queued when a
-  /// whole folder or a finished download is analyzed.
+  /// File extensions, without the dot, of the files offered for analysis. Analyzing a folder
+  /// includes only these.
   pub extensions: Vec<String>,
-  /// Number of files analyzed at once: `auto`, half of the processors and at least one, or a
-  /// number from 1 to the number of processors.
+  /// Number of files analyzed at once: `auto` for half the processors, or a number up to the
+  /// processor count.
   pub workers: Workers,
-  /// Maximum analysis time per file. An analysis that runs longer stops and reports its
-  /// partial results.
+  /// Maximum analysis time per file. A longer one stops and keeps its partial results.
   #[serde(with = "crate::config::duration")]
   pub timeout: Duration,
   /// Maximum length, in minutes, of a file analyzed in full. Longer files are sampled.
   pub max_full_minutes: u32,
-  /// Number of evenly spaced one-second windows analyzed in a sampled file.
+  /// Number of evenly spaced one-second stretches analyzed in a sampled file.
   pub sampled_windows: u32,
   /// Disk space for the spectrograms and waveforms of analyzed files. The least recently viewed
   /// are removed first.
   #[cascade(kind = "size")]
   pub cache_max_bytes: bytesize::ByteSize,
-  /// Disk space for files uploaded from a browser for analysis, with their spectrograms and
-  /// waveforms. The oldest are removed first, except the two newest, which stay whatever they
-  /// take.
+  /// Disk space for files uploaded from the browser for analysis. The oldest are removed first, but
+  /// the two newest are always kept.
   #[cascade(kind = "size")]
   pub upload_cache_max_bytes: bytesize::ByteSize,
-  /// Largest file that can be uploaded from a browser for analysis.
+  /// Largest file that can be uploaded from the browser for analysis.
   #[cascade(kind = "size")]
   pub upload_max_bytes: bytesize::ByteSize,
   /// Spectrogram display.
@@ -67,8 +65,8 @@ impl Default for Analysis {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Spectrogram {
-  /// Default frequency scale of the spectrogram: `log`, `linear` or `mel`. A scale picked in
-  /// the browser takes precedence.
+  /// Frequency scale of the spectrogram: `log`, `linear` or `mel`. A scale picked in the browser
+  /// overrides it.
   pub scale: SpectrogramScale,
 }
 

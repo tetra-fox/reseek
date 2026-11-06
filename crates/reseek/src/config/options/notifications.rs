@@ -25,17 +25,16 @@ option_enum! {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct ChatNotifications {
-  /// Suppresses notifications of every type while the tab is visible and, for a message, its
-  /// chat is open.
+  /// No notifications while the tab is in view, except for messages in a chat that is not open.
   #[cascade(env = "RESEEK_CHAT_NOTIFICATIONS_ONLY_WHEN_HIDDEN")]
   pub only_when_hidden: bool,
   /// How a private message is announced.
   #[cascade(env = "RESEEK_CHAT_NOTIFICATIONS_PRIVATE_MESSAGES")]
   pub private_messages: NotificationMode,
-  /// How a room message that mentions this account is announced.
+  /// How a room message that mentions you is announced.
   #[cascade(env = "RESEEK_CHAT_NOTIFICATIONS_MENTIONS")]
   pub mentions: NotificationMode,
-  /// How each message in a room set to notify of all messages is announced.
+  /// How messages in rooms set to notify of every message are announced.
   #[cascade(env = "RESEEK_CHAT_NOTIFICATIONS_ROOM_MESSAGES")]
   pub room_messages: NotificationMode,
 }
@@ -105,8 +104,8 @@ impl Default for SearchNotifications {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct BuddyNotifications {
-  /// How a buddy coming online, going away or going offline is announced, for the buddies set
-  /// to tell of it.
+  /// How a buddy coming online, going away or going offline is announced, for buddies set to
+  /// notify.
   #[cascade(env = "RESEEK_NOTIFICATIONS_BUDDIES_PRESENCE")]
   pub presence: NotificationMode,
 }
@@ -125,8 +124,7 @@ impl Default for BuddyNotifications {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct TransferNotifications {
-  /// How the end of a download job is announced: everything queued in one go, such as a file,
-  /// a folder or an album, told of once when all of it has finished.
+  /// How finished downloads are announced, once per file, folder or album queued together.
   #[cascade(env = "RESEEK_NOTIFICATIONS_TRANSFERS_JOB_FINISHED")]
   pub job_finished: NotificationMode,
   /// How an upload queued by another user is announced.

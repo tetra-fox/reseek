@@ -10,17 +10,17 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Paths {
-  /// Configuration directory, which holds the configuration files and the scripts directory.
-  /// Set only through the environment or the command line.
+  /// Holds the configuration files and scripts. Can only be set from the environment or the command
+  /// line.
   #[cascade(env = "RESEEK_CONFIG_DIR", cli = "--config-dir")]
   pub config: Option<PathBuf>,
-  /// Data directory, which holds the databases, runtime overrides and the instance lock.
+  /// Holds the databases and the settings applied at runtime.
   #[cascade(env = "RESEEK_DATA_DIR", cli = "--data-dir")]
   pub data: Option<PathBuf>,
-  /// Cache directory, which holds data that can be rebuilt, such as the share index.
+  /// Holds data that can be rebuilt, such as the share index.
   #[cascade(env = "RESEEK_CACHE_DIR", cli = "--cache-dir")]
   pub cache: Option<PathBuf>,
-  /// Directory of the daily log files.
+  /// Holds the daily log files.
   #[cascade(env = "RESEEK_LOG_DIR", cli = "--log-dir")]
   pub logs: Option<PathBuf>,
 }

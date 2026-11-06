@@ -10,15 +10,15 @@ pub struct Flags {
   /// Omits the startup banner.
   #[cascade(env = "RESEEK_NO_LOGO", cli = "-n|--no-logo")]
   pub no_logo: bool,
-  /// Initializes everything, then exits without serving. Used to check a configuration.
+  /// Starts up and exits without serving, to check a configuration.
   #[cascade(env = "RESEEK_NO_START", cli = "-x|--no-start")]
   pub no_start: bool,
   /// Disables watching the configuration files. Changes then require a reload signal or a
   /// restart.
   #[cascade(env = "RESEEK_NO_CONFIG_WATCH", cli = "--no-config-watch")]
   pub no_config_watch: bool,
-  /// Watches the configuration files by reading them every few seconds, for mounts that do
-  /// not deliver file notifications.
+  /// Checks the configuration files for changes every few seconds, for file systems that don't
+  /// report changes.
   #[cascade(env = "RESEEK_CONFIG_WATCH_POLL", cli = "--config-watch-poll")]
   pub config_watch_poll: bool,
   /// Does not connect to the Soulseek server at startup.
@@ -27,11 +27,10 @@ pub struct Flags {
   /// Skips the share scan at startup.
   #[cascade(env = "RESEEK_NO_SHARE_SCAN", cli = "--no-share-scan")]
   pub no_share_scan: bool,
-  /// Runs a full share scan at startup, even when the share cache is current.
+  /// Runs a full share scan at startup, even when the share index is up to date.
   #[cascade(env = "RESEEK_FORCE_SHARE_SCAN", cli = "--force-share-scan")]
   pub force_share_scan: bool,
-  /// Has no effect, and is accepted for compatibility: migrations apply by version and none runs
-  /// twice.
+  /// Has no effect, and is accepted for compatibility.
   #[cascade(env = "RESEEK_FORCE_MIGRATIONS", cli = "--force-migrations")]
   pub force_migrations: bool,
   /// Disables the check for a newer release.
@@ -53,8 +52,8 @@ pub struct Flags {
     cli = "--legacy-windows-tcp-keepalive"
   )]
   pub legacy_windows_tcp_keepalive: bool,
-  /// Makes a relay controller trust the share listing of an agent for whether a file exists,
-  /// instead of asking the agent first.
+  /// Trusts a relay agent's share list for whether a file exists, instead of asking the agent
+  /// first.
   #[cascade(
     env = "RESEEK_OPTIMISTIC_RELAY_FILE_INFO",
     cli = "--optimistic-relay-file-info"

@@ -339,7 +339,7 @@ async fn a_report_and_its_judgment_outlive_the_file() {
   assert_eq!(report["override"]["verdict"], "fake");
   let limitations = report["limitations"].as_array().unwrap();
   assert!(
-    limitations.contains(&json!("The file is no longer there.")),
+    limitations.contains(&json!("The file is no longer there")),
     "{report}"
   );
   let (status, _) = app.call("GET", &route("Album/02.flac"), None).await;

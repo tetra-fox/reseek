@@ -22,14 +22,14 @@ pub struct Soulseek {
   /// Port of the Soulseek server.
   #[cascade(env = "RESEEK_SLSK_PORT", cli = "--slsk-port", apply = "reconnect")]
   pub port: u16,
-  /// Soulseek account username. Required to connect to the network.
+  /// Soulseek username. Required to connect.
   #[cascade(
     env = "RESEEK_SLSK_USERNAME",
     cli = "--slsk-username",
     apply = "reconnect"
   )]
   pub username: Option<String>,
-  /// Soulseek account password.
+  /// Soulseek password.
   #[cascade(
     env = "RESEEK_SLSK_PASSWORD",
     cli = "--slsk-password",
@@ -52,8 +52,7 @@ pub struct Soulseek {
   /// Port on which to accept connections from other users.
   #[cascade(env = "RESEEK_SLSK_LISTEN_PORT", cli = "--slsk-listen-port")]
   pub listen_port: u16,
-  /// Forwards the listen port on the router through UPnP, NAT-PMP or PCP while connected to
-  /// the server.
+  /// Opens the listen port on the router with UPnP, NAT-PMP or PCP while connected.
   #[cascade(
     env = "RESEEK_SLSK_PORT_MAPPING",
     cli = "--slsk-no-port-mapping",
@@ -109,16 +108,16 @@ impl Default for Soulseek {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct DistributedNetwork {
-  /// Disables participation in the distributed search network.
+  /// Turns off the distributed network, which passes searches between users.
   #[cascade(env = "RESEEK_SLSK_NO_DNET", cli = "--slsk-no-dnet")]
   pub disabled: bool,
-  /// Refuses child connections in the distributed network.
+  /// Stops passing searches on to other users in the distributed network.
   #[cascade(env = "RESEEK_SLSK_DNET_NO_CHILDREN", cli = "--slsk-dnet-no-children")]
   pub disable_children: bool,
-  /// Maximum number of child connections in the distributed network.
+  /// Maximum number of users to pass searches on to in the distributed network.
   #[cascade(env = "RESEEK_SLSK_DNET_CHILDREN", cli = "--slsk-dnet-children")]
   pub child_limit: u32,
-  /// Logs distributed network diagnostics.
+  /// Logs details of the distributed network.
   #[cascade(env = "RESEEK_SLSK_DNET_LOGGING", cli = "--slsk-dnet-logging")]
   pub logging: bool,
 }
@@ -176,8 +175,8 @@ pub struct ConnectionTimeouts {
   #[cascade(env = "RESEEK_SLSK_TRANSFER_TIMEOUT", cli = "--slsk-transfer-timeout")]
   #[serde(with = "crate::config::duration")]
   pub transfer: Duration,
-  /// Maximum wait for a peer to answer a transfer request, for uploads and for downloads that
-  /// use the transfer request style. Minimum: 1 second.
+  /// Time another user has to answer a transfer request, for uploads and for `transfer_request`
+  /// downloads. Minimum: 1 second.
   #[serde(with = "crate::config::duration")]
   pub transfer_response: Duration,
 }
@@ -283,20 +282,20 @@ impl Default for ServerKeepalive {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct SoulseekLimits {
-  /// Largest message accepted from another user. Only the browse listing of a large share
-  /// legitimately comes close.
+  /// Largest file list accepted from another user. Other messages have smaller limits of their
+  /// own.
   #[cascade(kind = "size")]
   pub max_message_size: bytesize::ByteSize,
   /// Maximum number of connections to other users being opened at once.
   pub max_concurrent_peer_connects: u32,
   /// Maximum number of message connections to other users kept open.
   pub max_cached_peer_connections: u32,
-  /// Maximum number of search responses held for searchers that cannot be reached yet.
+  /// Maximum number of search results held for users who can't be reached yet.
   pub search_response_cache_size: u32,
   /// Maximum number of user addresses remembered between connections.
   pub user_endpoint_cache_size: u32,
-  /// Time a prospective distributed parent has to send its branch level, branch root and a
-  /// search.
+  /// Time a user offering to pass you searches in the distributed network has to start doing so.
+  /// One that doesn't is dropped.
   #[serde(with = "crate::config::duration")]
   pub distributed_parent_negotiation_timeout: Duration,
 }
@@ -333,8 +332,7 @@ impl Default for SoulseekSearch {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct SoulseekBrowse {
-  /// Time a user has to start sending a share listing. Large shares take longer to prepare.
-  /// Minimum: 1 second.
+  /// Time a user has to start sending their file list when browsed. Minimum: 1 second.
   #[serde(with = "crate::config::duration")]
   pub response_timeout: Duration,
 }

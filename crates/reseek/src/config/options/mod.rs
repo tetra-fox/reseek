@@ -55,17 +55,16 @@ pub use web::{Certificate, Cors, Https, Live, Web, WebFiles};
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Options {
-  /// Debug mode. Logs at debug level and includes the module name on every log line.
+  /// Logs at debug level, with the module name on every line.
   #[cascade(env = "RESEEK_DEBUG", cli = "-d|--debug", apply = "restart")]
   pub debug: bool,
   /// Serves the API only, without the web UI.
   #[cascade(env = "RESEEK_HEADLESS", cli = "-H|--headless", apply = "restart")]
   pub headless: bool,
-  /// Allows administrators to edit the configuration files and runtime overrides through the
-  /// API.
+  /// Lets administrators change settings from the web UI and the API.
   #[cascade(env = "RESEEK_REMOTE_CONFIGURATION", cli = "--remote-configuration")]
   pub remote_configuration: bool,
-  /// Allows the files API to delete files in the download and incomplete directories.
+  /// Allows deleting files in the download directories from the web UI and the API.
   #[cascade(
     env = "RESEEK_REMOTE_FILE_MANAGEMENT",
     cli = "--remote-file-management"
@@ -78,7 +77,7 @@ pub struct Options {
     apply = "restart"
   )]
   pub instance_name: String,
-  /// Maximum time a shutdown waits for work in progress before the process exits.
+  /// How long a shutdown waits for work in progress to finish.
   #[cascade(env = "RESEEK_SHUTDOWN_TIMEOUT", cli = "--shutdown-timeout")]
   #[serde(with = "crate::config::duration")]
   pub shutdown_timeout: Duration,
@@ -183,16 +182,16 @@ impl Default for Options {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Blacklist {
-  /// Enables the address blocklist. Peers at listed addresses are refused.
+  /// Refuses users at the addresses in the blocklist file.
   #[cascade(
     env = "RESEEK_BLACKLIST",
     cli = "--enable-blacklist",
     apply = "restart"
   )]
   pub enabled: bool,
-  /// Blocklist file in CIDR, P2P or DAT format. Reloaded when a `blacklist` option changes.
-  /// Users at listed addresses also have their private messages dropped and their room messages
-  /// hidden, once their address is known.
+  /// Blocklist file in CIDR, P2P or DAT format, read again when a blocklist setting changes. Listed
+  /// users also have their private messages dropped and room messages hidden, once their address is
+  /// known.
   #[cascade(env = "RESEEK_BLACKLIST_FILE", cli = "--blacklist-file")]
   pub file: Option<std::path::PathBuf>,
 }
@@ -234,16 +233,14 @@ pub struct SearchThrottling {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct IncomingSearchThrottling {
-  /// Bounds how many incoming searches are answered at once. Further searches wait in the
-  /// search queue until a worker is free.
+  /// Number of incoming searches answered at once. Others wait in the search queue.
   #[cascade(
     env = "RESEEK_THROTTLING_SEARCH_INCOMING_CONCURRENCY",
     cli = "--throttling-search-incoming-concurrency",
     apply = "restart"
   )]
   pub concurrency: u32,
-  /// Maximum number of incoming searches waiting to be answered. Further searches are
-  /// dropped and counted as dropped searches.
+  /// Maximum number of incoming searches waiting to be answered. Searches past it are dropped.
   #[cascade(
     env = "RESEEK_THROTTLING_SEARCH_INCOMING_CIRCUIT_BREAKER",
     cli = "--throttling-search-incoming-circuit-breaker"
@@ -281,7 +278,7 @@ pub struct Feature {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Integrations {
-  /// Scripts by name, each run on its events.
+  /// Programs run when events happen, by name.
   #[cascade(user_keyed)]
   pub scripts: BTreeMap<String, Script>,
 }
@@ -357,21 +354,18 @@ pub struct Chat {
   /// Maximum length of a sent message, in characters.
   #[cascade(env = "RESEEK_CHAT_MAX_MESSAGE_LENGTH")]
   pub max_message_length: u32,
-  /// Accepts invitations to private rooms. When off, the server is told that invitations are
-  /// not accepted.
+  /// Lets other users add you to their private rooms.
   #[cascade(env = "RESEEK_CHAT_ACCEPT_PRIVATE_ROOM_INVITATIONS")]
   pub accept_private_room_invitations: bool,
   /// Words and phrases that mark a room message as a mention. Matched as whole words, in any
   /// case.
   #[cascade(env = "RESEEK_CHAT_HIGHLIGHT_WORDS")]
   pub highlight_words: Vec<String>,
-  /// Time with no one at the UI after which we are shown as away, until someone opens it again.
-  /// `0` never sets away on its own.
+  /// Time with the web UI closed before you are shown as away. `0` turns this off.
   #[cascade(env = "RESEEK_CHAT_AUTO_AWAY")]
   #[serde(with = "crate::config::duration")]
   pub auto_away: Duration,
-  /// Reply sent while we are away to the first private message from each user, marked as an
-  /// automatic message. Unset sends none.
+  /// Sent while you are away, as an automatic reply to each user's first private message.
   #[cascade(env = "RESEEK_CHAT_AUTO_REPLY")]
   pub auto_reply: Option<String>,
 }
@@ -393,11 +387,11 @@ impl Default for Chat {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Blocking {
-  /// Scopes of a new block unless it specifies its own. Any of `uploads`, `searches`,
-  /// `browse`, `messages`, `rooms`, `downloads` and `distributed`.
+  /// What a new block covers unless it says otherwise. Any of `uploads`, `searches`, `browse`,
+  /// `messages`, `rooms`, `downloads` and `distributed`.
   #[cascade(env = "RESEEK_BLOCKING_DEFAULT_SCOPES")]
   pub default_scopes: Vec<String>,
-  /// What a user blocked from uploads is told when they ask to download from us.
+  /// What a user blocked from uploads is told when they try to download from you.
   #[cascade(env = "RESEEK_BLOCKING_REFUSAL_MESSAGE")]
   pub refusal_message: String,
 }

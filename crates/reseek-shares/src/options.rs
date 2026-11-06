@@ -32,21 +32,15 @@ pub struct Shares {
   /// Regular expressions. Files whose full path matches any of them are not shared.
   #[cascade(env = "RESEEK_SHARE_FILTER", cli = "--share-filter")]
   pub filters: Vec<String>,
-  /// Follows symbolic links to directories and files within the shares. Share roots are
-  /// always opened through a link.
+  /// Follows symbolic links inside the shares. A shared directory that is itself a link is always
+  /// followed.
   pub follow_symlinks: bool,
-  /// Aliases of the shares only buddies see, matched ignoring case; trusted buddies see them
-  /// too. Everyone else is answered as if they were not shared. A buddy is recognized only when
-  /// they connect from the address the server reports for them, so one on our own network sees
-  /// what everyone sees. The server's list also covers a relay agent's shares by their alias;
-  /// an agent's own list is not used.
+  /// Aliases of shares only buddies and trusted buddies see, ignoring case. This covers relay
+  /// agents' shares too. A buddy on your own network is not recognized as one.
   #[cascade(env = "RESEEK_SHARE_BUDDIES_ONLY")]
   pub buddies_only: Vec<String>,
-  /// Aliases of the shares only trusted buddies see, matched ignoring case. Everyone else is
-  /// answered as if they were not shared. A buddy is recognized only when they connect from the
-  /// address the server reports for them, so one on our own network sees what everyone sees.
-  /// The server's list also covers a relay agent's shares by their alias; an agent's own list
-  /// is not used.
+  /// Aliases of shares only trusted buddies see, ignoring case. This covers relay agents' shares
+  /// too. A buddy on your own network is not recognized as one.
   #[cascade(env = "RESEEK_SHARE_TRUSTED_ONLY")]
   pub trusted_only: Vec<String>,
   /// Index of shared files.
@@ -57,7 +51,7 @@ pub struct Shares {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct ShareCache {
-  /// Storage of the share index: `memory`, rebuilt at every start, or `disk`, kept in the
+  /// Where the share index is kept: `memory`, loaded from a backup at each start, or `disk`, in the
   /// cache directory.
   #[cascade(
     env = "RESEEK_SHARE_CACHE_STORAGE_MODE",
@@ -72,9 +66,8 @@ pub struct ShareCache {
     apply = "restart"
   )]
   pub workers: Option<u32>,
-  /// How often the shares are scanned again on their own: `off`, an interval such as `12h`, or
-  /// whole days at a time of day such as `7d at 04:00`. A scan is due that long after the last
-  /// complete one. Minimum: 1 hour.
+  /// How often the shares are rescanned: `off`, an interval such as `12h`, or days at a time of day
+  /// such as `7d at 04:00`. Counted from the last finished scan. Minimum: 1 hour.
   #[cascade(env = "RESEEK_SHARE_CACHE_RETENTION", cli = "--share-cache-retention")]
   pub retention: Schedule,
 }

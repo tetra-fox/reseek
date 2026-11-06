@@ -38,7 +38,7 @@ pub(in crate::analysis) fn findings(
   if let Some(edge) = found.source_edge.filter(|edge| profile_at(*edge).is_none()) {
     found.flags.push(AnalysisFlag::Upsampled);
     found.notes.push(format!(
-      "The content stops sharply at {:.2} kHz, the upper limit of a lower sample rate. The \
+      "The content stops sharply at {:.2} kHz, the upper limit of a lower sample rate, so the \
        audio was probably recorded at that rate.",
       edge / 1000.0
     ));
@@ -59,7 +59,7 @@ pub(in crate::analysis) fn findings(
   {
     found
       .notes
-      .push("The two channels are identical. The source was probably mono.".to_string());
+      .push("The two channels are identical, so the source was probably mono.".to_string());
   }
   found
 }

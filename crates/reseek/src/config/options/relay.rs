@@ -12,7 +12,7 @@ use crate::config::enums::RelayMode;
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Relay {
-  /// Enables relay mode.
+  /// Lets relay agents connect and share files through this daemon.
   #[cascade(env = "RESEEK_RELAY", cli = "-r|--relay", apply = "restart")]
   pub enabled: bool,
   /// Relay role: `controller`, the one the daemon plays. The relay agent is the separate
@@ -36,16 +36,16 @@ pub struct RelayTimeouts {
   #[cascade(env = "RESEEK_RELAY_CONTROLLER_TIMEOUTS_FILE_INFO")]
   #[serde(with = "crate::config::duration")]
   pub file_info: Duration,
-  /// Time an agent has to acknowledge that it is sending a file a peer downloads.
+  /// Time an agent has to confirm it is sending a file a user downloads.
   #[cascade(env = "RESEEK_RELAY_CONTROLLER_TIMEOUTS_FILE_ACK")]
   #[serde(with = "crate::config::duration")]
   pub file_ack: Duration,
-  /// Time after the acknowledgment for the file data to start arriving.
+  /// Time an agent has to start sending a file's data once it has confirmed.
   #[cascade(env = "RESEEK_RELAY_CONTROLLER_TIMEOUTS_FILE_STREAM")]
   #[serde(with = "crate::config::duration")]
   pub file_stream: Duration,
-  /// Total time after login that an agent may defer sending its shares while it scans them.
-  /// Past it, the agent is disconnected and reconnects.
+  /// Time an agent may take after connecting to send its shares while it scans them. Past it, the
+  /// agent is disconnected and reconnects.
   #[cascade(env = "RESEEK_RELAY_CONTROLLER_TIMEOUTS_SYNC_DEFERRAL")]
   #[serde(with = "crate::config::duration")]
   pub sync_deferral: Duration,

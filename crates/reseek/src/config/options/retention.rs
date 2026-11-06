@@ -23,8 +23,8 @@ pub struct Retention {
   pub logs: Duration,
   /// Chat history.
   pub messages: MessageRetention,
-  /// Time without being seen after which a user is removed from the users directory. Buddies
-  /// and noted, tagged, blocked and grouped users are kept.
+  /// Time a user can go unseen before they are removed from Users. Buddies and users with a note,
+  /// tag, block or group are kept.
   #[cascade(env = "RESEEK_RETENTION_USERS")]
   #[serde(with = "crate::config::duration")]
   pub users: Option<Duration>,
@@ -32,8 +32,7 @@ pub struct Retention {
   #[cascade(env = "RESEEK_RETENTION_EVENTS")]
   #[serde(with = "crate::config::duration")]
   pub events: Duration,
-  /// Maximum number of logged events kept. The oldest beyond it are deleted. `0` keeps all of
-  /// them.
+  /// Maximum number of events kept, deleting the oldest first. `0` for no limit.
   #[cascade(env = "RESEEK_RETENTION_EVENTS_MAX_ROWS")]
   pub events_max_rows: u32,
   /// Ended jobs in the jobs list.
@@ -64,8 +63,8 @@ pub struct TransfersRetention {
   pub upload: TransferRetention,
   /// Finished downloads.
   pub download: TransferRetention,
-  /// Time after removal from the transfer lists at which a transfer is deleted permanently.
-  /// Minimum: 5 minutes. Removed transfers are kept for the history when not set.
+  /// Time after a transfer is removed from the lists before it is deleted for good. When not set,
+  /// removed transfers stay in the history. Minimum: 5 minutes.
   #[serde(with = "crate::config::duration")]
   pub purge_removed_after: Option<Duration>,
 }
@@ -77,8 +76,8 @@ pub struct TransferRetention {
   /// Age after which succeeded transfers are removed. Minimum: 5 minutes.
   #[serde(with = "crate::config::duration")]
   pub succeeded: Option<Duration>,
-  /// Age after which transfers that ended in an error, a timeout, a rejection or a size
-  /// mismatch are removed. Minimum: 5 minutes.
+  /// Age after which transfers that errored, timed out or were rejected are removed. Minimum: 5
+  /// minutes.
   #[serde(with = "crate::config::duration")]
   pub errored: Option<Duration>,
   /// Age after which canceled transfers are removed. Minimum: 5 minutes.
@@ -94,12 +93,12 @@ pub struct TransferRetention {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct FileRetention {
-  /// Age after which files in the downloads directory are deleted, by last write time. The
-  /// directory is walked at every cleanup (`schedules.cleanup`). Minimum: 30 minutes.
+  /// Age after which files in the downloads directory are deleted, by when they were last written.
+  /// They are checked at each cleanup. Minimum: 30 minutes.
   #[serde(with = "crate::config::duration")]
   pub complete: Option<Duration>,
-  /// Age after which files in the incomplete directory are deleted, by last write time. The
-  /// directory is walked at every cleanup (`schedules.cleanup`). Minimum: 30 minutes.
+  /// Age after which files in the incomplete directory are deleted, by when they were last written.
+  /// They are checked at each cleanup. Minimum: 30 minutes.
   #[serde(with = "crate::config::duration")]
   pub incomplete: Option<Duration>,
 }
@@ -153,7 +152,7 @@ pub struct JobRetention {
   #[cascade(env = "RESEEK_RETENTION_JOBS_AGE")]
   #[serde(with = "crate::config::duration")]
   pub age: Duration,
-  /// Maximum number of ended jobs kept. The oldest beyond it are deleted. `0` for no limit.
+  /// Maximum number of ended jobs kept, deleting the oldest first. `0` for no limit.
   #[cascade(env = "RESEEK_RETENTION_JOBS_COUNT")]
   pub count: u32,
 }

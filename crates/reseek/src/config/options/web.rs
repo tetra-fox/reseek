@@ -11,7 +11,7 @@ use super::Authentication;
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Web {
-  /// HTTP port. `0` selects a free port chosen by the system, which is written to the log.
+  /// HTTP port. `0` picks a free port and writes it to the log.
   #[cascade(env = "RESEEK_HTTP_PORT", cli = "-l|--http-port", apply = "restart")]
   pub port: u16,
   /// Addresses to listen on, comma-separated. All IPv6 and IPv4 addresses when not set.
@@ -180,7 +180,7 @@ impl Default for WebFiles {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Live {
-  /// Maximum number of event streams one principal may hold open.
+  /// Maximum number of live update streams one user or API key may hold open.
   #[cascade(env = "RESEEK_LIVE_MAX_STREAMS_PER_PRINCIPAL")]
   pub max_streams_per_principal: u32,
 }

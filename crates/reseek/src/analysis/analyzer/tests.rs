@@ -701,7 +701,7 @@ fn a_seek_past_what_a_file_holds_ends_the_length_where_reading_stopped() {
     reading
       .limitations
       .iter()
-      .any(|l| l.contains("seeking failed")),
+      .any(|l| l.contains("Seeking failed")),
     "{reading:#?}"
   );
 }

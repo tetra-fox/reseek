@@ -7,9 +7,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Search {
-  /// Named result filters offered on the search page, each a filter string such as
-  /// `type:flac`. The list replaces the built-in presets as a whole, so a removed preset
-  /// stays removed.
+  /// Named filters offered on the search page, such as `type:flac`. This list replaces the built-in
+  /// presets.
   pub filter_presets: Vec<FilterPreset>,
 }
 

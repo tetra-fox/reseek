@@ -59,7 +59,7 @@ fn entries(app: &AppState, options: &Options, started: DateTime<Utc>) -> Vec<Ent
   let flags = &app.startup.values.flags;
   // the release check is turned off by the flag or by the build, which no setting changes
   let release_off = if flags.no_version_check {
-    Some("Turned off by the no-version-check flag")
+    Some("Turned off by --no-version-check")
   } else if app.state.current().version.is_development {
     Some("Development builds are not checked")
   } else if app.state.current().version.is_canary {
@@ -72,7 +72,7 @@ fn entries(app: &AppState, options: &Options, started: DateTime<Utc>) -> Vec<Ent
     Entry {
       name: SHARE_RESCAN,
       title: "Share rescan",
-      description: "Scans the shared folders again for what changed.",
+      description: "Finds changes in the shared folders",
       option: Some("shares.cache.retention"),
       schedule: options.shares.cache.retention,
       note: None,
@@ -82,8 +82,7 @@ fn entries(app: &AppState, options: &Options, started: DateTime<Utc>) -> Vec<Ent
     Entry {
       name: CLEANUP,
       title: "Cleanup",
-      description: "Deletes what the retention settings let go: finished transfers, searches, \
-                    chat history, events, users, downloaded files, sessions and ended jobs.",
+      description: "Deletes old data, as set in Retention",
       option: Some("schedules.cleanup"),
       schedule: options.schedules.cleanup,
       note: None,
@@ -93,7 +92,7 @@ fn entries(app: &AppState, options: &Options, started: DateTime<Utc>) -> Vec<Ent
     Entry {
       name: VACUUM,
       title: "Database vacuum",
-      description: "Rebuilds every database without its free space.",
+      description: "Frees unused space in the databases",
       option: Some("schedules.vacuum"),
       schedule: options.schedules.vacuum,
       note: None,
@@ -103,7 +102,7 @@ fn entries(app: &AppState, options: &Options, started: DateTime<Utc>) -> Vec<Ent
     Entry {
       name: RELEASE_CHECK,
       title: "Release check",
-      description: "Checks whether a newer version of reseek has been released.",
+      description: "Checks for a new version of reseek",
       option: release_off.is_none().then_some("schedules.release_check"),
       schedule: if release_off.is_some() {
         Schedule::Off
@@ -117,13 +116,13 @@ fn entries(app: &AppState, options: &Options, started: DateTime<Utc>) -> Vec<Ent
     Entry {
       name: WISHLIST,
       title: "Wishlist",
-      description: "Searches the next wishlist item again, one item each time.",
+      description: "Searches for the next wishlist item",
       option: None,
       schedule: wishlist.map_or(Schedule::Off, Schedule::every),
       note: Some(if wishlist.is_some() {
-        "The Soulseek server sets how often".to_string()
+        "The Soulseek server sets how often it runs".to_string()
       } else {
-        "Waits for the Soulseek server to say how often".to_string()
+        "Waiting for the Soulseek server to say how often it runs".to_string()
       }),
       never_ran_from: Some(started),
       // the server sets how often a wishlist search may go out

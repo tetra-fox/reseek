@@ -332,7 +332,7 @@ pub async fn cleanup(app: &AppState, starter: JobStarter, listed: bool) -> RunOu
     })
     .collect();
   let summary = if removed.is_empty() {
-    "Nothing was due to be removed".to_string()
+    "Nothing to remove".to_string()
   } else {
     format!("Removed {}", removed.join(", "))
   };
@@ -427,7 +427,7 @@ pub fn run_again(app: &AppState, data: Option<&serde_json::Value>) -> Result<(),
       if !is_database(&app, &name) {
         return Err(ApiError::conflict(
           "This job cannot be run again",
-          Some(format!("The database {name}.db no longer exists.")),
+          Some(format!("The database {name}.db no longer exists")),
         ));
       }
       tokio::spawn(async move {
@@ -438,7 +438,7 @@ pub fn run_again(app: &AppState, data: Option<&serde_json::Value>) -> Result<(),
     _ => {
       return Err(ApiError::conflict(
         "This job cannot be run again",
-        Some("It was made by an older version of reseek.".to_string()),
+        Some("It was made by an older version of reseek".to_string()),
       ));
     }
   }
@@ -467,10 +467,7 @@ mod tests {
     let quiet = cleanup(state, scheduled(), false).await;
     assert_eq!(quiet.ending, JobEnding::Succeeded);
     assert_eq!(quiet.job_id, None, "nothing removed, nothing listed");
-    assert_eq!(
-      quiet.summary.as_deref(),
-      Some("Nothing was due to be removed")
-    );
+    assert_eq!(quiet.summary.as_deref(), Some("Nothing to remove"));
 
     let mut old = Record::download("alice", "@@a\\old.flac", 1);
     old.state = TransferStates::Completed | TransferStates::Succeeded;

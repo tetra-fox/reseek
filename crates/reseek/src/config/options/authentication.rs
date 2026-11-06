@@ -15,8 +15,7 @@ use crate::config::enums::{DefaultRole, Role};
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Authentication {
-  /// Disables authentication. Every request is accepted as an administrator, the same as
-  /// trusting every network.
+  /// Turns off authentication, so every request has administrator access.
   #[cascade(env = "RESEEK_NO_AUTH", cli = "-X|--no-auth", apply = "restart")]
   pub disabled: bool,
   /// Administrator username.
@@ -28,10 +27,8 @@ pub struct Authentication {
   /// Administrator password as an argon2id hash. Used instead of `password` when set.
   #[cascade(env = "RESEEK_PASSWORD_HASH", cli = "--password-hash", secret)]
   pub password_hash: Option<String>,
-  /// An API key set outside the configuration files: the key alone, or `;`-separated parts
-  /// `role=<role>`, `cidr=<networks>` and the key, such as
-  /// `role=readonly;cidr=192.168.1.0/24;<key>`. A key without parts has the administrator
-  /// role from any network.
+  /// One API key as a single value: the key alone, with the administrator role from any network, or
+  /// `;`-separated parts such as `role=readonly;cidr=192.168.1.0/24;<key>`.
   #[cascade(
     env = "RESEEK_API_KEY",
     cli = "-k|--api-key",
@@ -48,7 +45,7 @@ pub struct Authentication {
   /// Role granted to requests from trusted networks.
   #[cascade(env = "RESEEK_TRUSTED_ROLE", cli = "--trusted-role")]
   pub trusted_role: Role,
-  /// Lifetime of a session from a password login.
+  /// How long a password login lasts.
   #[cascade(env = "RESEEK_SESSION_TTL", cli = "--session-ttl")]
   #[serde(with = "crate::config::duration")]
   pub session_ttl: Duration,
@@ -151,7 +148,7 @@ pub struct LocalUser {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Oidc {
-  /// Issuer URL. Discovery is read from under it.
+  /// Issuer URL of the provider.
   pub issuer: Option<String>,
   /// Client ID registered with the provider.
   pub client_id: Option<String>,
@@ -259,7 +256,7 @@ impl Default for OidcLogout {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Proxy {
-  /// Accepts the identity forwarded by the proxy.
+  /// Accepts the user named by a trusted reverse proxy.
   #[cascade(env = "RESEEK_PROXY_AUTH", cli = "--proxy-auth")]
   pub enabled: bool,
   /// Header that holds the username.
@@ -273,9 +270,8 @@ pub struct Proxy {
   pub email_header: String,
   /// Mapping of forwarded groups to roles.
   pub role_mapping: RoleMapping,
-  /// Starts a session when the web UI is served to a user named by the proxy and the browser
-  /// has no session, so that later requests from the page work without the proxy headers. API
-  /// requests rely on the headers alone. When off, the headers are read on every request.
+  /// Starts a session when the proxy names a user, so the web UI keeps working on requests without
+  /// the proxy headers. When off, every request needs them.
   #[cascade(env = "RESEEK_PROXY_AUTH_SESSION")]
   pub session: bool,
 }

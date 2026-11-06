@@ -12,16 +12,13 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Schedules {
-  /// How often the cleanup deletes what the retention options let go: finished transfers and
-  /// searches, chat history, events, users, files in the download directories, ended sessions
-  /// and ended jobs. Minimum: 1 minute.
+  /// How often old data is deleted, as set in Retention. Minimum: 1 minute.
   #[cascade(env = "RESEEK_SCHEDULES_CLEANUP")]
   pub cleanup: Schedule,
-  /// How often every database is rebuilt without its free pages. A database is vacuumed once
-  /// nothing else writes it.
+  /// How often the databases are compacted to give back unused disk space.
   #[cascade(env = "RESEEK_SCHEDULES_VACUUM")]
   pub vacuum: Schedule,
-  /// How often the release feed is read for a newer version. Minimum: 1 hour.
+  /// How often reseek checks for a newer release. Minimum: 1 hour.
   #[cascade(env = "RESEEK_SCHEDULES_RELEASE_CHECK")]
   pub release_check: Schedule,
 }

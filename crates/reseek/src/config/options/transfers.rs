@@ -50,8 +50,8 @@ impl Transfers {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Upload {
-  /// Maximum number of uploads running at once across all groups. When lowered, running
-  /// uploads finish and no new upload starts until fewer run.
+  /// Maximum number of uploads running at once, across all groups. Lowering it lets running uploads
+  /// finish and starts no new one until fewer run.
   #[cascade(env = "RESEEK_UPLOAD_SLOTS", cli = "--upload-slots")]
   pub slots: u32,
   /// Total upload speed limit in KiB/s. No limit when not set.
@@ -105,8 +105,8 @@ pub struct Limit {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Download {
-  /// Maximum number of downloads running at once. No limit when not set. When lowered,
-  /// running downloads finish and no new download starts until fewer run.
+  /// Maximum number of downloads running at once. No limit when not set. Lowering it lets running
+  /// downloads finish and starts no new one until fewer run.
   #[cascade(env = "RESEEK_DOWNLOAD_SLOTS", cli = "--download-slots")]
   pub slots: Option<u32>,
   /// Total download speed limit in KiB/s. No limit when not set.
@@ -116,16 +116,15 @@ pub struct Download {
   /// not set.
   #[cascade(env = "RESEEK_DOWNLOAD_ALT_SPEED_LIMIT")]
   pub alt_speed_limit: Option<u32>,
-  /// How a file is requested: `queue`, the queue request every current client sends, or
-  /// `transfer_request`, the older transfer request that the peer answers.
+  /// How a file is requested: `queue`, as every current client does, or `transfer_request`, the
+  /// older style.
   pub request_style: RequestStyle,
   /// Retries of failed downloads.
   pub retry: Retry,
   /// Destination of finished downloads.
   pub destination: Destination,
-  /// Regular expressions, matched ignoring case against a file's remote path. A file of a
-  /// folder or a selection that matches any of them is skipped; a file downloaded on its own
-  /// never is. Empty to download everything.
+  /// Regular expressions matched against each file's remote path, ignoring case. Matching files are
+  /// skipped in folder and selection downloads, never when downloaded on their own.
   #[cascade(env = "RESEEK_DOWNLOAD_FILTERS")]
   pub filters: Vec<String>,
 }
@@ -159,7 +158,7 @@ pub struct Retry {
   /// Longest wait between retries. Minimum: 30 seconds.
   #[serde(with = "crate::config::duration")]
   pub max_delay: Duration,
-  /// Handling of the partially downloaded data on a retry: `resume` or `overwrite`.
+  /// What a retry does with the part already downloaded: `resume` or `overwrite`.
   pub partial: RetryPartial,
 }
 
@@ -178,12 +177,11 @@ impl Default for Retry {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Destination {
-  /// Directory under the downloads directory that a finished file is moved to, relative to
-  /// it. `${SOURCE_USERNAME}`, `${SOURCE_PATH}`, `${SOURCE_DIRECTORY}`, `${JOB_ID}` (the
-  /// download job: everything queued with the file in one go), `${SEARCH_ID}` and
-  /// `${SEARCH_TEXT}` are replaced with their values.
+  /// Directory inside the downloads directory that finished files go to. `${SOURCE_USERNAME}`,
+  /// `${SOURCE_PATH}`, `${SOURCE_DIRECTORY}`, `${JOB_ID}` (everything queued together),
+  /// `${SEARCH_ID}` and `${SEARCH_TEXT}` are replaced with their values.
   pub subdirectory: Option<String>,
-  /// Action when the file already exists: `rename` or `overwrite`.
+  /// What happens when the file already exists: `rename` or `overwrite`.
   pub exists: DestinationExists,
   /// Permissions of downloaded files and of the directories created for them.
   pub permissions: Permissions,
@@ -237,7 +235,8 @@ pub struct Group {
 pub struct GroupUpload {
   /// Priority of the group. A lower number is served first.
   pub priority: u32,
-  /// Order in which the queue of the group is served: `roundrobin` or `firstinfirstout`.
+  /// How the group's queue is served: `roundrobin`, one file per user in turn, or
+  /// `firstinfirstout`, in the order queued.
   pub strategy: QueueStrategy,
   /// Maximum number of uploads of the group running at once. Only the global limit applies
   /// when not set.
@@ -297,8 +296,8 @@ pub struct Blacklisted {
   pub members: Vec<String>,
   /// Regular expressions matched against usernames.
   pub patterns: Vec<String>,
-  /// Networks whose addresses are refused. Users at these addresses also have their private
-  /// messages dropped and their room messages hidden, once their address is known.
+  /// Networks whose users are refused. Their private messages are also dropped and their room
+  /// messages hidden, once their address is known.
   pub cidrs: Vec<String>,
 }
 
@@ -316,8 +315,8 @@ pub struct UserDefinedGroup {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct TransfersUi {
-  /// Interval at which the page requests the queue position of visible remotely queued
-  /// downloads. Minimum: 30 seconds.
+  /// How often the downloads page updates the queue position of the downloads on screen. Minimum:
+  /// 30 seconds.
   #[cascade(env = "RESEEK_TRANSFERS_UI_QUEUE_REFRESH")]
   #[serde(with = "crate::config::duration")]
   pub queue_refresh: Duration,

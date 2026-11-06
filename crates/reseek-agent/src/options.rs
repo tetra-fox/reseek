@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Options {
-  /// Debug mode. Logs at debug level and includes the module name on every log line.
+  /// Logs at debug level, with the module name on every line.
   #[cascade(env = "RESEEK_DEBUG", cli = "-d|--debug", apply = "restart")]
   pub debug: bool,
   /// Name of this agent in logs and to its controller, which lists it among its agents under
@@ -60,7 +60,7 @@ pub struct Flags {
   /// Skips the share scan at startup.
   #[cascade(env = "RESEEK_NO_SHARE_SCAN", cli = "--no-share-scan")]
   pub no_share_scan: bool,
-  /// Runs a full share scan at startup, even when the share cache is current.
+  /// Runs a full share scan at startup, even when the share index is up to date.
   #[cascade(env = "RESEEK_FORCE_SHARE_SCAN", cli = "--force-share-scan")]
   pub force_share_scan: bool,
   /// Keeps the share index in memory only. Nothing is saved across restarts.

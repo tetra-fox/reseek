@@ -70,7 +70,7 @@ pub(in crate::analysis) struct Measured {
 pub(in crate::analysis) struct Canceled;
 
 /// What an analysis that ran out of time says of it.
-const OUT_OF_TIME: &str = "the analysis ran out of time and covers only the part read until then";
+const OUT_OF_TIME: &str = "The analysis ran out of time and covers only the part read by then";
 
 /// A source of audio bytes that stops giving them once the analysis is canceled or its time is
 /// up, which ends whatever the decoder was doing with an error.
@@ -156,7 +156,7 @@ fn measure_opened(
     Ok(decoder) => measure(decoder, settings, cancel),
     Err(_) if cancel.is_cancelled() => Err(Canceled),
     Err(_) if Instant::now() >= settings.deadline => Ok(unreadable(
-      "the analysis ran out of time while opening the file".to_string(),
+      "The analysis ran out of time while opening the file".to_string(),
     )),
     Err(problem) => Ok(unreadable(problem)),
   }
@@ -322,7 +322,7 @@ enum Reached {
 
 /// What a file states of its length beyond what its bytes can hold.
 const PAST_BYTES: &str =
-  "the file states a longer length than its bytes can hold, so it is taken as what they hold";
+  "The file states a longer length than its bytes can hold, so the length they hold is used";
 
 /// The length the file's bytes can hold, when audio up to `seconds` needs more bytes than the
 /// file has: the length taken in place of the one stated, never short of `read`, the furthest
@@ -405,11 +405,11 @@ fn whole(
       );
       measured.problems.push(match decoder.claimed.frames {
         None => format!(
-          "The file does not state its length, so the analysis stopped after {}.",
+          "The file does not state its length, so the analysis stopped after {}",
           minutes(second)
         ),
         Some(_) => format!(
-          "The file runs longer than it states, so the analysis stopped after {}.",
+          "The file runs longer than it states, so the analysis stopped after {}",
           minutes(second)
         ),
       });

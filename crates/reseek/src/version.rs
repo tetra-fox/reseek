@@ -89,15 +89,18 @@ impl Releases {
       .header("Accept", "application/vnd.github+json")
       .send()
       .await
-      .and_then(reqwest::Response::error_for_status)
       .map_err(|e| e.to_string())?;
+    let status = response.status();
+    if !status.is_success() {
+      return Err(format!("The release feed answered {status}"));
+    }
     let body = response.text().await.map_err(|e| e.to_string())?;
     let release: serde_json::Value =
-      serde_json::from_str(&body).map_err(|e| format!("the release feed is not JSON: {e}"))?;
+      serde_json::from_str(&body).map_err(|e| format!("The release feed is not JSON: {e}"))?;
     release["tag_name"]
       .as_str()
       .map(str::to_string)
-      .ok_or_else(|| "the release feed names no tag_name".to_string())
+      .ok_or_else(|| "The release feed names no tag_name".to_string())
   }
 }
 

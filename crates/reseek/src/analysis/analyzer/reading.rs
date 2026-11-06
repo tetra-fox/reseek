@@ -140,9 +140,24 @@ impl Heard {
 
 /// The limitation of a cut where the highest bitrates cut.
 fn filtered_at_20_khz() -> String {
-  "Some recordings are filtered at 20 kHz during recording or mastering. This looks the same \
-   as the cutoff of a high-bitrate encoder."
+  "A recording filtered at 20 kHz when it was made looks the same as a high-bitrate encoder's \
+   cutoff"
     .to_string()
+}
+
+/// The problems met while measuring, as limitations: the decoder's reasons are clauses it shares
+/// with other messages, so each is capitalized here as a list item of its own.
+fn problems(measured: &Measured) -> Vec<String> {
+  measured
+    .problems
+    .iter()
+    .map(|problem| {
+      let mut chars = problem.chars();
+      chars.next().map_or_else(String::new, |first| {
+        first.to_uppercase().chain(chars).collect()
+      })
+    })
+    .collect()
 }
 
 /// The profile at `hz` when it is one below the highest bitrates: a cut where those cut is
@@ -161,7 +176,7 @@ pub(in crate::analysis) fn read(measured: &Measured) -> Reading {
       encoder_guess: None,
       summary: "The file could not be read as audio.".to_string(),
       measures: measures(measured, &[], None),
-      limitations: measured.problems.clone(),
+      limitations: problems(measured),
       cutoff_hz: None,
     };
   };
@@ -181,16 +196,16 @@ pub(in crate::analysis) fn read(measured: &Measured) -> Reading {
   let cutoffs: Vec<f64> = windows.iter().filter_map(|w| w.cutoff_hz).collect();
   let median = (!cutoffs.is_empty()).then(|| middle(&cutoffs));
   let heard = Heard { windows, top };
-  let mut limitations = measured.problems.clone();
+  let mut limitations = problems(measured);
   if measured.sampled {
     limitations.push(format!(
-      "Only {} one-second windows spread over the file were analyzed.",
+      "Only {} one-second windows spread over the file were analyzed",
       measured.windows.len()
     ));
   }
   if measured.channels_left_out > 0 {
     limitations.push(format!(
-      "Only the first two of {} channels were analyzed.",
+      "Only the first two of {} channels were analyzed",
       claimed.channels
     ));
   }
@@ -198,11 +213,12 @@ pub(in crate::analysis) fn read(measured: &Measured) -> Reading {
   let heard_seconds = heard.seconds();
   if heard_seconds < FEW_SECONDS {
     limitations.push(format!(
-      "Only {heard_seconds:.1} s of the audio is above silence, too little for a reliable reading."
+      "Only {heard_seconds:.1} s of the audio is above silence, too little for a reliable reading"
     ));
   }
   if quiet(&heard) {
-    limitations.push("The audio is quiet. The upper band is harder to measure.".to_string());
+    limitations
+      .push("The audio is quiet, which makes the upper band harder to measure".to_string());
   }
   // a lossy file read as consistent with its own bitrate stops where its own encoder cuts,
   // which needs no other explanation
@@ -221,9 +237,9 @@ pub(in crate::analysis) fn read(measured: &Measured) -> Reading {
         confidence: 0.4,
       }),
       summary: format!(
-        "The content stops sharply at {}. This is the upper limit of a {} kHz recording, and \
-         also the cutoff of an encoder at {}. The file was either recorded at that rate and \
-         upsampled, or transcoded from that encoder. The analyzer cannot tell which.",
+        "The content stops sharply at {}, both the upper limit of a {} kHz recording and the \
+         cutoff of an encoder at {}. The file was either upsampled from that rate or \
+         transcoded from that encoder, and the analyzer cannot tell which.",
         khz(edge),
         format!("{:.2}", edge * 2.0 / 1000.0)
           .trim_end_matches('0')
@@ -241,7 +257,7 @@ pub(in crate::analysis) fn read(measured: &Measured) -> Reading {
       .find(|(edge, _)| (cut - edge).abs() <= CLUSTER_HZ)
   {
     limitations.push(format!(
-      "Audio recorded at {rate} and converted to this rate shows the same sharp cutoff, at {}.",
+      "Audio recorded at {rate} and converted to this rate has the same sharp cutoff at {}",
       khz(*edge)
     ));
   }
@@ -301,7 +317,7 @@ fn verdict(heard: &Heard, median: Option<f64>, lossless: bool, bitrate: Option<u
     let confidence = 0.6 + 0.38 * evidence;
     reading
       .limitations
-      .push("Two or more lossy generations show as the lowest cutoff among them.".to_string());
+      .push("Of several lossy generations, only the lowest cutoff shows".to_string());
     reading.verdict = AnalysisVerdict::LikelyTranscode;
     reading.confidence = confidence.min(CONFIDENCE_CAP);
     reading.encoder_guess = Some(EncoderGuess {
@@ -330,9 +346,8 @@ fn verdict(heard: &Heard, median: Option<f64>, lossless: bool, bitrate: Option<u
     });
     reading.limitations.push(filtered_at_20_khz());
     reading.summary = format!(
-      "{} of the time stops at {} with a sharp shelf, where an encoder at {} cuts off; a \
-       recording filtered there when it was made looks the same, and the analyzer cannot \
-       tell the two apart.",
+      "{} of the time stops at {} with a sharp shelf, where an encoder at {} cuts off or where \
+       a recording was filtered when it was made.",
       percent(clustered),
       khz(median),
       profile.name
@@ -382,8 +397,8 @@ fn verdict(heard: &Heard, median: Option<f64>, lossless: bool, bitrate: Option<u
     });
     reading.cutoff_hz = Some(at);
     reading.summary = format!(
-      "The content reaches the top of the band, but {} of the time shows a sharp step at {} \
-       below it. This is typical of a band-limited layer mixed with full-band material.",
+      "The content reaches the top of the band, but {} of the time has a sharp step at {}, as \
+       when a band-limited layer is mixed with full-band material.",
       percent(layered_share),
       khz(at)
     );
@@ -408,9 +423,9 @@ fn verdict(heard: &Heard, median: Option<f64>, lossless: bool, bitrate: Option<u
     reading.cutoff_hz = Some(at);
     reading.limitations.push(filtered_at_20_khz());
     reading.summary = format!(
-      "The content reaches the top of the band, but {} of the time shows a sharp step at {} \
-       below it, at the cutoff of an encoder at {profile}. A layer at that bitrate and a \
-       recording filtered there with other material above it look the same.",
+      "The content reaches the top of the band, but {} of the time has a sharp step at {}, \
+       where an encoder at {profile} cuts off. A layer at that bitrate and a recording \
+       filtered there with other material above it look the same.",
       percent(high_steps.len() as f64 / count as f64),
       khz(at)
     );
@@ -446,8 +461,8 @@ fn verdict(heard: &Heard, median: Option<f64>, lossless: bool, bitrate: Option<u
       return reading;
     }
     reading.limitations.push(
-      "Lossless recordings of old masters, speech, lo-fi material and vinyl or cassette \
-       transfers roll off early. Heavy equalization can resemble a shelf."
+      "Old masters, speech, lo-fi material and vinyl or cassette transfers roll off early, and \
+       heavy equalization can look like a shelf"
         .to_string(),
     );
     if median >= NATURAL_LIMIT * heard.top {

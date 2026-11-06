@@ -222,9 +222,9 @@ impl AnalysisService for Analysis {
     let file = self.files.local_path(&target).await?;
     let stored = self.stored(&file.path).await?;
     let note = match file.found {
-      None => Some("The file is no longer there."),
+      None => Some("The file is no longer there"),
       Some((size, modified)) if !current(&stored, size, modified) => {
-        Some("The file has changed since it was analyzed.")
+        Some("The file has changed since it was analyzed")
       }
       Some(_) => None,
     };
@@ -429,7 +429,7 @@ impl Analysis {
     }
     if stored.report.spectrogram.is_none() {
       return Err(ApiError::not_found(
-        "The file has no spectrogram. The limitations in its report give the reason.",
+        "The file has no spectrogram. Its limitations say why.",
       ));
     }
     Ok(match piece {
