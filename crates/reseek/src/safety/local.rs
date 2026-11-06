@@ -2,7 +2,8 @@
 //! a name a system would change or refuse when it is created, or one too long for it, is
 //! changed first, so the file is created under the name the daemon chose.
 
-use super::{Os, sanitize_path};
+use super::Os;
+use super::names::sanitize_path;
 
 /// The most bytes of UTF-8 one path segment may take.
 pub const SEGMENT_BYTES: usize = 255;
@@ -15,7 +16,7 @@ const RESERVED: [&str; 22] = [
 
 /// The longest path `os` creates: 4096 bytes on Unix, 260 characters on Windows without long
 /// path support.
-pub fn path_limit(os: Os) -> usize {
+fn path_limit(os: Os) -> usize {
   match os {
     Os::Unix => 4096,
     Os::Windows => 260,
@@ -52,16 +53,24 @@ pub fn creatable(segment: &str, os: Os) -> String {
   if name.len() <= SEGMENT_BYTES {
     return name;
   }
+  with_suffix(&name, "")
+}
+
+/// `name` with `suffix` put before its extension, the stem cut at a character boundary so the
+/// result takes at most [`SEGMENT_BYTES`]. `suffix` is shorter than half of that.
+pub fn with_suffix(name: &str, suffix: &str) -> String {
   let (stem, extension) = match name.rfind('.') {
     // an extension too long to leave room for a stem is cut with the rest
     Some(dot) if dot > 0 && name.len() - dot < SEGMENT_BYTES / 2 => name.split_at(dot),
-    _ => (name.as_str(), ""),
+    _ => (name, ""),
   };
-  let mut end = SEGMENT_BYTES - extension.len();
+  let mut end = stem
+    .len()
+    .min(SEGMENT_BYTES - extension.len() - suffix.len());
   while !stem.is_char_boundary(end) {
     end -= 1;
   }
-  format!("{}{extension}", &stem[..end])
+  format!("{}{suffix}{extension}", &stem[..end])
 }
 
 /// `path` as relative segments `os` creates unchanged: [`sanitize_path`], then each segment

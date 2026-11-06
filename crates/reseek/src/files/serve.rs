@@ -213,8 +213,8 @@ fn disposition(request: &ContentRequest, own_name: &str, content_type: &str) -> 
   let name = request
     .name
     .as_deref()
-    .and_then(|name| file_name_safely(name, true, Os::CURRENT))
-    .or_else(|| file_name_safely(own_name, true, Os::CURRENT))
+    .and_then(|name| file_name_safely(name, Os::CURRENT))
+    .or_else(|| file_name_safely(own_name, Os::CURRENT))
     .unwrap_or_else(|| "download".to_string());
   format!(
     "{kind}; filename*=UTF-8''{}",

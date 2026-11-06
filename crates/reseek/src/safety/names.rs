@@ -18,7 +18,7 @@ static SOULSEEK_QT: LazyLock<Regex> =
 
 /// `path` localized to `os` without a leading drive root, UNC root (with its server) or
 /// SoulseekQt root. A single leading `/` is not a root and stays.
-pub fn strip_path_root(path: &str, os: Os) -> String {
+fn strip_path_root(path: &str, os: Os) -> String {
   let mut path = localize_path(path, os);
   for root in [&*DRIVE, &*UNC, &*SOULSEEK_QT] {
     path = root.replace(&path, "").into_owned();
@@ -78,7 +78,7 @@ fn underscored(segment: &str, os: Os) -> String {
 
 /// A relative path made of `path`'s segments, each made safe, joined with `os`'s separator:
 /// empty segments and segments that end up empty are dropped, so a leading root goes too.
-pub fn sanitize_path(path: &str, replacement: char, os: Os) -> Result<String, String> {
+pub(super) fn sanitize_path(path: &str, replacement: char, os: Os) -> Result<String, String> {
   let mut segments = Vec::new();
   for segment in path.split(['/', '\\']).filter(|s| !s.is_empty()) {
     let safe = sanitize_path_segment(segment, replacement, os)?;
@@ -89,44 +89,31 @@ pub fn sanitize_path(path: &str, replacement: char, os: Os) -> Result<String, St
   Ok(segments.join(&os.separator().to_string()))
 }
 
-/// The file name a remote path ends in, made safe unless `sanitize` is false; `None` for an
-/// empty path, one that ends in a separator, or one that is only a root.
-pub fn file_name_safely(path: &str, sanitize: bool, os: Os) -> Option<String> {
+/// The file name a remote path ends in, made safe; `None` for an empty path, one that ends in
+/// a separator, or one that is only a root.
+pub fn file_name_safely(path: &str, os: Os) -> Option<String> {
   if path.is_empty() || path.ends_with(['/', '\\']) || strip_path_root(path, os).is_empty() {
     return None;
   }
   let localized = localize_path(path, os);
   let name = localized.rsplit(os.separator()).next().unwrap_or_default();
-  if sanitize {
-    Some(underscored(name, os))
-  } else {
-    Some(name.to_string())
-  }
+  Some(underscored(name, os))
 }
 
-/// The directory part of a remote path: every segment but the last, made safe unless
-/// `sanitize` is false, joined with `os`'s separator. The root is left off unless
-/// `retain_root`, which keeps it with the leading separators the path had. `None` for an empty
-/// path, a bare name, or a path with no directory under its root.
-pub fn directory_name_safely(
-  path: &str,
-  retain_root: bool,
-  sanitize: bool,
-  os: Os,
-) -> Option<String> {
+/// The directory part of a remote path without its root: every segment but the last, made
+/// safe unless `sanitize` is false, joined with `os`'s separator. `None` for an empty path, a
+/// bare name, or a path with no directory under its root.
+pub fn directory_name_safely(path: &str, sanitize: bool, os: Os) -> Option<String> {
   if path.is_empty() || !path.contains(['/', '\\']) {
     return None;
   }
-  let leading = path.chars().take_while(|c| *c == '/' || *c == '\\').count();
   let separator = os.separator();
   let localized = localize_path(path, os);
-  let localized = localized.trim_end_matches(separator);
-  let stripped = strip_path_root(localized, os);
-  if stripped.is_empty() {
-    return None;
-  }
-  let base = if retain_root { localized } else { &stripped };
-  let segments: Vec<&str> = base.split(separator).filter(|s| !s.is_empty()).collect();
+  let stripped = strip_path_root(localized.trim_end_matches(separator), os);
+  let segments: Vec<&str> = stripped
+    .split(separator)
+    .filter(|s| !s.is_empty())
+    .collect();
   let (_, directories) = segments.split_last()?;
   if directories.is_empty() {
     return None;
@@ -142,14 +129,7 @@ pub fn directory_name_safely(
     })
     .collect::<Vec<_>>()
     .join(&separator.to_string());
-  if retain_root {
-    Some(format!(
-      "{}{directories}",
-      separator.to_string().repeat(leading)
-    ))
-  } else {
-    Some(directories)
-  }
+  Some(directories)
 }
 
 #[cfg(test)]
@@ -221,62 +201,31 @@ mod tests {
 
   #[test]
   fn the_file_name_is_the_last_segment() {
-    let unix = |p, sanitize| file_name_safely(p, sanitize, Os::Unix);
-    assert_eq!(unix("foo//bar.flac", true).as_deref(), Some("bar.flac"));
-    assert_eq!(unix("foo/.", true).as_deref(), Some("_"));
-    assert_eq!(unix("foo/.", false).as_deref(), Some("."));
-    assert_eq!(
-      unix("@@abcde\\song.flac", true).as_deref(),
-      Some("song.flac")
-    );
+    let unix = |p| file_name_safely(p, Os::Unix);
+    assert_eq!(unix("foo//bar.flac").as_deref(), Some("bar.flac"));
+    assert_eq!(unix("foo/.").as_deref(), Some("_"));
+    assert_eq!(unix("@@abcde\\song.flac").as_deref(), Some("song.flac"));
     for none in ["", "foo/", "C:", "//server", "@@abcde"] {
-      assert_eq!(unix(none, true), None, "{none:?}");
+      assert_eq!(unix(none), None, "{none:?}");
     }
   }
 
   #[test]
   fn the_directory_is_every_segment_but_the_last() {
-    let unix = |p, retain, sanitize| directory_name_safely(p, retain, sanitize, Os::Unix);
+    let unix = |p, sanitize| directory_name_safely(p, sanitize, Os::Unix);
+    assert_eq!(unix("C:\\Music\\song.flac", true).as_deref(), Some("Music"));
+    assert_eq!(unix("@@abcde/file.txt", true), None);
     assert_eq!(
-      unix("C:\\Music\\song.flac", false, true).as_deref(),
-      Some("Music")
-    );
-    assert_eq!(
-      unix("C:\\song.flac", true, true).as_deref(),
-      Some("C:"),
-      "a colon is a name character on Unix"
-    );
-    assert_eq!(
-      directory_name_safely("C:\\song.flac", true, true, Os::Windows).as_deref(),
-      Some("C_")
-    );
-    assert_eq!(
-      unix("//server/file.txt", true, true).as_deref(),
-      Some("//server")
-    );
-    assert_eq!(
-      directory_name_safely("//server/file.txt", true, true, Os::Windows).as_deref(),
-      Some("\\\\server")
-    );
-    assert_eq!(unix("@@abcde/file.txt", false, true), None);
-    assert_eq!(
-      unix("@@abcde/file.txt", true, true).as_deref(),
-      Some("@@abcde")
-    );
-    assert_eq!(
-      unix("foo/../bar/file.txt", false, true).as_deref(),
+      unix("foo/../bar/file.txt", true).as_deref(),
       Some("foo/_/bar")
     );
     assert_eq!(
-      unix("foo/../bar/file.txt", false, false).as_deref(),
+      unix("foo/../bar/file.txt", false).as_deref(),
       Some("foo/../bar")
     );
-    assert_eq!(
-      unix("Artist/Album/", false, true).as_deref(),
-      Some("Artist")
-    );
-    assert_eq!(unix("fo\0o/bar", false, true).as_deref(), Some("fo_o"));
-    assert_eq!(unix("file.txt", false, true), None, "a bare name is a file");
-    assert_eq!(unix("", false, true), None);
+    assert_eq!(unix("Artist/Album/", true).as_deref(), Some("Artist"));
+    assert_eq!(unix("fo\0o/bar", true).as_deref(), Some("fo_o"));
+    assert_eq!(unix("file.txt", true), None, "a bare name is a file");
+    assert_eq!(unix("", true), None);
   }
 }

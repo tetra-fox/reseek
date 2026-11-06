@@ -9,13 +9,11 @@
 mod local;
 mod names;
 
-pub use local::{SEGMENT_BYTES, creatable, creatable_path, path_limit, too_long};
-pub use reseek_shares::traverses;
-
+pub use local::{SEGMENT_BYTES, creatable, creatable_path, too_long, with_suffix};
 pub use names::{
-  directory_name_safely, file_name_safely, sanitize_filename, sanitize_path, sanitize_path_segment,
-  strip_path_root,
+  directory_name_safely, file_name_safely, sanitize_filename, sanitize_path_segment,
 };
+pub use reseek_shares::traverses;
 
 /// Which operating system's path rules a check uses.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -87,26 +85,6 @@ pub fn localize_path(path: &str, os: Os) -> String {
 /// `path` without the separators at its end.
 fn trim_end_separators(path: &str) -> &str {
   path.trim_end_matches(['/', '\\'])
-}
-
-/// Whether `sub` is `root` or a directory under it. Both must be absolute without `.` or `..`
-/// segments; names compare exactly, ignoring case on Windows.
-pub fn is_sub_directory_of(sub: &str, root: &str, os: Os) -> Result<bool, String> {
-  for path in [sub, root] {
-    if !is_absolute(path, os) {
-      return Err(format!("{path} is not an absolute path"));
-    }
-    if traverses(path) {
-      return Err(format!("{path} contains a traversal segment"));
-    }
-  }
-  let fold = |text: &str| match os {
-    Os::Windows => text.to_lowercase(),
-    Os::Unix => text.to_string(),
-  };
-  let sub = fold(&localize_path(trim_end_separators(sub), os));
-  let root = fold(&localize_path(trim_end_separators(root), os));
-  Ok(sub == root || sub.starts_with(&format!("{root}{}", os.separator())))
 }
 
 /// `segments` joined below `root` with `os`'s separator, refused when a segment is absolute,
@@ -188,20 +166,6 @@ mod tests {
     assert!(relative_everywhere("x", "${SOURCE_DIRECTORY}").is_ok());
     assert!(relative_everywhere("x", "/x").is_err());
     assert!(relative_everywhere("x", "C:\\x").is_err());
-  }
-
-  #[test]
-  fn a_sub_directory_is_the_root_or_below_it() {
-    let unix = |sub, root| is_sub_directory_of(sub, root, Os::Unix).unwrap();
-    assert!(unix("/srv/downloads", "/srv/downloads/"));
-    assert!(unix("/srv/downloads/a/b", "/srv/downloads"));
-    assert!(!unix("/srv/downloadsx", "/srv/downloads"));
-    assert!(!unix("/srv/Downloads/a", "/srv/downloads"), "exact on Unix");
-    let windows = |sub, root| is_sub_directory_of(sub, root, Os::Windows).unwrap();
-    assert!(windows("C:\\Downloads\\x", "c:\\downloads"));
-    assert!(windows("C:/Downloads/x", "C:\\Downloads"));
-    assert!(is_sub_directory_of("relative", "/srv", Os::Unix).is_err());
-    assert!(is_sub_directory_of("/srv/../etc", "/srv", Os::Unix).is_err());
   }
 
   #[test]

@@ -298,7 +298,7 @@ fn served_path(root: &Path, relative: &str) -> Result<PathBuf, ApiError> {
 /// A name for an archive's `Content-Disposition`: the base name made safe, without the quotes
 /// and controls a quoted header value cannot hold.
 fn archive_name(name: &str) -> String {
-  safety::file_name_safely(name, true, Os::CURRENT)
+  safety::file_name_safely(name, Os::CURRENT)
     .unwrap_or_else(|| "archive".to_string())
     .chars()
     .map(|c| {

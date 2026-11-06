@@ -14,6 +14,8 @@ use std::path::{Path, PathBuf};
 
 use tracing::debug;
 
+use crate::safety::with_suffix;
+
 #[cfg(unix)]
 use super::mode::with_execute_for_each_read;
 
@@ -75,15 +77,13 @@ pub fn create_file(path: &Path, mode: Option<u32>, offset: u64) -> io::Result<Fi
   created.map_err(|e| context(e, format!("Failed to create file {}", base(path))))
 }
 
-/// `name` numbered `n`: `name` itself for 0, else `stem (n).extension`.
+/// `name` numbered `n`: `name` itself for 0, else `stem (n).extension`, the stem cut so the
+/// name stays within the length a file name may have.
 fn numbered(name: &str, n: u32) -> String {
   if n == 0 {
     return name.to_string();
   }
-  match name.rfind('.') {
-    Some(dot) if dot > 0 => format!("{} ({n}){}", &name[..dot], &name[dot..]),
-    _ => format!("{name} ({n})"),
-  }
+  with_suffix(name, &format!(" ({n})"))
 }
 
 /// Renames `from` to `to`, failing with `AlreadyExists` when `to` exists.
@@ -127,10 +127,10 @@ fn place_new(from: &Path, dir: &Path, name: &str) -> io::Result<PathBuf> {
   ))
 }
 
-/// Copies `source` to a hidden name of its own in `dir`, `.{name}.{random}.part`, flushed to
-/// disk, for a move across filesystems; the copy is deleted when it fails.
-fn copy_beside(source: &Path, dir: &Path, name: &str) -> io::Result<PathBuf> {
-  let part = dir.join(format!(".{name}.{:016x}.part", rand::random::<u64>()));
+/// Copies `source` to a hidden name of its own in `dir`, `.{random}.part`, flushed to disk, for
+/// a move across filesystems; the copy is deleted when it fails.
+fn copy_beside(source: &Path, dir: &Path) -> io::Result<PathBuf> {
+  let part = dir.join(format!(".{:016x}.part", rand::random::<u64>()));
   let copied = (|| {
     let mut from = File::open(source)?;
     let mut to = OpenOptions::new()
@@ -179,13 +179,20 @@ fn move_inner(
       "The specified source file does not exist",
     ));
   }
+  // flushed before the rename so a crash soon after never leaves a short file under the final
+  // name; Windows flushes only a handle opened for writing
+  OpenOptions::new()
+    .read(true)
+    .write(cfg!(windows))
+    .open(source)?
+    .sync_all()?;
   create_directories(dir, mode)?;
   let placed = if overwrite {
     let to = dir.join(name);
     match std::fs::rename(source, &to) {
       Ok(()) => Ok(to),
       Err(e) if e.kind() == ErrorKind::CrossesDevices => {
-        let part = copy_beside(source, dir, name)?;
+        let part = copy_beside(source, dir)?;
         std::fs::rename(&part, &to)?;
         std::fs::remove_file(source)?;
         Ok(to)
@@ -195,7 +202,7 @@ fn move_inner(
   } else {
     match place_new(source, dir, name) {
       Err(e) if e.kind() == ErrorKind::CrossesDevices => {
-        let part = copy_beside(source, dir, name)?;
+        let part = copy_beside(source, dir)?;
         let to = place_new(&part, dir, name)?;
         std::fs::remove_file(source)?;
         Ok(to)
@@ -224,6 +231,7 @@ mod tests {
   use std::ffi::OsString;
 
   use super::*;
+  use crate::safety::SEGMENT_BYTES;
 
   fn names(dir: &Path) -> Vec<OsString> {
     let mut names: Vec<OsString> = std::fs::read_dir(dir)
@@ -240,6 +248,17 @@ mod tests {
     assert_eq!(numbered("01 - Track.flac", 2), "01 - Track (2).flac");
     assert_eq!(numbered("README", 1), "README (1)");
     assert_eq!(numbered(".hidden", 1), ".hidden (1)");
+  }
+
+  #[test]
+  fn numbered_long_names_fit_and_keep_whole_characters() {
+    let long = format!("a{}.flac", "\u{97f3}".repeat(83));
+    assert_eq!(long.len(), SEGMENT_BYTES);
+    for n in [1, 9_999] {
+      let name = numbered(&long, n);
+      assert!(name.len() <= SEGMENT_BYTES, "{}", name.len());
+      assert!(name.ends_with(&format!("\u{97f3} ({n}).flac")), "{name}");
+    }
   }
 
   #[test]
@@ -316,7 +335,7 @@ mod tests {
     let source = dir.path().join("01.flac");
     std::fs::write(&source, "copied").unwrap();
     std::fs::write(dir.path().join("taken.flac"), "x").unwrap();
-    let part = copy_beside(&source, dir.path(), "taken.flac").unwrap();
+    let part = copy_beside(&source, dir.path()).unwrap();
     let placed = place_new(&part, dir.path(), "taken.flac").unwrap();
     assert_eq!(placed, dir.path().join("taken (1).flac"));
     assert_eq!(std::fs::read_to_string(&placed).unwrap(), "copied");
@@ -324,20 +343,17 @@ mod tests {
   }
 
   #[test]
-  fn two_copies_of_one_name_never_share_their_hidden_file() {
+  fn two_copies_never_share_their_hidden_file() {
     let dir = tempfile::tempdir().unwrap();
     let (one, two) = (dir.path().join("one"), dir.path().join("two"));
     std::fs::write(&one, "first").unwrap();
     std::fs::write(&two, "second").unwrap();
-    let first = copy_beside(&one, dir.path(), "cover.jpg").unwrap();
-    let second = copy_beside(&two, dir.path(), "cover.jpg").unwrap();
+    let first = copy_beside(&one, dir.path()).unwrap();
+    let second = copy_beside(&two, dir.path()).unwrap();
     assert_ne!(first, second);
     for part in [&first, &second] {
       let name = part.file_name().unwrap().to_str().unwrap();
-      assert!(
-        name.starts_with(".cover.jpg.") && name.ends_with(".part"),
-        "{name}"
-      );
+      assert!(name.starts_with('.') && name.ends_with(".part"), "{name}");
     }
     assert_eq!(std::fs::read_to_string(&first).unwrap(), "first");
     assert_eq!(std::fs::read_to_string(&second).unwrap(), "second");

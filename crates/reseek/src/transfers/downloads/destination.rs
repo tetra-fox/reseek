@@ -77,7 +77,7 @@ pub fn subdirectory(pattern: Option<&str>, source: &Source<'_>, os: Os) -> Resul
   if pattern.eq_ignore_ascii_case(DOWNLOADS_ITSELF) {
     return Ok(String::new());
   }
-  let source_path = directory_name_safely(source.filename, false, true, os).unwrap_or_default();
+  let source_path = directory_name_safely(source.filename, true, os).unwrap_or_default();
   let source_directory = source_path
     .rsplit(os.separator())
     .next()
@@ -142,11 +142,11 @@ pub fn incomplete_path(
   filename: &str,
   os: Os,
 ) -> Result<(PathBuf, bool), String> {
-  let name = file_name_safely(filename, true, os)
+  let name = file_name_safely(filename, os)
     .map(|name| creatable(&name, os))
     .ok_or_else(|| format!("the remote filename {filename} names no file"))?;
   let user = segment(username, os);
-  let directories = directory_name_safely(filename, false, false, os)
+  let directories = directory_name_safely(filename, false, os)
     .map(|directories| creatable_path(&directories, os))
     .unwrap_or_default();
   let root = root_text(incomplete)?;

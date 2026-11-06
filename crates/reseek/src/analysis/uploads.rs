@@ -152,7 +152,7 @@ impl Analysis {
       return Err(too_large());
     }
     // named as the system creates it, so the rename after the last byte cannot refuse it
-    let name = file_name_safely(name, true, Os::CURRENT)
+    let name = file_name_safely(name, Os::CURRENT)
       .filter(|name| !name.is_empty())
       .map(|name| creatable(&name, Os::CURRENT))
       .ok_or_else(|| ApiError::bad_request("The file has no name"))?;
