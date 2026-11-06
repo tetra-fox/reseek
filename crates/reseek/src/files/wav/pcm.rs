@@ -222,11 +222,6 @@ impl Pcm {
       Some(frame) => frame.checked_mul(block).ok_or_else(out_of_range)?,
       None => next,
     };
-    // the packet a seek lands on can start before the range, a later one only where the last
-    // one ends or after
-    if self.next.is_some() && from < next {
-      return Err("the file's packets overlap in time".to_string());
-    }
     let to = from
       .checked_add(pcm.len() as u64)
       .ok_or_else(out_of_range)?;
