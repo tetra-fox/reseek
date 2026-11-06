@@ -29,7 +29,10 @@ CREATE TABLE private_messages (
   -- inbound: the server was told we read it; outbound: always 1
   is_acknowledged INTEGER NOT NULL DEFAULT 0,
   -- the server delivered it again at a login because it was not acknowledged
-  was_replayed INTEGER NOT NULL DEFAULT 0
+  was_replayed INTEGER NOT NULL DEFAULT 0,
+  -- 1 for a message we sent on our own, as the answer to the first message from someone while
+  -- we were away
+  auto_reply INTEGER NOT NULL DEFAULT 0
 );
 CREATE UNIQUE INDEX pm_remote ON private_messages(username, remote_id) WHERE remote_id IS NOT NULL;
 CREATE INDEX pm_user_ts ON private_messages(username, timestamp);
@@ -78,9 +81,35 @@ CREATE TABLE sessions (
   -- moved on every minute while logged in
   last_seen_at TEXT NOT NULL,
   -- null while the session runs
-  ended_at TEXT,
-  -- "disconnected", "shutdown" or "crashed"
-  end_reason TEXT
+  ended_at TEXT
+);
+
+-- the chats pinned above the others in the chat list, rooms and users in one order of the
+-- user's. a pin outlives leaving the room or closing the conversation, as `room_state` and
+-- `conversation_state` do, and shows again when the chat is back
+CREATE TABLE chat_pins (
+  kind TEXT NOT NULL CHECK (kind IN ('room', 'user')),
+  -- a room's name or a username, exact and case-sensitive
+  name TEXT NOT NULL,
+  -- the pin's place in the order, the lowest first
+  position INTEGER NOT NULL,
+  PRIMARY KEY (kind, name)
+);
+
+-- the revision of the pinned chats, one more with every change of the list, so a client can tell
+-- an older list from a newer one whatever order it hears of them in
+CREATE TABLE chat_pins_revision (
+  -- the only row
+  id INTEGER PRIMARY KEY CHECK (id = 0),
+  revision INTEGER NOT NULL
+);
+INSERT INTO chat_pins_revision (id, revision) VALUES (0, 0);
+
+-- whether we set ourselves away, kept so a restart keeps it; an away that came from nobody
+-- having the UI open is not kept
+CREATE TABLE own_status (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  away INTEGER NOT NULL
 );
 
 -- the full-text indexes of the messages, kept by the triggers below; the text is read from the

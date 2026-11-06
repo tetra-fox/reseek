@@ -100,25 +100,9 @@ impl Messaging {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::db::{self, Database, Location, Schema};
+  use crate::db::{Database, Location};
   use crate::messaging::SCHEMA;
   use crate::testing::{app, request};
-
-  /// `messaging.db` as it was before pins.
-  static BEFORE: Schema = db::schema!(
-    "messaging",
-    ["0001_initial", "0002_drop_session_end_reason"]
-  );
-
-  /// `messaging.db` as it was before the pins had a revision.
-  static UNREVISED: Schema = db::schema!(
-    "messaging",
-    [
-      "0001_initial",
-      "0002_drop_session_end_reason",
-      "0003_chat_pins"
-    ]
-  );
 
   fn room(name: &str) -> ChatPin {
     ChatPin {
@@ -163,63 +147,8 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn a_database_from_before_pins_keeps_its_rooms_and_has_no_pins() {
-    let dir = tempfile::tempdir().unwrap();
-    let location = Location::on_disk(dir.path());
-    let before = Database::open(&BEFORE, &location).await.unwrap();
-    before
-      .write(|conn| conn.execute("INSERT INTO room_state (room_name) VALUES ('indie')", []))
-      .await
-      .unwrap();
-    before.close().await;
-    drop(before);
-
-    let db = Database::open(&SCHEMA, &location).await.unwrap();
-    assert_eq!(
-      db.read(list).await.unwrap(),
-      ChatPins {
-        revision: 0,
-        pins: Vec::new()
-      }
-    );
-    let rooms: i64 = db
-      .read(|conn| conn.query_row("SELECT count(*) FROM room_state", [], |row| row.get(0)))
-      .await
-      .unwrap();
-    assert_eq!(rooms, 1);
-  }
-
-  #[tokio::test]
-  async fn pins_from_before_the_revision_keep_their_order_and_refuse_another_kind() {
-    let dir = tempfile::tempdir().unwrap();
-    let location = Location::on_disk(dir.path());
-    let before = Database::open(&UNREVISED, &location).await.unwrap();
-    let order = vec![user("alice"), room("jazz"), room("indie")];
-    let first = order.clone();
-    before
-      .write(move |conn| {
-        let tx = conn.transaction()?;
-        for (position, pin) in (0_i64..).zip(&first) {
-          tx.execute(
-            "INSERT INTO chat_pins (kind, name, position) VALUES (?1, ?2, ?3)",
-            params![kind_text(pin.kind), pin.name, position],
-          )?;
-        }
-        tx.commit()
-      })
-      .await
-      .unwrap();
-    before.close().await;
-    drop(before);
-
-    let db = Database::open(&SCHEMA, &location).await.unwrap();
-    assert_eq!(
-      db.read(list).await.unwrap(),
-      ChatPins {
-        revision: 0,
-        pins: order
-      }
-    );
+  async fn pins_are_rooms_or_users() {
+    let db = Database::memory(&SCHEMA).await;
     let other = db
       .write(|conn| {
         conn.execute(
