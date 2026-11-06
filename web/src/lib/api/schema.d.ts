@@ -2357,7 +2357,10 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Renames a token or changes its expiry; the owner's or, for an administrator, anyone's. */
+        /**
+         * Renames a token or changes its expiry; the owner's or, for an administrator, anyone's.
+         *     Needs a login session, so a token cannot put off its own expiry.
+         */
         put: operations["update"];
         post?: never;
         /**
@@ -17263,6 +17266,14 @@ export interface operations {
                 };
             };
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

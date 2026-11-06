@@ -1,5 +1,5 @@
 //! The API token routes: listing tokens with the configuration's API keys, creating a token
-//! (only from a login session, never with a token), renaming it or changing its expiry, and
+//! and renaming it or changing its expiry (only from a login session, never with a token), and
 //! revoking it.
 
 use crate::api::extract::Json;
@@ -156,12 +156,14 @@ async fn create(
 }
 
 /// Renames a token or changes its expiry; the owner's or, for an administrator, anyone's.
+/// Needs a login session, so a token cannot put off its own expiry.
 #[utoipa::path(
   put, path = "/tokens/{id}", tag = "tokens", request_body = UpdateToken,
   params(("id" = Uuid, Path, description = "the token's id")),
   responses(
     (status = 200, body = Token), (status = 400, body = api_types::ErrorBody),
-    (status = 401, body = api_types::ErrorBody), (status = 404, body = api_types::ErrorBody)
+    (status = 401, body = api_types::ErrorBody), (status = 403, body = api_types::ErrorBody),
+    (status = 404, body = api_types::ErrorBody)
   )
 )]
 async fn update(
@@ -170,6 +172,7 @@ async fn update(
   Path(id): Path<Uuid>,
   Json(request): Json<UpdateToken>,
 ) -> Result<Json<Token>, ApiError> {
+  require_interactive(&caller.principal)?;
   visible(&app, &caller, id).await?;
   if let Some(name) = &request.name {
     check_name(name)?;
@@ -370,6 +373,21 @@ mod tests {
       )
       .await;
     assert_eq!(minted.status, 403, "a token is no login session");
+    let id = admin["token"]["id"].as_str().unwrap();
+    let extended = app
+      .send_from(
+        OUTSIDE,
+        bearer(
+          request(
+            "PUT",
+            &format!("/api/v0/tokens/{id}"),
+            Some(json!({ "expiresAt": "2099-01-01T00:00:00Z" })),
+          ),
+          secret,
+        ),
+      )
+      .await;
+    assert_eq!(extended.status, 403, "nor can it put off its own expiry");
     for (body, status) in [
       (json!({ "name": "", "role": "ReadOnly" }), 400),
       (json!({ "name": "x".repeat(65), "role": "ReadOnly" }), 400),

@@ -11374,7 +11374,7 @@
         "tags": [
           "tokens"
         ],
-        "summary": "Renames a token or changes its expiry; the owner's or, for an administrator, anyone's.",
+        "summary": "Renames a token or changes its expiry; the owner's or, for an administrator, anyone's.\nNeeds a login session, so a token cannot put off its own expiry.",
         "operationId": "update",
         "parameters": [
           {
@@ -11420,6 +11420,16 @@
             }
           },
           "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
             "description": "",
             "content": {
               "application/json": {
