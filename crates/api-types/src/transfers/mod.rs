@@ -138,6 +138,9 @@ pub struct Transfer {
   /// directory, null before that and for uploads
   pub local_path: Option<String>,
   /// a download the user paused: it waits here, keeping what arrived, until resumed
+  // events stored by a build without pausing hold transfers with no such field
+  #[serde(default)]
+  #[schema(required = true)]
   pub paused: bool,
   /// the states the transfer went through, oldest first; null unless asked for
   pub state_history: Option<Vec<TransferStateChange>>,
@@ -247,6 +250,38 @@ mod tests {
         state
       );
     }
+  }
+
+  #[test]
+  fn a_transfer_stored_before_pausing_existed_reads_as_not_paused() {
+    let stored = serde_json::json!({
+      "id": "6f1c1bb4-3c56-4a49-9d3c-2b8e8a7f1d10",
+      "jobId": null,
+      "username": "alice",
+      "direction": "Download",
+      "filename": "@@a\\Album\\01.flac",
+      "size": 1,
+      "state": "Completed, Succeeded",
+      "requestedAt": "2026-11-05T04:05:00Z",
+      "enqueuedAt": null,
+      "startedAt": null,
+      "endedAt": "2026-11-05T04:06:00Z",
+      "bytesTransferred": 1,
+      "averageSpeed": 0.0,
+      "placeInQueue": null,
+      "exception": null,
+      "attempts": 1,
+      "nextAttemptAt": null,
+      "removed": false,
+      "bytesRemaining": 0,
+      "elapsedTime": null,
+      "percentComplete": 100.0,
+      "remainingTime": null,
+      "localPath": null,
+      "stateHistory": null
+    });
+    let read: Transfer = serde_json::from_value(stored).unwrap();
+    assert!(!read.paused);
   }
 
   #[test]
