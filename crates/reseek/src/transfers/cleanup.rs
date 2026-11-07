@@ -24,10 +24,11 @@ pub const SHUT_DOWN: &str = "Application shut down";
 pub type Resumable = BTreeMap<Option<Uuid>, Vec<Group>>;
 
 /// Ends every transfer left unfinished but the paused downloads, removed ones included, as
-/// `Completed, Errored` with [`SHUT_DOWN`] at the time of this call, marking the downloads
-/// among them resumable. Returns how many it ended.
+/// `Completed, Errored` with [`SHUT_DOWN`] at the time of this call, adding the state to each
+/// one's history and marking the downloads among them resumable. Returns how many it ended.
 pub async fn end_unfinished(db: &Database) -> Result<usize, DbError> {
   let errored = TransferStates::Completed | TransferStates::Errored;
+  let now = timestamp(Utc::now());
   let ended = db
     .write(move |conn| {
       let tx = conn.transaction()?;
@@ -43,6 +44,13 @@ pub async fn end_unfinished(db: &Database) -> Result<usize, DbError> {
       };
       tx.execute(
         &format!(
+          "INSERT INTO transfers_state_history (transfer_id, state, at) SELECT Id, ?1, ?2 \
+           FROM Transfers WHERE {UNFINISHED} AND Paused = 0"
+        ),
+        params![errored.bits(), now],
+      )?;
+      tx.execute(
+        &format!(
           "UPDATE Transfers SET State = ?1, StateDescription = ?2, EndedAt = ?3, \
            Exception = ?4, Resumable = (Direction = ?5 OR Resumable), NextAttemptAt = NULL, \
            PlaceInQueue = NULL WHERE {UNFINISHED} AND Paused = 0"
@@ -50,7 +58,7 @@ pub async fn end_unfinished(db: &Database) -> Result<usize, DbError> {
         params![
           errored.bits(),
           errored.to_string(),
-          timestamp(Utc::now()),
+          now,
           SHUT_DOWN,
           direction_text(TransferDirection::Download),
         ],
@@ -153,6 +161,15 @@ mod tests {
         );
       }
     }
+    for row in [&queued, &removed, &uploading, &unended] {
+      let id = row.id;
+      let history = db.read(move |conn| store::history(conn, id)).await.unwrap();
+      let states: Vec<u32> = history.iter().map(|change| change.state.bits()).collect();
+      assert_eq!(states, [272], "{id}");
+    }
+    let id = done.id;
+    let history = db.read(move |conn| store::history(conn, id)).await.unwrap();
+    assert!(history.is_empty(), "a finished transfer gets no entry");
     assert_eq!(end_unfinished(&db).await.unwrap(), 0, "nothing is left");
     let marked: Vec<String> = db
       .read(|conn| {
