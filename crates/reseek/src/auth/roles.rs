@@ -4,6 +4,7 @@ use api_types::auth::Role;
 use serde_json::Value;
 
 use crate::config::enums::DefaultRole;
+use crate::config::{OidcRoleMapping, RoleMapping};
 
 /// The groups that grant each role, and the role of everyone else.
 pub struct Mapping<'a> {
@@ -15,6 +16,30 @@ pub struct Mapping<'a> {
   pub readonly: &'a [String],
   /// the role of a member of none of them, or a refusal
   pub default: DefaultRole,
+}
+
+impl<'a> From<&'a RoleMapping> for Mapping<'a> {
+  fn from(mapping: &'a RoleMapping) -> Self {
+    Self {
+      administrator: &mapping.administrator,
+      readwrite: &mapping.readwrite,
+      readonly: &mapping.readonly,
+      default: mapping.default,
+    }
+  }
+}
+
+// the provider's mapping adds the claim to the same four fields; cascade sections cannot
+// flatten a shared struct, so the two config types stay apart
+impl<'a> From<&'a OidcRoleMapping> for Mapping<'a> {
+  fn from(mapping: &'a OidcRoleMapping) -> Self {
+    Self {
+      administrator: &mapping.administrator,
+      readwrite: &mapping.readwrite,
+      readonly: &mapping.readonly,
+      default: mapping.default,
+    }
+  }
 }
 
 impl Mapping<'_> {

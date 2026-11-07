@@ -5,8 +5,8 @@
 //! forwarded identity, a trusted network. A token or key that is presented but not valid fails
 //! the request at once rather than falling through to a weaker way in; a session cookie that is
 //! not valid is cleared and the next ways are tried. A request that changes something on the
-//! strength of the session cookie alone must come from a page of this site, and one let in by a
-//! trusted network or a proxy's forwarded identity may not come from a page of another site.
+//! strength of the session cookie alone must come from a page of this site, and no request let
+//! in by a trusted network or a proxy's forwarded identity may come from a page of another site.
 //! The principal, or its absence, is put on the request as an [`Authentication`]; a handler
 //! takes an [`Authorized`] to require a role.
 
@@ -106,24 +106,25 @@ pub async fn authenticate(
     Ok(identified) => identified,
     Err(e) => return e.into_response(),
   };
-  if csrf::changes_state(request.method()) {
-    let headers = request.headers();
-    let client = &presented.client;
-    // a browser on a trusted network, or behind a proxy that signs it in from its own cookies,
-    // is let in on any request a page makes it send, as with the session cookie
-    let ambient = identified
-      .principal
-      .as_ref()
-      .is_some_and(|p| matches!(p.via, Via::TrustedNetwork { .. } | Via::Proxy));
-    let cross_site = (identified.by_cookie && !csrf::same_origin(headers, client, &current.values))
-      || (ambient && csrf::foreign_origin(headers, client, &current.values));
-    if cross_site {
-      let via = identified.principal.as_ref().map(|p| &p.via);
-      debug!(ip = %client.ip, ?via, "cross-site request refused");
-      return ApiError::forbidden("Cross-site request refused")
-        .logged()
-        .into_response();
-    }
+  let headers = request.headers();
+  let client = &presented.client;
+  // a browser on a trusted network, or behind a proxy that signs it in from its own cookies, is
+  // let in on any request a page makes it send. Another site's page may also read the answer
+  // when `web.cors.allowed_origins` has `*`, so reads are refused as well as changes
+  let ambient = identified
+    .principal
+    .as_ref()
+    .is_some_and(|p| matches!(p.via, Via::TrustedNetwork { .. } | Via::Proxy));
+  // a browser shows another site the answer to a cookie request only for a listed CORS origin
+  let cookie_change = identified.by_cookie && csrf::changes_state(request.method());
+  let cross_site = (ambient && csrf::foreign_origin(headers, client, &current.values))
+    || (cookie_change && !csrf::same_origin(headers, client, &current.values));
+  if cross_site {
+    let via = identified.principal.as_ref().map(|p| &p.via);
+    debug!(ip = %client.ip, ?via, "cross-site request refused");
+    return ApiError::forbidden("Cross-site request refused")
+      .logged()
+      .into_response();
   }
   if let Some(principal) = &identified.principal {
     tracing::Span::current().record("principal", principal.subject.as_str());
@@ -264,8 +265,12 @@ pub(crate) mod tests {
   }
 
   #[tokio::test]
-  async fn a_trusted_network_change_may_not_come_from_another_site() {
-    let app = app(&format!("remote_configuration = true\n{CONFIG}"), &[]).await;
+  async fn a_trusted_network_request_may_not_come_from_another_site() {
+    let app = app(
+      &format!("remote_configuration = true\n[web.cors]\nallowed_origins = [\"*\"]\n{CONFIG}"),
+      &[],
+    )
+    .await;
     let patch = |origin: Option<&str>| {
       let mut r = request("PATCH", "/api/v0/options", Some(serde_json::json!({})));
       if let Some(origin) = origin {
@@ -283,8 +288,24 @@ pub(crate) mod tests {
       204,
       "scripts send no Origin"
     );
-    let read = with_header("origin", "http://evil.example");
-    assert_eq!(app.send(read).await.status, 200, "reads are not refused");
+    let read = app.send(with_header("origin", "http://evil.example")).await;
+    assert_eq!(
+      read.status, 403,
+      "CORS lets another site read the answer, so reads are refused too"
+    );
+    let own = with_header("origin", "http://localhost");
+    assert_eq!(app.send(own).await.status, 200);
+    let keyed = crate::testing::with(
+      request("GET", "/api/v0/session", None),
+      "x-api-key",
+      "viewer-key-0123456789",
+    );
+    let keyed = crate::testing::with(keyed, "origin", "http://evil.example");
+    assert_eq!(
+      app.send(keyed).await.status,
+      200,
+      "a key is no ambient credential"
+    );
   }
 
   #[tokio::test]

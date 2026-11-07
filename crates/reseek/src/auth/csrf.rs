@@ -1,7 +1,7 @@
 //! Refusing cross-site requests: a request that changes something and is authenticated only by
 //! the session cookie, which a browser sends on its own, must come from a page of this site,
-//! and one let in by a trusted network or a proxy's forwarded identity, which a browser also
-//! carries along, may not name another site as its origin.
+//! and any request let in by a trusted network or a proxy's forwarded identity, which a browser
+//! also carries along, may not name another site as its origin.
 
 use axum::http::{HeaderMap, Method, header};
 use url::{Origin, Url};

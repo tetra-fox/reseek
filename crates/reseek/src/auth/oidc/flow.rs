@@ -246,15 +246,9 @@ pub fn admit(provider: &Provider, claims: &Claims) -> Result<Admitted, String> {
     return Err("no verified email in allowed_emails".to_string());
   }
   let groups = claim_strings(&claims.claims, &options.role_mapping.claim);
-  let mapping = &options.role_mapping;
-  let role = Mapping {
-    administrator: &mapping.administrator,
-    readwrite: &mapping.readwrite,
-    readonly: &mapping.readonly,
-    default: mapping.default,
-  }
-  .role(&groups)
-  .ok_or_else(|| "in no group that grants a role".to_string())?;
+  let role = Mapping::from(&options.role_mapping)
+    .role(&groups)
+    .ok_or_else(|| "in no group that grants a role".to_string())?;
   let name = claim(&options.username_claim)
     .or_else(|| claim("email"))
     .unwrap_or(&claims.subject)

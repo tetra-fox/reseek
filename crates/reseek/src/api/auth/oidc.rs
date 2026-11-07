@@ -109,14 +109,15 @@ async fn callback(
 ) -> Result<Response, ApiError> {
   let provider = provider(&app, &name)?;
   let client = &presented.client;
-  if app.auth.limits.logins.blocked(client.ip) {
+  let logins = &app.auth.limits.logins;
+  // counted as a failure from the start, so callbacks made at the same time are limited too
+  let Some(attempt) = logins.attempt(client.ip) else {
     return Err(ApiError::rate_limited());
-  }
+  };
   let scope = Scope::new(&app.url_base, client.https);
   let cookie_name = flow::cookie_name(&name);
   let clear = scope.clear(&cookie_name);
   let failed = |reason: String| {
-    app.auth.limits.logins.failed(client.ip);
     if let Some(suppressed) = CALLBACK_FAILED.allow() {
       warn!(provider = name, ip = %client.ip, reason, suppressed, "login failed");
     }
@@ -158,11 +159,21 @@ async fn callback(
       clear,
     ));
   };
-  let callback = callback_url(&app, &presented, &name)?;
-  let metadata = provider
-    .metadata()
-    .await
-    .map_err(|e| unavailable(&name, &e))?;
+  // neither of these is the client's failed login, so they are not counted
+  let callback = match callback_url(&app, &presented, &name) {
+    Ok(callback) => callback,
+    Err(e) => {
+      logins.forgive(attempt);
+      return Err(e);
+    }
+  };
+  let metadata = match provider.metadata().await {
+    Ok(metadata) => metadata,
+    Err(e) => {
+      logins.forgive(attempt);
+      return Err(unavailable(&name, &e));
+    }
+  };
   let claims = match flow::exchange(&provider, metadata.clone(), callback, code, &login).await {
     Ok(claims) => claims,
     Err(reason) => {
@@ -175,7 +186,10 @@ async fn callback(
     }
   };
   let admitted = match flow::admit(&provider, &claims) {
-    Ok(admitted) => admitted,
+    Ok(admitted) => {
+      logins.forgive(attempt);
+      admitted
+    }
     Err(reason) => {
       failed(format!("not authorized: {reason}"));
       let back = external_base(&app.url_base, &app.config.current().values, client)
@@ -736,6 +750,38 @@ mod tests {
         .status,
       404
     );
+  }
+
+  #[tokio::test]
+  async fn failed_callbacks_count_toward_the_login_limit_and_sign_ins_do_not() {
+    let (issuer, app) = setup("readonly").await;
+    for n in 0..6 {
+      let started = start(&app, "/").await;
+      let nonce = started.params["nonce"].clone();
+      let code = format!("ok{n}");
+      grant(
+        &issuer,
+        &started,
+        &code,
+        json!({ "sub": "u1", "nonce": nonce }),
+      );
+      let signed_in = back(&app, &started, &code).await;
+      assert!(set_cookie(&signed_in.headers, "reseek_session").is_some());
+    }
+    let expired = || {
+      app.send_from(
+        OUTSIDE,
+        request(
+          "GET",
+          "/api/v0/auth/oidc/home/callback?code=x&state=y",
+          None,
+        ),
+      )
+    };
+    for _ in 0..5 {
+      assert_eq!(expired().await.status, 400);
+    }
+    assert_eq!(expired().await.status, 429);
   }
 
   #[tokio::test]

@@ -167,7 +167,9 @@ async fn https_only(
 }
 
 /// The CORS layer `web.cors.allowed_origins` asks for: none when it is empty, any origin
-/// without credentials for `*`, else the listed origins with credentials.
+/// without credentials for `*`, else the listed origins with credentials. A request from
+/// another site's page is refused a trusted network's or a proxy's principal, so `*` shows it
+/// nothing those alone would open.
 fn cors(options: &Options) -> Option<CorsLayer> {
   let origins = &options.web.cors.allowed_origins;
   if origins.is_empty() {
@@ -232,15 +234,21 @@ async fn traced(logging: bool, request: Request, next: Next) -> Response {
 /// link's `t`.
 const SECRET_PARAMETERS: &[&str] = &["access_token", "t"];
 
-/// The path and query of `uri` with the value of every credential parameter taken out.
+/// The path and query of `uri` with the value of every credential parameter taken out. A name
+/// is compared decoded, as the handlers read it, so `access%5Ftoken` is masked too.
 fn loggable(uri: &Uri) -> String {
   let Some(query) = uri.query() else {
     return uri.path().to_string();
   };
+  let secret = |name: &str| {
+    url::form_urlencoded::parse(name.as_bytes())
+      .next()
+      .is_some_and(|(decoded, _)| SECRET_PARAMETERS.contains(&decoded.as_ref()))
+  };
   let query = query
     .split('&')
     .map(|pair| match pair.split_once('=') {
-      Some((name, _)) if SECRET_PARAMETERS.contains(&name) => format!("{name}=*****"),
+      Some((name, _)) if secret(name) => format!("{name}=*****"),
       _ => pair.to_string(),
     })
     .collect::<Vec<_>>()
@@ -353,6 +361,13 @@ mod tests {
     assert_eq!(
       loggable(&link),
       "/api/v0/files/downloads/files/YQ/content?t=*****&disposition=inline"
+    );
+    let encoded: Uri = "/api/v0/live?access%5Ftoken=slsk_secret&%74=eyJ.x.y&topics=logs"
+      .parse()
+      .unwrap();
+    assert_eq!(
+      loggable(&encoded),
+      "/api/v0/live?access%5Ftoken=*****&%74=*****&topics=logs"
     );
   }
 }

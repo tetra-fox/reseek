@@ -1,8 +1,8 @@
 //! Limits on failed attempts per client address: failed logins and failed API credentials, each
 //! counted over a sliding minute and kept in memory only. An IPv6 client is counted by its /64,
-//! the block one host is usually given, so it cannot spread attempts over its own addresses. A
-//! password login is counted when it starts and forgiven when it succeeds, so attempts made at
-//! the same time are held to the limit too.
+//! the block one host is usually given, so it cannot spread attempts over its own addresses. Every
+//! attempt is counted when it starts and forgiven when it succeeds, so attempts made at the
+//! same time are held to the limit too.
 
 use std::collections::{HashMap, VecDeque};
 use std::net::{IpAddr, Ipv6Addr};
@@ -59,35 +59,6 @@ impl Window {
       what,
       limit,
       failures: Mutex::new(HashMap::new()),
-    }
-  }
-
-  /// Whether `ip` has failed as often as it may within the window; logs when it has.
-  pub fn blocked(&self, ip: IpAddr) -> bool {
-    let now = Instant::now();
-    let key = counted_as(ip);
-    let mut failures = lock(&self.failures);
-    let Some(times) = failures.get_mut(&key) else {
-      return false;
-    };
-    forget_old(times, now);
-    let blocked = times.len() >= self.limit;
-    if times.is_empty() {
-      failures.remove(&key);
-    }
-    if blocked && let Some(suppressed) = TRIPPED.allow() {
-      warn!(%ip, kind = self.what, suppressed, "rate limit tripped");
-    }
-    blocked
-  }
-
-  /// Counts a failure of `ip`.
-  pub fn failed(&self, ip: IpAddr) {
-    let now = Instant::now();
-    let mut failures = lock(&self.failures);
-    let times = tracked(&mut failures, counted_as(ip), now);
-    if times.len() < self.limit {
-      times.push_back(now);
     }
   }
 
@@ -188,20 +159,25 @@ mod tests {
     let ip: IpAddr = "192.0.2.1".parse().unwrap();
     let other: IpAddr = "192.0.2.2".parse().unwrap();
     for _ in 0..4 {
-      limits.logins.failed(ip);
+      assert!(limits.logins.attempt(ip).is_some());
     }
-    assert!(!limits.logins.blocked(ip));
     tokio::time::advance(Duration::from_secs(30)).await;
-    limits.logins.failed(ip);
-    assert!(limits.logins.blocked(ip));
-    assert!(!limits.logins.blocked(other));
-    assert!(!limits.presentations.blocked(ip), "the limits are apart");
+    assert!(limits.logins.attempt(ip).is_some());
+    assert!(limits.logins.attempt(ip).is_none());
+    assert!(limits.logins.attempt(other).is_some());
+    assert!(
+      limits.presentations.attempt(ip).is_some(),
+      "the limits are apart"
+    );
     tokio::time::advance(Duration::from_secs(30)).await;
-    assert!(!limits.logins.blocked(ip), "the first four left the window");
-    for _ in 0..20 {
-      limits.presentations.failed(other);
+    assert!(
+      limits.logins.attempt(ip).is_some(),
+      "the first four left the window"
+    );
+    for _ in 0..PRESENTATIONS {
+      assert!(limits.presentations.attempt(other).is_some());
     }
-    assert!(limits.presentations.blocked(other));
+    assert!(limits.presentations.attempt(other).is_none());
   }
 
   #[tokio::test(start_paused = true)]
@@ -214,11 +190,12 @@ mod tests {
       LOGINS,
       "the rest are refused before any finishes"
     );
-    assert!(limits.logins.blocked(ip));
     let mut started = started.into_iter();
     limits.logins.forgive(started.next().unwrap());
-    assert!(!limits.logins.blocked(ip), "a success gives its place back");
-    assert!(limits.logins.attempt(ip).is_some());
+    assert!(
+      limits.logins.attempt(ip).is_some(),
+      "a success gives its place back"
+    );
     assert!(limits.logins.attempt(ip).is_none());
     tokio::time::advance(WINDOW).await;
     assert!(
@@ -231,23 +208,27 @@ mod tests {
   async fn an_ipv6_client_is_counted_by_its_64() {
     let limits = Limits::default();
     let address = |text: &str| text.parse::<IpAddr>().unwrap();
-    for host in 1..=5 {
+    for host in 1..=LOGINS {
+      let host = address(&format!("2001:db8:1:2::{host:x}"));
+      assert!(limits.logins.attempt(host).is_some());
+    }
+    assert!(
       limits
         .logins
-        .failed(address(&format!("2001:db8:1:2::{host:x}")));
-    }
-    assert!(limits.logins.blocked(address("2001:db8:1:2:ffff::1")));
+        .attempt(address("2001:db8:1:2:ffff::1"))
+        .is_none()
+    );
     assert!(
-      !limits.logins.blocked(address("2001:db8:1:3::1")),
+      limits.logins.attempt(address("2001:db8:1:3::1")).is_some(),
       "another /64"
     );
-    for _ in 0..5 {
-      limits.logins.failed(address("::ffff:192.0.2.9"));
+    for _ in 0..LOGINS {
+      assert!(limits.logins.attempt(address("::ffff:192.0.2.9")).is_some());
     }
     assert!(
-      limits.logins.blocked(address("192.0.2.9")),
+      limits.logins.attempt(address("192.0.2.9")).is_none(),
       "a mapped address is its IPv4 one"
     );
-    assert!(!limits.logins.blocked(address("192.0.2.10")));
+    assert!(limits.logins.attempt(address("192.0.2.10")).is_some());
   }
 }

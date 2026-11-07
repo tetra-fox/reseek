@@ -30,14 +30,7 @@ impl Forwarded {
 
   /// The role its groups give, `None` when it is refused.
   pub fn role(&self, proxy: &Proxy) -> Option<Role> {
-    let mapping = &proxy.role_mapping;
-    Mapping {
-      administrator: &mapping.administrator,
-      readwrite: &mapping.readwrite,
-      readonly: &mapping.readonly,
-      default: mapping.default,
-    }
-    .role(&self.groups)
+    Mapping::from(&proxy.role_mapping).role(&self.groups)
   }
 }
 

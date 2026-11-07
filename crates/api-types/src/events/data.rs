@@ -205,6 +205,8 @@ pub enum SessionRevokeReason {
   Admin,
   /// the identity provider ended it
   Backchannel,
+  /// the reverse proxy forwards another user or role than the session's
+  Proxy,
   /// it expired
   Expired,
 }
@@ -221,7 +223,7 @@ pub struct SessionRevoked {
   #[schema(example = "local:admin")]
   pub subject: String,
   /// the subject of the principal that ended it, null when it expired or the identity provider
-  /// ended it
+  /// or the reverse proxy ended it
   pub by: Option<String>,
   /// why it ended
   pub reason: SessionRevokeReason,

@@ -4,7 +4,7 @@
 //! valid is cleared and the next ways are tried. A session the proxy step started ends when the
 //! proxy forwards someone else or a different role for them.
 
-use std::net::{IpAddr, Ipv4Addr};
+use std::net::IpAddr;
 
 use api_types::auth::{Principal, Via};
 use api_types::events::{Event, SessionCreated, SessionRevokeReason, SessionRevoked};
@@ -18,7 +18,6 @@ use super::sessions::{self, NewSession, Origin, StoredSession};
 use super::{Client, TOKEN_PREFIX, client, keys, networks, proxy, tokens};
 use crate::api::error::ApiError;
 use crate::app::AppState;
-use crate::config::cidr::unmapped;
 use crate::http::Peer;
 
 /// The path of the event stream, the one route that takes a credential in its query.
@@ -65,9 +64,7 @@ impl Presented {
         })
     };
     Self {
-      peer: peer
-        .remote
-        .map_or(IpAddr::V4(Ipv4Addr::LOCALHOST), |addr| unmapped(addr.ip())),
+      peer: peer.ip(),
       credential: presented_credential(headers)
         .map(str::to_string)
         .or_else(in_query)
@@ -134,37 +131,56 @@ pub async fn identify(
   let auth = &app.auth;
   let ip = presented.client.ip;
   if let Some(credential) = &presented.credential {
-    let counted = check == Check::Request;
-    if counted && auth.limits.presentations.blocked(ip) {
-      return Err(ApiError::rate_limited());
-    }
+    let presentations = &auth.limits.presentations;
+    // counted as a failure from the start, so credentials presented at the same time are limited
+    // too; a credential checked again counts nothing
+    let attempt = match check {
+      Check::Request => Some(
+        presentations
+          .attempt(ip)
+          .ok_or_else(ApiError::rate_limited)?,
+      ),
+      Check::Again => None,
+    };
+    let forgive = || {
+      if let Some(attempt) = attempt {
+        presentations.forgive(attempt);
+      }
+    };
     let outcome = if credential.starts_with(TOKEN_PREFIX) {
-      tokens::check(&auth.db, credential, ip)
-        .await
-        .map_err(ApiError::internal)?
-        .map(|token| token.principal())
-        .map_err(|refusal| refusal.to_string())
+      tokens::check(&auth.db, credential, ip).await.map(|found| {
+        found
+          .map(|token| token.principal())
+          .map_err(|refusal| refusal.to_string())
+      })
     } else {
-      keys::check(
-        credential,
-        ip,
-        app.primary_key.as_deref(),
-        &options.web.authentication.api_keys,
+      Ok(
+        keys::check(
+          credential,
+          ip,
+          app.primary_key.as_deref(),
+          &options.web.authentication.api_keys,
+        )
+        .map_err(|refusal| refusal.to_string()),
       )
-      .map_err(|refusal| refusal.to_string())
     };
     return match outcome {
-      Ok(principal) => Ok(Identified {
-        principal: Some(principal),
-        ..Identified::default()
-      }),
-      Err(reason) => {
-        if counted {
-          auth.limits.presentations.failed(ip);
-        }
+      Ok(Ok(principal)) => {
+        forgive();
+        Ok(Identified {
+          principal: Some(principal),
+          ..Identified::default()
+        })
+      }
+      Ok(Err(reason)) => {
         // the credential itself is never logged, only how long it is
         debug!(%ip, length = credential.len(), reason, "API credential refused");
         Err(ApiError::unauthorized(reason).logged())
+      }
+      // a check that could not run is not a refused credential
+      Err(e) => {
+        forgive();
+        Err(ApiError::internal(e))
       }
     };
   }
@@ -291,13 +307,7 @@ async fn cookie_session(
     forwarded = named.subject(),
     "the proxy forwards another user or role than its session's"
   );
-  end_sessions(
-    app,
-    vec![session.id],
-    None,
-    SessionRevokeReason::Backchannel,
-  )
-  .await?;
+  end_sessions(app, vec![session.id], None, SessionRevokeReason::Proxy).await?;
   Ok(None)
 }
 
@@ -455,6 +465,18 @@ mod tests {
       )
       .await;
     assert_eq!(other.status, 403, "another address is not held back");
+  }
+
+  #[tokio::test]
+  async fn bad_tokens_presented_at_once_are_held_to_the_limit() {
+    let app = app(CONFIG, &[]).await;
+    // well formed, so the lookup waits on the database and all of them start before any is refused
+    let token = format!("Bearer slsk_{}", "a".repeat(40));
+    let wrong = || app.send_from("192.0.2.9:1", with_header("authorization", &token));
+    let answers = futures_util::future::join_all((0..30).map(|_| wrong())).await;
+    let refused = answers.iter().filter(|a| a.status == 401).count();
+    let limited = answers.iter().filter(|a| a.status == 429).count();
+    assert_eq!((refused, limited), (20, 10));
   }
 
   #[tokio::test]

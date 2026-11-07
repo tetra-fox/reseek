@@ -1,7 +1,7 @@
 //! Who is on the other end of a request: the client's address and the host it asked for, after
 //! the headers of trusted reverse proxies.
 
-use std::net::{IpAddr, Ipv4Addr};
+use std::net::IpAddr;
 
 use axum::http::{HeaderMap, Uri, header};
 
@@ -26,9 +26,7 @@ pub struct Client {
 /// `proxies`; the client is then the rightmost address of `X-Forwarded-For` that is not a
 /// trusted proxy.
 pub fn resolve(peer: &Peer, uri: &Uri, headers: &HeaderMap, proxies: &[IpRange]) -> Client {
-  let peer_ip = peer
-    .remote
-    .map_or(IpAddr::V4(Ipv4Addr::LOCALHOST), |addr| unmapped(addr.ip()));
+  let peer_ip = peer.ip();
   let host_header = headers
     .get(header::HOST)
     .and_then(|h| h.to_str().ok())
@@ -101,7 +99,7 @@ pub fn without_port(host: &str) -> String {
 mod tests {
   use super::*;
   use axum::http::HeaderValue;
-  use std::net::SocketAddr;
+  use std::net::{Ipv4Addr, SocketAddr};
 
   fn peer(addr: &str) -> Peer {
     Peer {
