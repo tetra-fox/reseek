@@ -74,15 +74,20 @@
     }
   });
 
-  // screens size their content from these heights and fixed layers keep clear of the panels.
-  // They go on the root so toasts and dialog portals, drawn outside the shell, read them too
+  // screens size their content from its height, and fixed layers keep clear of everything under
+  // it: the activity log, the panel's inset and the footer, measured as the gap between the
+  // content area's bottom and the shell's. Any change to those resizes the content area, which
+  // measures again. They go on the root so toasts and dialog portals, drawn outside the shell,
+  // read them too
+  let shell = $state<HTMLElement>();
   let contentHeight = $state(0);
-  let dockHeight = $state(0);
-  let bottomHeight = $state(0);
   $effect(() => {
+    const box = content.scroller;
+    if (!contentHeight || !shell || !box) return;
     const root = document.documentElement.style;
-    if (contentHeight) root.setProperty("--content-h", `${contentHeight}px`);
-    if (bottomHeight) root.setProperty("--bottom-h", `${dockHeight + bottomHeight}px`);
+    const below = shell.getBoundingClientRect().bottom - box.getBoundingClientRect().bottom;
+    root.setProperty("--content-h", `${contentHeight}px`);
+    root.setProperty("--bottom-h", `${below}px`);
     return () => {
       root.removeProperty("--content-h");
       root.removeProperty("--bottom-h");
@@ -154,7 +159,9 @@
 {#if app.phase === "app"}
   <!-- the window never scrolls: the content area does, and the activity log under it and the
        footer take their room from it rather than covering it -->
-  <div class="grid h-svh grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto]">
+  <div
+    bind:this={shell}
+    class="grid h-svh grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto]">
     <div class="flex min-h-0">
       <Sidebar />
       <div class="flex min-w-0 flex-1 flex-col">
@@ -192,14 +199,10 @@
           </div>
           <InspectorPane />
         </div>
-        <div bind:clientHeight={dockHeight}>
-          {#if activityPrefs.open}<ActivityDock />{/if}
-        </div>
+        {#if activityPrefs.open}<ActivityDock />{/if}
       </div>
     </div>
-    <div bind:clientHeight={bottomHeight}>
-      <Footer />
-    </div>
+    <Footer />
   </div>
   <BlockDialog />
   <SendFilesDialog />
