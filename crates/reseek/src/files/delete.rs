@@ -282,7 +282,9 @@ mod tests {
   fn a_file_being_written_is_not_deleted() {
     let t = tree();
     let writing = Writing::default();
-    let guard = writing.hold(vec![t.root.join("album/discs/02.flac")]);
+    let guard = writing
+      .hold(vec![t.root.join("album/discs/02.flac")])
+      .unwrap();
     for (path, kind) in [
       ("album/discs/02.flac", Kind::File),
       ("album", Kind::Directory),

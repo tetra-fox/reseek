@@ -1,6 +1,7 @@
 //! Deleting files left in the download directories for longer than their retention. Links are
-//! never followed or deleted, hidden entries are left alone, and a directory emptied by the
-//! pruning goes too; the directory itself always stays.
+//! never followed or deleted, hidden entries are left alone except the copies a move across
+//! filesystems left unfinished, and a directory emptied by the pruning goes too; the directory
+//! itself always stays.
 
 use std::path::Path;
 use std::time::{Duration, SystemTime};
@@ -8,6 +9,7 @@ use std::time::{Duration, SystemTime};
 use tracing::{debug, warn};
 
 use super::Files;
+use super::placing::is_part;
 use super::writing::Writing;
 use crate::entries;
 
@@ -87,7 +89,13 @@ fn prune_in(
     let Some(metadata) = super::roots::metadata_of(&path, "pruning") else {
       continue;
     };
-    if metadata.file_type().is_symlink() || entries::left_out(&entry.file_name(), Some(&metadata)) {
+    let name = entry.file_name();
+    // hidden, but pruned; a copy still being written has a fresh write time, far younger than
+    // any retention
+    let unfinished_copy = metadata.is_file() && is_part(&name);
+    if metadata.file_type().is_symlink()
+      || (entries::left_out(&name, Some(&metadata)) && !unfinished_copy)
+    {
       continue;
     }
     if metadata.is_dir() {
@@ -145,6 +153,7 @@ mod tests {
       "mixed/keep.flac",
       "mixed/old.flac",
       ".hidden",
+      "mixed/.0123456789abcdef.part",
     ] {
       std::fs::write(root.join(file), b"x").unwrap();
     }
@@ -152,18 +161,20 @@ mod tests {
     #[cfg(unix)]
     std::os::unix::fs::symlink(&outside, root.join("link")).unwrap();
     let writing = Writing::default();
-    let _held = writing.hold(vec![
-      std::fs::canonicalize(&root)
-        .unwrap()
-        .join("mixed/keep.flac"),
-    ]);
+    let _held = writing
+      .hold(vec![
+        std::fs::canonicalize(&root)
+          .unwrap()
+          .join("mixed/keep.flac"),
+      ])
+      .unwrap();
     // every file is older than a zero retention
     let later = SystemTime::now() + Duration::from_secs(60);
     let pruned = prune(&root, Duration::ZERO, later, &writing);
     assert_eq!(
       pruned,
       Pruned {
-        deleted: 2,
+        deleted: 3,
         errors: 0
       }
     );
@@ -178,6 +189,10 @@ mod tests {
       "only what pruning emptied"
     );
     assert!(root.join(".hidden").exists());
+    assert!(
+      !root.join("mixed/.0123456789abcdef.part").exists(),
+      "an unfinished copy goes"
+    );
     assert!(outside.join("theirs").exists(), "links are not followed");
     assert!(root.exists());
     let none = prune(

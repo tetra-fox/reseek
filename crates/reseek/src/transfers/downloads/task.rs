@@ -19,6 +19,7 @@ use super::Downloads;
 use super::attempt::{Attempted, Failure};
 use super::destination::incomplete_path;
 use super::starts::Turn;
+use crate::files::WriteGuard;
 use crate::safety::Os;
 use crate::sync::lock;
 use crate::transfers::{Record, removal, store};
@@ -38,9 +39,9 @@ pub(super) struct Gate {
 
 /// How a download task ended.
 enum Ended {
-  /// the file arrived and is in the incomplete file; the record is filled in, to be written
-  /// once the file is moved
-  Succeeded(Record, PathBuf),
+  /// the file arrived and is in the incomplete file, still marked as written; the record is
+  /// filled in, to be written once the file is moved
+  Succeeded(Record, PathBuf, WriteGuard),
   /// the download failed for good
   Failed(Failed),
   /// the daemon is stopping; the record is left as it is
@@ -88,7 +89,9 @@ impl Downloads {
 
   async fn run(self: Arc<Self>, id: Uuid, request: (u64, usize), cancel: CancellationToken) {
     match self.download(id, request, &cancel).await {
-      Ended::Succeeded(record, incomplete) => self.complete(record, incomplete).await,
+      Ended::Succeeded(record, incomplete, writing) => {
+        self.complete(record, incomplete, writing).await;
+      }
       Ended::Failed(failed) => self.fail(failed).await,
       Ended::Abandoned => debug!("download left for the stop to end"),
     }
@@ -189,7 +192,7 @@ impl Downloads {
         .attempt(&mut record, &incomplete, cancel, &mut gate)
         .await
       {
-        Attempted::Succeeded => return Ended::Succeeded(record, incomplete),
+        Attempted::Succeeded(writing) => return Ended::Succeeded(record, incomplete, writing),
         Attempted::Abandoned => return Ended::Abandoned,
         Attempted::Failed(failure) => {
           warn!(

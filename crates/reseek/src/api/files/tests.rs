@@ -131,7 +131,7 @@ async fn an_incomplete_file_is_served_only_once_no_download_writes_it() {
     b64("partial.flac")
   );
   let delete = format!("/api/v0/files/incomplete/files/{}", b64("partial.flac"));
-  let guard = app.state.files.writing(&file);
+  let guard = app.state.files.writing(&file).unwrap();
   assert_eq!(app.send(request("GET", &uri, None)).await.status, 409);
   assert_eq!(app.send(request("DELETE", &delete, None)).await.status, 409);
   drop(guard);
@@ -147,7 +147,11 @@ async fn an_incomplete_archive_leaves_out_the_files_a_download_writes() {
   std::fs::create_dir_all(&album).unwrap();
   std::fs::write(album.join("done.flac"), b"done").unwrap();
   std::fs::write(album.join("partial.flac"), b"part").unwrap();
-  let guard = app.state.files.writing(&album.join("partial.flac"));
+  let guard = app
+    .state
+    .files
+    .writing(&album.join("partial.flac"))
+    .unwrap();
   let uri = format!(
     "/api/v0/files/incomplete/directories/{}/archive",
     b64("Album")

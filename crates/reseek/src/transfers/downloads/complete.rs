@@ -16,10 +16,10 @@ use rusqlite::params;
 use tracing::{debug, error, info, warn};
 
 use super::Downloads;
-use super::destination::{SearchFound, Source, destination_directory, subdirectory};
+use super::destination::{SearchFound, Source, destination_directory, local_name, subdirectory};
 use crate::config::enums::DestinationExists;
 use crate::files::mode::to_unix_file_mode;
-use crate::files::move_file;
+use crate::files::{WriteGuard, move_file};
 use crate::safety::Os;
 use crate::transfers::categories::UNFINISHED;
 use crate::transfers::listing::remote_directory;
@@ -28,7 +28,13 @@ use crate::transfers::{Record, direction_text};
 impl Downloads {
   /// Moves the arrived file of `record`, succeeded but not yet written, from `incomplete` to its
   /// destination, writes the record with where the file is, and raises the events that follow.
-  pub(super) async fn complete(&self, mut record: Record, incomplete: PathBuf) {
+  /// `writing` marks the incomplete file until the move has ended.
+  pub(super) async fn complete(
+    &self,
+    mut record: Record,
+    incomplete: PathBuf,
+    writing: WriteGuard,
+  ) {
     let options = self.config.current().values.clone();
     let destination = &options.transfers.download.destination;
     // validated when the options were loaded
@@ -38,19 +44,21 @@ impl Downloads {
       .as_deref()
       .and_then(|text| to_unix_file_mode(text).ok());
     let overwrite = destination.exists == DestinationExists::Overwrite;
-    let directory = match self
-      .destination(&record, &incomplete, destination.subdirectory.as_deref())
+    let (directory, name) = match self
+      .destination(&record, destination.subdirectory.as_deref())
       .await
     {
-      Ok(directory) => directory,
+      Ok(placed) => placed,
       Err(reason) => return self.move_failed(&mut record, &incomplete, reason).await,
     };
     let source = incomplete.clone();
     let target = directory.clone();
-    let moved = tokio::task::spawn_blocking(move || move_file(&source, &target, mode, overwrite))
-      .await
-      .map_err(|e| format!("the move did not finish: {e}"))
-      .and_then(|moved| moved.map_err(|e| e.to_string()));
+    let moved =
+      tokio::task::spawn_blocking(move || move_file(&source, &target, &name, mode, overwrite))
+        .await
+        .map_err(|e| format!("the move did not finish: {e}"))
+        .and_then(|moved| moved.map_err(|e| e.to_string()));
+    drop(writing);
     let path = match moved {
       Ok(path) => path,
       Err(reason) => return self.move_failed(&mut record, &incomplete, reason).await,
@@ -79,13 +87,13 @@ impl Downloads {
     self.directory_complete(&record, &directory).await;
   }
 
-  /// The directory under the downloads directory the file of `record` goes to.
+  /// The directory under the downloads directory the file of `record` goes to, and its name
+  /// there.
   async fn destination(
     &self,
     record: &Record,
-    incomplete: &Path,
     pattern: Option<&str>,
-  ) -> Result<PathBuf, String> {
+  ) -> Result<(PathBuf, String), String> {
     let search = match record.search_id {
       Some(id) => self.search_of(id).await,
       None => None,
@@ -98,10 +106,7 @@ impl Downloads {
       search: search.as_ref(),
     };
     let relative = subdirectory(pattern, &source, Os::CURRENT)?;
-    let name = incomplete
-      .file_name()
-      .map(|name| name.to_string_lossy().into_owned())
-      .ok_or_else(|| format!("the incomplete file {} has no name", incomplete.display()))?;
+    let name = local_name(&record.filename, Os::CURRENT)?;
     let (directory, shortened) = destination_directory(
       &self.downloads,
       &relative,
@@ -112,7 +117,7 @@ impl Downloads {
     if shortened {
       warn!(directory = %directory.display(), "destination path too long; the file goes under the peer's directory");
     }
-    Ok(directory)
+    Ok((directory, name))
   }
 
   /// The search a download was found by, when it is still kept; a search deleted since, or one

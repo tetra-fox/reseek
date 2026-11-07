@@ -8,11 +8,12 @@
 //! each copy so two files of one name copied at once never share it, flushed to disk and
 //! renamed into place, so a half-copied file never has the final name.
 
+use std::ffi::OsStr;
 use std::fs::{File, OpenOptions};
 use std::io::{self, ErrorKind};
 use std::path::{Path, PathBuf};
 
-use tracing::debug;
+use tracing::{debug, warn};
 
 use crate::safety::with_suffix;
 
@@ -21,6 +22,12 @@ use super::mode::with_execute_for_each_read;
 
 /// How many numbered names a move tries before it gives up.
 const NUMBERED_NAMES: u32 = 10_000;
+
+/// How many hex digits of random a copy's hidden name has.
+const PART_DIGITS: usize = 16;
+
+/// The end of a copy's hidden name.
+const PART_SUFFIX: &str = ".part";
 
 /// `error` with `context` in front of its message, its kind kept.
 fn context(error: io::Error, context: impl std::fmt::Display) -> io::Error {
@@ -55,10 +62,26 @@ pub fn create_directories(dir: &Path, mode: Option<u32>) -> io::Result<()> {
   Ok(())
 }
 
-/// Opens `path` for a download to write from `offset`: the missing directories above it made
-/// with `mode` and an execute bit for every read bit, the file created with `mode` when it is
-/// new, and cut at `offset` so what follows is written after the bytes kept.
+/// Opens `path` for a download to write from `offset`. At 0 the missing directories above it
+/// are made with `mode` and an execute bit for every read bit, and the file is created with
+/// `mode` when it is new. Past 0 the file must exist and hold at least `offset` bytes, since
+/// they are the ones kept. The file is cut at `offset` so what follows is written after them.
 pub fn create_file(path: &Path, mode: Option<u32>, offset: u64) -> io::Result<File> {
+  if offset > 0 {
+    let opened = (|| {
+      let file = OpenOptions::new().read(true).write(true).open(path)?;
+      let length = file.metadata()?.len();
+      if length < offset {
+        return Err(io::Error::new(
+          ErrorKind::UnexpectedEof,
+          format!("it holds {length} bytes, fewer than the {offset} resumed from"),
+        ));
+      }
+      file.set_len(offset)?;
+      Ok(file)
+    })();
+    return opened.map_err(|e| context(e, format!("Failed to open partial file {}", base(path))));
+  }
   let created = (|| {
     if let Some(dir) = path.parent() {
       create_directories(dir, mode)?;
@@ -71,7 +94,7 @@ pub fn create_file(path: &Path, mode: Option<u32>, offset: u64) -> io::Result<Fi
       options.mode(mode);
     }
     let file = options.open(path)?;
-    file.set_len(offset)?;
+    file.set_len(0)?;
     Ok(file)
   })();
   created.map_err(|e| context(e, format!("Failed to create file {}", base(path))))
@@ -127,10 +150,28 @@ fn place_new(from: &Path, dir: &Path, name: &str) -> io::Result<PathBuf> {
   ))
 }
 
-/// Copies `source` to a hidden name of its own in `dir`, `.{random}.part`, flushed to disk, for
-/// a move across filesystems; the copy is deleted when it fails.
+/// The hidden name `.{random}.part` a copy across filesystems is written to.
+fn part_name(random: u64) -> String {
+  format!(".{random:0PART_DIGITS$x}{PART_SUFFIX}")
+}
+
+/// Whether `name` is one [`part_name`] gives, so a copy cut off before its rename can be found.
+pub(super) fn is_part(name: &OsStr) -> bool {
+  name
+    .to_str()
+    .and_then(|name| name.strip_prefix('.')?.strip_suffix(PART_SUFFIX))
+    .is_some_and(|random| {
+      random.len() == PART_DIGITS
+        && random
+          .bytes()
+          .all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+    })
+}
+
+/// Copies `source` to a hidden name of its own in `dir`, from [`part_name`], flushed to disk,
+/// for a move across filesystems; the copy is deleted when it fails.
 fn copy_beside(source: &Path, dir: &Path) -> io::Result<PathBuf> {
-  let part = dir.join(format!(".{:016x}.part", rand::random::<u64>()));
+  let part = dir.join(part_name(rand::random()));
   let copied = (|| {
     let mut from = File::open(source)?;
     let mut to = OpenOptions::new()
@@ -151,18 +192,18 @@ fn copy_beside(source: &Path, dir: &Path) -> io::Result<PathBuf> {
   Ok(part)
 }
 
-/// Moves `source` into `dir` under its own name, the missing directories made with `mode` and
-/// an execute bit for every read bit, and gives the moved file `mode`. With `overwrite` a file
-/// of that name is replaced; without, the file takes the first free numbered name. The
-/// source's directory is deleted when the move leaves it empty. Returns where the file is now.
+/// Moves `source` into `dir` as `name`, the missing directories made with `mode` and an
+/// execute bit for every read bit, and gives the moved file `mode`. With `overwrite` a file of
+/// that name is replaced; without, the file takes the first free numbered name. The source's
+/// directory is deleted when the move leaves it empty. Returns where the file is now.
 pub fn move_file(
   source: &Path,
   dir: &Path,
+  name: &str,
   mode: Option<u32>,
   overwrite: bool,
 ) -> io::Result<PathBuf> {
-  let name = base(source);
-  move_inner(source, dir, &name, mode, overwrite)
+  move_inner(source, dir, name, mode, overwrite)
     .map_err(|e| context(e, format!("Failed to move file {name}")))
 }
 
@@ -215,6 +256,17 @@ fn move_inner(
     use std::os::unix::fs::PermissionsExt;
     std::fs::set_permissions(&placed, std::fs::Permissions::from_mode(mode))?;
   }
+  // a rename is on disk only once the directories it changed are, so a power loss cannot
+  // leave the file under its incomplete name
+  #[cfg(unix)]
+  {
+    sync_directory(dir);
+    if let Some(parent) = source.parent()
+      && parent != dir
+    {
+      sync_directory(parent);
+    }
+  }
   if let Some(parent) = source.parent() {
     match std::fs::remove_dir(parent) {
       Ok(()) => debug!(dir = %parent.display(), "emptied directory removed"),
@@ -224,6 +276,15 @@ fn move_inner(
     }
   }
   Ok(placed)
+}
+
+/// Flushes the entries of `dir` to disk. A failure is logged and the move stands, since the
+/// file is in place by then.
+#[cfg(unix)]
+fn sync_directory(dir: &Path) {
+  if let Err(e) = File::open(dir).and_then(|dir| dir.sync_all()) {
+    warn!(dir = %dir.display(), error = %e, "directory not flushed to disk after a move");
+  }
 }
 
 #[cfg(test)]
@@ -272,6 +333,23 @@ mod tests {
     assert_eq!(std::fs::read(&path).unwrap(), b"0123");
   }
 
+  #[test]
+  fn a_resumed_partial_must_still_hold_its_bytes() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("01.flac");
+    let gone = create_file(&path, None, 4).unwrap_err();
+    assert_eq!(gone.kind(), ErrorKind::NotFound);
+    assert!(!path.exists(), "a vanished partial is not made again");
+    std::fs::write(&path, b"01").unwrap();
+    let short = create_file(&path, None, 4).unwrap_err();
+    assert_eq!(short.kind(), ErrorKind::UnexpectedEof);
+    assert_eq!(
+      short.to_string(),
+      "Failed to open partial file 01.flac: it holds 2 bytes, fewer than the 4 resumed from"
+    );
+    assert_eq!(std::fs::read(&path).unwrap(), b"01", "left as it was");
+  }
+
   #[cfg(unix)]
   #[test]
   fn directories_and_files_take_the_configured_mode() {
@@ -281,7 +359,14 @@ mod tests {
     drop(create_file(&path, Some(0o640), 0).unwrap());
     let mode = |p: &Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o7777;
     assert_eq!(mode(&dir.path().join("made")), 0o750);
-    let moved = move_file(&path, &dir.path().join("final"), Some(0o604), false).unwrap();
+    let moved = move_file(
+      &path,
+      &dir.path().join("final"),
+      "01.flac",
+      Some(0o604),
+      false,
+    )
+    .unwrap();
     assert_eq!(mode(&moved), 0o604);
     assert_eq!(mode(&dir.path().join("final")), 0o705);
   }
@@ -297,7 +382,7 @@ mod tests {
       let from = incoming.join(format!("user{n}")).join("01.flac");
       std::fs::create_dir_all(from.parent().unwrap()).unwrap();
       std::fs::write(&from, content).unwrap();
-      let moved = move_file(&from, &downloads, None, false).unwrap();
+      let moved = move_file(&from, &downloads, "01.flac", None, false).unwrap();
       assert_eq!(std::fs::read_to_string(&moved).unwrap(), *content);
       assert!(
         !from.parent().unwrap().exists(),
@@ -312,7 +397,7 @@ mod tests {
     let from = incoming.join("01.flac");
     std::fs::write(&from, "new").unwrap();
     std::fs::write(incoming.join("other.flac"), "stays").unwrap();
-    let moved = move_file(&from, &downloads, None, true).unwrap();
+    let moved = move_file(&from, &downloads, "01.flac", None, true).unwrap();
     assert_eq!(moved, downloads.join("01.flac"));
     assert_eq!(std::fs::read_to_string(&moved).unwrap(), "new");
     assert!(incoming.exists(), "a directory with other files stays");
@@ -321,7 +406,14 @@ mod tests {
   #[test]
   fn a_missing_source_is_named_in_the_error() {
     let dir = tempfile::tempdir().unwrap();
-    let error = move_file(&dir.path().join("gone.flac"), dir.path(), None, false).unwrap_err();
+    let error = move_file(
+      &dir.path().join("gone.flac"),
+      dir.path(),
+      "gone.flac",
+      None,
+      false,
+    )
+    .unwrap_err();
     assert_eq!(error.kind(), ErrorKind::NotFound);
     assert_eq!(
       error.to_string(),
@@ -343,6 +435,23 @@ mod tests {
   }
 
   #[test]
+  fn only_a_copys_hidden_name_is_taken_for_one() {
+    for random in [0, 0xdead_beef, u64::MAX] {
+      assert!(is_part(OsStr::new(&part_name(random))), "{random:x}");
+    }
+    for name in [
+      ".0123456789abcdef.partial",
+      "0123456789abcdef.part",
+      ".0123456789ABCDEF.part",
+      ".0123456789abcde.part",
+      ".0123456789abcdef0.part",
+      ".hidden.part",
+    ] {
+      assert!(!is_part(OsStr::new(name)), "{name}");
+    }
+  }
+
+  #[test]
   fn two_copies_never_share_their_hidden_file() {
     let dir = tempfile::tempdir().unwrap();
     let (one, two) = (dir.path().join("one"), dir.path().join("two"));
@@ -352,8 +461,7 @@ mod tests {
     let second = copy_beside(&two, dir.path()).unwrap();
     assert_ne!(first, second);
     for part in [&first, &second] {
-      let name = part.file_name().unwrap().to_str().unwrap();
-      assert!(name.starts_with('.') && name.ends_with(".part"), "{name}");
+      assert!(is_part(part.file_name().unwrap()), "{}", part.display());
     }
     assert_eq!(std::fs::read_to_string(&first).unwrap(), "first");
     assert_eq!(std::fs::read_to_string(&second).unwrap(), "second");

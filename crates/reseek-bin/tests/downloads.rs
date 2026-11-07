@@ -159,14 +159,21 @@ async fn a_download_lands_at_its_destination_and_a_failed_move_keeps_it() {
   assert_eq!(kept.local_path, None);
   let failed = events(&api, "DownloadFileFailed", 1).await;
   assert_eq!(failed[0]["stage"], "move");
-  let incomplete = dir
-    .path()
-    .join("data")
-    .join("incomplete")
-    .join(&peer)
-    .join("in the way")
-    .join("02 song.flac");
-  assert_eq!(failed[0]["localFilename"], incomplete.to_str().unwrap());
+  let incomplete = std::path::PathBuf::from(failed[0]["localFilename"].as_str().unwrap());
+  assert_eq!(
+    incomplete.parent().unwrap(),
+    dir
+      .path()
+      .join("data")
+      .join("incomplete")
+      .join(&peer)
+      .join("in the way")
+  );
+  let name = incomplete.file_name().unwrap().to_str().unwrap();
+  assert!(
+    name.starts_with("02 song [") && name.ends_with("].flac"),
+    "the incomplete name carries the download's key: {name}"
+  );
   assert!(incomplete.exists(), "the file stays where it arrived");
 }
 
@@ -358,7 +365,8 @@ async fn a_download_whole_at_a_stop_is_moved_at_the_next_start_without_asking_ag
   let (daemon, api) = started(dir.path(), &server, &name).await;
   let peer = uploader.username.clone();
   let (job, first) = stopped_while_queued(daemon, &api, &mut requests, &peer).await;
-  // every byte arrived and the stop came before the move
+  // every byte arrived and the stop came before the move, under the name incomplete files had
+  // before they carried a key, which the next try takes over
   let incomplete = dir
     .path()
     .join("data")

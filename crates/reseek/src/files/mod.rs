@@ -136,8 +136,8 @@ impl Files {
   }
 
   /// Marks the file at `path`, which a download is writing, so it is not served, deleted or
-  /// pruned until the guard is dropped.
-  pub fn writing(&self, path: &Path) -> WriteGuard {
+  /// pruned until the guard is dropped. Fails while another download writes it.
+  pub fn writing(&self, path: &Path) -> std::io::Result<WriteGuard> {
     let mut spellings = vec![path.to_path_buf()];
     // a parent that does not resolve has only the spelling given
     if let (Some(parent), Some(name)) = (path.parent(), path.file_name())

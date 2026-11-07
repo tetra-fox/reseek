@@ -2,17 +2,24 @@
 //! the peer's own, and the directory under the downloads directory it is moved to once it has
 //! arrived, from the configured pattern or the download's own destination. Every name that came
 //! from the peer, the destination or the search is made safe before it becomes part of a path.
+//! The incomplete file's name carries a hash of the exact peer and remote filename, since two
+//! downloads can have names that are made safe alike or that a filesystem takes as one.
 
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 
 use regex::{Captures, Regex};
+use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::safety::{
   Os, combine_safely, creatable, creatable_path, directory_name_safely, file_name_safely,
-  is_absolute, sanitize_filename, sanitize_path_segment, too_long, traverses,
+  is_absolute, sanitize_filename, sanitize_path_segment, too_long, traverses, with_suffix,
 };
+
+/// How many bytes of the hash of a download's peer and remote filename its incomplete file's
+/// name carries.
+const KEY_BYTES: usize = 8;
 
 /// The pattern used when none is configured: the remote file's own directory name.
 const DEFAULT_PATTERN: &str = "${SOURCE_DIRECTORY}";
@@ -132,30 +139,75 @@ fn root_text(root: &Path) -> Result<&str, String> {
     .ok_or_else(|| format!("{} is not valid UTF-8", root.display()))
 }
 
+/// The name the file `filename` has once downloaded, made safe.
+pub fn local_name(filename: &str, os: Os) -> Result<String, String> {
+  file_name_safely(filename, os)
+    .map(|name| creatable(&name, os))
+    .ok_or_else(|| format!("the remote filename {filename} names no file"))
+}
+
+/// The first [`KEY_BYTES`] of the SHA-256 of the exact `username` and `filename`, in hex. The
+/// username's length goes first so no two pairs hash the same bytes.
+fn download_key(username: &str, filename: &str) -> String {
+  let mut hasher = Sha256::new();
+  hasher.update((username.len() as u64).to_le_bytes());
+  hasher.update(username);
+  hasher.update(filename);
+  hasher.finalize()[..KEY_BYTES]
+    .iter()
+    .map(|b| format!("{b:02x}"))
+    .collect()
+}
+
 /// The incomplete file a download of `filename` from `username` is written to: under
-/// `incomplete`, a directory named after the peer, so two peers' files never meet, then the
-/// remote directories without their root, then the file's name, each made safe. A path too
-/// long for `os` loses the remote directories, which is said by the second value.
+/// `incomplete`, a directory named after the peer, then the remote directories without their
+/// root, then the file's name with ` [key]` from [`download_key`] before its extension, each
+/// made safe. A path too long for `os` loses the remote directories, which is said by the
+/// second value.
 pub fn incomplete_path(
   incomplete: &Path,
   username: &str,
   filename: &str,
   os: Os,
 ) -> Result<(PathBuf, bool), String> {
-  let name = file_name_safely(filename, os)
-    .map(|name| creatable(&name, os))
-    .ok_or_else(|| format!("the remote filename {filename} names no file"))?;
+  let key = download_key(username, filename);
+  let name = with_suffix(&local_name(filename, os)?, &format!(" [{key}]"));
+  placed(incomplete, username, filename, &name, os)
+}
+
+/// Where [`incomplete_path`] put the file before its name carried the key, which two downloads
+/// could share.
+// TODO: remove once no partial file named this way is left to resume
+pub fn earlier_incomplete_path(
+  incomplete: &Path,
+  username: &str,
+  filename: &str,
+  os: Os,
+) -> Result<PathBuf, String> {
+  let name = local_name(filename, os)?;
+  Ok(placed(incomplete, username, filename, &name, os)?.0)
+}
+
+/// The incomplete file `name` of a download of `filename` from `username`, as
+/// [`incomplete_path`] lays it out.
+fn placed(
+  incomplete: &Path,
+  username: &str,
+  filename: &str,
+  name: &str,
+  os: Os,
+) -> Result<(PathBuf, bool), String> {
   let user = segment(username, os);
   let directories = directory_name_safely(filename, false, os)
     .map(|directories| creatable_path(&directories, os))
     .unwrap_or_default();
   let root = root_text(incomplete)?;
-  let full = combine_safely(root, &[&user, &directories, &name], os)?;
+  let full = combine_safely(root, &[&user, &directories, name], os)?;
   if !too_long(&full, os) {
     return Ok((PathBuf::from(full), false));
   }
   Ok((
-    PathBuf::from(combine_safely(root, &[&user, &name], os)?),
+    PathBuf::from(combine_safely(root, &[&user, name], os)?),
     true,
   ))
 }
@@ -319,7 +371,8 @@ mod tests {
     .unwrap();
     assert_eq!(
       path,
-      Path::new("/data/incomplete/FooBar/Music/Public_Domain/Foo/Bar/Baz.ext")
+      Path::new("/data/incomplete/FooBar/Music/Public_Domain/Foo/Bar/Baz [74147747ae8a619f].ext"),
+      "the key never changes, or partials from before a change are not resumed"
     );
     assert!(!short);
     let (hostile, _) = incomplete_path(
@@ -329,8 +382,43 @@ mod tests {
       Os::Unix,
     )
     .unwrap();
-    assert_eq!(hostile, Path::new("/data/incomplete/.._../_/_/_/secret"));
+    assert_eq!(
+      hostile,
+      Path::new("/data/incomplete/.._../_/_/_/secret [2b0a1ad417e7fe23]")
+    );
     assert!(incomplete_path(Path::new("/in"), "a", "dir\\", Os::Unix).is_err());
+  }
+
+  #[test]
+  fn downloads_whose_names_are_made_safe_alike_never_share_an_incomplete_file() {
+    let album = "@@abcde\\Album\\01.flac";
+    let pairs = [
+      (("a/b", album), ("a_b", album)),
+      (("Alice", album), ("alice", album)),
+      (
+        ("alice", "@@abcde\\Artist\\Album\\01.flac"),
+        ("alice", "@@abcde\\artist\\album\\01.flac"),
+      ),
+      (
+        ("alice", "@@abcde\\Caf\u{e9}\\01.flac"),
+        ("alice", "@@abcde\\Cafe\u{301}\\01.flac"),
+      ),
+    ];
+    for ((user_a, file_a), (user_b, file_b)) in pairs {
+      let path = |user, file| {
+        let (path, _) = incomplete_path(Path::new("/in"), user, file, Os::Unix).unwrap();
+        path.to_str().unwrap().to_lowercase()
+      };
+      assert_ne!(
+        path(user_a, file_a),
+        path(user_b, file_b),
+        "{user_a} {file_a}"
+      );
+      // the key is ASCII, so no normalisation of the name can make two keys one
+      assert_ne!(download_key(user_a, file_a), download_key(user_b, file_b));
+    }
+    let earlier = earlier_incomplete_path(Path::new("/in"), "a/b", album, Os::Unix).unwrap();
+    assert_eq!(earlier, Path::new("/in/a_b/Album/01.flac"));
   }
 
   #[test]
@@ -344,7 +432,7 @@ mod tests {
     .unwrap();
     assert_eq!(
       path,
-      Path::new("C:\\data\\incomplete\\CON_\\Music\\Album\\NUL_.flac")
+      Path::new("C:\\data\\incomplete\\CON_\\Music\\Album\\NUL_ [fc695bc4ebcfa25a].flac")
     );
   }
 
@@ -352,7 +440,8 @@ mod tests {
   fn a_path_too_long_falls_back_to_the_peers_directory() {
     let deep = format!("{}\\01.flac", vec!["d".repeat(200); 30].join("\\"));
     let (path, short) = incomplete_path(Path::new("/in"), "alice", &deep, Os::Unix).unwrap();
-    assert_eq!(path, Path::new("/in/alice/01.flac"));
+    let key = download_key("alice", &deep);
+    assert_eq!(path, Path::new(&format!("/in/alice/01 [{key}].flac")));
     assert!(short);
     let long = vec!["d".repeat(200); 30].join("/");
     let (dir, short) =

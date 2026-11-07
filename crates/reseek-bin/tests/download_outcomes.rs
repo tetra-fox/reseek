@@ -284,10 +284,15 @@ async fn refusals_failures_and_sizes_end_each_in_their_outcome() {
     Some("the remote size of 90 does not match expected size 100")
   );
   assert_eq!(aborted.attempts, 1, "a size dispute is not tried again");
-  assert!(
-    incomplete.join("shrunk.flac").exists(),
-    "the partial stays for later"
-  );
+  // the try took the partial over under its keyed name, `shrunk [<key>].flac`
+  let kept = std::fs::read_dir(&incomplete)
+    .unwrap()
+    .filter_map(Result::ok)
+    .any(|e| {
+      let name = e.file_name().to_string_lossy().into_owned();
+      name.starts_with("shrunk [") && name.ends_with("].flac")
+    });
+  assert!(kept, "the partial stays for later");
 
   // the place in queue, asked and said unasked
   let queue = "@@share\\c\\queued.flac";
