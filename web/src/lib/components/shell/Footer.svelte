@@ -53,9 +53,10 @@
 
 <!-- the server connection and the transfer figures, always in view. A phone keeps the speeds
      and the activity log's button and leaves out the counts and the project link. Where a large
-     text size leaves no room, the speeds move to a second line together -->
+     text size leaves no room, the speeds move to a second line together. Beside the sidebar, its
+     first item's dot is centred under the sidebar's icons -->
 <footer
-  class="relative z-20 flex min-h-10 flex-wrap items-center gap-x-3 gap-y-1 bg-page px-gutter py-1.5 text-xs max-md:border-t md:gap-x-4">
+  class="relative z-20 flex min-h-10 flex-wrap items-center gap-x-3 gap-y-1 bg-page px-gutter py-1.5 text-xs max-md:border-t md:gap-x-4 md:pl-6">
   <!-- our name, and whether others see us online or away, which a click changes -->
   <Tooltip
     text={!canSet

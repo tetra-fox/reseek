@@ -58,7 +58,7 @@
 </script>
 
 <header
-  class="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-inline border-b bg-surface px-gutter">
+  class="sticky top-0 z-10 flex h-header shrink-0 items-center gap-inline border-b bg-surface px-gutter">
   <Tooltip text="Toggle navigation">
     {#snippet child({ props })}
       <Button {...props} variant="ghost" size="icon-sm" class="-ml-1.5" onclick={sidebar.toggle}>

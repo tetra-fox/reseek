@@ -83,6 +83,8 @@
   --spacing-group: 1rem;
   --spacing-inline: 0.5rem;
   --spacing-gutter: 1rem;
+  /* the screen's header, which the sidebar's name lines up with */
+  --spacing-header: 3.5rem;
 
   --container-page: 88rem;
 

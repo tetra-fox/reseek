@@ -164,9 +164,10 @@
     class="grid h-svh grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto]">
     <div class="flex min-h-0">
       <Sidebar />
-      <!-- the screen's panel, inset from the chrome around it, edge to edge on a phone -->
+      <!-- the screen's panel, inset from the chrome around it, edge to edge on a phone. The footer
+           under it is its bottom inset, so its line sits evenly between the panel and the window -->
       <div
-        class="flex min-w-0 flex-1 flex-col overflow-hidden bg-surface md:my-2 md:mr-2 md:rounded-card md:border">
+        class="flex min-w-0 flex-1 flex-col overflow-hidden bg-surface md:mt-2 md:mr-2 md:rounded-card md:border">
         <div>
           <Header />
           <LostBanner />

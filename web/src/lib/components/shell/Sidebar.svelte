@@ -96,10 +96,15 @@
 {#snippet panel()}
   <div
     class={[
-      "flex h-full flex-col gap-2 overflow-x-hidden overflow-y-auto p-3",
-      sidebar.phone ? "rounded-card border bg-surface shadow-raised" : "bg-page"
+      "flex h-full flex-col gap-2 overflow-x-hidden overflow-y-auto px-3 pb-3",
+      sidebar.phone ? "rounded-card border bg-surface pt-3 shadow-raised" : "bg-page pt-2"
     ]}>
-    <a href={href("/dashboard")} class="flex h-control items-center gap-2.5" aria-label="reseek">
+    <!-- beside the screen's panel, the name takes the panel's top inset and border and its
+         header's height, so it sits level with the screen's title -->
+    <a
+      href={href("/dashboard")}
+      class={["flex items-center gap-2.5", sidebar.phone ? "h-control" : "mt-px h-header"]}
+      aria-label="reseek">
       <Logo />
       <span class={["flex flex-col leading-none", sidebar.collapsed && "hidden"]}>
         <span class="text-sm font-medium">reseek</span>
