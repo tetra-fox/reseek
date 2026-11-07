@@ -6,7 +6,7 @@ test("runs the cleanup from its schedule and finds it in the list by its kind", 
   page
 }) => {
   await login(page, "/jobs");
-  await expect(page.getByRole("heading", { name: "Schedules" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Scheduled jobs" })).toBeVisible();
   const cleanup = page.getByRole("listitem").filter({ hasText: "Deletes old data" });
   await expect(cleanup).toContainText("Every 5 minutes");
   // an off schedule says so and where to turn it on

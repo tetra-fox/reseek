@@ -14,8 +14,10 @@
   import { app } from "#lib/app.svelte.js";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
+  import Progress from "#lib/components/ui/Progress.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import Time from "#lib/components/ui/Time.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { Busy } from "#lib/feedback/busy.svelte.js";
   import { confirmation } from "#lib/feedback/confirm.svelte.js";
   import {
@@ -114,26 +116,35 @@
   };
 </script>
 
-<div class="flex flex-col">
-  <div
-    class="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-1 px-4 py-2.5 md:grid-cols-[auto_minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
+<!-- the columns are the job list's, taken through subgrids -->
+<div class="col-span-full grid grid-cols-subgrid">
+  <div class="col-span-full grid grid-cols-subgrid items-center gap-y-1 px-4 py-2.5">
     <!-- a phone gives the name the row's width, with the state, the time and the actions under it -->
     {#if job.counts.total}
-      <button
-        type="button"
-        class="flex size-control-sm items-center justify-center rounded-control text-fg-muted hover:bg-hover hover:text-fg"
-        aria-expanded={open}
-        aria-label={open ? `Hide the parts of ${job.name}` : `Show the parts of ${job.name}`}
-        onclick={ontoggle}>
-        <ChevronRightIcon class={["size-4 transition-transform", open && "rotate-90"]} />
-      </button>
+      <Tooltip text={open ? "Hide the parts" : "Show the parts"}>
+        {#snippet child({ props })}
+          <button
+            {...props}
+            type="button"
+            class="flex size-control-sm items-center justify-center rounded-control text-fg-muted hover:bg-hover hover:text-fg"
+            aria-expanded={open}
+            aria-label={open ? `Hide the parts of ${job.name}` : `Show the parts of ${job.name}`}
+            onclick={ontoggle}>
+            <ChevronRightIcon class={["size-4 transition-transform", open && "rotate-90"]} />
+          </button>
+        {/snippet}
+      </Tooltip>
     {:else}
       <span class="size-control-sm"></span>
     {/if}
     <div class="flex min-w-0 flex-col gap-0.5">
       <span class="flex min-w-0 items-center gap-2">
         <Icon class="size-4 shrink-0 text-fg-muted" role="img" aria-label={KIND_LABELS[job.kind]} />
-        <span class="truncate font-medium" title={job.name}>{job.name}</span>
+        <Tooltip text={job.name} clipped>
+          {#snippet child({ props })}
+            <span {...props} class="truncate font-medium">{job.name}</span>
+          {/snippet}
+        </Tooltip>
       </span>
       <span class="truncate text-xs text-fg-muted">{starterText(job, jobs.schedules)}</span>
     </div>
@@ -146,15 +157,23 @@
         {#if counted}<span class="text-xs text-fg-muted tabular-nums">{counted}</span>{/if}
       </span>
       {#if !ended && done !== null}
-        <span
-          class="h-1.5 w-full max-w-48 overflow-hidden rounded-full bg-surface-muted ring-1 ring-border">
-          <span class="block h-full bg-accent" style:width={`${Math.round(done * 100)}%`}></span>
-        </span>
+        <Progress
+          value={done * 100}
+          label={`Progress of ${job.name}`}
+          class="w-full max-w-48 ring-1 ring-border" />
       {/if}
       {#if job.error}
-        <span class="line-clamp-2 text-xs text-danger" title={job.error}>{job.error}</span>
+        <Tooltip text={job.error} clipped>
+          {#snippet child({ props })}
+            <span {...props} class="line-clamp-2 text-xs text-danger">{job.error}</span>
+          {/snippet}
+        </Tooltip>
       {:else if job.summary}
-        <span class="truncate text-xs text-fg-muted" title={job.summary}>{job.summary}</span>
+        <Tooltip text={job.summary} clipped>
+          {#snippet child({ props })}
+            <span {...props} class="truncate text-xs text-fg-muted">{job.summary}</span>
+          {/snippet}
+        </Tooltip>
       {/if}
     </div>
     <div class="flex flex-col gap-0.5 text-xs text-fg-muted max-md:col-start-2">
@@ -173,59 +192,80 @@
       {/if}
       {#if write}
         {#if job.pausable && job.state === "paused"}
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Resume"
-            title="Resume"
-            disabled={busy.running}
-            onclick={() => void busy.run(() => jobs.control(job.id, "resume"))}
-            ><PlayIcon /></Button>
+          <Tooltip text="Resume">
+            {#snippet child({ props })}
+              <Button
+                {...props}
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Resume"
+                disabled={busy.running}
+                onclick={() => void busy.run(() => jobs.control(job.id, "resume"))}
+                ><PlayIcon /></Button>
+            {/snippet}
+          </Tooltip>
         {:else if job.pausable}
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Pause"
-            title="Pause"
-            disabled={busy.running}
-            onclick={pause}><PauseIcon /></Button>
+          <Tooltip text="Pause">
+            {#snippet child({ props })}
+              <Button
+                {...props}
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Pause"
+                disabled={busy.running}
+                onclick={pause}><PauseIcon /></Button>
+            {/snippet}
+          </Tooltip>
         {/if}
         {#if !ended}
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Cancel"
-            title="Cancel"
-            disabled={busy.running}
-            onclick={cancel}><XIcon /></Button>
+          <Tooltip text="Cancel">
+            {#snippet child({ props })}
+              <Button
+                {...props}
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Cancel"
+                disabled={busy.running}
+                onclick={cancel}><XIcon /></Button>
+            {/snippet}
+          </Tooltip>
         {:else}
           {#if endedBadly(job)}
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Run again"
-              title={job.kind === "download"
+            <Tooltip
+              text={job.kind === "download"
                 ? "Queue the missing files again as a new job"
                 : job.kind === "analysis"
                   ? "Analyze the failed files again as a new job"
-                  : "Run again as a new job"}
-              disabled={busy.running}
-              onclick={() => void busy.run(() => jobs.runAgain(job.id), "Started again")}
-              ><RotateCwIcon /></Button>
+                  : "Run again as a new job"}>
+              {#snippet child({ props })}
+                <Button
+                  {...props}
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Run again"
+                  disabled={busy.running}
+                  onclick={() => void busy.run(() => jobs.runAgain(job.id), "Started again")}
+                  ><RotateCwIcon /></Button>
+              {/snippet}
+            </Tooltip>
           {/if}
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Remove from the list"
-            title="Remove from the list"
-            disabled={busy.running}
-            onclick={() => void busy.run(() => jobs.remove(job.id))}><Trash2Icon /></Button>
+          <Tooltip text="Remove from the list">
+            {#snippet child({ props })}
+              <Button
+                {...props}
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Remove from the list"
+                disabled={busy.running}
+                onclick={() => void busy.run(() => jobs.remove(job.id))}><Trash2Icon /></Button>
+            {/snippet}
+          </Tooltip>
         {/if}
       {/if}
     </div>
   </div>
   {#if open}
-    <div class="border-t bg-surface-muted/50 px-4 py-2 pl-14 text-xs">
+    <div class="col-span-full border-t bg-surface-muted/50 px-4 py-2 pl-14 text-xs">
       {#if partsError}
         <span class="text-danger">{partsError}</span>
       {:else if parts === null}
@@ -238,14 +278,27 @@
             <li class="flex min-w-0 items-center gap-2">
               <Badge tone={partTone(p)}>{PART_STATES[p.state]}</Badge>
               {#if p.transferId}
-                <a
-                  class="truncate hover:underline"
-                  href={href(`/downloads?job=${job.id}&transfer=${p.transferId}`)}
-                  title={p.name}>{p.name}</a>
+                <Tooltip text={p.name} clipped>
+                  {#snippet child({ props })}
+                    <a
+                      {...props}
+                      class="truncate hover:underline"
+                      href={href(`/downloads?job=${job.id}&transfer=${p.transferId}`)}>{p.name}</a>
+                  {/snippet}
+                </Tooltip>
               {:else}
-                <span class="truncate" title={p.name}>{p.name}</span>
+                <Tooltip text={p.name} clipped>
+                  {#snippet child({ props })}<span {...props} class="truncate">{p.name}</span
+                    >{/snippet}
+                </Tooltip>
               {/if}
-              {#if p.error}<span class="truncate text-danger" title={p.error}>{p.error}</span>{/if}
+              {#if p.error}
+                <Tooltip text={p.error} clipped>
+                  {#snippet child({ props })}
+                    <span {...props} class="truncate text-danger">{p.error}</span>
+                  {/snippet}
+                </Tooltip>
+              {/if}
             </li>
           {/each}
         </ul>

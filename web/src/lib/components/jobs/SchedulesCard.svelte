@@ -7,6 +7,7 @@
   import Card from "#lib/components/ui/Card.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import Time from "#lib/components/ui/Time.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { Busy } from "#lib/feedback/busy.svelte.js";
   import { ENDING_LABELS, everyText, type Schedule } from "#lib/jobs/jobs.js";
   import { jobs } from "#lib/jobs/jobs.svelte.js";
@@ -31,16 +32,18 @@
           : "neutral";
 </script>
 
-<Card title="Schedules">
+<Card title="Scheduled jobs">
   {#if jobs.schedulesError && !jobs.schedules.length}
     <ErrorSegment caption={jobs.schedulesError} retry={() => void jobs.load()} retryLabel="Retry" />
   {/if}
-  <ul class="-mx-5 divide-y border-y text-sm">
+  <!-- the rows share the list's columns, so a row without Run now lines up with the others -->
+  <ul
+    class="-mx-5 grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 divide-y border-y text-sm md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
     {#each jobs.schedules as s (s.name)}
       {@const off = !s.every}
       <li
         class={[
-          "grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 gap-y-1 px-5 py-2.5 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_auto]",
+          "col-span-full grid grid-cols-subgrid items-start gap-y-1 px-5 py-2.5",
           off && "text-fg-muted"
         ]}>
         <div class="flex min-w-0 flex-col gap-0.5">
@@ -67,9 +70,17 @@
               {/if}
             </span>
             {#if s.lastError}
-              <span class="truncate text-danger" title={s.lastError}>{s.lastError}</span>
+              <Tooltip text={s.lastError} clipped>
+                {#snippet child({ props })}
+                  <span {...props} class="truncate text-danger">{s.lastError}</span>
+                {/snippet}
+              </Tooltip>
             {:else if s.lastSummary}
-              <span class="truncate text-fg-muted" title={s.lastSummary}>{s.lastSummary}</span>
+              <Tooltip text={s.lastSummary} clipped>
+                {#snippet child({ props })}
+                  <span {...props} class="truncate text-fg-muted">{s.lastSummary}</span>
+                {/snippet}
+              </Tooltip>
             {/if}
             {#if s.lastJobId}
               <button
