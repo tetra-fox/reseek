@@ -8,6 +8,7 @@
   import Card from "#lib/components/ui/Card.svelte";
   import ConfirmDialog from "#lib/components/ui/ConfirmDialog.svelte";
   import Notice from "#lib/components/ui/Notice.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { lasting, managerOfFiles } from "#lib/config/editability.js";
   import type { ConfigView } from "#lib/config/fields.js";
   import { valueAt } from "#lib/config/sections.js";
@@ -100,8 +101,12 @@
           <Badge tone="warning">{file.readOnlyReason ?? "read-only"}</Badge>
         {/if}
         {#if file.revision}
-          <code class="text-xs text-fg-subtle" title={file.revision}
-            >{file.revision.slice(0, 15)}</code>
+          {@const revision = file.revision}
+          <Tooltip text={revision}>
+            {#snippet child({ props })}
+              <code {...props} class="text-xs text-fg-subtle">{revision.slice(0, 15)}</code>
+            {/snippet}
+          </Tooltip>
         {:else}
           <span class="text-xs text-fg-subtle">Not written yet</span>
         {/if}
@@ -122,15 +127,20 @@
           <span class="text-xs text-fg-subtle">
             by {override.setBy}, {lasting(override)}
           </span>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            class="ml-auto"
-            aria-label={`Remove the override of ${key}`}
-            disabled={busy.running}
-            onclick={() => remove(key)}>
-            <Trash2Icon />
-          </Button>
+          <Tooltip text={`Remove the override of ${key}`}>
+            {#snippet child({ props })}
+              <Button
+                {...props}
+                variant="ghost"
+                size="icon-sm"
+                class="ml-auto"
+                aria-label={`Remove the override of ${key}`}
+                disabled={busy.running}
+                onclick={() => remove(key)}>
+                <Trash2Icon />
+              </Button>
+            {/snippet}
+          </Tooltip>
         </li>
       {/each}
     </ul>

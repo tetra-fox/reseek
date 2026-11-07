@@ -12,6 +12,7 @@
   import Notice from "#lib/components/ui/Notice.svelte";
   import Segmented from "#lib/components/ui/Segmented.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { formatBytes, getFileName } from "#lib/format.js";
   import { call } from "#lib/request.js";
   import type { Root } from "#lib/system/localfiles.js";
@@ -136,16 +137,20 @@
         <FolderLine {node} open={expansion.isOpen(node.key)} {depth} />
       {/snippet}
       {#snippet item(f)}
-        <button
-          type="button"
-          role="gridcell"
-          class="flex h-full min-w-0 items-center gap-2 pr-3 text-left"
-          title={f.path}
-          onclick={() => pick(f)}>
-          <span class="min-w-0 flex-1 truncate">{getFileName(f.path)}</span>
-          <AnalysisMark mark={marks.file(root, f.path)} />
-          <span class="shrink-0 text-xs text-fg-muted tabular-nums">{formatBytes(f.size)}</span>
-        </button>
+        <Tooltip text={f.path} dense>
+          {#snippet child({ props })}
+            <button
+              {...props}
+              type="button"
+              role="gridcell"
+              class="flex h-full min-w-0 items-center gap-2 pr-3 text-left"
+              onclick={() => pick(f)}>
+              <span class="min-w-0 flex-1 truncate">{getFileName(f.path)}</span>
+              <AnalysisMark mark={marks.file(root, f.path)} />
+              <span class="shrink-0 text-xs text-fg-muted tabular-nums">{formatBytes(f.size)}</span>
+            </button>
+          {/snippet}
+        </Tooltip>
       {/snippet}
     </FileTree>
   {/if}

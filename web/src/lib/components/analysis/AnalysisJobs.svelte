@@ -3,6 +3,8 @@
 
   import { jobs } from "#lib/analysis/jobs.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
+  import Progress from "#lib/components/ui/Progress.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { plural } from "#lib/format.js";
   import { session } from "#lib/session.svelte.js";
@@ -35,20 +37,29 @@
     <ul class="flex flex-col gap-1">
       {#each jobs.list as job (job.id)}
         <li class="flex items-center gap-2 text-sm">
-          <span class="min-w-0 flex-1 truncate" title={job.path}>{name(job.path)}</span>
+          <Tooltip text={job.path} dense>
+            {#snippet child({ props })}
+              <span {...props} class="min-w-0 flex-1 truncate">{name(job.path)}</span>
+            {/snippet}
+          </Tooltip>
           <span class="w-24 shrink-0 text-right text-xs text-fg-muted tabular-nums">
             {job.state === "running" ? `${Math.round((job.progress ?? 0) * 100)}%` : "Waiting"}
           </span>
-          <div
-            class="h-1.5 w-20 shrink-0 overflow-hidden rounded-full bg-surface-muted max-sm:hidden">
-            <div class="h-full bg-accent" style:width={`${(job.progress ?? 0) * 100}%`}></div>
-          </div>
+          <Progress
+            value={job.state === "running" ? (job.progress ?? 0) * 100 : null}
+            label={`Analysis of ${name(job.path)}`}
+            class="w-20 shrink-0 max-sm:hidden" />
           {#if write}
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label={`Cancel the analysis of ${name(job.path)}`}
-              onclick={() => void cancel(job.id)}><XIcon /></Button>
+            <Tooltip text={`Cancel the analysis of ${name(job.path)}`}>
+              {#snippet child({ props })}
+                <Button
+                  {...props}
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`Cancel the analysis of ${name(job.path)}`}
+                  onclick={() => void cancel(job.id)}><XIcon /></Button>
+              {/snippet}
+            </Tooltip>
           {/if}
         </li>
       {/each}

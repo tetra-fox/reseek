@@ -8,6 +8,7 @@
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Card from "#lib/components/ui/Card.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { Busy } from "#lib/feedback/busy.svelte.js";
   import { ago, dateTime } from "#lib/format.js";
   import { Keyed } from "#lib/lists/keyed.svelte.js";
@@ -72,14 +73,19 @@
                     ? `${ago(t.lastUsedAt)} from ${t.lastUsedIp ?? "?"}`
                     : "Never"}</td>
                 <td class="text-right">
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={`Revoke ${t.name}`}
-                    disabled={busy.running}
-                    onclick={() => revoke(t.id, t.name)}>
-                    <Trash2Icon />
-                  </Button>
+                  <Tooltip text={`Revoke ${t.name}`}>
+                    {#snippet child({ props })}
+                      <Button
+                        {...props}
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`Revoke ${t.name}`}
+                        disabled={busy.running}
+                        onclick={() => revoke(t.id, t.name)}>
+                        <Trash2Icon />
+                      </Button>
+                    {/snippet}
+                  </Tooltip>
                 </td>
               </tr>
             {:else}

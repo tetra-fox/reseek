@@ -9,11 +9,11 @@ const WIDTH = 384;
 const pane = (page: Page) => page.getByRole("complementary", { name: "Details" });
 const fileName = (page: Page) => pane(page).getByRole("heading", { level: 2 });
 
-/** The Downloads screen with every transfer on a line of its own, focus in the table */
+/** The Downloads screen in the List view, every transfer on a line of its own, focus in the table */
 const flatDownloads = async (page: Page) => {
   await fakeDownloads(page);
   await login(page, "/downloads");
-  await page.getByRole("radio", { name: "Flat" }).click();
+  await page.getByRole("radio", { name: "List" }).click();
   const grid = page.getByRole("treegrid", { name: "Downloads" });
   await expect(grid.getByText("3.flac")).toBeVisible();
   await grid.focus();
@@ -136,8 +136,8 @@ test.describe("on a wide screen", () => {
     await fakeConnected(page);
     await fakeSearch(page);
     await login(page, `/searches/${SEARCH_ID}`);
-    await page.getByRole("radio", { name: "Dense" }).click();
-    const grid = page.getByRole("grid", { name: "Search results" });
+    await page.getByRole("radio", { name: "List" }).click();
+    const grid = page.getByRole("treegrid", { name: "Search results" });
     await expect(grid.getByText("02 Two.flac")).toBeVisible();
 
     const toggle = page.locator("main").getByRole("button", { name: "Details", exact: true });

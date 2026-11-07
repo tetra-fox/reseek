@@ -13,7 +13,7 @@
   import { type Palette, readPalette } from "#lib/analysis/spectrogram/paint.js";
   import type { ScaleMotion } from "#lib/analysis/spectrogram/scalemotion.svelte.js";
   import type { Scope } from "#lib/analysis/spectrogram/scope.svelte.js";
-  import { acrossOf, formatTime, showsAll, timeAt } from "#lib/analysis/spectrogram/timeview.js";
+  import { acrossOf, showsAll, timeAt } from "#lib/analysis/spectrogram/timeview.js";
 
   // the spectrogram over the waveform on one time axis, drawn on one canvas at device pixels,
   // with the cursor across both. Pressing on the cursor and dragging moves it; pressing
@@ -283,7 +283,6 @@
     data-view={`${scope.view.start.toFixed(3)} ${scope.view.span.toFixed(3)}`}
     data-plot={box(stage.spectrogram)}
     data-wave={box(stage.waveform)}
-    title={`Cursor at ${formatTime(scope.cursor, true)}`}
     onpointerdown={down}
     onpointermove={move}
     onpointerup={up}

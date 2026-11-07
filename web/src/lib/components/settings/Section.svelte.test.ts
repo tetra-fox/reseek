@@ -250,7 +250,7 @@ describe("a settings section", () => {
       web.querySelector(`[id="${key}-help"]`)!.parentElement!.parentElement!;
     const restore = (key: string) =>
       [...row(key).querySelectorAll("button")].find((b) =>
-        b.title.startsWith("Changed from the default")
+        b.getAttribute("aria-label")?.startsWith("Restore the default")
       );
     const reset = restore("web.port")!;
     // a field already at its default has no marker

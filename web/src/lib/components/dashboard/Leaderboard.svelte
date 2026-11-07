@@ -8,6 +8,7 @@
   import Button from "#lib/components/ui/Button.svelte";
   import Segmented from "#lib/components/ui/Segmented.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import Username from "#lib/components/users/Username.svelte";
   import { type RangeLabel, reports, type Window } from "#lib/dashboard/reports.js";
   import { columnWidth, formatBytes, formatSpeed, plural, WIDEST } from "#lib/format.js";
@@ -57,7 +58,8 @@
   const COLUMNS: {
     by: Sort;
     label: string;
-    title: string;
+    /** the whole name, where the label shortens it */
+    title?: string;
     widest: string;
     value: (e: Entry) => string;
     brief?: (e: Entry) => string;
@@ -66,7 +68,6 @@
     {
       by: "Count",
       label: "Files",
-      title: "Files",
       widest: WIDEST.count,
       value: (e) => e.count.toLocaleString(),
       brief: (e) => plural(e.count, "file", "files")
@@ -135,14 +136,18 @@
                   c.phone === false && "max-md:hidden"
                 ]}
                 aria-sort={sortBy === c.by ? "descending" : "none"}>
-                <button
-                  type="button"
-                  class="inline-flex max-w-full items-center gap-1"
-                  title={c.title}
-                  onclick={() => (picked = { range, by: c.by })}>
-                  <span class="truncate">{c.label}</span>
-                  {#if sortBy === c.by}<ArrowDownIcon class="size-3 shrink-0" />{/if}
-                </button>
+                <Tooltip text={c.title}>
+                  {#snippet child({ props })}
+                    <button
+                      {...props}
+                      type="button"
+                      class="inline-flex max-w-full items-center gap-1"
+                      onclick={() => (picked = { range, by: c.by })}>
+                      <span class="truncate">{c.label}</span>
+                      {#if sortBy === c.by}<ArrowDownIcon class="size-3 shrink-0" />{/if}
+                    </button>
+                  {/snippet}
+                </Tooltip>
               </th>
             {/each}
             <th class="max-md:hidden"><span class="sr-only">{USER_ACTIONS.shares.label}</span></th>
@@ -169,12 +174,16 @@
               {/each}
               <td class="py-0.5 max-md:hidden">
                 {#each reach(entry.username, { only: ["shares"] }) as action (action.id)}
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    href={action.href}
-                    aria-label={action.of(entry.username)}
-                    title={action.of(entry.username)}><action.icon /></Button>
+                  <Tooltip text={action.of(entry.username)}>
+                    {#snippet child({ props })}
+                      <Button
+                        {...props}
+                        variant="ghost"
+                        size="icon-sm"
+                        href={action.href}
+                        aria-label={action.of(entry.username)}><action.icon /></Button>
+                    {/snippet}
+                  </Tooltip>
                 {/each}
               </td>
             </tr>

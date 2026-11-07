@@ -17,7 +17,7 @@
 </script>
 
 {#if mark}
-  <Tooltip text={hint} hint>
+  <Tooltip text={hint} dense spoken>
     {#snippet child({ props })}
       {#if judgment}
         <Badge {...props} tone={judgment === "fake" ? "danger" : "success"}

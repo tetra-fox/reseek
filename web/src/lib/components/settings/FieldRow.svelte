@@ -8,6 +8,7 @@
   import type { Schemas } from "#lib/api/client.js";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import type { Editability } from "#lib/config/editability.js";
   import type { Draft } from "#lib/config/fields.js";
   import { helpParts } from "#lib/config/help.js";
@@ -89,12 +90,17 @@
         for={labelable ? field.key : undefined}
         class="min-w-0 text-sm font-medium wrap-anywhere">{field.label}</label>
       {#if changed}
-        <span class="size-1.5 rounded-full bg-accent" title="Not saved yet"></span>
+        <Tooltip text="Not saved yet" dense>
+          {#snippet child({ props })}
+            <span {...props} class="size-1.5 rounded-full bg-accent"></span>
+          {/snippet}
+        </Tooltip>
         <span class="sr-only">not saved yet</span>
       {/if}
       {#if custom && edit.mode === "locked"}
-        <Badge tone="outline" title={tabular ? undefined : `The default is ${shown(info.default)}`}
-          >not default</Badge>
+        <Tooltip text={tabular ? undefined : `The default is ${shown(info.default)}`} dense spoken>
+          {#snippet child({ props })}<Badge {...props} tone="outline">not default</Badge>{/snippet}
+        </Tooltip>
       {/if}
       <SourceBadge source={info.source} />
       {#if info.apply !== "live"}<Badge tone="warning">Applies on {info.apply}</Badge>{/if}
@@ -148,16 +154,21 @@
         !tabular && "md:col-start-1 md:row-start-2"
       ]}>
       {#if restorable}
-        <button
-          type="button"
-          class="flex items-center gap-1 rounded-badge border border-dashed border-accent/50 px-1.5 text-xs text-accent-soft-fg hover:bg-accent-soft"
-          title={tabular
-            ? "Changed from the default. Click to restore it."
-            : `Changed from the default (${shown(info.default)}). Click to restore it.`}
-          aria-label={`Restore the default of ${field.label}`}
-          onclick={ondefault}>
-          <RotateCcwIcon class="size-3" />default
-        </button>
+        <Tooltip
+          text={tabular
+            ? "Changed from the default. Click to restore it"
+            : `Changed from the default (${shown(info.default)}). Click to restore it`}>
+          {#snippet child({ props })}
+            <button
+              {...props}
+              type="button"
+              class="flex items-center gap-1 rounded-badge border border-dashed border-accent/50 px-1.5 text-xs text-accent-soft-fg hover:bg-accent-soft"
+              aria-label={`Restore the default of ${field.label}`}
+              onclick={ondefault}>
+              <RotateCcwIcon class="size-3" />default
+            </button>
+          {/snippet}
+        </Tooltip>
       {/if}
       {#if environment}
         <LinkPreview.Root openDelay={250} closeDelay={150}>
@@ -184,11 +195,16 @@
                   <code
                     class="min-w-0 flex-1 rounded-badge bg-surface-muted px-1.5 py-0.5 font-mono wrap-anywhere"
                     >{text}</code>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={`Copy ${text.split(/[= ]/)[0]}`}
-                    onclick={() => void copyText(text.split(/[= ]/)[0])}><CopyIcon /></Button>
+                  <Tooltip text={`Copy ${text.split(/[= ]/)[0]}`}>
+                    {#snippet child({ props })}
+                      <Button
+                        {...props}
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`Copy ${text.split(/[= ]/)[0]}`}
+                        onclick={() => void copyText(text.split(/[= ]/)[0])}><CopyIcon /></Button>
+                    {/snippet}
+                  </Tooltip>
                 </span>
               {/each}
             </LinkPreview.Content>

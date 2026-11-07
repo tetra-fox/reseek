@@ -2,6 +2,7 @@
   import CopyIcon from "@lucide/svelte/icons/copy";
 
   import Button from "#lib/components/ui/Button.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import type { Field } from "#lib/inspector/inspector.svelte.js";
 
@@ -23,15 +24,19 @@
           <span
             class="min-w-0 flex-1 cursor-text font-mono text-xs wrap-anywhere whitespace-pre-wrap"
             >{field.value}</span>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            class="-my-1 size-6 text-fg-muted"
-            aria-label={`Copy ${field.label.toLowerCase()}`}
-            title={`Copy ${field.label.toLowerCase()}`}
-            onclick={() => void copyText(field.value)}>
-            <CopyIcon class="size-3.5" />
-          </Button>
+          <Tooltip text={`Copy ${field.label.toLowerCase()}`}>
+            {#snippet child({ props })}
+              <Button
+                {...props}
+                variant="ghost"
+                size="icon-sm"
+                class="-my-1 size-6 text-fg-muted"
+                aria-label={`Copy ${field.label.toLowerCase()}`}
+                onclick={() => void copyText(field.value)}>
+                <CopyIcon class="size-3.5" />
+              </Button>
+            {/snippet}
+          </Tooltip>
         </dd>
       </div>
     {/each}

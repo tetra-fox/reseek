@@ -8,6 +8,7 @@
   import Button from "#lib/components/ui/Button.svelte";
   import Card from "#lib/components/ui/Card.svelte";
   import ConfirmDialog from "#lib/components/ui/ConfirmDialog.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { Busy } from "#lib/feedback/busy.svelte.js";
   import { ago, dateTime } from "#lib/format.js";
   import { Keyed } from "#lib/lists/keyed.svelte.js";
@@ -75,17 +76,26 @@
               <td>{s.role}</td>
               <td>{dateTime(s.createdAt)}</td>
               <td>{ago(s.lastSeenAt)}</td>
-              <td class="max-w-64 truncate" title={s.userAgent ?? undefined}>{s.ip ?? "?"}</td>
+              <Tooltip text={s.userAgent ?? undefined}>
+                {#snippet child({ props })}
+                  <td {...props} class="max-w-64 truncate">{s.ip ?? "?"}</td>
+                {/snippet}
+              </Tooltip>
               <td class="text-right">
                 {#if !s.current}
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={`Log out ${s.name}'s session`}
-                    disabled={busy.running}
-                    onclick={() => revoke(s.id)}>
-                    <LogOutIcon />
-                  </Button>
+                  <Tooltip text={`Log out ${s.name}'s session`}>
+                    {#snippet child({ props })}
+                      <Button
+                        {...props}
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`Log out ${s.name}'s session`}
+                        disabled={busy.running}
+                        onclick={() => revoke(s.id)}>
+                        <LogOutIcon />
+                      </Button>
+                    {/snippet}
+                  </Tooltip>
                 {/if}
               </td>
             </tr>

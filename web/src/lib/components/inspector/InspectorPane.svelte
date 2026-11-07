@@ -5,6 +5,7 @@
 
   import Button from "#lib/components/ui/Button.svelte";
   import ResizeHandle from "#lib/components/ui/ResizeHandle.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import {
     inspector,
     inspectorPrefs,
@@ -27,11 +28,16 @@
     {@render inspector.content?.()}
   {:else}
     <div class="flex items-center justify-end p-2">
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        aria-label="Close details"
-        onclick={() => inspector.close()}><XIcon /></Button>
+      <Tooltip text="Close details">
+        {#snippet child({ props })}
+          <Button
+            {...props}
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Close details"
+            onclick={() => inspector.close()}><XIcon /></Button>
+        {/snippet}
+      </Tooltip>
     </div>
     <p class="px-4 text-sm text-fg-muted">No file selected</p>
   {/if}

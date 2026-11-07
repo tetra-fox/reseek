@@ -9,6 +9,7 @@
   import Dialog from "#lib/components/ui/Dialog.svelte";
   import Input from "#lib/components/ui/Input.svelte";
   import Select from "#lib/components/ui/Select.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { Busy } from "#lib/feedback/busy.svelte.js";
   import { CopyButton } from "#lib/feedback/clipboard.svelte.js";
   import { call } from "#lib/request.js";
@@ -71,13 +72,18 @@
         class="min-w-0 flex-1 rounded-control bg-surface-muted px-2 py-1.5 text-xs wrap-anywhere">
         {created.secret}
       </code>
-      <Button
-        variant="outline"
-        size="icon-sm"
-        aria-label="Copy the secret"
-        onclick={() => copying.copy(created!.secret)}>
-        {#if copying.copied}<CheckIcon />{:else}<CopyIcon />{/if}
-      </Button>
+      <Tooltip text="Copy the secret">
+        {#snippet child({ props })}
+          <Button
+            {...props}
+            variant="outline"
+            size="icon-sm"
+            aria-label="Copy the secret"
+            onclick={() => copying.copy(created!.secret)}>
+            {#if copying.copied}<CheckIcon />{:else}<CopyIcon />{/if}
+          </Button>
+        {/snippet}
+      </Tooltip>
     </div>
     <p class="text-xs text-fg-muted">Use it as a bearer token, for example:</p>
     <code class="rounded-control bg-surface-muted px-2 py-1.5 text-xs wrap-anywhere">

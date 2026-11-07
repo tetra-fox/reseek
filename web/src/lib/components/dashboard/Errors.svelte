@@ -7,6 +7,7 @@
   import Dialog from "#lib/components/ui/Dialog.svelte";
   import EmptyRow from "#lib/components/ui/EmptyRow.svelte";
   import Segmented from "#lib/components/ui/Segmented.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import Username from "#lib/components/users/Username.svelte";
   import {
     type Direction,
@@ -91,6 +92,9 @@
     const word = endingText(state);
     return word.charAt(0).toUpperCase() + word.slice(1);
   };
+
+  /** how much of an error message a table line shows */
+  const CUT = 80;
 </script>
 
 {#snippet which(value: Which, set: (w: Which) => void, label: string)}
@@ -131,14 +135,22 @@
               exception === row.exception ? "bg-accent-soft/60" : "hover:bg-hover"
             ]}>
             <td class="px-2 py-1">{row.direction}</td>
-            <td class="px-2 py-1" title={row.exception ?? ""}>
-              <button
-                type="button"
-                class="text-left hover:underline"
-                title="Show only this error in recent errors"
-                onclick={() =>
-                  (exception = exception === row.exception ? null : (row.exception ?? null))}
-                >{truncate(row.exception ?? "(no message)", 80)}</button>
+            <td class="px-2 py-1">
+              <!-- the whole message where it is cut, which a click also shows in recent errors -->
+              <Tooltip
+                text={(row.exception?.length ?? 0) > CUT
+                  ? (row.exception ?? undefined)
+                  : "Show only this error in recent errors"}>
+                {#snippet child({ props })}
+                  <button
+                    {...props}
+                    type="button"
+                    class="text-left hover:underline"
+                    onclick={() =>
+                      (exception = exception === row.exception ? null : (row.exception ?? null))}
+                    >{truncate(row.exception ?? "(no message)", CUT)}</button>
+                {/snippet}
+              </Tooltip>
             </td>
             <td class="px-2">
               <div class="h-1.5 rounded-full bg-surface-muted">
@@ -188,14 +200,26 @@
             <td class="px-2 py-1 whitespace-nowrap">{formatDate(row.endedAt)}</td>
             <td class="px-2 py-1">{row.direction}</td>
             <td class="px-2 py-1"><Username name={row.username} /></td>
-            <td class="px-2 py-1" title={row.filename}>
-              <button type="button" class="text-left hover:underline" onclick={() => (detail = row)}
-                >{getFileName(row.filename)}</button>
+            <td class="px-2 py-1">
+              <Tooltip text={row.filename} dense>
+                {#snippet child({ props })}
+                  <button
+                    {...props}
+                    type="button"
+                    class="text-left hover:underline"
+                    onclick={() => (detail = row)}>{getFileName(row.filename)}</button>
+                {/snippet}
+              </Tooltip>
             </td>
-            <td class="px-2 py-1" title={row.exception ?? ""}>
+            <td class="px-2 py-1">
               <span class="font-medium">{endingWord(row.state)}</span>
-              {#if row.exception}<span class="text-fg-muted">{truncate(row.exception, 80)}</span
-                >{/if}
+              {#if row.exception}
+                <Tooltip text={row.exception.length > CUT ? row.exception : undefined} dense spoken>
+                  {#snippet child({ props })}
+                    <span {...props} class="text-fg-muted">{truncate(row.exception, CUT)}</span>
+                  {/snippet}
+                </Tooltip>
+              {/if}
             </td>
           </tr>
         {:else}

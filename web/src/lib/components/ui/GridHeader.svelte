@@ -3,7 +3,11 @@
   import ArrowUpIcon from "@lucide/svelte/icons/arrow-up";
   import type { Snippet } from "svelte";
 
+  import type { AllTick } from "#lib/lists/list.svelte.js";
   import type { Grid, GridColumn } from "#lib/lists/table.svelte.js";
+
+  import SelectAll from "./SelectAll.svelte";
+  import Tooltip from "./Tooltip.svelte";
 
   // a grid's header row: a label per column, a click on one sorts by it, and its right edge
   // drags the column's width. A label that doesn't fit is cut, with the whole of it on hover
@@ -13,9 +17,11 @@
     class?: string;
     /** what a quiet column's header holds instead of its label alone */
     cell?: Snippet<[GridColumn<T>]>;
+    /** the list's Select all, drawn over its `select` column */
+    all?: AllTick;
   };
 
-  let { grid, class: className, cell }: Props = $props();
+  let { grid, class: className, cell, all }: Props = $props();
 </script>
 
 <div
@@ -31,22 +37,31 @@
         "relative flex min-w-0 items-center self-stretch px-2 text-xs",
         column.end && "justify-end"
       ]}>
-      {#if column.quiet}
+      {#if column.id === "select" && all}
+        <SelectAll {all} />
+      {:else if column.quiet}
         <span class="sr-only">{column.label}</span>
         {@render cell?.(column)}
       {:else if grid.sorts(column)}
         <button
           type="button"
           class="flex min-w-0 items-center gap-1 self-stretch hover:text-fg"
-          title={column.label}
           onclick={() => grid.toggle(column)}>
-          <span class="truncate">{column.label}</span>
+          <Tooltip text={column.label} clipped>
+            {#snippet child({ props })}
+              <span {...props} class="truncate">{column.label}</span>
+            {/snippet}
+          </Tooltip>
           {#if sort === "asc"}<ArrowUpIcon
               class="size-3 shrink-0" />{:else if sort === "desc"}<ArrowDownIcon
               class="size-3 shrink-0" />{/if}
         </button>
       {:else}
-        <span class="truncate" title={column.label}>{column.label}</span>
+        <Tooltip text={column.label} clipped>
+          {#snippet child({ props })}
+            <span {...props} class="truncate">{column.label}</span>
+          {/snippet}
+        </Tooltip>
       {/if}
       {#if !column.fixed}
         <!-- dragging the edge sets the column's width, which is kept. TanStack's drag follows mouse

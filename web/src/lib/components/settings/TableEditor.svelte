@@ -11,6 +11,7 @@
   import Select from "#lib/components/ui/Select.svelte";
   import Switch from "#lib/components/ui/Switch.svelte";
   import Textarea from "#lib/components/ui/Textarea.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import type { Draft } from "#lib/config/fields.js";
   import { helpParts } from "#lib/config/help.js";
   import type { Control, Field } from "#lib/config/sections.js";
@@ -221,14 +222,19 @@
 {/snippet}
 
 {#snippet removeButton(row: Row, i: number)}
-  <Button
-    variant="ghost"
-    size="icon-sm"
-    class="row-action"
-    aria-label={`Remove ${nameOf(row, i)}`}
-    onclick={() => remove(row)}>
-    <Trash2Icon />
-  </Button>
+  <Tooltip text={`Remove ${nameOf(row, i)}`}>
+    {#snippet child({ props })}
+      <Button
+        {...props}
+        variant="ghost"
+        size="icon-sm"
+        class="row-action"
+        aria-label={`Remove ${nameOf(row, i)}`}
+        onclick={() => remove(row)}>
+        <Trash2Icon />
+      </Button>
+    {/snippet}
+  </Tooltip>
 {/snippet}
 
 {#snippet complaint(row: Row)}
@@ -258,12 +264,14 @@
         <tr class="border-b text-left text-xs font-medium text-fg-muted">
           {#if named}<th scope="col" class="px-2 py-1 font-medium">{nameLabel}</th>{/if}
           {#each columns as column (column.key)}
-            <th
-              scope="col"
-              class="px-2 py-1 font-medium"
-              title={helpParts(column.doc)
+            <Tooltip
+              text={helpParts(column.doc)
                 .map((part) => part.text)
-                .join("")}>{column.label}</th>
+                .join("")}>
+              {#snippet child({ props })}
+                <th {...props} scope="col" class="px-2 py-1 font-medium">{column.label}</th>
+              {/snippet}
+            </Tooltip>
           {/each}
           {#if !disabled}<th scope="col" class="box-content w-control-sm p-0 pr-3"
               ><span class="sr-only">Remove</span></th

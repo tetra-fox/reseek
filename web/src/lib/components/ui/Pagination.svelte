@@ -5,6 +5,7 @@
   import ChevronsRightIcon from "@lucide/svelte/icons/chevrons-right";
 
   import Button from "./Button.svelte";
+  import Tooltip from "./Tooltip.svelte";
 
   // first, previous, the pages around this one, next, last
   type Props = { page: number; pages: number; onpage: (page: number) => void };
@@ -18,18 +19,28 @@
 </script>
 
 <nav aria-label="Pages" class="flex items-center gap-0.5">
-  <Button
-    variant="ghost"
-    size="icon-sm"
-    aria-label="First page"
-    disabled={page <= 1}
-    onclick={() => onpage(1)}><ChevronsLeftIcon /></Button>
-  <Button
-    variant="ghost"
-    size="icon-sm"
-    aria-label="Previous page"
-    disabled={page <= 1}
-    onclick={() => onpage(page - 1)}><ChevronLeftIcon /></Button>
+  <Tooltip text="First page">
+    {#snippet child({ props })}
+      <Button
+        {...props}
+        variant="ghost"
+        size="icon-sm"
+        aria-label="First page"
+        disabled={page <= 1}
+        onclick={() => onpage(1)}><ChevronsLeftIcon /></Button>
+    {/snippet}
+  </Tooltip>
+  <Tooltip text="Previous page">
+    {#snippet child({ props })}
+      <Button
+        {...props}
+        variant="ghost"
+        size="icon-sm"
+        aria-label="Previous page"
+        disabled={page <= 1}
+        onclick={() => onpage(page - 1)}><ChevronLeftIcon /></Button>
+    {/snippet}
+  </Tooltip>
   {#each numbers as n (n)}
     <Button
       variant={n === page ? "secondary" : "ghost"}
@@ -37,16 +48,26 @@
       aria-current={n === page ? "page" : undefined}
       onclick={() => onpage(n)}>{n}</Button>
   {/each}
-  <Button
-    variant="ghost"
-    size="icon-sm"
-    aria-label="Next page"
-    disabled={page >= pages}
-    onclick={() => onpage(page + 1)}><ChevronRightIcon /></Button>
-  <Button
-    variant="ghost"
-    size="icon-sm"
-    aria-label="Last page"
-    disabled={page >= pages}
-    onclick={() => onpage(pages)}><ChevronsRightIcon /></Button>
+  <Tooltip text="Next page">
+    {#snippet child({ props })}
+      <Button
+        {...props}
+        variant="ghost"
+        size="icon-sm"
+        aria-label="Next page"
+        disabled={page >= pages}
+        onclick={() => onpage(page + 1)}><ChevronRightIcon /></Button>
+    {/snippet}
+  </Tooltip>
+  <Tooltip text="Last page">
+    {#snippet child({ props })}
+      <Button
+        {...props}
+        variant="ghost"
+        size="icon-sm"
+        aria-label="Last page"
+        disabled={page >= pages}
+        onclick={() => onpage(pages)}><ChevronsRightIcon /></Button>
+    {/snippet}
+  </Tooltip>
 </nav>

@@ -1,4 +1,5 @@
 <script lang="ts" module>
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { gridView } from "#lib/lists/table.svelte.js";
 
   /** the log files' sort and column widths, kept in this browser */
@@ -98,24 +99,32 @@
           >{formatBytes(f.length)}</span>
         <span role="gridcell" class="flex justify-end px-1">
           {#if f.length <= MAX_VIEW}
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              href={url(f)}
-              target="_blank"
-              rel="noopener"
-              data-open={f.name}
-              aria-label={`View ${f.name} in a new tab`}
-              title={`View ${f.name} in a new tab`}><ExternalLinkIcon /></Button>
+            <Tooltip text={`View ${f.name} in a new tab`}>
+              {#snippet child({ props })}
+                <Button
+                  {...props}
+                  variant="ghost"
+                  size="icon-sm"
+                  href={url(f)}
+                  target="_blank"
+                  rel="noopener"
+                  data-open={f.name}
+                  aria-label={`View ${f.name} in a new tab`}><ExternalLinkIcon /></Button>
+              {/snippet}
+            </Tooltip>
           {/if}
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            href={url(f)}
-            download={f.name}
-            data-open={f.length > MAX_VIEW ? f.name : undefined}
-            aria-label={`Download ${f.name}`}
-            title={`Download ${f.name}`}><DownloadIcon /></Button>
+          <Tooltip text={`Download ${f.name}`}>
+            {#snippet child({ props })}
+              <Button
+                {...props}
+                variant="ghost"
+                size="icon-sm"
+                href={url(f)}
+                download={f.name}
+                data-open={f.length > MAX_VIEW ? f.name : undefined}
+                aria-label={`Download ${f.name}`}><DownloadIcon /></Button>
+            {/snippet}
+          </Tooltip>
         </span>
       </div>
     {/each}

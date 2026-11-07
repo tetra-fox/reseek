@@ -1,4 +1,5 @@
 <script lang="ts" generics="T extends string">
+  import { RadioGroup } from "bits-ui";
   import type { Component } from "svelte";
 
   import { cn } from "#lib/ui/cn.js";
@@ -27,42 +28,30 @@
     class: className,
     ...rest
   }: Props = $props();
-
-  /** The arrows move to the next choice and take it, round the ends, as radio buttons do */
-  const arrow = (e: KeyboardEvent & { currentTarget: HTMLElement }, at: number) => {
-    const forward = e.key === "ArrowRight" || e.key === "ArrowDown";
-    if (!forward && e.key !== "ArrowLeft" && e.key !== "ArrowUp") return;
-    e.preventDefault();
-    const next = (at + (forward ? 1 : -1) + options.length) % options.length;
-    value = options[next].id;
-    (e.currentTarget.parentElement?.children[next] as HTMLElement | undefined)?.focus();
-  };
 </script>
 
-<div
+<!-- the arrows move to the next choice and take it, round the ends, as radio buttons do. The
+     values bits-ui gives back are only the options' ids -->
+<RadioGroup.Root
+  bind:value={() => value, (v) => (value = v as T)}
+  orientation="horizontal"
+  loop
+  {disabled}
+  aria-label={label}
   class={cn(
     "inline-flex max-w-full flex-wrap rounded-control border p-0.5",
     size === "sm" ? "min-h-control-sm" : "min-h-6.5",
     className
   )}
-  role="radiogroup"
-  aria-label={label}
   {...rest}>
-  {#each options as option, at (option.id)}
-    <button
-      type="button"
-      role="radio"
-      aria-checked={value === option.id}
-      tabindex={value === option.id ? 0 : -1}
-      {disabled}
+  {#each options as option (option.id)}
+    <RadioGroup.Item
+      value={option.id}
       class={[
-        "flex items-center gap-1.5 rounded-badge px-2 transition-colors duration-(--motion-fast) disabled:opacity-50",
-        size === "xs" ? "text-xs" : "text-sm",
-        value === option.id ? "bg-surface-muted text-fg" : "text-fg-muted hover:text-fg"
-      ]}
-      onclick={() => (value = option.id)}
-      onkeydown={(e) => arrow(e, at)}>
+        "flex items-center gap-1.5 rounded-badge px-2 text-fg-muted transition-colors duration-(--motion-fast) not-disabled:hover:text-fg disabled:opacity-50 data-[state=checked]:bg-surface-muted data-[state=checked]:text-fg",
+        size === "xs" ? "text-xs" : "text-sm"
+      ]}>
       {#if option.icon}<option.icon class="size-3.5" />{/if}{option.label}
-    </button>
+    </RadioGroup.Item>
   {/each}
-</div>
+</RadioGroup.Root>

@@ -10,6 +10,7 @@
   import RowMenu from "#lib/components/transfers/RowMenu.svelte";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import {
     ago,
     formatBytes,
@@ -109,8 +110,11 @@
 </script>
 
 {#snippet chips()}
-  <Badge tone={chip.tone} class="max-w-full truncate" title={chip.title ?? undefined}
-    >{chip.text}</Badge>
+  <Tooltip text={chip.title ?? undefined} spoken>
+    {#snippet child({ props })}
+      <Badge {...props} tone={chip.tone} class="max-w-full truncate">{chip.text}</Badge>
+    {/snippet}
+  </Tooltip>
   {#if direction === "download"}<AnalysisMark mark={marks.download(t.id)} />{/if}
 {/snippet}
 

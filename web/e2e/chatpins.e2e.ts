@@ -227,7 +227,7 @@ test.describe("on a phone", () => {
     const client = await page.context().newCDPSession(page);
     const box = page.getByRole("grid", { name: "Rooms and conversations" });
 
-    const grip = (await line(page, "room:jazz").locator("button[title]").boundingBox())!;
+    const grip = (await line(page, "room:jazz").locator("button[aria-hidden=true]").boundingBox())!;
     const start = { x: grip.x + grip.width / 2, y: grip.y + grip.height / 2 };
     const end = await center(page, "user:person1");
     await swipe(client, start, { x: start.x, y: end.y + 6 });

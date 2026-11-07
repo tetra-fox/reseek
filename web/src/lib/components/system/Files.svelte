@@ -32,7 +32,9 @@
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Notice from "#lib/components/ui/Notice.svelte";
   import Select from "#lib/components/ui/Select.svelte";
+  import SelectAll from "#lib/components/ui/SelectAll.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import { confirmation } from "#lib/feedback/confirm.svelte.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
@@ -434,6 +436,12 @@
     onCheckedChange={(on) => (on ? selected.add(e.key) : selected.delete(e.key))} />
 {/snippet}
 
+{#snippet entryName(e: Entry)}
+  <Tooltip text={e.path} dense>
+    {#snippet child({ props })}<span {...props} class="truncate">{e.name}</span>{/snippet}
+  </Tooltip>
+{/snippet}
+
 {#if error}
   <Notice kind="error">
     {error}
@@ -469,6 +477,7 @@
     columns={COLUMNS}
     {selected}
     idOf={(e) => e.key}
+    tickable={(e) => e.kind !== "up"}
     folderId={(node) => `d:${node.path}`}
     onopen={(e) => void open(e)}
     onopenfolder={(node) => go(node.path.split("/"))}
@@ -482,8 +491,9 @@
       if (!opened) return;
       for (const at of keys) if (!listings.has(at)) void read(at);
     }}>
-    {#snippet header()}
-      <span role="columnheader"></span>
+    {#snippet header(all)}
+      <span role="columnheader" class="flex"
+        >{#if all}<SelectAll {all} />{/if}</span>
       <span role="columnheader">{@render sortable("Name", "name")}</span>
       <span role="columnheader" class="max-md:hidden">{@render sortable("Modified", "date")}</span>
       {#if !viewport.phone}<span role="columnheader" class="pr-3 text-right">Size</span>{/if}
@@ -493,11 +503,15 @@
       {@const e = dirEntry(node)}
       {#if e}{@render tick(e)}{/if}
       <FolderIcon class="size-4 shrink-0 text-fg-muted" />
-      <button
-        type="button"
-        class="min-w-0 truncate text-left hover:underline"
-        title={node.path}
-        onclick={() => go(node.path.split("/"))}>{node.label}</button>
+      <Tooltip text={node.path} dense>
+        {#snippet child({ props })}
+          <button
+            {...props}
+            type="button"
+            class="min-w-0 truncate text-left hover:underline"
+            onclick={() => go(node.path.split("/"))}>{node.label}</button>
+        {/snippet}
+      </Tooltip>
       {#if listings.has(node.path)}
         <span class="shrink-0 text-xs text-fg-subtle tabular-nums">{folderCaption(node)}</span>
       {/if}
@@ -518,12 +532,12 @@
           <FileIcon class="size-4 shrink-0 text-fg-muted" />
           {#if viewport.phone}
             <span class="flex min-w-0 flex-col py-1">
-              <span class="truncate" title={e.path}>{e.name}</span>
+              {@render entryName(e)}
               <span class="text-xs whitespace-nowrap text-fg-muted tabular-nums"
                 >{e.size ? formatBytes(e.size) : ""}</span>
             </span>
           {:else}
-            <span class="truncate" title={e.path}>{e.name}</span>
+            {@render entryName(e)}
           {/if}
           <AnalysisMark mark={marks.file(root, e.path)} />
         {:else}

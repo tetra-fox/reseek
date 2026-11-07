@@ -195,24 +195,32 @@
         {...list.line(e, i)}
         class="grid min-w-max grid-cols-[2rem_9rem_13rem_minmax(16rem,1fr)] items-center gap-2 list-row px-2 py-1 font-mono text-xs">
         <span role="gridcell">
-          <Tooltip text={e.id}>
+          <Tooltip text={e.id} dense>
             {#snippet child({ props })}
               <InfoIcon {...props} class="size-4 text-fg-muted" aria-label={e.id} />
             {/snippet}
           </Tooltip>
         </span>
-        <span role="gridcell" title={e.timestamp}>{dateTime(e.timestamp)}</span>
+        <Tooltip text={e.timestamp} dense>
+          {#snippet child({ props })}
+            <span {...props} role="gridcell">{dateTime(e.timestamp)}</span>
+          {/snippet}
+        </Tooltip>
         <span role="gridcell" class="truncate">{e.type}</span>
         <span role="gridcell" class="flex min-w-0 items-center gap-2">
           {#if user}<span class="font-sans"><Username name={user} /></span>{/if}
           <span class="min-w-0 flex-1 truncate text-fg-muted">{JSON.stringify(e.data)}</span>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            class="shrink-0"
-            aria-label="Show full payload"
-            title="Show full payload"
-            onclick={() => (shown = e)}><Maximize2Icon /></Button>
+          <Tooltip text="Show full payload">
+            {#snippet child({ props })}
+              <Button
+                {...props}
+                variant="ghost"
+                size="icon-sm"
+                class="shrink-0"
+                aria-label="Show full payload"
+                onclick={() => (shown = e)}><Maximize2Icon /></Button>
+            {/snippet}
+          </Tooltip>
         </span>
       </div>
     {/each}

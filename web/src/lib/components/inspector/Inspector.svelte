@@ -9,6 +9,8 @@
   import AnalysisSection from "#lib/components/analysis/AnalysisSection.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
+  import Progress from "#lib/components/ui/Progress.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import Username from "#lib/components/users/Username.svelte";
   import { FILE_ACTIONS as A } from "#lib/files/actions.js";
   import { type Field, inspector } from "#lib/inspector/inspector.svelte.js";
@@ -72,7 +74,11 @@
 </script>
 
 <header class="flex items-center gap-2 px-4 pt-3">
-  <h2 class="min-w-0 flex-1 truncate font-medium" title={path}>{name}</h2>
+  <Tooltip text={path}>
+    {#snippet child({ props })}
+      <h2 {...props} class="min-w-0 flex-1 truncate font-medium">{name}</h2>
+    {/snippet}
+  </Tooltip>
   {#if menu}
     <Menu.Root>
       <Menu.Trigger>
@@ -96,15 +102,7 @@
   {/if}
   {#if size}<p class="text-fg-muted tabular-nums">{size}</p>{/if}
   {#if percent !== null}
-    <div
-      class="h-2 overflow-hidden rounded-full bg-surface-muted"
-      role="progressbar"
-      aria-label="Progress"
-      aria-valuenow={Math.round(percent)}
-      aria-valuemin={0}
-      aria-valuemax={100}>
-      <div class="h-full bg-accent transition-[width]" style:width={`${percent}%`}></div>
-    </div>
+    <Progress value={percent} label="Progress" class="h-2" />
   {/if}
   {#if username}<p class="min-w-0 truncate"><Username name={username} /></p>{/if}
   <div class="flex flex-wrap gap-inline empty:hidden" {@attach keepsFocus}>

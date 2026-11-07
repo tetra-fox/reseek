@@ -10,7 +10,9 @@
   import { trackOf } from "#lib/analysis/track.js";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
+  import Progress from "#lib/components/ui/Progress.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { FILE_ACTIONS as A } from "#lib/files/actions.js";
   import { getFileName } from "#lib/format.js";
@@ -105,16 +107,7 @@
         <span class="font-medium">{letter}</span>
         <div class="flex min-w-0 flex-1 flex-col gap-1">
           <span class="truncate">Uploading {sending.name}: {percent}%</span>
-          <div
-            class="h-1.5 overflow-hidden rounded-full bg-surface-muted"
-            role="progressbar"
-            aria-label={`Uploading ${sending.name}`}
-            aria-valuenow={percent}
-            aria-valuemin={0}
-            aria-valuemax={100}>
-            <div class="h-full bg-accent transition-[width]" style:width={`${sending.sent * 100}%`}>
-            </div>
-          </div>
+          <Progress value={percent} label={`Uploading ${sending.name}`} />
         </div>
         <Button variant="outline" size="sm" onclick={() => slots.cancel(id)}
           ><XIcon />Cancel</Button>
@@ -127,9 +120,11 @@
       <span class="font-medium">{letter}</span>
       {#if name || report === undefined}
         {#if name}
-          <h2 class="min-w-0 truncate text-sm font-medium" title={local ? name : (path ?? name)}>
-            {name}
-          </h2>
+          <Tooltip text={local ? name : (path ?? name)} clipped={local || !path}>
+            {#snippet child({ props })}
+              <h2 {...props} class="min-w-0 truncate text-sm font-medium">{name}</h2>
+            {/snippet}
+          </Tooltip>
         {:else}
           <Skeleton class="h-4 w-48" />
         {/if}

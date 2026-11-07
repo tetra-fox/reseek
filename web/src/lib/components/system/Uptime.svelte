@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { formatDate, formatDuration } from "#lib/format.js";
   import { clock } from "#lib/ui/clock.svelte.js";
 
@@ -9,4 +10,8 @@
   const started = $derived(Date.parse(since));
 </script>
 
-<span title={formatDate(since)}>{formatDuration((clock.second - started) / 1000, 3)}</span>
+<Tooltip text={formatDate(since)}>
+  {#snippet child({ props })}
+    <span {...props}>{formatDuration((clock.second - started) / 1000, 3)}</span>
+  {/snippet}
+</Tooltip>

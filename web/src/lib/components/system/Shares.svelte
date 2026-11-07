@@ -13,6 +13,7 @@
   import Dialog from "#lib/components/ui/Dialog.svelte";
   import EmptyRow from "#lib/components/ui/EmptyRow.svelte";
   import Notice from "#lib/components/ui/Notice.svelte";
+  import Progress from "#lib/components/ui/Progress.svelte";
   import Select from "#lib/components/ui/Select.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
@@ -204,18 +205,7 @@
       <span class="text-sm font-medium">Scanning shares</span>
       <span class="ml-auto text-sm font-medium tabular-nums">{percent}%</span>
     </div>
-    <div
-      class="h-1.5 overflow-hidden rounded-full bg-surface-muted"
-      role="progressbar"
-      aria-label="Scan progress"
-      aria-valuenow={percent}
-      aria-valuemin={0}
-      aria-valuemax={100}>
-      <div
-        class="h-full rounded-full bg-accent transition-[width] duration-(--motion-slow)"
-        style:width={`${percent}%`}>
-      </div>
-    </div>
+    <Progress value={percent} label="Scan progress" />
     <span class="text-xs text-fg-muted tabular-nums"
       >Found {plural(scan.files, "file", "files")} in {plural(
         scan.directories,

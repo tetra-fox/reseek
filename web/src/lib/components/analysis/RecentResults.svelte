@@ -8,6 +8,7 @@
   import Notice from "#lib/components/ui/Notice.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Time from "#lib/components/ui/Time.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { FILE_ACTIONS as A } from "#lib/files/actions.js";
   import { getFileName } from "#lib/format.js";
   import { call } from "#lib/request.js";
@@ -59,19 +60,23 @@
         {@const name = getFileName(report.relativePath)}
         {@const mark = marks.file(report.root, report.relativePath)}
         <li class="pick-row">
-          <button
-            type="button"
-            class="flex min-h-9 w-full min-w-0 items-center gap-2 px-2 text-left text-sm"
-            title={report.relativePath}
-            aria-label={`${A.openAnalysis.label}: ${name}`}
-            onclick={() => slots.open(target(report), name)}>
-            <span class="min-w-0 flex-1 truncate">{name}</span>
-            <AnalysisMark mark={mark?.judgment ? mark : undefined} />
-            <span class="shrink-0 text-xs text-fg-muted max-sm:hidden"
-              >{report.stale ? "Analyzed by an older version" : VERDICTS[report.verdict]}</span>
-            <span class="shrink-0 text-xs text-fg-muted max-md:hidden"
-              ><Time at={report.analyzedAt} /></span>
-          </button>
+          <Tooltip text={report.relativePath} dense>
+            {#snippet child({ props })}
+              <button
+                {...props}
+                type="button"
+                class="flex min-h-9 w-full min-w-0 items-center gap-2 px-2 text-left text-sm"
+                aria-label={`${A.openAnalysis.label}: ${name}`}
+                onclick={() => slots.open(target(report), name)}>
+                <span class="min-w-0 flex-1 truncate">{name}</span>
+                <AnalysisMark mark={mark?.judgment ? mark : undefined} />
+                <span class="shrink-0 text-xs text-fg-muted max-sm:hidden"
+                  >{report.stale ? "Analyzed by an older version" : VERDICTS[report.verdict]}</span>
+                <span class="shrink-0 text-xs text-fg-muted max-md:hidden"
+                  ><Time at={report.analyzedAt} /></span>
+              </button>
+            {/snippet}
+          </Tooltip>
         </li>
       {/each}
     </ul>

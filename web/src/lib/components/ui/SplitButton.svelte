@@ -2,6 +2,8 @@
   import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
   import type { Component } from "svelte";
 
+  import { viewport } from "#lib/ui/viewport.svelte.js";
+
   import Button from "./Button.svelte";
   import * as Menu from "./menu/menu.js";
   import Tooltip from "./Tooltip.svelte";
@@ -23,7 +25,7 @@
 <!-- an action with a scope picked from its menu; narrow screens show the icon with the words in a
      tooltip -->
 <div class="inline-flex">
-  <Tooltip text={label}>
+  <Tooltip text={viewport.lg ? undefined : label}>
     {#snippet child({ props })}
       <Button
         {...props}

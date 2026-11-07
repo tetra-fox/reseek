@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Area, Axis, Chart, Grid, Highlight, LinearGradient, Svg, Tooltip } from "layerchart";
 
+  import Hint from "#lib/components/ui/Tooltip.svelte";
   import {
     axisPadding,
     axisTicks,
@@ -76,18 +77,24 @@
     {#each view.series as s (s.key)}
       {@const direction = s.direction}
       {#if direction}
-        <button
-          type="button"
-          aria-pressed={!hidden.includes(direction)}
-          disabled={direction === lastOn}
-          title={direction === lastOn ? "One direction always stays on" : undefined}
-          class={[
-            "flex items-center gap-1.5 rounded-badge px-1.5 py-0.5 text-xs not-disabled:hover:bg-hover",
-            hidden.includes(direction) && "opacity-35"
-          ]}
-          onclick={() => toggle(direction)}>
-          {@render swatch(s)}{direction}
-        </button>
+        <!-- a disabled button takes no focus, so the reason is on a span around it -->
+        <Hint text={direction === lastOn ? "One direction always stays on" : undefined}>
+          {#snippet child({ props })}
+            <span {...props} class="inline-flex">
+              <button
+                type="button"
+                aria-pressed={!hidden.includes(direction)}
+                disabled={direction === lastOn}
+                class={[
+                  "flex items-center gap-1.5 rounded-badge px-1.5 py-0.5 text-xs not-disabled:hover:bg-hover",
+                  hidden.includes(direction) && "opacity-35"
+                ]}
+                onclick={() => toggle(direction)}>
+                {@render swatch(s)}{direction}
+              </button>
+            </span>
+          {/snippet}
+        </Hint>
       {:else}
         <span class="flex items-center gap-1.5 px-1.5 py-0.5 text-xs">
           {@render swatch(s)}{s.name}

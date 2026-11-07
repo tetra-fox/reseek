@@ -3,6 +3,7 @@
   import XIcon from "@lucide/svelte/icons/x";
   import { tick, untrack } from "svelte";
 
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import {
     type ActiveFilter,
     announce,
@@ -74,15 +75,19 @@
     </span>
     <div class="flex flex-wrap items-center gap-1.5" bind:this={chips}>
       {#each filters as f, at (f.id)}
-        <button
-          type="button"
-          class="inline-flex h-6 max-w-64 items-center gap-1 rounded-full border border-accent/40 bg-surface pr-1.5 pl-2.5 text-xs text-fg transition-colors duration-(--motion-fast) hover:border-accent"
-          aria-label={`Remove filter ${f.label}`}
-          title={`Remove filter ${f.label}`}
-          data-id={f.id}
-          onclick={() => remove(at)}>
-          <span class="truncate">{f.label}</span><XIcon class="size-3 shrink-0" />
-        </button>
+        <Tooltip text={`Remove filter ${f.label}`}>
+          {#snippet child({ props })}
+            <button
+              {...props}
+              type="button"
+              class="inline-flex h-6 max-w-64 items-center gap-1 rounded-full border border-accent/40 bg-surface pr-1.5 pl-2.5 text-xs text-fg transition-colors duration-(--motion-fast) hover:border-accent"
+              aria-label={`Remove filter ${f.label}`}
+              data-id={f.id}
+              onclick={() => remove(at)}>
+              <span class="truncate">{f.label}</span><XIcon class="size-3 shrink-0" />
+            </button>
+          {/snippet}
+        </Tooltip>
       {/each}
     </div>
     <!-- an emptied list offers its own Clear filters where the rows would be -->

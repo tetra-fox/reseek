@@ -3,6 +3,7 @@
 
   import type { Schemas } from "#lib/api/client.js";
   import EmptyRow from "#lib/components/ui/EmptyRow.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { shortDirectory } from "#lib/dashboard/reports.js";
 
   // the directories peers took the most from us
@@ -25,8 +26,11 @@
     {#each rows as row, i (row.directory)}
       <tr class="border-b last:border-b-0">
         <td class="py-1 text-right text-fg-muted tabular-nums">{i + 1}</td>
-        <td class="px-2 py-1 wrap-anywhere" title={row.directory}
-          >{shortDirectory(row.directory)}</td>
+        <Tooltip text={row.directory} dense>
+          {#snippet child({ props })}
+            <td {...props} class="px-2 py-1 wrap-anywhere">{shortDirectory(row.directory)}</td>
+          {/snippet}
+        </Tooltip>
         <td class="px-2 py-1 text-right tabular-nums">{row.count.toLocaleString()}</td>
         <td class="px-2 py-1 text-right tabular-nums">{row.distinctUsers.toLocaleString()}</td>
       </tr>

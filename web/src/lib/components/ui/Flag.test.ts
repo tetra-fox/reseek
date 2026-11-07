@@ -20,7 +20,6 @@ describe("a country's flag", () => {
     const image = show(code)!;
     expect(image.getAttribute("src")).toMatch(/nl.*\.svg/);
     expect(image.alt).toBe("Netherlands");
-    expect(image.title).toBe("Netherlands");
     // nothing a system font has to draw, which Windows does as two letters
     expect(document.body.textContent?.trim()).toBe("");
   });

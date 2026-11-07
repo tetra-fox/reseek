@@ -12,6 +12,7 @@
   import Input from "#lib/components/ui/Input.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Notice from "#lib/components/ui/Notice.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import { type ActiveFilter, typedFilter } from "#lib/lists/filtered.js";
   import { freezesWhileUsed, interaction } from "#lib/lists/interaction.svelte.js";
@@ -142,20 +143,23 @@
   <Filter.Group label="Levels">
     {#each LEVELS as l (l.level)}
       {@const on = levels.includes(l.level)}
-      <Filter.Chip
-        pressed={on}
-        hides
-        count={counts[l.level] ?? 0}
-        class="pr-2 pl-1.5 font-mono text-xs"
-        title={on
-          ? `Hide ${l.level} lines. Alt-click to show only these.`
-          : `Show ${l.level} lines`}
-        onclick={(e) =>
-          (levels = e.altKey
-            ? [l.level]
-            : on
-              ? levels.filter((x) => x !== l.level)
-              : [...levels, l.level])}>{l.short}</Filter.Chip>
+      <Tooltip
+        text={on ? `Hide ${l.level} lines. Alt-click to show only these` : `Show ${l.level} lines`}>
+        {#snippet child({ props })}
+          <Filter.Chip
+            {...props}
+            pressed={on}
+            hides
+            count={counts[l.level] ?? 0}
+            class="pr-2 pl-1.5 font-mono text-xs"
+            onclick={(e) =>
+              (levels = e.altKey
+                ? [l.level]
+                : on
+                  ? levels.filter((x) => x !== l.level)
+                  : [...levels, l.level])}>{l.short}</Filter.Chip>
+        {/snippet}
+      </Tooltip>
     {/each}
   </Filter.Group>
   <Input
@@ -223,10 +227,12 @@
       <span role="gridcell" class="text-fg-muted">{logTime(l.record.timestamp)}</span>
       <span role="gridcell">{level?.short ?? l.record.level}</span>
       <span role="gridcell" class="break-all whitespace-pre-wrap">
-        <span class="text-fg-subtle" title={l.record.context}
-          >{l.record.context.split("::").pop()}{l.record.subContext
-            ? `[${l.record.subContext}]`
-            : ""}</span>
+        <Tooltip text={l.record.context} dense
+          >{#snippet child({ props })}<span {...props} class="text-fg-subtle"
+              >{l.record.context.split("::").pop()}{l.record.subContext
+                ? `[${l.record.subContext}]`
+                : ""}</span
+            >{/snippet}</Tooltip>
         {l.record.message}
       </span>
     </div>

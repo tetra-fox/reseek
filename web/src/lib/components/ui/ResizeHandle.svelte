@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
 
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { cn } from "#lib/ui/cn.js";
   import { withModifier } from "#lib/ui/keys.js";
 
@@ -52,46 +53,53 @@
 
 <!-- a separator between two parts of a screen that the keys can move, as a splitter is. Its line shows
      once the pointer rests on it, and at once for the keys and during a drag. A press takes focus
-     by hand, as keeping the page from selecting text under a drag also keeps it from focusing -->
-<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
-<div
-  role="separator"
-  tabindex="0"
-  aria-orientation={sideways ? "vertical" : "horizontal"}
-  aria-label={label}
-  aria-valuemin={min}
-  aria-valuemax={Number.isFinite(max) ? max : undefined}
-  aria-valuenow={value}
-  title="Drag or use the arrow keys to resize, double-click to reset"
-  data-dragging={dragging ? "" : undefined}
-  class={cn(
-    "touch-none outline-none after:absolute after:bg-accent after:opacity-0 after:transition-opacity after:duration-(--motion-fast) hover:after:opacity-100 hover:after:delay-150 focus-visible:after:opacity-100 data-dragging:after:opacity-100 data-dragging:after:delay-0",
-    sideways
-      ? "cursor-col-resize after:inset-y-0 after:left-1/2 after:w-0.5 after:-translate-x-1/2"
-      : "cursor-row-resize after:inset-x-0 after:top-1/2 after:h-0.5 after:-translate-y-1/2",
-    className
-  )}
-  onpointerdown={(e) => {
-    e.preventDefault();
-    e.currentTarget.focus();
-    dragging = { at: along(e), value };
-    e.currentTarget.setPointerCapture(e.pointerId);
-  }}
-  onpointermove={(e) => {
-    if (dragging) value = clamp(dragging.value + grows(along(e) - dragging.at));
-  }}
-  onlostpointercapture={() => {
-    if (dragging && value !== dragging.value) onchange(value);
-    dragging = null;
-  }}
-  ondblclick={() => set(initial)}
-  onkeydown={(e) => {
-    if (withModifier(e)) return;
-    if (e.key === "Home") set(min);
-    else if (e.key === "End" && Number.isFinite(max)) set(max);
-    else if (keys.includes(e.key)) set(value + grows(e.key === keys[1] ? STEP : -STEP));
-    else return;
-    e.preventDefault();
-  }}>
-  {@render children?.()}
-</div>
+     by hand, as keeping the page from selecting text under a drag also keeps it from focusing. The
+     pointer handlers listen in the capture phase so the tooltip's own on the same events still run -->
+<Tooltip
+  text="Drag or use the arrow keys to resize, double-click to reset"
+  side={sideways ? "right" : "top"}>
+  {#snippet child({ props })}
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+    <div
+      {...props}
+      role="separator"
+      tabindex="0"
+      aria-orientation={sideways ? "vertical" : "horizontal"}
+      aria-label={label}
+      aria-valuemin={min}
+      aria-valuemax={Number.isFinite(max) ? max : undefined}
+      aria-valuenow={value}
+      data-dragging={dragging ? "" : undefined}
+      class={cn(
+        "touch-none outline-none after:absolute after:bg-accent after:opacity-0 after:transition-opacity after:duration-(--motion-fast) hover:after:opacity-100 hover:after:delay-150 focus-visible:after:opacity-100 data-dragging:after:opacity-100 data-dragging:after:delay-0",
+        sideways
+          ? "cursor-col-resize after:inset-y-0 after:left-1/2 after:w-0.5 after:-translate-x-1/2"
+          : "cursor-row-resize after:inset-x-0 after:top-1/2 after:h-0.5 after:-translate-y-1/2",
+        className
+      )}
+      onpointerdowncapture={(e) => {
+        e.preventDefault();
+        e.currentTarget.focus();
+        dragging = { at: along(e), value };
+        e.currentTarget.setPointerCapture(e.pointerId);
+      }}
+      onpointermovecapture={(e) => {
+        if (dragging) value = clamp(dragging.value + grows(along(e) - dragging.at));
+      }}
+      onlostpointercapture={() => {
+        if (dragging && value !== dragging.value) onchange(value);
+        dragging = null;
+      }}
+      ondblclick={() => set(initial)}
+      onkeydown={(e) => {
+        if (withModifier(e)) return;
+        if (e.key === "Home") set(min);
+        else if (e.key === "End" && Number.isFinite(max)) set(max);
+        else if (keys.includes(e.key)) set(value + grows(e.key === keys[1] ? STEP : -STEP));
+        else return;
+        e.preventDefault();
+      }}>
+      {@render children?.()}
+    </div>
+  {/snippet}
+</Tooltip>

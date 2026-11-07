@@ -14,6 +14,8 @@
 </script>
 
 <script lang="ts">
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
+
   // a country as an image of its flag, since Windows has no flag emoji, with its name as the label
   // and tooltip; nothing for a code with no flag
   let { code }: { code: string | null | undefined } = $props();
@@ -24,10 +26,14 @@
 
 {#if url}
   {@const name = NAMES.of(country)}
-  <img
-    src={url}
-    alt={name}
-    title={name}
-    draggable="false"
-    class="h-3 w-4 shrink-0 rounded-[1px] object-cover outline -outline-offset-1 outline-fg/15" />
+  <Tooltip text={name} dense>
+    {#snippet child({ props })}
+      <img
+        {...props}
+        src={url}
+        alt={name}
+        draggable="false"
+        class="h-3 w-4 shrink-0 rounded-[1px] object-cover outline -outline-offset-1 outline-fg/15" />
+    {/snippet}
+  </Tooltip>
 {/if}

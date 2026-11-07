@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Tooltip } from "bits-ui";
   import type { Snippet } from "svelte";
+  import { createAttachmentKey } from "svelte/attachments";
 
   import { type Side, tether } from "#lib/components/ui/TooltipHost.svelte";
 
@@ -9,31 +10,74 @@
     text: string | undefined;
     /** which side of the element it opens on */
     side?: Side;
-    /** for static elements: keeps them out of the tab order and repeats the text for screen readers */
-    hint?: boolean;
+    /**
+     * for a static element in a dense list, such as a timestamp on every line: it stays out of the
+     * tab order. Any other static element with a tooltip is a tab stop, so the keys can show it
+     */
+    dense?: boolean;
+    /** repeats the text for screen readers, for an element that says nothing of it otherwise */
+    spoken?: boolean;
+    /**
+     * for text that is its own full text: the tooltip shows only while the element cuts it off,
+     * and the element stays out of the tab order unless it is focusable itself
+     */
+    clipped?: boolean;
     /** the element the tooltip belongs to, which spreads `props` */
     child: Snippet<[{ props: Record<string, unknown> }]>;
   };
 
-  let { text, side = "top", hint = false, child: render }: Props = $props();
+  let {
+    text,
+    side = "top",
+    dense = false,
+    spoken = false,
+    clipped = false,
+    child: render
+  }: Props = $props();
+
+  let cut = $state(false);
+
+  // measured as the pointer or focus arrives, in the capture phase so it is known before the
+  // trigger's own handlers decide whether to open
+  const measure = (node: HTMLElement) => {
+    const check = () => {
+      cut = node.scrollWidth > node.clientWidth || node.scrollHeight > node.clientHeight;
+    };
+    node.addEventListener("pointerenter", check, { capture: true });
+    node.addEventListener("focus", check, { capture: true });
+    return () => {
+      node.removeEventListener("pointerenter", check, { capture: true });
+      node.removeEventListener("focus", check, { capture: true });
+    };
+  };
+  const measuring = { [createAttachmentKey()]: measure };
+
+  // bits-ui reads payload and disabled again in the trigger's teardown, when what `text` comes
+  // from may be gone, such as a removed row, so it gets these copies of the last values
+  // TODO: pass the props straight through once bits-ui stops reading them on detach
+  let payload = $state.raw<{ text: string; side: Side }>({ text: "", side: "top" });
+  let disabled = $state(true);
+  $effect.pre(() => {
+    payload = { text: text ?? "", side };
+    disabled = text === undefined || (clipped && !cut);
+  });
 </script>
 
 <!-- always a trigger, disabled without text, so the element isn't remounted when a tooltip comes
-     and goes -->
-<Tooltip.Trigger
-  {tether}
-  payload={{ text: text ?? "", side }}
-  disabled={text === undefined}
-  tabindex={hint ? -1 : undefined}>
+     and goes. The spoken text follows it without a line break, which would render as a space -->
+<Tooltip.Trigger {tether} {payload} {disabled}>
   {#snippet child({ props })}
     <!-- type is for bits-ui's own button, and disabled only means there's nothing to show -->
     {@const {
       "type": _type,
       "disabled": _disabled,
       "data-disabled": _dataDisabled,
+      "tabindex": tabindex,
       ...own
     } = props}
-    {@render render({ props: own })}
+    <!-- the trigger makes its element a tab stop, which dense and clipped leave to the element -->
+    {@render render({
+      props: { ...own, ...(dense || clipped ? {} : { tabindex }), ...(clipped ? measuring : {}) }
+    })}
   {/snippet}
-</Tooltip.Trigger>
-{#if hint && text !== undefined}<span class="sr-only">{text}</span>{/if}
+</Tooltip.Trigger>{#if spoken && text !== undefined}<span class="sr-only">{text}</span>{/if}

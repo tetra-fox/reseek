@@ -13,6 +13,8 @@
   import Button from "#lib/components/ui/Button.svelte";
   import Card from "#lib/components/ui/Card.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
+  import Username from "#lib/components/users/Username.svelte";
   import { Busy } from "#lib/feedback/busy.svelte.js";
   import { CopyButton, copyText } from "#lib/feedback/clipboard.svelte.js";
   import { confirmation } from "#lib/feedback/confirm.svelte.js";
@@ -190,7 +192,9 @@
           {s.server.ipEndPoint ? `(${s.server.ipEndPoint})` : ""}
         </dd>
         <dt>Account</dt>
-        <dd>{s.user.username ?? "?"}</dd>
+        <dd>
+          {#if s.user.username}<Username name={s.user.username} />{:else}?{/if}
+        </dd>
         <dt>Privileges</dt>
         <dd>
           {s.user.privileges.isPrivileged
@@ -237,12 +241,17 @@
       <dl class="info">
         <dt>Parent</dt>
         <dd>
-          {s.distributedNetwork.parent ??
-            (s.distributedNetwork.isBranchRoot ? "None (branch root)" : "None")}
+          {#if s.distributedNetwork.parent}
+            <Username name={s.distributedNetwork.parent} />
+          {:else}
+            {s.distributedNetwork.isBranchRoot ? "None (branch root)" : "None"}
+          {/if}
         </dd>
         <dt>Branch</dt>
         <dd>
-          Level {s.distributedNetwork.branchLevel}, root {s.distributedNetwork.branchRoot ?? "?"}
+          Level {s.distributedNetwork.branchLevel}, root
+          {#if s.distributedNetwork.branchRoot}<Username
+              name={s.distributedNetwork.branchRoot} />{:else}?{/if}
         </dd>
         <dt>Children</dt>
         <dd>
@@ -250,6 +259,12 @@
             .distributedNetwork.canAcceptChildren
             ? "accepting more"
             : "not accepting more"}
+          {#if s.distributedNetwork.children.length}
+            <span class="block">
+              {#each s.distributedNetwork.children as child, i (child)}{#if i},
+                {/if}<Username name={child} />{/each}
+            </span>
+          {/if}
         </dd>
       </dl>
     </Card>
@@ -262,7 +277,9 @@
           <dd>
             {#each s.relay.agents as agent (agent.name)}
               <span class="flex flex-wrap items-center gap-inline">
-                <span title={`${agent.ipAddress}, version ${agent.version}`}>{agent.name}</span>
+                <Tooltip text={`${agent.ipAddress}, version ${agent.version}`}>
+                  {#snippet child({ props })}<span {...props}>{agent.name}</span>{/snippet}
+                </Tooltip>
                 <span class="text-fg-muted">
                   {agent.ipAddress}, since {ago(agent.connectedAt, clock.now)},
                   {agent.ready

@@ -9,19 +9,19 @@
 </script>
 
 {#if source.layer === "env"}
-  <Tooltip text="Set by an environment variable, which overrides the files" hint>
+  <Tooltip text="Set by an environment variable, which overrides the files" dense spoken>
     {#snippet child({ props })}
       <Badge {...props} tone="info">{source.var}</Badge>
     {/snippet}
   </Tooltip>
 {:else if source.layer === "cli"}
-  <Tooltip text={`Set on the command line with ${source.flag}`} hint>
+  <Tooltip text={`Set on the command line with ${source.flag}`} dense spoken>
     {#snippet child({ props })}
       <Badge {...props} tone="info">cli</Badge>
     {/snippet}
   </Tooltip>
 {:else if source.layer === "runtime"}
-  <Tooltip text={`Applied at runtime by ${source.setBy}`} hint>
+  <Tooltip text={`Applied at runtime by ${source.setBy}`} dense spoken>
     {#snippet child({ props })}
       <Badge {...props} tone="accent">
         runtime {lasting(source)}

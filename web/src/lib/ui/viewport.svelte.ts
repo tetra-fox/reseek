@@ -2,11 +2,21 @@ import { createSubscriber, MediaQuery } from "svelte/reactivity";
 
 /** Below Tailwind's `md`: a phone, where panels become sheets over the screen */
 const narrow = new MediaQuery("max-width: 767px");
+const sm = new MediaQuery("min-width: 640px");
+const lg = new MediaQuery("min-width: 1024px");
 
 /** What the window's width allows, decided here once for every screen */
 export const viewport = {
   get phone() {
     return narrow.current;
+  },
+  /** at least Tailwind's `sm`, for a label that its classes hide from there on */
+  get sm() {
+    return sm.current;
+  },
+  /** at least Tailwind's `lg` */
+  get lg() {
+    return lg.current;
   }
 };
 

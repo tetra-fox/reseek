@@ -9,6 +9,7 @@
   import Card from "#lib/components/ui/Card.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { sections, valueAt } from "#lib/config/sections.js";
   import { Busy } from "#lib/feedback/busy.svelte.js";
   import { confirmation } from "#lib/feedback/confirm.svelte.js";
@@ -119,10 +120,15 @@
             "grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-2 gap-y-0.5 list-row px-5 py-1.5 md:grid-cols-[10rem_minmax(0,1fr)_6rem_6rem_6rem]"
           ]}>
           <span role="gridcell" class="truncate font-medium">{d.name}</span>
-          <span
-            role="gridcell"
-            class="truncate font-mono text-xs text-fg-muted max-md:col-span-3 max-md:row-start-2"
-            title={d.path}>{d.path}</span>
+          <Tooltip text={d.path} clipped>
+            {#snippet child({ props })}
+              <span
+                {...props}
+                role="gridcell"
+                class="truncate font-mono text-xs text-fg-muted max-md:col-span-3 max-md:row-start-2"
+                >{d.path}</span>
+            {/snippet}
+          </Tooltip>
           <span role="gridcell" class="text-right tabular-nums">{formatBytes(d.sizeBytes)}</span>
           <span role="gridcell" class="text-right text-xs text-fg-muted tabular-nums max-md:hidden"
             >{d.walSizeBytes ? `+${formatBytes(d.walSizeBytes)} log` : ""}</span>
@@ -145,7 +151,9 @@
   <dl
     class="grid grid-cols-[minmax(0,1fr)] gap-x-6 gap-y-1 text-sm md:grid-cols-[auto_minmax(0,1fr)]">
     {#each retention as r (r.key)}
-      <dt class="text-fg-muted" title={r.key}>{r.label}</dt>
+      <Tooltip text={r.key}>
+        {#snippet child({ props })}<dt {...props} class="text-fg-muted">{r.label}</dt>{/snippet}
+      </Tooltip>
       <dd class="max-md:mb-1">{retentionText(r.value)}</dd>
     {/each}
   </dl>

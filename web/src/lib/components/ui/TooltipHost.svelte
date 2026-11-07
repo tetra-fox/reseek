@@ -10,7 +10,8 @@
 
 <!-- bits-ui's default 700ms is slow for the collapsed sidebar, where the tooltip is the only label -->
 <Tooltip.Provider delayDuration={300}>
-  <Tooltip.Root {tether}>
+  <!-- a click or a dialog moving focus opens no tooltip, so Escape reaches the dialog; keys still do -->
+  <Tooltip.Root {tether} ignoreNonKeyboardFocus>
     {#snippet children({ payload })}
       <Tooltip.Portal>
         <Tooltip.Content
