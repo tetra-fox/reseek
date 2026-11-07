@@ -26,7 +26,7 @@
 
 <div
   role="row"
-  class={["grid items-center", className]}
+  class={["group/head grid items-center", className]}
   style:grid-template-columns={grid.template}>
   {#each grid.columns as column (column.id)}
     {@const sort = grid.sortOf(column)}
@@ -65,10 +65,11 @@
       {/if}
       {#if !column.fixed}
         <!-- dragging the edge sets the column's width, which is kept. TanStack's drag follows mouse
-             and touch events, not pointer events -->
+             and touch events, not pointer events. The edge shows while the header is in use -->
         <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
         <span
-          class="absolute inset-y-0 right-0 w-1.5 cursor-col-resize touch-none after:absolute after:inset-y-3 after:right-0 after:border-r"
+          class="absolute inset-y-0 right-0 w-1.5 cursor-col-resize touch-none after:absolute after:inset-y-3 after:right-0 after:border-r after:opacity-0 after:transition-[opacity,border-color] after:duration-(--motion-fast) group-focus-within/head:after:opacity-100 group-hover/head:after:opacity-100 hover:after:border-accent data-resizing:after:border-accent data-resizing:after:opacity-100 [@media(hover:none)]:after:opacity-100"
+          data-resizing={grid.header(column.id)?.column.getIsResizing() || undefined}
           role="separator"
           aria-orientation="vertical"
           aria-label={`Width of ${column.label}`}

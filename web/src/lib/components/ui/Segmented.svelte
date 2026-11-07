@@ -41,12 +41,17 @@
   {disabled}
   aria-label={label}
   class={cn(
-    "relative inline-flex max-w-full flex-wrap rounded-control border p-0.5",
+    "relative inline-flex max-w-full flex-wrap rounded-control border bg-surface-muted p-0.5",
     size === "sm" ? "min-h-control-sm" : "min-h-6.5",
     className
   )}
   {...rest}>
-  <Thumb {value} class={["rounded-badge bg-surface-muted", disabled && "opacity-50"]} />
+  <Thumb
+    {value}
+    class={[
+      "rounded-badge bg-thumb shadow-xs inset-ring inset-ring-border",
+      disabled && "opacity-50"
+    ]} />
   {#each options as option (option.id)}
     <RadioGroup.Item
       value={option.id}
