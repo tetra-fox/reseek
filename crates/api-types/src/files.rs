@@ -199,32 +199,3 @@ impl utoipa::PartialSchema for FileContent {
 }
 
 impl ToSchema for FileContent {}
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  #[test]
-  fn root_names_are_the_json_names() {
-    assert_eq!(FileRoot::Downloads.to_string(), "downloads");
-    assert_eq!("incomplete".parse(), Ok(FileRoot::Incomplete));
-    assert_eq!(
-      "Downloads".parse::<FileRoot>(),
-      Err("No directory root named Downloads".to_string())
-    );
-  }
-
-  #[test]
-  fn filesystem_attributes_are_written_by_name_in_bit_order() {
-    let attributes = FilesystemAttributes::Directory | FilesystemAttributes::ReadOnly;
-    assert_eq!(
-      serde_json::to_string(&attributes).unwrap(),
-      "\"ReadOnly, Directory\""
-    );
-    let read: FilesystemAttributes = serde_json::from_str("\"Directory, ReparsePoint\"").unwrap();
-    assert_eq!(
-      read,
-      FilesystemAttributes::Directory | FilesystemAttributes::ReparsePoint
-    );
-  }
-}

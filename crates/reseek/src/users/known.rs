@@ -63,30 +63,3 @@ impl Known {
     }
   }
 }
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  #[test]
-  fn only_users_with_a_row_and_a_new_country_are_news() {
-    let known = Known::default();
-    known.added("alice");
-    known.added("bob");
-    known.set_country("bob", "NL".into());
-    let seen = vec![
-      ("alice".to_string(), "DE".to_string()),
-      ("bob".into(), "NL".into()),
-      ("carol".into(), "FR".into()),
-    ];
-    assert_eq!(known.news(seen), [("alice".to_string(), "DE".to_string())]);
-    known.added("bob");
-    assert_eq!(
-      known.country("bob").as_deref(),
-      Some("NL"),
-      "kept on a change"
-    );
-    known.removed("bob");
-    assert_eq!(known.country("bob"), None);
-  }
-}

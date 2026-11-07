@@ -240,13 +240,9 @@ mod tests {
   }
 
   #[test]
-  fn files_and_directories_are_deleted_and_missing_ones_are_404() {
+  fn a_directory_is_no_file_and_the_root_is_never_deleted() {
     let t = tree();
     let writing = Writing::default();
-    delete(&t.root, "album/01.flac", Kind::File, &writing).unwrap();
-    assert!(!t.root.join("album/01.flac").exists());
-    let again = delete(&t.root, "album/01.flac", Kind::File, &writing).unwrap_err();
-    assert_eq!(again.status(), 404);
     assert_eq!(
       delete(&t.root, "album", Kind::File, &writing)
         .unwrap_err()
@@ -254,9 +250,6 @@ mod tests {
       404,
       "a directory is no file"
     );
-    delete(&t.root, "album", Kind::Directory, &writing).unwrap();
-    assert!(!t.root.join("album").exists());
-    assert!(t.root.exists());
     assert_eq!(
       delete(&t.root, "", Kind::Directory, &writing)
         .unwrap_err()

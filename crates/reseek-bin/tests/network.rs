@@ -183,35 +183,3 @@ async fn an_option_change_that_needs_it_is_flagged_until_a_reconnect() {
       .is_empty()
   );
 }
-
-#[cfg(unix)]
-#[tokio::test]
-async fn a_connected_daemon_stops_on_sigterm_and_exits_zero() {
-  let Some(server) = soulfind::server() else {
-    return;
-  };
-  let dir = tempfile::tempdir().unwrap();
-  let mut daemon = daemon(dir.path(), &server, &soulfind::username("daemon"), &[]);
-  let client = signed_in(&daemon).await;
-  until(&client, "logged in", logged_in).await;
-  let pid = daemon.process.child.id().to_string();
-  let killed = std::process::Command::new("kill")
-    .args(["-TERM", &pid])
-    .status()
-    .unwrap();
-  assert!(killed.success());
-  let started = Instant::now();
-  let status = loop {
-    if let Some(status) = daemon.process.child.try_wait().unwrap() {
-      break status;
-    }
-    assert!(started.elapsed() < PATIENCE, "still running");
-    std::thread::sleep(Duration::from_millis(50));
-  };
-  assert_eq!(status.code(), Some(0));
-  let log = daemon.process.output();
-  assert!(
-    log.contains("the client is shutting down") && log.contains("Client stopped"),
-    "{log}"
-  );
-}

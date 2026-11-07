@@ -8,7 +8,7 @@
 //! rooms we are in or of our buddies names, once it starts, the rooms or buddies it went to.
 
 mod running;
-mod store;
+pub(crate) mod store;
 mod suspect;
 mod wishlist;
 

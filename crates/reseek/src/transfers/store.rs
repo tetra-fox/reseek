@@ -285,6 +285,28 @@ mod tests {
   }
 
   #[tokio::test]
+  async fn an_end_leaves_a_transfer_that_ended_already_as_it_ended() {
+    let db = transfers().await;
+    let mut record = Record::download("alice", "b.flac", 3);
+    record.state = TransferStates::Completed | TransferStates::Succeeded;
+    record.ended_at = Some(Utc::now());
+    record.local_path = Some("/music/b.flac".into());
+    let written = record.clone();
+    db.write(move |conn| insert(conn, &written)).await.unwrap();
+    let id = record.id;
+    let canceled = TransferStates::Completed | TransferStates::Cancelled;
+    let at = Utc::now();
+    let ended = db
+      .write(move |conn| end_unless_ended(conn, id, canceled, at, "canceled"))
+      .await
+      .unwrap();
+    assert!(!ended);
+    let read = db.read(move |conn| get(conn, id)).await.unwrap().unwrap();
+    assert_eq!(read.state, record.state);
+    assert_eq!(read.local_path, record.local_path);
+  }
+
+  #[tokio::test]
   async fn the_history_keeps_the_newest_sixty_four_states() {
     let db = transfers().await;
     let record = Record::download("alice", "a.flac", 10);

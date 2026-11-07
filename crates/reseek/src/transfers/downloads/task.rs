@@ -335,7 +335,7 @@ mod tests {
   const SECOND: Duration = Duration::from_secs(1);
 
   #[test]
-  fn each_retry_waits_twice_as_long_up_to_the_most() {
+  fn each_retry_waits_twice_as_long_and_the_jitter_never_takes_it_past_the_most() {
     let whole = |attempt| retry_wait(attempt, 5 * SECOND, 60 * SECOND).as_secs();
     let waits: Vec<u64> = (2..=9).map(whole).collect();
     assert_eq!(
@@ -343,10 +343,6 @@ mod tests {
       [5, 10, 20, 40, 60, 60, 60, 60],
       "under a second of jitter"
     );
-  }
-
-  #[test]
-  fn the_jitter_never_takes_a_wait_past_the_most() {
     for _ in 0..100 {
       assert_eq!(retry_wait(9, 5 * SECOND, 60 * SECOND), 60 * SECOND);
     }

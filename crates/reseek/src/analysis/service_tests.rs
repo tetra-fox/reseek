@@ -16,7 +16,7 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use serde_json::{Value, json};
 
 use super::analyzer::fixtures::{flac, music, pink, write_flac};
-use crate::testing::{TRUSTED, TestApp, app, request, with};
+use crate::testing::{TRUSTED, TestApp, app, request};
 use crate::transfers::{Record, store as transfers};
 
 /// One analysis at a time, so a test knows which files wait.
@@ -117,8 +117,9 @@ async fn a_download_is_analyzed_reported_drawn_and_announced_once() {
     .iter()
     .find(|frame| frame.event == "files.analysis_queued")
     .unwrap_or_else(|| panic!("no frame said the file was queued: {frames:?}"));
+  assert_eq!(queued.data["root"], "downloads");
   assert_eq!(queued.data["relativePath"], "Album/01.flac");
-  assert_eq!(queued.data["relativePath"], "Album/01.flac");
+  assert_eq!(queued.data["transferId"], json!(id));
   let frame = &frames.last().unwrap().data;
   assert_eq!(frame["transferId"], json!(id));
   assert_eq!(frame["verdict"], "consistent");
@@ -739,33 +740,6 @@ async fn an_upload_is_not_held_to_the_size_of_a_json_body() {
   let app = app(TRUSTED, &[]).await;
   let (status, body) = upload(&app, "a.flac", Body::from(vec![0; 3 << 20])).await;
   assert_eq!(status, 201, "{body}");
-}
-
-#[tokio::test]
-async fn an_upload_takes_the_read_write_role() {
-  let keys = "[web.authentication.api_keys.viewer]\nkey = \"viewer-key-0123456789\"\n\
-              role = \"readonly\"\n[web.authentication.api_keys.editor]\n\
-              key = \"editor-key-0123456789\"\nrole = \"readwrite\"\n";
-  let app = app(keys, &[]).await;
-  let sent = |key: &str| {
-    let mut sent = request("POST", "/api/v0/analysis/uploads?name=a.flac", None);
-    *sent.body_mut() = Body::from(vec![0; 10]);
-    with(sent, "x-api-key", key)
-  };
-  assert_eq!(
-    app
-      .send(request(
-        "POST",
-        "/api/v0/analysis/uploads?name=a.flac",
-        None
-      ))
-      .await
-      .status,
-    401
-  );
-  assert_eq!(app.send(sent("viewer-key-0123456789")).await.status, 403);
-  uploads_settle(&app, 0).await;
-  assert_eq!(app.send(sent("editor-key-0123456789")).await.status, 201);
 }
 
 #[tokio::test]

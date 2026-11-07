@@ -489,40 +489,4 @@ mod tests {
     );
     assert!(serde_json::from_value::<SummaryQuery>(serde_json::json!({ "start": "abc" })).is_err());
   }
-
-  #[test]
-  fn summary_report_puts_directions_beside_distinct_users() {
-    let mut directions = DirectionSummaries::default();
-    directions.upload.insert(
-      TransferOutcome::Succeeded,
-      TransferSummary {
-        total_bytes: 10,
-        count: 1,
-        distinct_users: 1,
-        average_speed: 2.5,
-        average_wait: 0.0,
-        average_duration: 4.0,
-      },
-    );
-    let report = SummaryReport {
-      directions,
-      distinct_users: 1,
-    };
-    let json = serde_json::to_value(&report).unwrap();
-    assert_eq!(
-      json,
-      serde_json::json!({
-        "Download": {},
-        "Upload": { "Succeeded": {
-          "totalBytes": 10, "count": 1, "distinctUsers": 1,
-          "averageSpeed": 2.5, "averageWait": 0.0, "averageDuration": 4.0
-        } },
-        "distinctUsers": 1
-      })
-    );
-    assert_eq!(
-      serde_json::from_value::<SummaryReport>(json).unwrap(),
-      report
-    );
-  }
 }

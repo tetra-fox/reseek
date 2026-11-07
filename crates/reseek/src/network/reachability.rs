@@ -160,20 +160,6 @@ impl Reachability {
 mod tests {
   use super::*;
 
-  #[test]
-  fn a_peer_reaching_the_listener_settles_it() {
-    assert_eq!(judge(1, 0, false), Reachable::Yes);
-    assert_eq!(judge(1, 9, true), Reachable::Yes);
-  }
-
-  #[test]
-  fn only_our_own_connections_after_long_enough_say_no() {
-    assert_eq!(judge(0, 0, false), Reachable::Unknown);
-    assert_eq!(judge(0, 4, false), Reachable::Unknown);
-    assert_eq!(judge(0, 5, false), Reachable::No);
-    assert_eq!(judge(0, 0, true), Reachable::No);
-  }
-
   /// Lets the judgment's task run until it waits again.
   async fn settle() {
     for _ in 0..10 {

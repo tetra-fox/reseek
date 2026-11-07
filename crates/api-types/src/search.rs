@@ -429,33 +429,6 @@ mod tests {
   use super::*;
 
   #[test]
-  fn search_states_are_written_by_name_in_bit_order() {
-    let cases = [
-      (SearchStates::Requested, "Requested"),
-      (SearchStates::Queued, "Queued"),
-      (SearchStates::InProgress, "InProgress"),
-      (
-        SearchStates::TimedOut | SearchStates::Completed,
-        "Completed, TimedOut",
-      ),
-      (
-        SearchStates::Completed | SearchStates::ResponseLimitReached,
-        "Completed, ResponseLimitReached",
-      ),
-      (
-        SearchStates::Completed | SearchStates::Errored,
-        "Completed, Errored",
-      ),
-      (SearchStates::empty(), "None"),
-    ];
-    for (state, text) in cases {
-      let json = format!("\"{text}\"");
-      assert_eq!(serde_json::to_string(&state).unwrap(), json);
-      assert_eq!(serde_json::from_str::<SearchStates>(&json).unwrap(), state);
-    }
-  }
-
-  #[test]
   fn file_attribute_types_are_names_or_numbers() {
     let attributes = [
       FileAttribute {

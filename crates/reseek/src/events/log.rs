@@ -309,37 +309,28 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn raised_events_are_written_with_the_id_and_time_of_their_raise() {
-    let (log, bus) = log().await;
-    let at = "2025-03-01T12:00:00Z".parse().unwrap();
-    let raised = bus.raise_at(blocked("alice"), at);
-    written(&log, 1).await;
-    let page = log.page(query()).await.unwrap();
-    assert_eq!(page.items, [EventRecord::clone(&raised)]);
-  }
-
-  #[tokio::test]
-  async fn filters_count_without_the_cursor_and_pages_read_both_ways() {
+  async fn raised_events_are_written_whole_filtered_counted_and_paged_both_ways() {
     let (log, bus) = log().await;
     let base: DateTime<Utc> = "2025-03-01T12:00:00Z".parse().unwrap();
     let at = |minutes: i64| base + chrono::Duration::minutes(minutes);
-    let ids: Vec<_> = [
+    let raised: Vec<_> = [
       (blocked("alice"), 0),
       (noop(), 1),
       (blocked("bob"), 2),
       (blocked("alice"), 3),
     ]
     .into_iter()
-    .map(|(event, minute)| bus.raise_at(event, at(minute)).id)
+    .map(|(event, minute)| bus.raise_at(event, at(minute)))
     .collect();
+    let ids: Vec<_> = raised.iter().map(|r| r.id).collect();
     written(&log, 4).await;
 
     let mut q = query();
     q.types = vec![EventType::UserBlocked];
     let page = log.page(q.clone()).await.unwrap();
     assert_eq!(page.total, 3);
-    let newest_first: Vec<_> = page.items.iter().map(|r| r.id).collect();
-    assert_eq!(newest_first, [ids[3], ids[2], ids[0]]);
+    let newest_first = [&raised[3], &raised[2], &raised[0]].map(|r| EventRecord::clone(r));
+    assert_eq!(page.items, newest_first);
 
     q.username = Some("alice".to_string());
     q.before = Some(at(3));

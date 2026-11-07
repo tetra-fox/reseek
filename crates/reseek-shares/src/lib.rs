@@ -57,6 +57,7 @@ use tracing::{Instrument, debug, info, info_span, trace, warn};
 use crate::db::{Database, DbError};
 pub use folders::FolderError;
 pub use hosts::{HostError, remove_agent_hosts};
+pub use repository::SCHEMA;
 pub use reseek_relay_proto::LOCAL_HOST;
 use scanner::{Outcome, Settings};
 use share::Share;

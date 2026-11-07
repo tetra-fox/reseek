@@ -220,39 +220,6 @@ mod tests {
   use super::*;
 
   #[test]
-  fn transfer_states_are_written_by_name_in_bit_order() {
-    let cases = [
-      (TransferStates::Requested, "Requested"),
-      (
-        TransferStates::Queued | TransferStates::Locally,
-        "Queued, Locally",
-      ),
-      (
-        TransferStates::Remotely | TransferStates::Queued,
-        "Queued, Remotely",
-      ),
-      (TransferStates::InProgress, "InProgress"),
-      (
-        TransferStates::Succeeded | TransferStates::Completed,
-        "Completed, Succeeded",
-      ),
-      (
-        TransferStates::Completed | TransferStates::Aborted,
-        "Completed, Aborted",
-      ),
-      (TransferStates::empty(), "None"),
-    ];
-    for (state, text) in cases {
-      let json = format!("\"{text}\"");
-      assert_eq!(serde_json::to_string(&state).unwrap(), json);
-      assert_eq!(
-        serde_json::from_str::<TransferStates>(&json).unwrap(),
-        state
-      );
-    }
-  }
-
-  #[test]
   fn a_transfer_stored_before_pausing_existed_reads_as_not_paused() {
     let stored = serde_json::json!({
       "id": "6f1c1bb4-3c56-4a49-9d3c-2b8e8a7f1d10",

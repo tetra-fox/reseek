@@ -2,7 +2,7 @@
 //! keeps them in `events.db` for the events API.
 
 mod bus;
-mod log;
+pub(crate) mod log;
 mod samples;
 
 pub use bus::EventBus;

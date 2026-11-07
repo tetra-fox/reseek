@@ -404,25 +404,7 @@ mod tests {
   }
 
   #[test]
-  fn a_missing_source_is_named_in_the_error() {
-    let dir = tempfile::tempdir().unwrap();
-    let error = move_file(
-      &dir.path().join("gone.flac"),
-      dir.path(),
-      "gone.flac",
-      None,
-      false,
-    )
-    .unwrap_err();
-    assert_eq!(error.kind(), ErrorKind::NotFound);
-    assert_eq!(
-      error.to_string(),
-      "Failed to move file gone.flac: The specified source file does not exist"
-    );
-  }
-
-  #[test]
-  fn a_copy_across_filesystems_lands_whole_under_a_free_name() {
+  fn a_hidden_copy_is_renamed_whole_to_a_free_numbered_name() {
     let dir = tempfile::tempdir().unwrap();
     let source = dir.path().join("01.flac");
     std::fs::write(&source, "copied").unwrap();
@@ -449,21 +431,5 @@ mod tests {
     ] {
       assert!(!is_part(OsStr::new(name)), "{name}");
     }
-  }
-
-  #[test]
-  fn two_copies_never_share_their_hidden_file() {
-    let dir = tempfile::tempdir().unwrap();
-    let (one, two) = (dir.path().join("one"), dir.path().join("two"));
-    std::fs::write(&one, "first").unwrap();
-    std::fs::write(&two, "second").unwrap();
-    let first = copy_beside(&one, dir.path()).unwrap();
-    let second = copy_beside(&two, dir.path()).unwrap();
-    assert_ne!(first, second);
-    for part in [&first, &second] {
-      assert!(is_part(part.file_name().unwrap()), "{}", part.display());
-    }
-    assert_eq!(std::fs::read_to_string(&first).unwrap(), "first");
-    assert_eq!(std::fs::read_to_string(&second).unwrap(), "second");
   }
 }

@@ -546,4 +546,17 @@ async fn the_failures_list_and_count_only_failed_transfers() {
     count(&[144, 272, 528, 1040])
   );
   assert_eq!(user.download.statistics.cancelled, count(&[80]));
+  let mut by_message: BTreeMap<Option<String>, u64> = BTreeMap::new();
+  for record in theirs.iter().filter(|r| FAILED.contains(&bits(r))) {
+    *by_message.entry(record.exception.clone()).or_default() += 1;
+  }
+  let mut expected: Vec<(Option<String>, u64)> = by_message.into_iter().collect();
+  expected.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+  let found: Vec<(Option<String>, u64)> = user
+    .download
+    .exceptions
+    .into_iter()
+    .map(|c| (c.exception, c.count))
+    .collect();
+  assert_eq!(found, expected, "dave's failed downloads by message");
 }

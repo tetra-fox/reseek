@@ -423,27 +423,14 @@ mod tests {
   use super::*;
 
   #[test]
-  fn each_client_error_ends_in_its_outcome() {
-    let cases = [
-      (ClientError::Canceled, TransferStates::Cancelled),
-      (ClientError::Timeout("t".into()), TransferStates::TimedOut),
-      (
-        ClientError::TransferRejected("Queued".into()),
-        TransferStates::Rejected,
-      ),
-      (
-        ClientError::NotFound(FILE_GONE.into()),
-        TransferStates::Aborted,
-      ),
-      (ClientError::transfer("x"), TransferStates::Errored),
-    ];
-    for (error, state) in cases {
-      assert_eq!(outcome(&error), state, "{error}");
-    }
-    assert_eq!(reason(&ClientError::NotFound(FILE_GONE.into())), FILE_GONE);
-    assert_eq!(
-      reason(&ClientError::TransferRejected("Too many files".into())),
-      "Too many files"
-    );
+  fn an_input_whose_file_is_gone_or_late_aborts_or_times_out_its_upload() {
+    use std::io::{Error, ErrorKind};
+    let gone = ClientError::io("read", Error::new(ErrorKind::NotFound, "no such file"));
+    assert_eq!(outcome(&gone), TransferStates::Aborted);
+    assert_eq!(reason(&gone), "no such file");
+    let late = ClientError::io("read", Error::new(ErrorKind::TimedOut, "too slow"));
+    assert_eq!(outcome(&late), TransferStates::TimedOut);
+    let other = ClientError::io("read", Error::other("disk"));
+    assert_eq!(outcome(&other), TransferStates::Errored);
   }
 }

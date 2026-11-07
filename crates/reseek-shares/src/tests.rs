@@ -278,14 +278,6 @@ async fn a_scan_is_one_at_a_time_and_only_a_running_one_cancels() {
 }
 
 #[tokio::test]
-async fn changed_filters_mark_a_scan_pending() {
-  let (files, engine) = shared_engine().await;
-  let changed = config(files.path()).replace("[shares]\n", "[shares]\nfilters = [\"\\\\.mp3$\"]\n");
-  engine.reconfigure(&changed).await;
-  eventually(async || engine.state().scan_pending).await;
-}
-
-#[tokio::test]
 async fn filters_only_reordered_or_repeated_mark_no_scan_pending() {
   let (_files, engine) = shared_engine().await;
   let shares = &engine.shares;

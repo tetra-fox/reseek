@@ -700,7 +700,9 @@ pub(super) mod tests {
   fn a_user_in_a_group_the_queue_does_not_have_waits_in_the_default_group() {
     let (queue, groups) = queue("[transfers.upload]\nslots = 1\n");
     groups.set("alice", "gone");
-    let (_, mut alice) = ready(&queue, "alice");
+    let (id, mut alice) = ready(&queue, "alice");
     assert!(started(&mut alice));
+    let state = queue.lock();
+    assert!(state.group(DEFAULT_GROUP).unwrap().used.contains(&id));
   }
 }

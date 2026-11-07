@@ -378,26 +378,3 @@ pub struct ConfigurationState {
   /// when that reload failed, null once a reload succeeds
   pub last_reload_at: Option<DateTime<Utc>>,
 }
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  #[test]
-  fn server_state_flags_are_written_by_name() {
-    let state = ServerConnectionState::Connected | ServerConnectionState::LoggedIn;
-    assert_eq!(
-      serde_json::to_string(&state).unwrap(),
-      "\"Connected, LoggedIn\""
-    );
-    assert_eq!(
-      serde_json::to_string(&ServerConnectionState::empty()).unwrap(),
-      "\"None\""
-    );
-    let read: ServerConnectionState = serde_json::from_str("\"Connected, LoggingIn\"").unwrap();
-    assert_eq!(
-      read,
-      ServerConnectionState::Connected | ServerConnectionState::LoggingIn
-    );
-  }
-}

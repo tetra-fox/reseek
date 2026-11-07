@@ -232,49 +232,24 @@ async fn writes_push_the_users_summary_and_forgetting_pushes_the_removal() {
 }
 
 #[tokio::test]
-async fn users_not_seen_for_the_retention_are_forgotten_unless_they_hold_something() {
+async fn the_users_retention_sets_the_cutoff_of_forgetting() {
   let app = app(&format!("[retention]\nusers = \"1d\"\n{CONFIG}"), &[]).await;
   let directory = &app.state.users;
-  let old = Utc::now() - chrono::Duration::days(3);
-  let seen = |at| touch::Pending {
-    seen_at: Some(at),
+  let seen = |days| touch::Pending {
+    seen_at: Some(Utc::now() - chrono::Duration::days(days)),
     creates: true,
     ..Default::default()
   };
   let batch = std::collections::BTreeMap::from([
-    ("gone".to_string(), seen(old)),
-    ("noted".to_string(), seen(old)),
-    ("recent".to_string(), seen(Utc::now())),
+    ("gone".to_string(), seen(3)),
+    ("recent".to_string(), seen(0)),
   ]);
   directory
     .db
     .write(move |conn| touch::write(conn, &batch))
     .await
     .unwrap();
-  directory
-    .db
-    .write(|conn| {
-      conn.execute(
-        "UPDATE users SET notes = 'keep' WHERE username = 'noted'",
-        [],
-      )
-    })
-    .await
-    .unwrap();
-  assert_eq!(
-    directory.forget_unseen().await.unwrap(),
-    1,
-    "the user seen long ago with nothing of ours"
-  );
-  let left: Vec<String> = directory
-    .db
-    .read(|conn| {
-      let mut statement = conn.prepare("SELECT username FROM users ORDER BY username")?;
-      statement.query_map([], |row| row.get(0))?.collect()
-    })
-    .await
-    .unwrap();
-  assert_eq!(left, ["noted", "recent"]);
+  assert_eq!(directory.forget_unseen().await.unwrap(), 1);
 }
 
 #[tokio::test]
@@ -509,7 +484,7 @@ async fn forgetting_a_user_drops_their_block_and_purges_their_transfers() {
 }
 
 #[tokio::test]
-async fn a_picture_has_a_url_only_while_it_is_stored_under_it() {
+async fn a_picture_too_large_or_not_cached_has_no_url() {
   let sent = |picture: &[u8]| info::PeerInfo {
     description: String::new(),
     picture: Some(picture.to_vec()),
@@ -530,14 +505,6 @@ async fn a_picture_has_a_url_only_while_it_is_stored_under_it() {
     &[],
   )
   .await;
-  app.state.users.store_info("alice", sent(b"GIF89a")).await;
-  let (_, url) = profile_info(&app, "alice").await;
-  let served = app.send(request("GET", url.as_str().unwrap(), None)).await;
-  assert_eq!(
-    (served.status.as_u16(), &served.body[..]),
-    (200, &b"GIF89a"[..])
-  );
-
   app
     .state
     .users

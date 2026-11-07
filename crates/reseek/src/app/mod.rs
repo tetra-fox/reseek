@@ -766,3 +766,60 @@ async fn host(
   info!("reseek stopped");
   0
 }
+
+#[cfg(test)]
+mod tests {
+  use std::path::Path;
+
+  use crate::db::Schema;
+
+  /// Every database the daemon and the relay agent open.
+  static SCHEMAS: [&Schema; 9] = [
+    &crate::auth::store::SCHEMA,
+    &crate::events::log::SCHEMA,
+    &crate::messaging::SCHEMA,
+    &crate::transfers::SCHEMA,
+    &crate::searches::store::SCHEMA,
+    &crate::users::store::SCHEMA,
+    &crate::jobs::SCHEMA,
+    &crate::analysis::SCHEMA,
+    &reseek_shares::SCHEMA,
+  ];
+
+  #[test]
+  fn every_migration_file_is_built_in_and_numbered_in_order() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../migrations");
+    for schema in SCHEMAS {
+      let mut on_disk: Vec<String> = std::fs::read_dir(root.join(schema.name))
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+      on_disk.sort();
+      let built_in: Vec<String> = schema
+        .migrations
+        .iter()
+        .map(|m| format!("{}.sql", m.file))
+        .collect();
+      assert_eq!(built_in, on_disk, "{}", schema.name);
+      for (index, migration) in schema.migrations.iter().enumerate() {
+        assert_eq!(
+          migration.version() as usize,
+          index + 1,
+          "{}",
+          migration.file
+        );
+      }
+    }
+    let mut directories: Vec<String> = std::fs::read_dir(&root)
+      .unwrap()
+      .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+      .collect();
+    directories.sort();
+    let mut named: Vec<String> = SCHEMAS.iter().map(|s| s.name.to_string()).collect();
+    named.sort();
+    assert_eq!(
+      directories, named,
+      "every migrations directory has a schema"
+    );
+  }
+}

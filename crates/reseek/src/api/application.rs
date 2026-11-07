@@ -359,30 +359,21 @@ mod tests {
                        role = \"administrator\"\n";
 
   #[tokio::test]
-  async fn a_restart_stops_the_daemon_to_start_again_and_needs_someone_at_the_ui() {
+  async fn a_restart_starts_the_daemon_again_and_a_key_may_not_stop_or_restart_it() {
     let app = app(ADMIN, &[]).await;
-    let by_key = with(
-      request("PUT", "/api/v0/application", None),
-      "x-api-key",
-      "robot-key-0123456789",
-    );
-    assert_eq!(app.send_from(OUTSIDE, by_key).await.status, 403);
+    for method in ["PUT", "DELETE"] {
+      let by_key = with(
+        request(method, "/api/v0/application", None),
+        "x-api-key",
+        "robot-key-0123456789",
+      );
+      assert_eq!(app.send_from(OUTSIDE, by_key).await.status, 403, "{method}");
+    }
     assert!(!app.state.shutdown.is_cancelled());
     let answer = app.send(request("PUT", "/api/v0/application", None)).await;
     assert_eq!(answer.status, 204);
     assert!(app.state.restart_requested());
     assert!(app.state.shutdown.is_cancelled());
-  }
-
-  #[tokio::test]
-  async fn a_shutdown_stops_the_daemon_for_good() {
-    let app = app(ADMIN, &[]).await;
-    let answer = app
-      .send(request("DELETE", "/api/v0/application", None))
-      .await;
-    assert_eq!(answer.status, 204);
-    assert!(app.state.shutdown.is_cancelled());
-    assert!(!app.state.restart_requested());
   }
 
   #[tokio::test]

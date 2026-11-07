@@ -24,7 +24,7 @@ mod network;
 mod profile;
 mod retention;
 mod service;
-mod store;
+pub(crate) mod store;
 #[cfg(test)]
 mod tests;
 mod touch;

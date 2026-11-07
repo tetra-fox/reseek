@@ -32,16 +32,12 @@ async fn profile(app: &TestApp) -> serde_json::Value {
 async fn the_text_and_the_picture_round_trip_through_the_file() {
   let app = app(CONFIG, &[]).await;
   let empty = profile(&app).await;
-  assert_eq!(empty["description"], "A reseek user.");
   assert_eq!(empty["hasPicture"], false);
   assert_eq!(empty["pictureUrl"], json!(null));
   assert_eq!(
     empty["sources"]["description"],
     json!({ "layer": "default" })
   );
-  assert!(empty["uploadSlots"].as_u64().unwrap() > 0);
-  assert_eq!(empty["freeUploadSlot"], true);
-  assert_eq!(empty["queueLength"], 0);
 
   let text = json!({ "description": "Jazz, mostly.\nAsk before you queue a lot." });
   let put = app

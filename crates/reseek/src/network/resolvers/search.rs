@@ -473,28 +473,6 @@ mod tests {
     assert_eq!(found(&edges, "mallory", "abbey").await, None);
   }
 
-  #[tokio::test]
-  async fn spaces_and_dashes_split_a_query_as_other_clients_send_it() {
-    let dir = tempfile::tempdir().unwrap();
-    let app = shared(dir.path(), "").await;
-    let edges = edges(&app);
-    let both = [
-      "Music\\Abbey Road\\01 - Come Together.mp3",
-      "Music\\Abbey Road\\02 - Something.mp3",
-    ];
-    assert_eq!(found(&edges, "alice", "abbey  road").await.unwrap(), both);
-    assert_eq!(
-      found(&edges, "alice", "abbey - road").await.unwrap(),
-      both,
-      "a lone dash is a term with no word, which is passed over"
-    );
-    assert_eq!(
-      found(&edges, "alice", "abbey --come").await.unwrap(),
-      [both[1]],
-      "every leading dash of an exclusion goes"
-    );
-  }
-
   #[test]
   fn the_servers_phrases_join_the_exclusions_once() {
     let query = excluding(

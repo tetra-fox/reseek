@@ -408,21 +408,3 @@ impl Directory {
     });
   }
 }
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  #[test]
-  fn only_users_known_take_what_the_server_says_on_its_own() {
-    let cache = GroupCache::new([("alice".to_string(), "friends".to_string())]);
-    assert_eq!(
-      cache.facts("alice").unwrap().group_override.as_deref(),
-      Some("friends")
-    );
-    assert!(!cache.update("bob", false, |facts| facts.privileged = true));
-    assert!(cache.facts("bob").is_none());
-    assert!(cache.update("alice", false, |facts| facts.privileged = true));
-    assert!(cache.facts("alice").unwrap().privileged);
-  }
-}

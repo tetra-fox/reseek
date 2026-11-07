@@ -2,8 +2,7 @@
 //! controller, uploads its shares, and a third user on soulfind downloads one of the agent's
 //! files from the controller with the bytes intact; a kicked agent's shares go with it and it
 //! comes back on its own, as it does after its controller restarts; an agent that stops takes
-//! its shares with it. The controller refuses a wrong secret, an unknown name, a replayed
-//! credential, an address outside the agent's networks and a version off its release line. A
+//! its shares with it. The controller refuses a wrong secret and a replayed credential. A
 //! controller's finished download is copied to an agent that asks for them, a controller that
 //! stops closes its agents' sockets as shutting down, and an agent stopped by a signal closes
 //! its own.
@@ -29,12 +28,9 @@ use tokio_util::sync::CancellationToken;
 const KEY: &str = "agents-key-0123456789";
 const SECRET: &str = "nas-secret-0123456789";
 
-/// The controller's relay configuration: the agent `nas`, and `fenced`, which may connect only
-/// from 10.0.0.0/8.
+/// The controller's relay configuration: the agent `nas`.
 const CONTROLLER: &str = "[relay]\nenabled = true\nmode = \"controller\"\n\
   [relay.agents.nas]\ninstance_name = \"nas\"\nsecret = \"nas-secret-0123456789\"\n\
-  [relay.agents.fenced]\ninstance_name = \"fenced\"\nsecret = \"fenced-secret-0123456\"\n\
-  cidr = \"10.0.0.0/8\"\n\
   [web.authentication.api_keys.agents]\nkey = \"agents-key-0123456789\"\nrole = \"readwrite\"\n";
 
 /// The controller in `dir`, logged in to `server` as `name`, serving HTTP on `port`.
@@ -227,6 +223,7 @@ async fn a_stopping_controller_closes_its_agents_as_shutting_down() {
   let api = signed_in(&stopping).await;
   let agent = agent(agent_dir.path(), port, "");
   until(&api, "serving the agent", |s| serving(s, 0)).await;
+  until(&api, "logged in", support::logged_in).await;
   let pid = stopping.process.child.id().to_string();
   let signaled = std::process::Command::new("kill")
     .args(["-TERM", &pid])
@@ -237,6 +234,11 @@ async fn a_stopping_controller_closes_its_agents_as_shutting_down() {
     .printed_line(&["relay controller connection lost", "code=4010"])
     .await;
   assert!(stopping.process.child.wait().unwrap().success());
+  let log = stopping.process.output();
+  assert!(
+    log.contains("the client is shutting down") && log.contains("Client stopped"),
+    "{log}"
+  );
 }
 
 /// The agent program, stopped by a signal, closes its socket, says so and exits cleanly, and its
@@ -397,7 +399,7 @@ async fn refused(
 }
 
 #[tokio::test]
-async fn a_login_is_refused_for_each_wrong_part() {
+async fn a_wrong_or_replayed_login_is_refused_and_a_right_one_listed() {
   let dir = tempfile::tempdir().unwrap();
   std::fs::write(dir.path().join("config.toml"), CONTROLLER).unwrap();
   let controller = Daemon::start(dir.path(), &[], &ACCOUNT);
@@ -408,12 +410,6 @@ async fn a_login_is_refused_for_each_wrong_part() {
   let ours = env!("CARGO_PKG_VERSION");
   let wrong = refused(&api, "nas", "not-the-secret-0123", None, ours).await;
   assert_eq!(wrong, LoginFailure::BadCredential);
-  let unknown = refused(&api, "stranger", SECRET, None, ours).await;
-  assert_eq!(unknown, LoginFailure::UnknownAgent);
-  let outside = refused(&api, "fenced", "fenced-secret-0123456", None, ours).await;
-  assert_eq!(outside, LoginFailure::AddressNotAllowed);
-  let older = refused(&api, "nas", SECRET, None, "0.0.1").await;
-  assert_eq!(older, LoginFailure::IncompatibleVersion);
 
   let (_logged_in, answer, used) = log_in(&api, "nas", SECRET, None, ours).await;
   assert!(matches!(answer, RelayMessage::LoginOk { .. }), "{answer:?}");

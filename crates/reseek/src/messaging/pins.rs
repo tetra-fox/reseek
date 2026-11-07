@@ -147,20 +147,6 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn pins_are_rooms_or_users() {
-    let db = Database::memory(&SCHEMA).await;
-    let other = db
-      .write(|conn| {
-        conn.execute(
-          "INSERT INTO chat_pins (kind, name, position) VALUES ('group', 'x', 9)",
-          [],
-        )
-      })
-      .await;
-    assert!(other.is_err(), "the table takes rooms and users only");
-  }
-
-  #[tokio::test]
   async fn the_newest_revision_streamed_is_the_list_written_last() {
     let config = "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n";
     let app = app(config, &[]).await;

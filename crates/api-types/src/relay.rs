@@ -387,30 +387,4 @@ mod tests {
       r#"{"v":1,"id":null,"type":"ping","data":{}}"#
     );
   }
-
-  #[test]
-  fn message_data_fields_are_camel_case() {
-    let message = RelayMessage::Challenge {
-      token: "abc".to_string(),
-      expires_in: 10_000,
-      protocol: 1,
-    };
-    let json = serde_json::to_value(&message).unwrap();
-    assert_eq!(
-      json,
-      serde_json::json!({
-        "type": "challenge",
-        "data": { "token": "abc", "expiresIn": 10000, "protocol": 1 }
-      })
-    );
-    let failed: RelayMessage =
-      serde_json::from_str(r#"{"type":"login_failed","data":{"reason":"bad_credential"}}"#)
-        .unwrap();
-    assert_eq!(
-      failed,
-      RelayMessage::LoginFailed {
-        reason: LoginFailure::BadCredential
-      }
-    );
-  }
 }

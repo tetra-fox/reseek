@@ -267,7 +267,11 @@ pub(crate) mod tests {
   #[tokio::test]
   async fn a_trusted_network_request_may_not_come_from_another_site() {
     let app = app(
-      &format!("remote_configuration = true\n[web.cors]\nallowed_origins = [\"*\"]\n{CONFIG}"),
+      &format!(
+        "remote_configuration = true\n[web.cors]\nallowed_origins = [\"*\"]\n{CONFIG}\
+         [web.authentication.api_keys.robot]\nkey = \"robot-key-0123456789\"\n\
+         role = \"administrator\"\n"
+      ),
       &[],
     )
     .await;
@@ -306,6 +310,16 @@ pub(crate) mod tests {
       200,
       "a key is no ambient credential"
     );
+    let keyed = crate::testing::with(
+      patch(Some("http://evil.example")),
+      "x-api-key",
+      "robot-key-0123456789",
+    );
+    assert_eq!(
+      app.send_from(OUTSIDE, keyed).await.status,
+      204,
+      "nor for a change"
+    );
   }
 
   #[tokio::test]
@@ -325,22 +339,6 @@ pub(crate) mod tests {
     let foreign = app.send(patch).await;
     assert_eq!(foreign.status, 403);
     assert_eq!(foreign.json()["error"], "Cross-site request refused");
-  }
-
-  #[tokio::test]
-  async fn a_change_with_an_api_key_may_come_from_any_site() {
-    let app = app(
-      "remote_configuration = true\n[web.authentication.api_keys.robot]\n\
-       key = \"robot-key-0123456789\"\nrole = \"administrator\"\n",
-      &[],
-    )
-    .await;
-    let mut patch = request("PATCH", "/api/v0/options", Some(serde_json::json!({})));
-    let headers = patch.headers_mut();
-    headers.insert("x-api-key", "robot-key-0123456789".parse().unwrap());
-    headers.insert("origin", "http://evil.example".parse().unwrap());
-    let answer = app.send_from(OUTSIDE, patch).await;
-    assert_eq!(answer.status, 204, "a key is no ambient credential");
   }
 
   #[tokio::test]

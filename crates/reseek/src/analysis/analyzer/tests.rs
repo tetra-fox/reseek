@@ -52,7 +52,7 @@ fn not_fake(reading: &Reading) {
 }
 
 #[test]
-fn lossless_audio_reads_consistent() {
+fn lossless_music_reads_consistent_with_no_frame_rhythm_or_top_band_gaps() {
   let dir = tempfile::tempdir().unwrap();
   let reading = analyzed(&flac(dir.path(), "a.flac", &music(1, 44_100, pink), 16));
   assert_eq!(reading.verdict, AnalysisVerdict::Consistent, "{reading:#?}");
@@ -61,6 +61,11 @@ fn lossless_audio_reads_consistent() {
   assert_eq!(reading.encoder_guess, None);
   assert_eq!(reading.cutoff_hz, None);
   assert_eq!(reading.measures.bit_depth_effective, Some(16));
+  assert!(
+    reading.measures.frame_artifact_score.unwrap() < 0.05,
+    "{reading:#?}"
+  );
+  assert!(reading.measures.sfb21_holes.unwrap() < 0.01, "{reading:#?}");
 }
 
 /// An MP3 at `bitrate` written out as a FLAC reads as a transcode of that bitrate.
@@ -704,17 +709,6 @@ fn a_seek_past_what_a_file_holds_ends_the_length_where_reading_stopped() {
       .any(|l| l.contains("Seeking failed")),
     "{reading:#?}"
   );
-}
-
-#[test]
-fn plain_music_has_no_frame_rhythm_or_gaps_in_the_top_band() {
-  let dir = tempfile::tempdir().unwrap();
-  let plain = analyzed(&flac(dir.path(), "plain.flac", &music(1, 44_100, pink), 16));
-  assert!(
-    plain.measures.frame_artifact_score.unwrap() < 0.05,
-    "{plain:#?}"
-  );
-  assert!(plain.measures.sfb21_holes.unwrap() < 0.01, "{plain:#?}");
 }
 
 #[test]

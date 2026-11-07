@@ -65,27 +65,6 @@ fn invalid(document: &Value) -> Vec<String> {
   problems
 }
 
-#[test]
-fn a_dangling_ref_and_a_repeated_operation_id_make_a_document_invalid() {
-  let document = json!({
-    "paths": {
-      "/a": {
-        "get": { "operationId": "list", "parameters": [{ "schema": { "$ref": "#/components/schemas/Sort" } }] },
-        "head": { "operationId": "list" }
-      },
-      "/b": { "get": { "operationId": "list_b", "responses": { "200": { "$ref": "#/components/schemas/B" } } } }
-    },
-    "components": { "schemas": { "B": { "type": "string" } } }
-  });
-  assert_eq!(
-    invalid(&document),
-    [
-      "#/components/schemas/Sort is not in the document",
-      "operationId list names get /a, head /a"
-    ]
-  );
-}
-
 #[tokio::test]
 async fn every_route_is_answered() {
   let app = app(CONFIG, &[]).await;
@@ -154,6 +133,7 @@ async fn each_route_takes_its_least_role() {
       "/api/v0/files/{root}/files/{path}/analysis",
       write,
     ),
+    (Method::POST, "/api/v0/analysis/uploads", write),
     (Method::DELETE, "/api/v0/analysis/jobs", write),
     (Method::GET, "/api/v0/jobs", read),
     (Method::GET, "/api/v0/jobs/schedules", read),

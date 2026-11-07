@@ -226,32 +226,6 @@ pub(super) mod tests {
 
   use PRIVATE as TEST;
 
-  #[test]
-  fn every_migration_file_is_built_in_and_numbered_in_order() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../migrations");
-    for schema in [&TEST] {
-      let mut on_disk: Vec<String> = std::fs::read_dir(root.join(schema.name))
-        .unwrap()
-        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
-        .collect();
-      on_disk.sort();
-      let built_in: Vec<String> = schema
-        .migrations
-        .iter()
-        .map(|m| format!("{}.sql", m.file))
-        .collect();
-      assert_eq!(built_in, on_disk, "{}", schema.name);
-      for (index, migration) in schema.migrations.iter().enumerate() {
-        assert_eq!(
-          migration.version() as usize,
-          index + 1,
-          "{}",
-          migration.file
-        );
-      }
-    }
-  }
-
   #[tokio::test]
   async fn a_fresh_database_is_migrated_and_reopens_without_changes() {
     let dir = tempfile::tempdir().unwrap();

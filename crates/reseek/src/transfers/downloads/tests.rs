@@ -1,6 +1,6 @@
 //! The download calls of the API against the in-memory daemon, which is not connected: finding
-//! a download by its peer and id, canceling and removing one no task runs, removing completed
-//! ones, a finished download's file served from where it was moved, the removals and updates
+//! a download by its peer and id, canceling and removing one no task runs, a bulk cancel, a
+//! finished download's file served from where it was moved, the removals and updates
 //! pushed on the `transfers` topic, and a job told of once its last download ended.
 
 use api_types::transfers::{TransferStates, UserResponse};
@@ -70,11 +70,13 @@ async fn a_download_is_found_by_its_peer_and_id_with_its_history() {
 }
 
 #[tokio::test]
-async fn canceling_a_download_no_task_runs_ends_it_and_can_remove_it() {
+async fn canceling_a_download_no_task_runs_ends_its_wait_and_can_remove_it() {
   let app = app(TRUSTED, &[]).await;
-  let stuck = Record::download("alice", "a.flac", 10);
-  insert(&app, &stuck).await;
-  let id = stuck.id;
+  let mut waiting = Record::download("alice", "a.flac", 10);
+  waiting.next_attempt_at = Some(chrono::Utc::now());
+  waiting.place_in_queue = Some(4);
+  insert(&app, &waiting).await;
+  let id = waiting.id;
   let uri = format!("/api/v0/transfers/downloads/alice/{id}?remove=true");
   let (status, _) = app.call("DELETE", &uri, None).await;
   assert_eq!(status, 204);
@@ -88,6 +90,7 @@ async fn canceling_a_download_no_task_runs_ends_it_and_can_remove_it() {
     Some("The operation was canceled.")
   );
   assert!(ended.ended_at.is_some() && ended.removed);
+  assert_eq!((ended.next_attempt_at, ended.place_in_queue), (None, None));
   let (_, listed) = app.call("GET", "/api/v0/transfers/downloads", None).await;
   assert_eq!(listed, json!([]), "removed downloads are not listed");
   let (_, listed) = app
@@ -101,57 +104,12 @@ async fn canceling_a_download_no_task_runs_ends_it_and_can_remove_it() {
 }
 
 #[tokio::test]
-async fn canceling_a_download_no_task_runs_ends_its_wait_and_spares_one_that_ended() {
-  let app = app(TRUSTED, &[]).await;
-  let mut waiting = Record::download("alice", "a.flac", 10);
-  waiting.next_attempt_at = Some(chrono::Utc::now());
-  waiting.place_in_queue = Some(4);
-  insert(&app, &waiting).await;
-  let uri = format!("/api/v0/transfers/downloads/alice/{}", waiting.id);
-  let (status, _) = app.call("DELETE", &uri, None).await;
-  assert_eq!(status, 204);
-  let ended = read(&app, waiting.id).await;
-  assert_eq!(
-    ended.state,
-    TransferStates::Completed | TransferStates::Cancelled
-  );
-  assert_eq!((ended.next_attempt_at, ended.place_in_queue), (None, None));
-
-  // a task that ended the download after the cancel read it keeps how it ended
-  let mut finished = done("alice", "b.flac");
-  finished.local_path = Some("/music/b.flac".into());
-  insert(&app, &finished).await;
-  let id = finished.id;
-  let canceled = TransferStates::Completed | TransferStates::Cancelled;
-  let at = chrono::Utc::now();
-  let ended = app
-    .state
-    .transfers
-    .write(move |conn| store::end_unless_ended(conn, id, canceled, at, "canceled"))
-    .await
-    .unwrap();
-  assert!(!ended);
-  let kept = read(&app, id).await;
-  assert_eq!(
-    kept.state,
-    TransferStates::Completed | TransferStates::Succeeded
-  );
-  assert_eq!(kept.local_path.as_deref(), Some("/music/b.flac"));
-}
-
-#[tokio::test]
-async fn removing_completed_downloads_leaves_running_ones() {
+async fn a_bulk_cancel_ends_the_running_download_and_fails_the_ended_and_unknown_ones() {
   let app = app(TRUSTED, &[]).await;
   let finished = done("alice", "a.flac");
   let waiting = Record::download("alice", "b.flac", 10);
   insert(&app, &finished).await;
   insert(&app, &waiting).await;
-  let (status, _) = app
-    .call("DELETE", "/api/v0/transfers/downloads/all/completed", None)
-    .await;
-  assert_eq!(status, 204);
-  assert!(read(&app, finished.id).await.removed);
-  assert!(!read(&app, waiting.id).await.removed);
   let request = json!({ "ids": [waiting.id, finished.id, Uuid::new_v4()], "action": "cancel" });
   let (status, result) = app
     .call("POST", "/api/v0/transfers/downloads/bulk", Some(request))
@@ -232,7 +190,7 @@ async fn removals_and_updates_are_pushed_on_the_transfers_topic() {
 }
 
 #[tokio::test]
-async fn a_job_is_told_once_by_the_cancel_that_ends_its_last_download() {
+async fn a_job_is_told_once_by_the_cancel_that_ends_it_and_leaves_out_a_removed_download() {
   let app = app(TRUSTED, &[]).await;
   let job = Uuid::new_v4();
   let in_job = |record: Record| Record {
@@ -252,13 +210,17 @@ async fn a_job_is_told_once_by_the_cancel_that_ends_its_last_download() {
     )
     .await;
   assert_eq!(stream.next().await.unwrap().event, "hello");
-  for record in [&third, &second] {
-    let uri = format!("/api/v0/transfers/downloads/alice/{}", record.id);
+  let canceled = format!("/api/v0/transfers/downloads/alice/{}", third.id);
+  let removed = format!(
+    "/api/v0/transfers/downloads/alice/{}?remove=true",
+    second.id
+  );
+  for uri in [canceled, removed] {
     let (status, _) = app.call("DELETE", &uri, None).await;
     assert_eq!(status, 204);
   }
   let mut frames = Vec::new();
-  for _ in 0..3 {
+  for _ in 0..4 {
     frames.push(stream.next().await.unwrap());
   }
   let events: Vec<&str> = frames.iter().map(|f| f.event.as_str()).collect();
@@ -267,11 +229,12 @@ async fn a_job_is_told_once_by_the_cancel_that_ends_its_last_download() {
     [
       "transfers.updated",
       "transfers.updated",
+      "transfers.removed",
       "transfers.job_finished"
     ],
     "the first cancel leaves a download of the job to end"
   );
-  let told = &frames[2].data;
+  let told = &frames[3].data;
   assert_eq!(told["id"], json!(job));
   assert_eq!(told["folder"], "@@a\\Album");
   assert_eq!(
@@ -280,55 +243,7 @@ async fn a_job_is_told_once_by_the_cancel_that_ends_its_last_download() {
       &told["succeededCount"],
       &told["canceledCount"]
     ],
-    [3, 1, 2]
-  );
-}
-
-#[tokio::test]
-async fn a_download_removed_by_its_cancel_is_left_out_of_the_job_it_ends() {
-  let app = app(TRUSTED, &[]).await;
-  let job = Uuid::new_v4();
-  let kept = Record {
-    job_id: Some(job),
-    ..done("alice", "@@a\\Album\\1.flac")
-  };
-  let stuck = Record {
-    job_id: Some(job),
-    ..Record::download("alice", "@@a\\Album\\2.flac", 10)
-  };
-  insert(&app, &kept).await;
-  insert(&app, &stuck).await;
-  let mut stream = app
-    .stream_from(
-      "127.0.0.1:1",
-      request("GET", "/api/v0/live?topics=transfers", None),
-    )
-    .await;
-  assert_eq!(stream.next().await.unwrap().event, "hello");
-  let uri = format!("/api/v0/transfers/downloads/alice/{}?remove=true", stuck.id);
-  let (status, _) = app.call("DELETE", &uri, None).await;
-  assert_eq!(status, 204);
-  let mut frames = Vec::new();
-  for _ in 0..3 {
-    frames.push(stream.next().await.unwrap());
-  }
-  let events: Vec<&str> = frames.iter().map(|f| f.event.as_str()).collect();
-  assert_eq!(
-    events,
-    [
-      "transfers.updated",
-      "transfers.removed",
-      "transfers.job_finished"
-    ]
-  );
-  let told = &frames[2].data;
-  assert_eq!(
-    [
-      &told["fileCount"],
-      &told["succeededCount"],
-      &told["canceledCount"]
-    ],
-    [1, 1, 0],
+    [2, 1, 1],
     "the removed download is not counted"
   );
 }
@@ -430,34 +345,37 @@ async fn a_download_job_ends_in_the_list_with_its_files_named_under_its_folder()
 #[tokio::test]
 async fn a_folder_download_skips_the_files_the_filters_match_before_asking_its_user() {
   let app = app(TRUSTED, &[]).await;
-  let file = |name: &str| super::FileRequest {
-    filename: format!("@@a\\Album\\{name}"),
-    size: 1,
-  };
-  let group = super::Group {
+  let group = |names: &[&str]| super::Group {
     username: "alice".into(),
-    files: vec![file("setup.EXE"), file("Thumbs.db"), file(".DS_Store")],
+    files: names
+      .iter()
+      .map(|name| super::FileRequest {
+        filename: format!("@@a\\Album\\{name}"),
+        size: 1,
+      })
+      .collect(),
     destination: None,
     search_id: None,
   };
+  let kept = ["Thumbs.db.flac", "01 desktop.ini.mp3", "exe.flac"];
+  let mut groups = vec![group(&["setup.EXE", "Thumbs.db", ".DS_Store"])];
+  groups.extend(kept.map(|name| group(&[name])));
   let downloads = &app.state.downloads;
-  let results = downloads.enqueue(Uuid::new_v4(), vec![group], true).await;
+  let mut results = downloads
+    .enqueue(Uuid::new_v4(), groups, true)
+    .await
+    .into_iter();
   let enqueued = results
-    .into_iter()
     .next()
     .unwrap()
     .expect("nothing left to ask alice for");
   assert!(enqueued.enqueued.is_empty());
   let skipped: Vec<&str> = enqueued.failed.iter().map(|f| f.message.as_str()).collect();
   assert_eq!(skipped, ["Skipped: Filtered"; 3]);
-  for kept in ["Thumbs.db.flac", "01 desktop.ini.mp3", "exe.flac"] {
-    let patterns = &app.state.config.current().values.transfers.download.filters;
-    let matched = patterns.iter().any(|p| {
-      reseek_shares::patterns::compile(p, false)
-        .unwrap()
-        .is_match(&format!("@@a\\Album\\{kept}"))
-    });
-    assert!(!matched, "{kept} is downloaded");
+  // a file the filters pass goes on to ask alice, which the missing server refuses
+  for (name, result) in kept.iter().zip(results) {
+    let refused = result.err().unwrap_or_else(|| panic!("{name} is skipped"));
+    assert!(refused.is_unavailable(), "{name} is downloaded");
   }
 }
 

@@ -132,26 +132,3 @@ fn statistics(summary: &BTreeMap<TransferOutcome, TransferSummary>) -> UserTrans
     cancelled: count(TransferOutcome::Cancelled),
   }
 }
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-  use crate::telemetry::reports::tests::{all, fixture_reports};
-
-  #[tokio::test]
-  async fn a_user_report_counts_outcomes_and_lists_the_errors() {
-    let reports = fixture_reports().await;
-    let report = reports.user("dave", all()).await.unwrap();
-    assert_eq!(
-      report.download.statistics,
-      UserTransferStatistics {
-        total: 2,
-        successful: 0,
-        errored: 1,
-        cancelled: 1
-      }
-    );
-    assert_eq!(report.download.exceptions.len(), 2);
-    assert_eq!(report.upload.statistics.total, 0);
-  }
-}

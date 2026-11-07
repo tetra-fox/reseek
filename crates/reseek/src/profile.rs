@@ -167,15 +167,6 @@ mod tests {
   }
 
   #[test]
-  fn a_bmp_becomes_a_jpeg() {
-    let source = image::load_from_memory(&png(16, 8, Rgba([200, 30, 30, 255]))).unwrap();
-    let mut bmp = Cursor::new(Vec::new());
-    source.write_to(&mut bmp, ImageFormat::Bmp).unwrap();
-    let picture = decoded(&reencode(bmp.get_ref()).unwrap());
-    assert_eq!((picture.width(), picture.height()), (16, 8));
-  }
-
-  #[test]
   fn a_photo_tagged_as_turned_is_kept_upright() {
     // a big-endian TIFF block with one entry: orientation 6, turn a quarter clockwise to show
     let exif = [

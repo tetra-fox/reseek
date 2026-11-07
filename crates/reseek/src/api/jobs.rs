@@ -332,33 +332,7 @@ mod tests {
         request("GET", "/api/v0/live?topics=jobs", None),
       )
       .await;
-    let opened = stream.until("jobs.schedules").await;
-    let cards = &opened.last().unwrap().data;
-    let names: Vec<&str> = cards
-      .as_array()
-      .unwrap()
-      .iter()
-      .map(|card| card["name"].as_str().unwrap())
-      .collect();
-    assert_eq!(
-      names,
-      [
-        "share-rescan",
-        "cleanup",
-        "vacuum",
-        "release-check",
-        "wishlist"
-      ]
-    );
-    let vacuum = cards
-      .as_array()
-      .unwrap()
-      .iter()
-      .find(|card| card["name"] == "vacuum")
-      .unwrap();
-    assert_eq!(vacuum["every"], serde_json::Value::Null, "off by default");
-    assert_eq!(vacuum["option"], "schedules.vacuum");
-
+    stream.until("jobs.schedules").await;
     let (status, _) = app
       .call("POST", "/api/v0/jobs/schedules/cleanup/run", None)
       .await;

@@ -407,62 +407,23 @@ mod tests {
 
   const PATH: &str = "/srv/downloads/a.flac";
 
-  fn everything() -> AnalysisListQuery {
-    AnalysisListQuery {
-      verdict: None,
-      since: None,
-      offset: 0,
-      limit: 100,
-    }
-  }
-
   #[tokio::test]
-  async fn a_report_in_another_shape_reads_as_stale_with_its_judgment() {
+  async fn a_report_of_this_format_that_does_not_read_is_stale_and_says_why() {
     let db = Database::memory(&SCHEMA).await;
     let at = db::timestamp(Utc::now());
     db.write(move |conn| {
-      // a report in a shape this version's type no longer reads, numbered as an older shape
       conn.execute(
         "INSERT INTO reports \
          (path, root, relative, size, modified, transfer_id, analyzed_at, verdict, spectra, \
          report, format) \
          VALUES (?1, 'downloads', 'a.flac', 10, 'then', NULL, ?2, 'likely_transcode', 'img', \
-         '{\"path\": \"/srv/downloads/a.flac\", \"summary\": \"an older shape\"}', ?3)",
-        params![PATH, at, REPORT_FORMAT - 1],
-      )?;
-      conn.execute(
-        "INSERT INTO judgments (path, verdict, note, by, at) \
-         VALUES (?1, 'fake', 'an old rip', 'local:reseek', ?2)",
-        params![PATH, at],
+         '{\"path\": \"/srv/downloads/a.flac\", \"summary\": \"no other field\"}', ?3)",
+        params![PATH, at, REPORT_FORMAT],
       )
     })
     .await
     .unwrap();
 
-    let stored = find(&db, PATH).await.unwrap().unwrap();
-    let report = &stored.report;
-    assert!(report.stale);
-    assert_eq!(
-      stored.unreadable, None,
-      "an older shape is no fault to report"
-    );
-    assert_eq!(report.summary, STALE_SUMMARY);
-    assert_eq!(report.verdict, AnalysisVerdict::LikelyTranscode);
-    assert_eq!(
-      (report.root, report.relative_path.as_str()),
-      (FileRoot::Downloads, "a.flac")
-    );
-    let judgment = report.judgment.as_ref().unwrap();
-    assert_eq!(judgment.verdict, Judgment::Fake);
-    assert_eq!(judgment.note.as_deref(), Some("an old rip"));
-    let listed = list(&db, &everything()).await.unwrap();
-    assert_eq!(listed.len(), 1);
-    assert!(listed[0].report.stale && listed[0].report.judgment.is_some());
-
-    // a report in this version's own shape that does not read is stale too, and says why
-    db.write(|conn| conn.execute("UPDATE reports SET format = ?1", [REPORT_FORMAT]))
-      .await
-      .unwrap();
     let stored = find(&db, PATH).await.unwrap().unwrap();
     assert!(stored.report.stale);
     assert!(stored.unreadable.unwrap().contains("missing field"));

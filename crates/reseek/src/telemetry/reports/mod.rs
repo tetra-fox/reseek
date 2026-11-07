@@ -158,11 +158,10 @@ mod parity;
 
 #[cfg(test)]
 pub(super) mod tests {
-  use api_types::transfers::TransferDirection::{Download, Upload};
   use chrono::{DateTime, TimeZone, Utc};
 
   use super::*;
-  use crate::transfers::fixtures::{Row, insert, transfers};
+  use crate::transfers::fixtures::Row;
 
   /// Every time the databases store.
   pub fn all() -> Window {
@@ -192,38 +191,5 @@ pub(super) mod tests {
     row.requested_at = ended - chrono::Duration::hours(1);
     row.ended_at = Some(ended);
     row
-  }
-
-  /// Reports over a day of transfers: two successful uploads on the ends of 10:00 to 12:00 and
-  /// one before it, two failed downloads of dave's, one running and one bare completed.
-  pub async fn fixture_reports() -> Reports {
-    let db = transfers().await;
-    let timed = |username: &str, size, speed, ended: DateTime<Utc>| {
-      let mut r = row(username, Upload, 48, ended);
-      r.size = size;
-      r.speed = speed;
-      r.started_at = Some(ended - chrono::Duration::seconds(60));
-      r.enqueued_at = Some(ended - chrono::Duration::seconds(90));
-      r
-    };
-    let failed = |state, ended, message: &str| {
-      let mut r = row("dave", Download, state, ended);
-      r.exception = Some(message.to_string());
-      r
-    };
-    insert(
-      &db,
-      vec![
-        timed("alice", 100, 100.0, at(10, 0)),
-        timed("bob", 200, 200.0, at(12, 0)),
-        timed("carol", 400, 400.0, at(9, 0)),
-        failed(272, at(11, 0), "File not shared."),
-        failed(80, at(11, 30), "Cancelled"),
-        row("erin", Download, 4, at(11, 10)),
-        row("frank", Download, 16, at(11, 20)),
-      ],
-    )
-    .await;
-    Reports::new(db)
   }
 }

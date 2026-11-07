@@ -135,51 +135,36 @@ mod tests {
   use super::*;
   use crate::telemetry::reports::tests::{all, at, row};
   use crate::transfers::fixtures::{insert, transfers};
-  use api_types::transfers::TransferDirection::{Download, Upload};
+  use api_types::transfers::TransferDirection::Download;
 
-  async fn reports() -> Reports {
+  #[tokio::test]
+  async fn failures_are_found_by_their_message() {
     let db = transfers().await;
-    let failed = |user: &str, state, minute, message: Option<&str>| {
-      let mut r = row(user, Download, state, at(10, minute));
-      r.exception = message.map(str::to_string);
+    let failed = |state, minute, message: &str| {
+      let mut r = row("a", Download, state, at(10, minute));
+      r.exception = Some(message.to_string());
       r
     };
     insert(
       &db,
       vec![
-        failed("a", 272, 1, Some("Remote file not found: C:\\x")),
-        failed("b", 272, 2, Some("Remote file not found: C:\\x")),
-        failed("a", 528, 3, Some("File not shared.")),
-        failed("a", 80, 4, None),
-        failed("a", 16, 5, Some("bare completed")),
-        failed("a", 8, 6, Some("still running")),
-        failed("a", 48, 7, None),
-        row("u", Upload, 272, at(10, 8)),
+        failed(272, 1, "Remote file not found: C:\\x"),
+        failed(528, 2, "File not shared."),
       ],
     )
     .await;
-    Reports::new(db)
-  }
-
-  fn exceptions(order: SortOrder) -> ExceptionsQuery {
-    ExceptionsQuery {
+    let reports = Reports::new(db);
+    let query = ExceptionsQuery {
       direction: Download,
       start: None,
       end: None,
       username: None,
-      exception: None,
-      sort_order: order,
+      exception: Some("File not shared.".into()),
+      sort_order: SortOrder::Asc,
       limit: 25,
       offset: 0,
-    }
-  }
-
-  #[tokio::test]
-  async fn failures_are_found_by_their_message() {
-    let reports = reports().await;
-    let mut by_message = exceptions(SortOrder::Asc);
-    by_message.exception = Some("File not shared.".into());
-    let found = reports.exceptions(all(), by_message).await.unwrap();
+    };
+    let found = reports.exceptions(all(), query).await.unwrap();
     assert_eq!(found.len(), 1);
     assert_eq!(
       serde_json::to_value(found[0].state).unwrap(),

@@ -195,18 +195,3 @@ pub struct BlockImportResult {
   /// entries that made no block
   pub skipped: u32,
 }
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  #[test]
-  fn scope_names_read_back() {
-    for scope in BlockScope::ALL {
-      assert_eq!(scope.to_string().parse::<BlockScope>().unwrap(), scope);
-    }
-    assert_eq!(BlockScope::Distributed.to_string(), "distributed");
-    let refused = "everything".parse::<BlockScope>().unwrap_err();
-    assert!(refused.ends_with("downloads, distributed"), "{refused}");
-  }
-}

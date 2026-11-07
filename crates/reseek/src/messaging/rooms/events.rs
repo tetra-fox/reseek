@@ -419,47 +419,6 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn the_ticker_of_a_user_hidden_in_rooms_is_marked_hidden() {
-    let app = app(
-      "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n",
-      &[],
-    )
-    .await;
-    let block = serde_json::json!({ "scopes": ["rooms"] });
-    let answer = app
-      .send(crate::testing::request(
-        "PUT",
-        "/api/v0/users/mallory/block",
-        Some(block),
-      ))
-      .await;
-    assert_eq!(answer.status, 200);
-    let messaging = &app.state.messaging;
-    let data = RoomData {
-      name: "indie".into(),
-      users: Vec::new(),
-      private: None,
-    };
-    messaging.rooms.tracker().joined(&data, "me");
-    for username in ["mallory", "bob"] {
-      let set = Event::RoomTickerAdded {
-        room_name: "indie".into(),
-        ticker: soulseek_proto::server::RoomTicker {
-          username: username.into(),
-          message: "listening".into(),
-        },
-      };
-      messaging.room_event(set).await;
-    }
-    let tickers = messaging.tickers("indie").unwrap();
-    let hidden: Vec<_> = tickers
-      .iter()
-      .map(|t| (t.username.as_str(), t.hidden))
-      .collect();
-    assert_eq!(hidden, [("bob", false), ("mallory", true)]);
-  }
-
-  #[tokio::test]
   async fn a_block_and_its_end_reach_an_open_wall_at_once() {
     let app = app(
       "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n",

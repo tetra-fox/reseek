@@ -67,3 +67,67 @@ macro_rules! flag_names {
 }
 
 pub(crate) use flag_names;
+
+#[cfg(test)]
+mod tests {
+  use std::fmt::Debug;
+
+  use serde::Serialize;
+  use serde::de::DeserializeOwned;
+
+  use crate::files::FilesystemAttributes as Fs;
+  use crate::search::SearchStates as Search;
+  use crate::state::ServerConnectionState as Server;
+  use crate::transfers::TransferStates as Transfer;
+
+  fn round_trip<F: Serialize + DeserializeOwned + PartialEq + Debug>(rows: &[(F, &str)]) {
+    for (value, text) in rows {
+      let json = format!("\"{text}\"");
+      assert_eq!(serde_json::to_string(value).unwrap(), json);
+      assert_eq!(&serde_json::from_str::<F>(&json).unwrap(), value, "{text}");
+    }
+  }
+
+  #[test]
+  fn flag_sets_are_written_by_name_in_bit_order() {
+    round_trip(&[
+      (Server::Connected | Server::LoggedIn, "Connected, LoggedIn"),
+      (
+        Server::LoggingIn | Server::Connected,
+        "Connected, LoggingIn",
+      ),
+      (Server::empty(), "None"),
+    ]);
+    round_trip(&[
+      (Fs::Directory | Fs::ReadOnly, "ReadOnly, Directory"),
+      (Fs::ReparsePoint | Fs::Directory, "Directory, ReparsePoint"),
+    ]);
+    round_trip(&[
+      (Search::Requested, "Requested"),
+      (Search::Queued, "Queued"),
+      (Search::InProgress, "InProgress"),
+      (Search::TimedOut | Search::Completed, "Completed, TimedOut"),
+      (
+        Search::Completed | Search::ResponseLimitReached,
+        "Completed, ResponseLimitReached",
+      ),
+      (Search::Completed | Search::Errored, "Completed, Errored"),
+      (Search::empty(), "None"),
+    ]);
+    round_trip(&[
+      (Transfer::Requested, "Requested"),
+      (Transfer::Queued | Transfer::Locally, "Queued, Locally"),
+      (Transfer::Remotely | Transfer::Queued, "Queued, Remotely"),
+      (Transfer::InProgress, "InProgress"),
+      (
+        Transfer::Succeeded | Transfer::Completed,
+        "Completed, Succeeded",
+      ),
+      (
+        Transfer::Completed | Transfer::Aborted,
+        "Completed, Aborted",
+      ),
+      (Transfer::empty(), "None"),
+    ]);
+  }
+}

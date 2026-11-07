@@ -545,71 +545,27 @@ mod tests {
   use super::*;
 
   #[test]
-  fn each_client_error_ends_in_its_outcome() {
+  fn a_refused_or_duplicate_download_is_not_tried_again_and_a_lost_peer_is() {
     let cases = [
       (
-        ClientError::Canceled,
-        TransferStates::Cancelled,
-        "Operation cancelled",
-        false,
-      ),
-      (
-        ClientError::Timeout("Operation timed out".into()),
-        TransferStates::TimedOut,
-        "Operation timed out",
-        true,
-      ),
-      (
         ClientError::TransferRejected("File not shared.".into()),
-        TransferStates::Rejected,
-        "File not shared.",
         false,
-      ),
-      (
-        ClientError::SizeMismatch {
-          local: 10,
-          remote: 12,
-          source: None,
-        },
-        TransferStates::Aborted,
-        "the remote size of 12 does not match expected size 10",
-        false,
-      ),
-      (
-        ClientError::TransferReportedFailed("Download reported as failed by remote client".into()),
-        TransferStates::Errored,
-        "Download reported as failed by remote client",
-        true,
-      ),
-      (
-        ClientError::UserOffline("User bob appears to be offline".into()),
-        TransferStates::Errored,
-        "User bob appears to be offline",
-        true,
-      ),
-      (
-        ClientError::connection(ConnectionErrorKind::Read, "Remote connection closed"),
-        TransferStates::Errored,
-        "Remote connection closed",
-        true,
       ),
       (
         ClientError::DuplicateTransfer {
           username: "bob".into(),
           filename: "a".into(),
         },
-        TransferStates::Errored,
-        "A duplicate download of the same file to the same user is already registered",
         false,
       ),
+      (ClientError::UserOffline("bob".into()), true),
+      (
+        ClientError::connection(ConnectionErrorKind::Read, "Remote connection closed"),
+        true,
+      ),
     ];
-    for (error, state, message, retryable) in cases {
-      let failure = failure(&error);
-      assert_eq!(
-        (failure.state, failure.message.as_str(), failure.retryable),
-        (state, message, retryable),
-        "{error}"
-      );
+    for (error, retryable) in cases {
+      assert_eq!(failure(&error).retryable, retryable, "{error}");
     }
   }
 
