@@ -250,7 +250,9 @@ impl Client {
         privileges.seconds_remaining,
       ),
       R::EmbeddedMessage(embedded) => self.handle_embedded(&embedded),
-      R::NetInfo(candidates) => self.distributed_command(Command::NetInfo(candidates.parents)),
+      R::NetInfo(candidates) => {
+        self.distributed_command(Command::NetInfo(candidates.parents));
+      }
       R::GetPersonalSimilarUsers(users) => {
         self.complete(WaitKey::Server(ServerCode::GetPersonalSimilarUsers), users);
       }

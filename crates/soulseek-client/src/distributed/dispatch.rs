@@ -1,7 +1,7 @@
 //! What the client does with distributed frames. A search from the parent is passed on to every
 //! child as it arrived and answered unless it is our own; a search the server sends us directly
 //! makes us a branch root and is passed on unwrapped; the parent's branch level and root are
-//! followed; a child's ping is answered with an empty one.
+//! followed; a child's ping is answered with an empty one, the parent's is ignored.
 
 use std::sync::atomic::Ordering;
 
@@ -10,12 +10,11 @@ use soulseek_proto::{DecodeError, DistributedCode, DistributedMessage, SEARCH_ID
 use tokio::time::Instant;
 use tracing::Instrument;
 
-use super::parent::Link;
+use super::parent::{BranchNews, Link};
 use super::tree::Command;
 use crate::client::Client;
 use crate::conn::{MessageConn, ReadEvent};
 use crate::error::{ClientError, ConnectionErrorKind};
-use crate::waiter::WaitKey;
 
 impl Client {
   /// A frame from our parent
@@ -34,7 +33,6 @@ impl Client {
     if code == Some(DistributedCode::SearchRequest.code()) {
       return self.search_from_parent(conn, link, &frame);
     }
-    let username = conn.handle().username().unwrap_or_default().to_owned();
     match DistributedMessage::decode(&frame) {
       Ok(DistributedMessage::EmbeddedMessage(wrapped)) => {
         // an old parent forwards the server's wrapper instead of the search inside it
@@ -50,40 +48,37 @@ impl Client {
       // handled above, before decoding
       Ok(DistributedMessage::SearchRequest(_)) => {}
       Ok(DistributedMessage::Ping(ping)) => {
-        let key = WaitKey::Distributed {
-          code: DistributedCode::Ping,
-          username,
-        };
-        if !self.waiter().complete(&key, ping.token) {
-          tracing::trace!("ping from the parent nobody waits for");
-        }
+        tracing::trace!(token = ping.token, "ping from the parent ignored");
       }
       Ok(DistributedMessage::BranchLevel(level)) => {
-        self.distributed_command(Command::ParentBranchLevel {
-          connection: conn.handle().id(),
-          level: level.level,
-        });
+        self.parent_branch(conn, link, |news| news.level = Some(level.level));
       }
       Ok(DistributedMessage::BranchRoot(root)) => {
-        self.distributed_command(Command::ParentBranchRoot {
-          connection: conn.handle().id(),
-          root: root.username,
-        });
+        self.parent_branch(conn, link, |news| news.root = Some(root.username));
       }
+      // a child tells its parent its depth; from our parent it means nothing
       Ok(DistributedMessage::ChildDepth(depth)) => {
-        let key = WaitKey::ChildDepthMessage {
-          username,
-          remote: conn.handle().remote(),
-        };
-        if !self.waiter().complete(&key, depth.depth) {
-          tracing::trace!("child depth nobody waits for");
-        }
+        tracing::trace!(depth = depth.depth, "child depth from the parent ignored");
       }
       Err(DecodeError::UnknownCode { code }) => {
         tracing::debug!(code, "unhandled distributed message from the parent");
       }
       // the decoder has logged it
       Err(_) => {}
+    }
+  }
+
+  /// Keeps the parent's branch level or root on its link and tells the tree task, unless a
+  /// command telling it is queued already; a parent repeating its branch at line rate holds one
+  /// entry in the queue, and the tree task acts on the latest values
+  fn parent_branch(&self, conn: &MessageConn, link: &Link, record: impl FnOnce(&mut BranchNews)) {
+    let mut news = crate::lock(&link.branch);
+    record(&mut news);
+    if !news.queued {
+      // a dropped command leaves the flag clear, so the next news is queued again
+      news.queued = self.distributed_command(Command::ParentBranchChanged {
+        connection: conn.handle().id(),
+      });
     }
   }
 

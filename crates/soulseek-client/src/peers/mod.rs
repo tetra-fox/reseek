@@ -15,7 +15,7 @@ pub(crate) use message::request_endpoint;
 pub(crate) use solicit::{Answer, Solicitation, Solicitations, Via, both_failed, race};
 
 use std::collections::{HashMap, VecDeque};
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -24,7 +24,7 @@ use tokio::sync::{Semaphore, watch};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::conn::MessageConn;
+use crate::conn::{ConnKind, MessageConn};
 use crate::error::{ClientError, ConnectionErrorKind};
 use crate::limit::Limiter;
 use crate::lock;
@@ -38,6 +38,10 @@ const PEER_HANDLERS: usize = 256;
 /// replaced message connections kept open per user beside the current one; a peer reconnecting
 /// over and over cannot hold more than this
 const KEPT_REPLACED: usize = 2;
+
+/// message connections one address may have opened to us and keep open, current or replaced;
+/// a few users behind one NAT fit, a host posing as many users cannot fill the cache
+const MESSAGE_CONNECTIONS_PER_ADDRESS: usize = 8;
 
 type Outcome = Option<Result<MessageConn, ClientError>>;
 
@@ -213,6 +217,25 @@ impl PeerConnections {
       tracing::debug!(username, "message connection evicted from the full cache");
       self.close(&username, &conn, "Evicted");
     }
+  }
+
+  /// the open message connections the remote at `ip` opened to us, current or replaced
+  fn opened_from(&self, cache: &HashMap<String, Entry>, ip: IpAddr) -> usize {
+    let opened = |conn: &MessageConn| {
+      let handle = conn.handle();
+      handle.kind().contains(ConnKind::INBOUND) && handle.remote().ip() == ip && handle.is_open()
+    };
+    let current = cache
+      .values()
+      .filter_map(Entry::connection)
+      .filter(opened)
+      .count();
+    let replaced = lock(&self.replaced)
+      .values()
+      .flatten()
+      .filter(|conn| opened(conn))
+      .count();
+    current + replaced
   }
 
   /// Keeps `conn`, just replaced as `username`'s message connection, open beside its

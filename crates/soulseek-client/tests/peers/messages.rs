@@ -2,18 +2,21 @@
 //! answers from the application's resolvers, refusals, and what a hostile or vanishing peer
 //! causes.
 
+use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
-use crate::support::peer::PeerSide;
+use crate::support::peer::{FakePeer, PeerSide};
 use crate::support::{Logs, PATIENCE, Session, listening_options};
 use soulseek_client::{
   ClientError, ClientOptions, Event, IncomingBrowse, MessageErrorKind, Resolvers, SearchOptions,
   SearchScope, SearchState, WaitKey,
 };
 use soulseek_proto::peer::*;
-use soulseek_proto::{Limits, PeerCode, PeerMessage, RemoteFilename, TransferDirection};
+use soulseek_proto::{
+  InitMessage, Limits, PeerCode, PeerMessage, RemoteFilename, TransferDirection,
+};
 use tokio_util::sync::CancellationToken;
 
 fn resolvers() -> Resolvers {
@@ -367,6 +370,51 @@ async fn a_peer_reconnecting_over_and_over_keeps_two_replaced_connections() {
   let connections = session.client.message_connections();
   assert_eq!(connections.len(), 1, "{connections:?}");
   assert_eq!(connections[0].1, sides[4].stream.local_addr().unwrap());
+}
+
+#[tokio::test]
+async fn one_address_posing_as_many_users_cannot_evict_other_connections() {
+  let mut options = listening_options();
+  // room for our connection to carol and the eight one address may open to us
+  options.limits.max_cached_peer_connections = 9;
+  let session = Session::with_options(options).await;
+  let carol = FakePeer::start().await;
+  let endpoint = SocketAddr::from((Ipv4Addr::LOCALHOST, u16::try_from(carol.port()).unwrap()));
+  session
+    .client
+    .get_or_add_message_connection("carol", Some(endpoint), &CancellationToken::new())
+    .await
+    .unwrap();
+  let mut ours = carol.accept().await;
+  assert!(matches!(ours.read_init().await, InitMessage::PeerInit(_)));
+  // each busier than ours, so ours is the one a full cache would evict
+  let mut posers = Vec::new();
+  for n in 1..=8 {
+    let mut poser = session.peer(&format!("poser{n}")).await;
+    poser.send(&PeerMessage::InfoRequest.encode()).await;
+    assert!(matches!(
+      poser.read_peer().await,
+      PeerMessage::InfoResponse(_)
+    ));
+    posers.push(poser);
+  }
+  session.peer("poser9").await.closed().await;
+  ours.send(&PeerMessage::InfoRequest.encode()).await;
+  assert!(matches!(
+    ours.read_peer().await,
+    PeerMessage::InfoResponse(_)
+  ));
+  let mut connected: Vec<String> = session
+    .client
+    .message_connections()
+    .into_iter()
+    .map(|(username, _)| username)
+    .collect();
+  connected.sort();
+  let mut expected: Vec<String> = (1..=8).map(|n| format!("poser{n}")).collect();
+  expected.push("carol".into());
+  expected.sort();
+  assert_eq!(connected, expected);
 }
 
 #[tokio::test]

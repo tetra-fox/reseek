@@ -37,19 +37,10 @@ pub(crate) enum Command {
     connection: Uuid,
     reason: Disconnect,
   },
-  ParentBranchLevel {
-    connection: Uuid,
-    level: u32,
-  },
-  ParentBranchRoot {
-    connection: Uuid,
-    root: String,
-  },
+  /// the parent sent its branch level or root, which wait on its link
+  ParentBranchChanged { connection: Uuid },
   /// a peer connected to us directly to become a child
-  ChildConnecting {
-    username: String,
-    conn: Conn,
-  },
+  ChildConnecting { username: String, conn: Conn },
   /// a peer asked the server to have us connect to it as its parent
   ChildRequested(ConnectToPeerResponse),
   /// the connection to a peer that asked to be our child is made, or failed
@@ -86,8 +77,7 @@ impl Command {
       Self::NetInfo(_) => "NetInfo",
       Self::Negotiated { .. } => "Negotiated",
       Self::ParentLost { .. } => "ParentLost",
-      Self::ParentBranchLevel { .. } => "ParentBranchLevel",
-      Self::ParentBranchRoot { .. } => "ParentBranchRoot",
+      Self::ParentBranchChanged { .. } => "ParentBranchChanged",
       Self::ChildConnecting { .. } => "ChildConnecting",
       Self::ChildRequested(_) => "ChildRequested",
       Self::ChildConnected { .. } => "ChildConnected",
@@ -212,22 +202,7 @@ impl Tree {
       }
       Command::Negotiated { round, candidates } => self.negotiated(round, candidates).await,
       Command::ParentLost { connection, reason } => self.parent_lost(connection, &reason).await,
-      Command::ParentBranchLevel { connection, level } => {
-        if let Some(parent) = self.parent_with(connection)
-          && parent.candidate.branch_level != level
-        {
-          parent.candidate.branch_level = level;
-          self.branch_changed().await;
-        }
-      }
-      Command::ParentBranchRoot { connection, root } => {
-        if let Some(parent) = self.parent_with(connection)
-          && parent.candidate.branch_root != root
-        {
-          parent.candidate.branch_root = root;
-          self.branch_changed().await;
-        }
-      }
+      Command::ParentBranchChanged { connection } => self.parent_branch_changed(connection).await,
       Command::ChildConnecting { username, conn } => self.child_connecting(username, conn).await,
       Command::ChildRequested(request) => self.child_requested(request).await,
       Command::ChildConnected {

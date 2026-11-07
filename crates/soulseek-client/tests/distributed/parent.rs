@@ -12,10 +12,9 @@ use crate::support::tree::{
   net_info, search, status, wrapped_search,
 };
 use crate::support::{FakeServer, Logs, Session, USERNAME, listening_options, next_event};
-use soulseek_client::{ClientOptions, DistributedParent, Event, WaitKey};
+use soulseek_client::{ClientOptions, DistributedParent, Event};
 use soulseek_proto::distributed::Ping;
-use soulseek_proto::{DistributedCode, DistributedMessage, ServerResponse};
-use tokio_util::sync::CancellationToken;
+use soulseek_proto::{DistributedMessage, ServerResponse};
 
 fn parent_options() -> ClientOptions {
   let mut options = listening_options();
@@ -92,20 +91,12 @@ async fn the_candidate_nearest_the_top_is_adopted_and_the_others_let_go() {
   assert!(info.has_parent);
   assert_eq!(info.parent.0, "near");
   assert_eq!((info.branch_level, info.branch_root.as_str()), (2, "top"));
-  // an older parent's ping carries a token, which is taken and not answered
-  let ping = session.client.waiter().wait::<Option<u32>>(
-    WaitKey::Distributed {
-      code: DistributedCode::Ping,
-      username: "near".into(),
-    },
-    None,
-    CancellationToken::new(),
-  );
+  // an older parent's ping carries a token; it is not answered and the parent stays
   near
     .send(&DistributedMessage::Ping(Ping { token: Some(7) }).encode())
     .await;
-  assert_eq!(ping.await.unwrap(), Some(7));
   assert!(near.quiet_for(Duration::from_millis(100)).await);
+  assert!(session.client.distributed_network().has_parent);
 }
 
 #[tokio::test]
@@ -263,14 +254,56 @@ async fn a_change_in_the_parents_branch_reaches_the_children_and_the_server() {
   let mut frames = branch_level(4);
   frames.extend(branch_root("higher"));
   parent.send(&frames).await;
-  assert_eq!(branch_information(&mut child).await, (5, "top".into()));
-  assert_eq!(branch_information(&mut child).await, (5, "higher".into()));
+  // when the tree task takes both at once, the children hear only the latest
+  let mut heard = branch_information(&mut child).await;
+  if heard == (5, "top".into()) {
+    heard = branch_information(&mut child).await;
+  }
+  assert_eq!(heard, (5, "higher".into()));
   // the server hears it once the changes have settled
   tokio::time::pause();
   tokio::time::advance(Duration::from_secs(6)).await;
   tokio::time::resume();
   let reported = status(&mut session.server).await;
   assert_eq!((reported.level, reported.root.as_str()), (5, "higher"));
+}
+
+#[tokio::test]
+async fn a_parent_flooding_its_branch_does_not_crowd_out_the_server() {
+  let logs = Logs::capture();
+  let mut options = parent_options();
+  options.server_connection_options.write_queue_size = 4096;
+  let mut session = Session::on(FakeServer::with_receive_buffer(4096).await, options).await;
+  session.stall_server_writes();
+  let candidate = FakePeer::start().await;
+  session
+    .server
+    .send(&net_info(&[("parent", &candidate)]))
+    .await;
+  let mut parent = answers(&candidate, 1, "top").await;
+  // the tree task now waits on the status it writes for the adoption
+  adopted(&mut session).await;
+  // many more changes than the command queue holds, then a search that shows all were read
+  let mut frames: Vec<u8> = (0..5000).flat_map(|n| branch_level(1 + n % 2)).collect();
+  frames.extend(branch_level(7));
+  frames.extend(search("bob", 30, "after"));
+  parent.send(&frames).await;
+  session
+    .event(|event| matches!(event, Event::SearchRequestReceived { token: 30, .. }).then_some(()))
+    .await;
+  session.server.send(&ServerResponse::DistributedReset).await;
+  let Session { server, events, .. } = &mut session;
+  let lost = next_event(events, |event| match event {
+    Event::DistributedParentDisconnected(parent) => Some(parent.branch_level),
+    _ => None,
+  });
+  let lost = tokio::select! {
+    lost = lost => lost,
+    () = server.discard() => unreachable!("the server reads until the client closes"),
+  };
+  // the tree followed the parent to its last level and then carried out the reset
+  assert_eq!(lost, 7);
+  assert!(logs.lines_with(&["command queue is full"]).is_empty());
 }
 
 #[tokio::test]

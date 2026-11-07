@@ -4,7 +4,7 @@
 //! asked the server to have us connect. A replaced connection is not closed: what is queued on it
 //! is still written and what the user sends on it is still read and answered, until it goes idle
 //! or the user closes it. Only the last two replaced per user are kept; an older one closes once
-//! its queued writes are out.
+//! its queued writes are out. One address opens at most a few at once, and more are refused.
 
 use std::net::SocketAddr;
 
@@ -16,13 +16,16 @@ use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
 
 use super::solicit::{Via, both_failed, race};
-use super::{Entry, Outcome, PeerConnections, lock};
+use super::{Entry, MESSAGE_CONNECTIONS_PER_ADDRESS, Outcome, PeerConnections, lock};
 use crate::client::Client;
 use crate::conn::{Conn, ConnKind, MessageConn};
 use crate::error::{ClientError, ConnectionErrorKind};
+use crate::log::LogLimiter;
 
 /// how many times a caller follows a connection that was replaced while it waited for it
 const FOLLOW_REPLACEMENTS: usize = 3;
+
+static CROWDED_ADDRESS: LogLimiter = LogLimiter::new();
 
 impl Client {
   /// The message connection to `username`: the cached one, the attempt already under way, or a
@@ -185,7 +188,8 @@ impl Client {
   /// A peer connected to us for messages, introducing itself or answering a connection
   /// request of ours. Its connection replaces whatever we had for that user, since the peer
   /// considers this one current, and takes our writes from now on; the one it replaces stays
-  /// open until it goes idle. `kind` says how it was made.
+  /// open until it goes idle. `kind` says how it was made. One the remote opened is refused
+  /// when its address has as many open already, so one host cannot fill the cache.
   pub(crate) fn add_or_update_message_connection(
     &self,
     username: &str,
@@ -216,6 +220,24 @@ impl Client {
     let peers = self.peers();
     let replaced = {
       let mut cache = peers.cache();
+      if kind.contains(ConnKind::INBOUND)
+        && peers.opened_from(&cache, remote.ip()) >= MESSAGE_CONNECTIONS_PER_ADDRESS
+      {
+        drop(cache);
+        if let Some(suppressed) = CROWDED_ADDRESS.allow() {
+          tracing::debug!(
+            username,
+            %remote,
+            limit = MESSAGE_CONNECTIONS_PER_ADDRESS,
+            suppressed,
+            "too many message connections from one address, refused"
+          );
+        }
+        conn
+          .handle()
+          .disconnect("Too many message connections from this address", None);
+        return Ok(());
+      }
       if !cache.contains_key(username) {
         peers.make_room(
           &mut cache,

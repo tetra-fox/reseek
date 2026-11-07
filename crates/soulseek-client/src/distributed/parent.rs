@@ -6,8 +6,8 @@
 //! goes. A search straight from the server makes us a branch root instead.
 
 use std::net::SocketAddr;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use soulseek_proto::frame::FrameKind;
@@ -40,6 +40,18 @@ pub(super) struct Link {
   role: AtomicU8,
   /// a search with a bad identifier from this connection has been logged
   pub(super) bad_search_logged: AtomicBool,
+  /// the parent's branch as it last sent it, waiting for the tree task
+  pub(super) branch: Mutex<BranchNews>,
+}
+
+/// The parent's latest branch level and root that the tree task has not taken yet. At most one
+/// command for them is queued at a time, however often the parent sends them.
+#[derive(Default)]
+pub(super) struct BranchNews {
+  pub(super) level: Option<u32>,
+  pub(super) root: Option<String>,
+  /// a command telling the tree task is in its queue
+  pub(super) queued: bool,
 }
 
 impl Link {
@@ -47,6 +59,7 @@ impl Link {
     Self {
       role: AtomicU8::new(Role::Candidate as u8),
       bad_search_logged: AtomicBool::new(false),
+      branch: Mutex::new(BranchNews::default()),
     }
   }
 
@@ -412,6 +425,31 @@ impl Tree {
     // children would otherwise keep reporting the branch we just left
     self.send_branch_information(&client);
     self.add_parent_connection().await;
+  }
+
+  /// Takes the branch news the parent's link holds, which also lets the next news be queued,
+  /// and follows what changed
+  pub(super) async fn parent_branch_changed(&mut self, connection: Uuid) {
+    let Some(parent) = self.parent_with(connection) else {
+      return;
+    };
+    let news = std::mem::take(&mut *crate::lock(&parent.candidate.link.branch));
+    let mut changed = false;
+    if let Some(level) = news.level
+      && level != parent.candidate.branch_level
+    {
+      parent.candidate.branch_level = level;
+      changed = true;
+    }
+    if let Some(root) = news.root
+      && root != parent.candidate.branch_root
+    {
+      parent.candidate.branch_root = root;
+      changed = true;
+    }
+    if changed {
+      self.branch_changed().await;
+    }
   }
 
   /// our parent's level or root changed, so ours did: the children and the server hear it

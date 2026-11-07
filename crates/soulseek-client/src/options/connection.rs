@@ -18,7 +18,8 @@ pub struct ConnectionOptions {
   pub write_buffer_size: usize,
   /// writes that may be waiting on the connection; one more closes it as dead
   pub write_queue_size: u32,
-  /// one deadline for the TCP connect and the proxy handshake together
+  /// one deadline for the TCP connect and the proxy handshake together; on an accepted
+  /// connection, for its first message to arrive
   pub connect_timeout: Duration,
   /// how long the connection may go without a byte read or written before it is closed; `None`
   /// never closes it for inactivity

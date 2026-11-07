@@ -131,11 +131,11 @@ impl Client {
   /// Hands `command` to the tree task without waiting, for read loops and dispatchers, which
   /// must not block. A full queue, which a tree task held up on a server write causes, drops it;
   /// a dropped one leaves the tree out of date until later news repeats it. Commands whose loss
-  /// would stick go through [`deliver`] instead.
-  pub(crate) fn distributed_command(&self, command: Command) {
+  /// would stick go through [`deliver`] instead. Whether it was queued.
+  pub(crate) fn distributed_command(&self, command: Command) -> bool {
     let name = command.name();
     match self.distributed().commands.try_send(command) {
-      Ok(()) => {}
+      Ok(()) => true,
       Err(mpsc::error::TrySendError::Full(_)) => {
         if let Some(suppressed) = COMMANDS_FULL.allow() {
           tracing::warn!(
@@ -144,10 +144,12 @@ impl Client {
             "distributed network command queue is full, command dropped"
           );
         }
+        false
       }
       // the tree task stops only with the client
       Err(mpsc::error::TrySendError::Closed(_)) => {
         tracing::debug!(name, "distributed network stopped, command dropped");
+        false
       }
     }
   }

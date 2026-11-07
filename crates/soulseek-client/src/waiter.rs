@@ -6,12 +6,11 @@
 use std::any::Any;
 use std::collections::{HashMap, VecDeque};
 use std::future::{Future, pending};
-use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
-use soulseek_proto::{DistributedCode, PeerCode, RemoteFilename, ServerCode};
+use soulseek_proto::{PeerCode, RemoteFilename, ServerCode};
 use tokio::sync::oneshot;
 use tokio::time::{Instant, sleep_until};
 use tokio_util::sync::CancellationToken;
@@ -51,11 +50,6 @@ pub enum WaitKey {
     username: String,
     filename: RemoteFilename,
   },
-  /// a reply on a distributed connection
-  Distributed {
-    code: DistributedCode,
-    username: String,
-  },
   /// the first bytes of a browse response, so its progress can be followed
   BrowseResponseConnection { username: String },
   /// a peer connecting to us because the server relayed our request for a message connection
@@ -77,11 +71,6 @@ pub enum WaitKey {
   BranchRootMessage { connection: Uuid },
   /// a search passed down by a would-be parent
   SearchRequestMessage { connection: Uuid },
-  /// a child's subtree depth
-  ChildDepthMessage {
-    username: String,
-    remote: SocketAddr,
-  },
 }
 
 /// The group of waits that one connection's loss makes unanswerable
@@ -141,9 +130,7 @@ impl WaitKey {
         Self::Peer { username, .. }
         | Self::PeerToken { username, .. }
         | Self::PeerFile { username, .. }
-        | Self::Distributed { username, .. }
-        | Self::BrowseResponseConnection { username }
-        | Self::ChildDepthMessage { username, .. },
+        | Self::BrowseResponseConnection { username },
         Scope::Peer(peer),
       ) => username == peer,
       (
