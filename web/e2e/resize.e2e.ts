@@ -1,7 +1,7 @@
 import { expect, type Locator, type Page, test } from "@playwright/test";
 
 import { fakeChat } from "./support/fakes";
-import { login } from "./support/login";
+import { visit } from "./support/login";
 
 /** Drags the handle sideways by `by` pixels */
 const drag = async (page: Page, handle: Locator, by: number) => {
@@ -19,7 +19,7 @@ const width = (handle: Locator) => handle.getAttribute("aria-valuenow").then(Num
 /** The room's chat, the pane its handles resize */
 const room = async (page: Page) => {
   await fakeChat(page);
-  await login(page, "/chat/rooms/indie");
+  await visit(page, "/chat/rooms/indie");
 };
 
 test.describe("on a wide screen", () => {

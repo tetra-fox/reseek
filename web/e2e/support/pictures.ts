@@ -3,6 +3,8 @@
  * them, and a short WAV for the Analysis page to play
  */
 
+import type { Schemas } from "../../src/lib/api/client";
+
 const BINS = 512;
 const COLUMNS_PER_SECOND = 16;
 const PEAKS_PER_SECOND = 200;
@@ -31,25 +33,26 @@ const column = (t: number, out: Uint8Array, at: number) => {
 const detail = (duration: number, perSecond: number) => Math.ceil(duration * perSecond - 1e-9);
 
 /** The layout of the report of a file `duration` seconds long */
-export const layout = (duration: number, scale: string) => ({
-  scale,
-  maxHz: MAX_HZ,
-  durationSeconds: duration,
-  sampled: false,
-  guides: [
-    { hz: 16000, label: "MP3 128k", kind: "encoder" },
-    { hz: CUTOFF_HZ, label: "analyzer's cutoff", kind: "cutoff" },
-    { hz: 19000, label: "MP3 192k", kind: "encoder" },
-    { hz: 19500, label: "MP3 224-256k", kind: "encoder" },
-    { hz: 20000, label: "MP3 320k / AAC", kind: "encoder" },
-    { hz: MAX_HZ, label: "file limit", kind: "file_limit" }
-  ],
-  bins: BINS,
-  columnsPerSecond: COLUMNS_PER_SECOND,
-  peaksPerSecond: PEAKS_PER_SECOND,
-  tileSeconds: TILE_SECONDS,
-  tiles: Math.ceil(detail(duration, COLUMNS_PER_SECOND) / (TILE_SECONDS * COLUMNS_PER_SECOND))
-});
+export const layout = (duration: number, scale: Schemas["SpectrogramScale"]) =>
+  ({
+    scale,
+    maxHz: MAX_HZ,
+    durationSeconds: duration,
+    sampled: false,
+    guides: [
+      { hz: 16000, label: "MP3 128k", kind: "encoder" },
+      { hz: CUTOFF_HZ, label: "analyzer's cutoff", kind: "cutoff" },
+      { hz: 19000, label: "MP3 192k", kind: "encoder" },
+      { hz: 19500, label: "MP3 224-256k", kind: "encoder" },
+      { hz: 20000, label: "MP3 320k / AAC", kind: "encoder" },
+      { hz: MAX_HZ, label: "file limit", kind: "file_limit" }
+    ],
+    bins: BINS,
+    columnsPerSecond: COLUMNS_PER_SECOND,
+    peaksPerSecond: PEAKS_PER_SECOND,
+    tileSeconds: TILE_SECONDS,
+    tiles: Math.ceil(detail(duration, COLUMNS_PER_SECOND) / (TILE_SECONDS * COLUMNS_PER_SECOND))
+  }) satisfies Schemas["SpectrogramLayout"];
 
 /** The spectrogram's overview, or with `tile` that tile, of a file `duration` seconds long */
 export const spectrogram = (duration: number, tile: number | null) => {

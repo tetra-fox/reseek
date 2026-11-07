@@ -1,7 +1,17 @@
 import { expect, type Locator, test } from "@playwright/test";
 
-import { dir, fakeFiles, fakeSearch, file, SEARCH_ID, transfer } from "./support/fakes";
-import { login, textSize } from "./support/login";
+import {
+  carolShares,
+  dir,
+  fakeDownloadList,
+  fakeFiles,
+  fakeSearch,
+  response,
+  SEARCH_ID,
+  transfer,
+  userDownloads
+} from "./support/fakes";
+import { textSize, visit } from "./support/login";
 
 /** How far apart two names start across the page, in pixels */
 const apart = async (a: Locator, b: Locator) => {
@@ -23,50 +33,14 @@ for (const [width, height] of [
       await fakeFiles(page);
       // a file beside a folder, in search results and in the downloads: Album holds a track and
       // the Bonus folder
-      await page.route(
-        (url) => url.pathname.endsWith("/api/v0/transfers/downloads"),
-        (route) =>
-          route.fulfill({
-            json: [
-              {
-                username: "alice",
-                directories: [
-                  {
-                    directory: "d",
-                    fileCount: 2,
-                    files: [
-                      transfer("@@a\\Music\\Album\\01 One.flac"),
-                      transfer("@@a\\Music\\Album\\Bonus\\05 Demo.flac")
-                    ]
-                  }
-                ]
-              }
-            ]
-          })
-      );
+      const album = ["@@a\\Music\\Album\\01 One.flac", "@@a\\Music\\Album\\Bonus\\05 Demo.flac"];
+      const downloads = album.map((name) => transfer(name));
+      await fakeDownloadList(page, () => [userDownloads("alice", downloads)]);
       await page.route(`**/api/v0/searches/${SEARCH_ID}/responses**`, (route) =>
-        route.fulfill({
-          json: [
-            {
-              username: "alice",
-              country: "NL",
-              token: 1,
-              hasFreeUploadSlot: true,
-              uploadSpeed: 3_000_000,
-              queueLength: 0,
-              fileCount: 2,
-              files: [
-                file("@@a\\Music\\Album\\01 One.flac"),
-                file("@@a\\Music\\Album\\Bonus\\05 Demo.flac")
-              ],
-              lockedFileCount: 0,
-              lockedFiles: []
-            }
-          ]
-        })
+        route.fulfill({ json: [response("alice", 3_000_000, album)] })
       );
 
-      await login(page, "/system/files");
+      await visit(page, "/system/files");
       const files = page.getByRole("treegrid");
       const folder = files.getByRole("button", { name: "In Rainbows", exact: true });
       const note = files.getByText("notes.txt", { exact: true });
@@ -81,21 +55,10 @@ for (const [width, height] of [
       expect(await apart(bonus, track), "search results").toBeLessThan(0.5);
 
       // a browse, where Music holds a file beside its Albums folder
-      await page.route(
-        (url) => url.pathname.endsWith("/api/v0/users/carol/browse"),
-        (route) =>
-          route.fulfill({
-            json: {
-              directories: [
-                dir("@@c\\Music", ["readme.txt"]),
-                dir("@@c\\Music\\Albums", ["1.flac"])
-              ],
-              directoryCount: 2,
-              lockedDirectories: [],
-              lockedDirectoryCount: 0
-            }
-          })
-      );
+      await carolShares(page, [
+        dir("@@c\\Music", ["readme.txt"]),
+        dir("@@c\\Music\\Albums", ["1.flac"])
+      ]);
       await page.goto("./#/users/carol/shares");
       const shares = page.getByRole("treegrid", { name: "Shared folders" });
       const albums = shares.getByText("Albums", { exact: true });

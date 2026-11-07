@@ -141,18 +141,29 @@ api-check: web-install
       printf '%s\n' "$view" | diff -q web/src/lib/config/fixtures/view.json - > /dev/null \
       || { echo "web/src/lib/config/fixtures/view.json is stale, run \`just config-fixture\`" >&2; exit 1; }
 
-# the built UI served by the daemon in a browser: it loads, logs in and moves between screens
-web-smoke:
+# the network tests need soulfind and the soulseek-rs cli, found as serve.sh finds them, and are
+# skipped without them
+[doc("the built UI served by the daemon in a browser: it loads, logs in and moves between screens")]
+web-smoke: (web-playwright "smoke")
+    @[ -n "$({{ just_executable() }} --justfile {{ justfile() }} soulfind-bin)" ] && [ -n "$({{ just_executable() }} --justfile {{ justfile() }} soulseek-rs-bin)" ] || echo "soulfind or soulseek-rs not found at SOULFIND_BIN, SOULSEEK_RS_BIN or on PATH: the network smoke tests were skipped"
+
+# the Analysis page's frame-rate benchmarks in a browser, run by hand rather than in ci
+web-perf: (web-playwright "perf")
+
+# builds the UI and the daemon and runs the web package's playwright script SCRIPT, skipped
+# without chromium
+[private]
+web-playwright SCRIPT:
     #!/usr/bin/env bash
     set -euo pipefail
     chromium="${CHROMIUM_BIN:-$(command -v chromium || true)}"
     if [ -z "$chromium" ]; then
-      echo "web-smoke skipped: no chromium at CHROMIUM_BIN or on PATH"
+      echo "web-{{ SCRIPT }} skipped: no chromium at CHROMIUM_BIN or on PATH"
       exit 0
     fi
     {{ just_executable() }} --justfile {{ justfile() }} web-build
     cargo build -p reseek-bin
-    CHROMIUM_BIN="$chromium" pnpm --dir web smoke
+    CHROMIUM_BIN="$chromium" pnpm --dir web {{ SCRIPT }}
 
 # the web UI's packages as the lockfile pins them
 [private]
@@ -165,7 +176,7 @@ e2e:
     #!/usr/bin/env bash
     set -euo pipefail
     soulfind="$({{ just_executable() }} --justfile {{ justfile() }} soulfind-bin)"
-    soulseek_rs="${SOULSEEK_RS_BIN:-$(command -v soulseek-rs || true)}"
+    soulseek_rs="$({{ just_executable() }} --justfile {{ justfile() }} soulseek-rs-bin)"
     if [ -z "$soulfind" ] || [ -z "$soulseek_rs" ]; then
       echo "e2e skipped: soulfind (SOULFIND_BIN or PATH) or soulseek-rs (SOULSEEK_RS_BIN or PATH) not found"
       exit 0
@@ -195,6 +206,12 @@ soulfind-bin:
       exit 1
     fi
     echo "$soulfind"
+
+# prints the soulseek-rs cli to test against: SOULSEEK_RS_BIN, else soulseek-rs on PATH, else
+# nothing, which the callers take as a skip
+[private]
+soulseek-rs-bin:
+    @echo "${SOULSEEK_RS_BIN:-$(command -v soulseek-rs || true)}"
 
 # the gate for every push
 ci: lint test api-check web-smoke e2e

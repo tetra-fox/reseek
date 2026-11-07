@@ -1,7 +1,7 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 
 import { fakeReports } from "./support/fakes";
-import { login } from "./support/login";
+import { visit } from "./support/login";
 
 /** The labels of a chart that spill out of its box, its axes' included, by text and how far */
 const spills = (page: Page, name: string) =>
@@ -23,32 +23,28 @@ const spills = (page: Page, name: string) =>
       });
     });
 
-for (const [width, height] of [
-  [390, 844],
-  [1280, 800]
-]) {
-  for (const scheme of ["light", "dark"] as const) {
-    test.describe(`at ${width} px, ${scheme}`, () => {
-      test.use({ viewport: { width, height }, colorScheme: scheme });
-
-      test("the charts' labels stay inside their boxes", async ({ page }) => {
-        await fakeReports(page);
-        await login(page, "/dashboard");
-        for (const name of ["Transfers over time", "Transfer outcomes"]) {
-          const chart = page.getByRole("img", { name }).first();
-          await chart.scrollIntoViewIfNeeded();
-          await expect(chart.locator("text").first()).toBeVisible();
-          expect(await spills(page, name), name).toEqual([]);
-          if (process.env.SHOTS) {
-            await chart.locator("..").screenshot({
-              path: `${process.env.SHOTS}/chart-${width}-${scheme}-${name.split(" ")[1]}.png`
-            });
-          }
-        }
-      });
-    });
-  }
-}
+/**
+ * Waits for a chart's marks to grow in. They tween in script, not as animations of the page, so
+ * this waits for two frames running to draw the same shapes
+ */
+const grown = (chart: Locator) =>
+  chart.evaluate(
+    (box) =>
+      new Promise<void>((done) => {
+        const shapes = () =>
+          [...box.querySelectorAll("path, rect")]
+            .map((mark) => ["d", "x", "y", "width", "height"].map((a) => mark.getAttribute(a)))
+            .join();
+        let last = shapes();
+        const frame = () => {
+          const now = shapes();
+          if (now === last) return done();
+          last = now;
+          requestAnimationFrame(frame);
+        };
+        requestAnimationFrame(frame);
+      })
+  );
 
 /** Each choice of the history chart and how every label on its value axis reads */
 const VIEWS: [string, RegExp][] = [
@@ -79,7 +75,12 @@ for (const [width, height] of [
   test(`at ${width} px, each view has an axis in its own unit`, async ({ page }) => {
     await page.setViewportSize({ width, height });
     await fakeReports(page);
-    await login(page, "/dashboard");
+    await visit(page, "/dashboard");
+    // the outcomes' labels stay inside their box too
+    const outcomes = page.getByRole("img", { name: "Transfer outcomes" }).first();
+    await outcomes.scrollIntoViewIfNeeded();
+    await expect(outcomes.locator("text").first()).toBeVisible();
+    expect(await spills(page, "Transfer outcomes")).toEqual([]);
     const measure = page.getByRole("radiogroup", { name: "What the chart measures" });
     for (const [view, label] of VIEWS) {
       await measure.getByRole("radio", { name: view }).click();
@@ -93,12 +94,6 @@ for (const [width, height] of [
       expect(await spills(page, "Transfers over time"), view).toEqual([]);
       const box = await measure.boundingBox();
       expect(box!.x + box!.width, view).toBeLessThanOrEqual(width);
-      if (process.env.SHOTS) {
-        await page
-          .getByRole("img", { name: "Transfers over time" })
-          .locator("xpath=ancestor::*[contains(@class, 'rounded-card')][1]")
-          .screenshot({ path: `${process.env.SHOTS}/view-${width}-${view.replace(" ", "-")}.png` });
-      }
     }
     // a view with one line has nothing to toggle
     await expect(
@@ -107,36 +102,15 @@ for (const [width, height] of [
   });
 }
 
-test("the chosen view and directions stay through a reload", async ({ page }) => {
-  await fakeReports(page);
-  await login(page, "/dashboard");
-  await page.getByRole("radio", { name: "Speed" }).click();
-  await page.getByRole("button", { name: "Upload", exact: true }).click();
-  await expect(page.getByRole("img", { name: "Transfers over time" })).toHaveAttribute(
-    "aria-label",
-    /: Download speed peaks at [^;]*$/
-  );
-  await page.reload();
-  await expect(page.getByRole("radio", { name: "Speed" })).toBeChecked();
-  await expect(page.getByRole("button", { name: "Upload", exact: true })).toHaveAttribute(
-    "aria-pressed",
-    "false"
-  );
-  await expect(page.getByRole("img", { name: "Transfers over time" })).toHaveAttribute(
-    "aria-label",
-    /: Download speed peaks at [^;]*$/
-  );
-});
-
 test("a chart cuts its marks at its box while the window narrows", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await fakeReports(page);
-  await login(page, "/dashboard");
+  await visit(page, "/dashboard");
   for (const name of ["Transfers over time", "Transfer outcomes"]) {
     const chart = page.getByRole("img", { name }).first();
     await chart.scrollIntoViewIfNeeded();
     await expect(chart.locator("svg").first()).toBeVisible();
-    await page.waitForTimeout(700); // the marks have grown in
+    await grown(chart);
     // the furthest the svg, which cuts what it draws, reaches past the box on any frame
     const sampled = chart.evaluate((box) => {
       const svg = box.querySelector("svg")!;
@@ -172,7 +146,7 @@ for (const scheme of ["light", "dark"] as const) {
   test(`a chart's tooltip is opaque, ${scheme}`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: scheme });
     await fakeReports(page);
-    await login(page, "/dashboard");
+    await visit(page, "/dashboard");
     for (const name of ["Transfers over time", "Transfer outcomes"]) {
       const chart = page.getByRole("img", { name }).first();
       await chart.scrollIntoViewIfNeeded();

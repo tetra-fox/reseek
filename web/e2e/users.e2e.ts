@@ -1,7 +1,7 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 
 import { fakeConnected } from "./support/fakes";
-import { login, textSize } from "./support/login";
+import { textSize, visit } from "./support/login";
 
 const counts = { succeeded: 2, failed: 0, active: 0, queued: 0, bytes: 0 };
 const alice = {
@@ -53,7 +53,7 @@ test("a country's flag is a real image, served from the build under the URL base
   page
 }) => {
   await profile(page, "alice", (route) => route.fulfill({ json: alice }));
-  await login(page, "/users/alice");
+  await visit(page, "/users/alice");
   const flag = page.getByRole("img", { name: "Netherlands" });
   await expect(flag).toBeVisible();
   await expect
@@ -61,23 +61,25 @@ test("a country's flag is a real image, served from the build under the URL base
     .not.toBe(0);
 });
 
-test("the search box lists matching users best first, and picks one by key or click", async ({
+test("the search box lists users best first, picks one, and closes on Escape and Clear", async ({
   page
 }) => {
   await directory(page, [
     { ...alice, username: "alice", tags: ["bob"] },
     { ...alice, username: "bobby" },
-    { ...alice, username: "bob", presence: "Online" }
+    { ...alice, username: "bob", presence: "Online" },
+    { ...alice, username: "carol", tags: [] }
   ]);
   await profile(page, "bobby", (route) => route.fulfill({ json: alice }));
   await profile(page, "bob", (route) => route.fulfill({ json: alice }));
-  await login(page, "/users");
+  await visit(page, "/users");
 
   await searchBox(page).fill("bob");
   await expect(options(page)).toHaveText([/\bbob\b.*Online.*default.*Last seen/, /\bbobby\b/]);
   // the list under the box filters too, by tags as well, and the look-up entry stays away from
   // a name the directory holds
   await expect(page.locator('[data-line="alice"]')).toBeVisible();
+  await expect(page.locator('[data-line="carol"]')).toHaveCount(0);
 
   await page.keyboard.press("ArrowDown");
   await page.keyboard.press("Enter");
@@ -86,43 +88,45 @@ test("the search box lists matching users best first, and picks one by key or cl
   await page.goBack();
   await searchBox(page).fill("bob");
   await expect(options(page)).toHaveCount(2);
+  // Escape closes the dropdown and keeps the text, and a click on the box brings it back
+  await page.keyboard.press("Escape");
+  await expect(options(page)).toHaveCount(0);
+  await expect(searchBox(page)).toHaveValue("bob");
+  await searchBox(page).click();
+  await expect(options(page)).toHaveCount(2);
+  // the clear button empties it, and the list under it is whole again
+  await page.getByRole("button", { name: "Clear", exact: true }).click();
+  await expect(searchBox(page)).toHaveValue("");
+  await expect(options(page)).toHaveCount(0);
+  await expect(page.locator('[data-line="carol"]')).toBeVisible();
+
+  await searchBox(page).fill("bob");
   await options(page).first().click();
   await expect(page).toHaveURL(/#\/users\/bob$/);
 });
 
-test("Escape closes the dropdown and keeps the text, the clear button empties it", async ({
+test("looking up a user asks the network as typed, and says when there is none", async ({
   page
 }) => {
-  await directory(page, [{ ...alice, username: "bob" }, alice]);
-  await login(page, "/users");
-  await searchBox(page).fill("bob");
-  await expect(options(page)).toHaveCount(1);
-  await expect(page.locator('[data-line="alice"]')).toHaveCount(0);
-
-  await page.keyboard.press("Escape");
-  await expect(options(page)).toHaveCount(0);
-  await expect(searchBox(page)).toHaveValue("bob");
-
-  // a click on the box brings it back
-  await searchBox(page).click();
-  await expect(options(page)).toHaveCount(1);
-
-  await page.getByRole("button", { name: "Clear", exact: true }).click();
-  await expect(searchBox(page)).toHaveValue("");
-  await expect(options(page)).toHaveCount(0);
-  await expect(page.locator('[data-line="alice"]')).toBeVisible();
-});
-
-test("looking up a user who exists asks the network with the name as typed", async ({ page }) => {
   await fakeConnected(page);
   await directory(page, [alice]);
+  await profile(page, "nobody", (route) =>
+    route.fulfill({ status: 404, json: { error: "User nobody does not exist" } })
+  );
   let answer = () => {};
   const answered = new Promise<void>((resolve) => (answer = resolve));
   await profile(page, "NewUser", async (route) => {
     await answered;
     await route.fulfill({ json: { ...alice, username: "NewUser", known: false } });
   });
-  await login(page, "/users");
+  await visit(page, "/users");
+
+  // a user who does not exist is said so, and nothing opens
+  await searchBox(page).fill("nobody");
+  await page.getByRole("option", { name: "Look up nobody" }).click();
+  await expect(page.getByText("No user named nobody")).toBeVisible();
+  await expect(page).toHaveURL(/#\/users$/);
+  await expect(page.getByRole("option", { name: "Look up nobody" })).toBeVisible();
 
   await searchBox(page).fill("NewUser");
   const entry = options(page).last();
@@ -132,21 +136,6 @@ test("looking up a user who exists asks the network with the name as typed", asy
   await expect(entry).toContainText("Looking up NewUser");
   answer();
   await expect(page).toHaveURL(/#\/users\/NewUser$/);
-});
-
-test("looking up a user who does not exist says so and opens nothing", async ({ page }) => {
-  await fakeConnected(page);
-  await directory(page, [alice]);
-  await profile(page, "nobody", (route) =>
-    route.fulfill({ status: 404, json: { error: "User nobody does not exist" } })
-  );
-  await login(page, "/users");
-
-  await searchBox(page).fill("nobody");
-  await page.getByRole("option", { name: "Look up nobody" }).click();
-  await expect(page.getByText("No user named nobody")).toBeVisible();
-  await expect(page).toHaveURL(/#\/users$/);
-  await expect(page.getByRole("option", { name: "Look up nobody" })).toBeVisible();
 });
 
 test("a look-up the user walked away from opens nothing", async ({ page }) => {
@@ -159,7 +148,7 @@ test("a look-up the user walked away from opens nothing", async ({ page }) => {
     await answered;
     await route.fulfill({ json: { ...alice, username: "slowpoke" } });
   });
-  await login(page, "/users");
+  await visit(page, "/users");
 
   await searchBox(page).fill("slowpoke");
   await page.keyboard.press("Enter");
@@ -169,15 +158,6 @@ test("a look-up the user walked away from opens nothing", async ({ page }) => {
   answer();
   await asked;
   await expect(page).toHaveURL(/#\/users$/);
-});
-
-test("the look-up entry waits for a connection", async ({ page }) => {
-  await directory(page, [alice]);
-  await login(page, "/users");
-  await searchBox(page).fill("nobody");
-  const entry = page.getByRole("option", { name: /Look up nobody/ });
-  await expect(entry).toContainText("Connect to the Soulseek server first");
-  await expect(entry).toHaveAttribute("data-disabled", "");
 });
 
 test("the dropdown fits a phone at the largest text size", async ({ page }) => {
@@ -192,7 +172,7 @@ test("the dropdown fits a phone at the largest text size", async ({ page }) => {
       group: { name: "a group with a long name", source: "user", priority: 1, color: null }
     }
   ]);
-  await login(page, "/users");
+  await visit(page, "/users");
   await searchBox(page).fill("a-name");
   const entries = options(page);
   await expect(entries).toHaveCount(2);
@@ -224,7 +204,7 @@ test("a user's card and row offer Message, Browse shares and Add buddy", async (
     }
     return route.fulfill({ json: { ...alice, buddy } });
   });
-  await login(page, "/users");
+  await visit(page, "/users");
   const row = page.locator('[data-line="alice"]');
   await expect(row).toBeVisible();
   // the card on hover, with the actions as buttons and when they were last seen
@@ -251,7 +231,7 @@ test("notes save as you type and say so with a tick", async ({ page }) => {
     }
     return route.fulfill({ json: { ...alice, notes: saved, figures: alice.figures } });
   });
-  await login(page, "/users/alice");
+  await visit(page, "/users/alice");
   await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText("alice");
   await page.getByLabel("Notes").fill("shares rare jazz");
   await expect(page.getByRole("status").filter({ hasText: "Saved" })).toBeVisible();

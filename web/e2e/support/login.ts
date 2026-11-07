@@ -1,11 +1,19 @@
 import { expect, type Page } from "@playwright/test";
 
-/** Logs in with the daemon's built-in account from the login page `route` was sent to */
+/** Logs in through the form with the daemon's built-in account, from the login page `route` was sent to */
 export const login = async (page: Page, route = "/dashboard") => {
   await page.goto(`./#${route}`);
   await page.getByLabel("Username").fill("reseek");
   await page.getByLabel("Password").fill("reseek");
   await page.getByRole("button", { name: "Log in", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`#${route}$`));
+};
+
+/** Opens `route` with the session the login project saved, once the app is up on it */
+export const visit = async (page: Page, route: string) => {
+  await page.goto(`./#${route}`);
+  // the shell's main area shows only once the session is checked; without one the login takes it
+  await expect(page.getByRole("main")).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`#${route}$`));
 };
 

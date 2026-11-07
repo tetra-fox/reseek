@@ -1,7 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 
 import { fakeChat } from "./support/fakes";
-import { login, textSize } from "./support/login";
+import { textSize, visit } from "./support/login";
 
 const box = (page: Page) => page.getByRole("combobox", { name: "Search chats" });
 const options = (page: Page) => page.getByRole("option");
@@ -88,9 +88,11 @@ const fakeSearch = async (page: Page) => {
   });
 };
 
-test("typing lists rooms, users and messages in categories", async ({ page }) => {
+test("typing lists rooms, users and messages in categories, walked by the arrows", async ({
+  page
+}) => {
   await fakeSearch(page);
-  await login(page, "/chat");
+  await visit(page, "/chat");
   await box(page).fill("floyd");
   const list = page.getByRole("listbox");
   await expect(list).toContainText("Rooms");
@@ -105,11 +107,24 @@ test("typing lists rooms, users and messages in categories", async ({ page }) =>
   ]);
   // what matched is marked, in names and in messages
   await expect(list.locator("mark").first()).toHaveText("floyd");
+
+  // the arrows reach every entry, and Escape closes the list with the text kept
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("ArrowDown");
+  await expect(options(page).nth(2)).toHaveAttribute("data-highlighted", "");
+  await page.keyboard.press("Escape");
+  await expect(options(page)).toHaveCount(0);
+  await expect(box(page)).toHaveValue("floyd");
+  await page.keyboard.press("ArrowDown");
+  await expect(options(page)).toHaveCount(5);
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/#\/chat\/rooms\/floydians$/);
 });
 
 test("an exact name opens its chat from the box, by Enter or a click", async ({ page }) => {
   await fakeSearch(page);
-  await login(page, "/chat");
+  await visit(page, "/chat");
   await box(page).fill("indie");
   await expect(options(page).first()).toContainText("indie");
   await page.keyboard.press("Enter");
@@ -126,29 +141,11 @@ test("an exact name opens its chat from the box, by Enter or a click", async ({ 
   await expect(page).toHaveURL(/#\/chat\/alice$/);
 });
 
-test("the arrows reach every entry and Escape closes the list", async ({ page }) => {
-  await fakeSearch(page);
-  await login(page, "/chat");
-  await box(page).fill("floyd");
-  await expect(options(page)).toHaveCount(5);
-  await page.keyboard.press("ArrowDown");
-  await page.keyboard.press("ArrowDown");
-  await expect(options(page).nth(2)).toHaveAttribute("data-highlighted", "");
-  await page.keyboard.press("Escape");
-  await expect(options(page)).toHaveCount(0);
-  await expect(box(page)).toHaveValue("floyd");
-  await page.keyboard.press("ArrowDown");
-  await expect(options(page)).toHaveCount(5);
-  await page.keyboard.press("ArrowDown");
-  await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/#\/chat\/rooms\/floydians$/);
-});
-
-test("Enter opens the results, a message opens its chat, Back and Escape return", async ({
+test("Enter opens the results, walked by key, and Back and Escape return from a message", async ({
   page
 }) => {
   await fakeSearch(page);
-  await login(page, "/chat");
+  await visit(page, "/chat");
   await box(page).fill("floyd");
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/#\/chat\/search\?q=floyd$/);
@@ -160,6 +157,19 @@ test("Enter opens the results, a message opens its chat, Back and Escape return"
   await expect(lines.locator('[data-line="chat:room:jazz"]')).toContainText("jazz");
   await expect(lines.locator("mark").first()).toHaveText("floyd");
   await expect(box(page)).toHaveValue("floyd");
+
+  // the keys walk the results and Enter opens a message; Escape comes back to its line
+  await page.keyboard.press("End");
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/#\/chat\/rooms\/jazz\?at=150&q=floyd$/);
+  await expect(page.getByRole("log").locator('[data-message="150"]')).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(results(page)).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/#\/chat\/rooms\/jazz\?at=150&q=floyd$/);
+  await page.keyboard.press("Escape");
+  await expect(page).toHaveURL(/#\/chat\/search\?q=floyd$/);
 
   await page.reload();
   await expect(results(page).getByRole("row").filter({ hasText: "came up here" })).toBeVisible();
@@ -209,27 +219,9 @@ test("Enter opens the results, a message opens its chat, Back and Escape return"
   await expect(results(page)).toBeVisible();
 });
 
-test("the results are walked by key, and a message opened by Enter", async ({ page }) => {
-  await fakeSearch(page);
-  await login(page, "/chat");
-  await box(page).fill("floyd");
-  await page.keyboard.press("Enter");
-  await expect(results(page)).toBeFocused();
-  await page.keyboard.press("End");
-  await page.keyboard.press("ArrowUp");
-  await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/#\/chat\/rooms\/jazz\?at=150&q=floyd$/);
-  await expect(page.getByRole("log").locator('[data-message="150"]')).toBeVisible();
-  // back on the same line
-  await page.keyboard.press("Escape");
-  await expect(results(page)).toBeFocused();
-  await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/#\/chat\/rooms\/jazz\?at=150&q=floyd$/);
-});
-
 test("the messages can be narrowed, and the address keeps it", async ({ page }) => {
   await fakeSearch(page);
-  await login(page, "/chat");
+  await visit(page, "/chat");
   await page.goto("./#/chat/search?q=floyd");
   await expect(results(page)).toContainText("have you heard");
   await page.getByRole("combobox", { name: "Which messages" }).click();
@@ -248,7 +240,7 @@ test("the messages can be narrowed, and the address keeps it", async ({ page }) 
 
 test("Jump to latest leaves the older messages for the newest", async ({ page }) => {
   await fakeSearch(page);
-  await login(page, "/chat");
+  await visit(page, "/chat");
   await page.goto("./#/chat/rooms/jazz?at=150&q=floyd");
   const log = page.getByRole("log");
   await expect(log.locator('[data-message="150"]')).toBeVisible();
@@ -260,7 +252,7 @@ test("Jump to latest leaves the older messages for the newest", async ({ page })
 
 test("a search that finds nothing says so, and offers the name", async ({ page }) => {
   await fakeSearch(page);
-  await login(page, "/chat");
+  await visit(page, "/chat");
   await box(page).fill("zzz");
   await expect(page.getByRole("listbox")).toContainText("No rooms, users or messages match");
   await page.keyboard.press("Enter");
@@ -283,34 +275,12 @@ test("a long category shows its first rooms until all are asked for", async ({ p
       }))
     })
   );
-  await login(page, "/chat");
+  await visit(page, "/chat");
   await page.goto("./#/chat/search?q=floyd");
   const rooms = results(page).locator('[data-line^="room:"]');
   await expect(rooms).toHaveCount(20);
   await results(page).getByRole("row", { name: "Show all 25 rooms" }).click();
   await expect(rooms).toHaveCount(25);
-});
-
-test("the results with no search say what to do", async ({ page }) => {
-  await fakeSearch(page);
-  await login(page, "/chat");
-  await page.goto("./#/chat/search");
-  await expect(page.getByText("Search rooms, users and messages")).toBeVisible();
-});
-
-test("a query the daemon can't read finds the words", async ({ page }) => {
-  await fakeSearch(page);
-  await page.route("**/api/v0/messages/search**", (route) => {
-    const q = new URL(route.request().url()).searchParams.get("q") ?? "";
-    if (q === '"floyd')
-      return route.fulfill({ status: 400, json: { error: "not a valid search" } });
-    return route.fulfill({ json: { hits: q === '"floyd"*' ? HITS : [], total: 2 } });
-  });
-  await login(page, "/chat");
-  await box(page).fill('"floyd');
-  await page.keyboard.press("Enter");
-  await expect(results(page).getByRole("row").filter({ hasText: "came up here" })).toBeVisible();
-  await expect(page.getByRole("alert")).toHaveCount(0);
 });
 
 test.describe("on a phone", () => {
@@ -319,7 +289,7 @@ test.describe("on a phone", () => {
   test("the box works from the sheet and the results fit the screen", async ({ page }) => {
     await textSize(page, 24);
     await fakeSearch(page);
-    await login(page, "/chat");
+    await visit(page, "/chat");
     await box(page).fill("floyd");
     await expect(options(page)).toHaveCount(5);
     const list = (await page.getByRole("listbox").boundingBox())!;

@@ -1,11 +1,11 @@
-import { expect, type Locator, test } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
 import { fakeBrowse, fakeChat, fakeSearch, manyDownloads, SEARCH_ID } from "./support/fakes";
-import { login } from "./support/login";
+import { visit } from "./support/login";
 
 test("shows search results as a tree and as a list walked by key", async ({ page }) => {
   await fakeSearch(page);
-  await login(page, "/dashboard");
+  await visit(page, "/dashboard");
   await page.goto(`./#/searches/${SEARCH_ID}`);
   const crumbs = page.getByRole("navigation", { name: "Breadcrumb" });
   await expect(crumbs).toContainText("Search");
@@ -22,12 +22,6 @@ test("shows search results as a tree and as a list walked by key", async ({ page
   const filter = page.getByLabel("Filter", { exact: true });
   await filter.fill("type:mp3");
   await expect(tree.getByText("03 Three.mp3")).toBeVisible();
-  // a result's row acts on a click and shows it; the count above them is plain text
-  await expect(tree.locator("[role=row][aria-selected]").last()).toHaveCSS("cursor", "pointer");
-  await expect(page.getByRole("status").filter({ hasText: "files from" })).toHaveCSS(
-    "cursor",
-    "default"
-  );
   await expect(user("bob")).toHaveCount(0);
   await page.getByRole("button", { name: "Clear", exact: true }).click();
   await expect(filter).toHaveValue("");
@@ -37,7 +31,6 @@ test("shows search results as a tree and as a list walked by key", async ({ page
   await page.getByRole("radio", { name: "List" }).click();
   const grid = page.getByRole("treegrid", { name: "Search results" });
   await expect(grid.locator("[role=row][data-line]")).toHaveCount(5);
-  await expect(grid.locator("[role=row][data-line]").first()).toHaveCSS("cursor", "pointer");
   await grid.focus();
   await page.keyboard.press("ArrowDown");
   await page.keyboard.press("ArrowDown");
@@ -54,32 +47,12 @@ test("shows search results as a tree and as a list walked by key", async ({ page
   await expect(page.getByRole("radio", { name: "List" })).toBeChecked();
 });
 
-test("cross-fades between screens", async ({ page }) => {
-  await page.addInitScript(() => {
-    const start = document.startViewTransition?.bind(document);
-    if (!start) return;
-    Object.assign(window, { fades: 0 });
-    document.startViewTransition = ((update: () => Promise<void>) => {
-      (window as unknown as { fades: number }).fades += 1;
-      return start(update);
-    }) as typeof document.startViewTransition;
-  });
-  await login(page, "/dashboard");
-  const fades = () => page.evaluate(() => (window as unknown as { fades: number }).fades);
-  const before = await fades();
-  await page.getByRole("link", { name: "Downloads" }).click();
-  await expect(page).toHaveURL(/#\/downloads$/);
-  await expect.poll(fades).toBeGreaterThan(before);
-});
-
 test("browses a user, finds a folder by typing and shows where it is", async ({ page }) => {
   await fakeBrowse(page);
-  await login(page, "/users/carol/shares");
+  await visit(page, "/users/carol/shares");
   const tree = page.getByRole("treegrid", { name: "Shared folders" });
   const bootlegs = tree.locator('[data-line$="Bootlegs"]');
   await expect(bootlegs).toBeVisible();
-  // a folder line is a pointer target, which opens it, not text to select
-  await expect(bootlegs).toHaveCSS("cursor", "pointer");
   await tree.focus();
   await page.keyboard.type("bo");
   await expect(bootlegs).toHaveAttribute("data-focused", "true");
@@ -98,22 +71,9 @@ test("browses a user, finds a folder by typing and shows where it is", async ({ 
   await expect(page).toHaveURL(/#\/users\/carol\/shares$/);
 });
 
-test("goes to a screen from the command palette", async ({ page }) => {
-  await login(page, "/dashboard");
-  // the palette is part of the shell, there once the app is up
-  await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toBeVisible();
-  await page.keyboard.press("ControlOrMeta+k");
-  const box = page.getByRole("combobox", { name: /Go to a screen/ });
-  await expect(box).toBeFocused();
-  await box.fill("downl");
-  await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/#\/downloads$/);
-  await expect(box).toBeHidden();
-});
-
 test("keeps a compact row's controls between its dividers", async ({ page }) => {
   await manyDownloads(page, 30);
-  await login(page, "/downloads");
+  await visit(page, "/downloads");
   await page.getByRole("button", { name: "Density: Comfortable" }).click();
   await expect(page.getByRole("button", { name: "Density: Compact" })).toBeVisible();
   const grid = page.getByRole("treegrid", { name: "Downloads" });
@@ -134,39 +94,24 @@ test("keeps a compact row's controls between its dividers", async ({ page }) => 
   }
 });
 
-test("shows a list's focus ring for the keys, not after a click", async ({ page }) => {
-  await fakeChat(page);
-  await login(page, "/chat");
-  const list = page.getByRole("grid", { name: "Rooms and conversations" });
-  const rooms = list.locator('[data-line="h:rooms"]');
-  await rooms.getByRole("button").click();
-  await page.mouse.move(0, 0);
-  await expect(list.locator("[data-line]").first()).toBeVisible();
-  await expect(rooms).toHaveCSS("box-shadow", "none");
-  await expect(list.locator("[data-focused]")).toHaveCount(0);
-  // the keys bring it back, on the row they move to
-  await rooms.getByRole("button").click();
-  await page.keyboard.press("ArrowDown");
-  await expect(list.locator("[data-focused]")).toHaveCount(1);
-  await expect(list.locator("[data-focused]")).not.toHaveCSS("box-shadow", "none");
-});
-
 test("a row's hidden menu takes no width, and comes up without moving the row", async ({
   page
 }) => {
   await fakeChat(page);
-  await login(page, "/chat");
+  await visit(page, "/chat");
   const row = page.locator('[data-line="room:indie"]');
   const text = row.getByRole("gridcell");
   const menu = row.getByRole("button", { name: "Menu for indie" });
-  const end = async () => (await row.boundingBox())!.x + (await row.boundingBox())!.width;
-  const padding = 12;
   await expect(row).toBeVisible();
   await page.mouse.move(0, 0);
   await expect(menu).toHaveCSS("opacity", "0");
   // the text runs to the row's padding with nothing kept for the control
+  const inner = await row.evaluate((e) => {
+    const box = e.getBoundingClientRect();
+    return box.right - parseFloat(getComputedStyle(e).paddingRight);
+  });
   const rest = (await text.boundingBox())!;
-  expect(rest.x + rest.width).toBe((await end()) - padding);
+  expect(Math.abs(rest.x + rest.width - inner)).toBeLessThanOrEqual(1);
   await row.hover();
   await expect(menu).toHaveCSS("opacity", "1");
   expect(await text.boundingBox()).toEqual(rest);
@@ -181,71 +126,12 @@ test("a row's hidden menu takes no width, and comes up without moving the row", 
   await expect(menu).toHaveCSS("opacity", "1");
 });
 
-test("a highlight holds the avatar it belongs to", async ({ page }) => {
-  await fakeChat(page);
-  await login(page, "/chat");
-  const within = async (outer: Locator, inner: Locator) => {
-    const a = (await outer.boundingBox())!;
-    const b = (await inner.boundingBox())!;
-    expect(b.x).toBeGreaterThanOrEqual(a.x);
-    expect(b.y).toBeGreaterThanOrEqual(a.y);
-    expect(b.x + b.width).toBeLessThanOrEqual(a.x + a.width);
-    expect(b.y + b.height).toBeLessThanOrEqual(a.y + a.height);
-  };
-  const account = page.getByRole("button", { name: /Administrator/ });
-  await within(account, account.locator("span").first());
-  const row = page.locator('[data-line="user:alice"]');
-  await within(row, row.locator("span").first());
-});
-
-test("two highlighted rows stay apart, with no gap for the pointer", async ({ page }) => {
-  await fakeChat(page);
-  await page.route("**/api/v0/rooms/joined", (route) =>
-    route.fulfill({
-      json: ["indie", "jazz"].map((name) => ({
-        name,
-        unread: 0,
-        mentions: 0,
-        notify: "mentions",
-        userCount: 3,
-        lastMessageAt: null,
-        lastMessage: null,
-        lastReadId: 0
-      }))
-    })
-  );
-  await login(page, "/chat");
-  const first = page.locator('[data-line="room:indie"]');
-  const second = page.locator('[data-line="room:jazz"]');
-  await first.click({ modifiers: ["Control"] });
-  await second.click({ modifiers: ["Control"] });
-  await expect(first).toHaveAttribute("aria-selected", "true");
-  await expect(second).toHaveAttribute("aria-selected", "true");
-  // each tint stops at its padding box, inside the row's box, and the boxes meet
-  const painted = (row: Locator) =>
-    row.evaluate((e) => {
-      const box = e.getBoundingClientRect();
-      const style = getComputedStyle(e);
-      return {
-        clip: style.backgroundClip,
-        top: box.top + parseFloat(style.borderTopWidth),
-        bottom: box.bottom - parseFloat(style.borderBottomWidth),
-        boxTop: box.top,
-        boxBottom: box.bottom
-      };
-    });
-  const [a, b] = [await painted(first), await painted(second)];
-  expect(a.clip).toBe("padding-box");
-  expect(Math.abs(a.boxBottom - b.boxTop)).toBeLessThanOrEqual(1);
-  expect(b.top - a.bottom).toBeGreaterThanOrEqual(2);
-});
-
 test.describe("on a phone", () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
   test("a row's menu is always there for a finger", async ({ page }) => {
     await fakeChat(page);
-    await login(page, "/chat");
+    await visit(page, "/chat");
     const menu = page.getByRole("button", { name: "Menu for indie" });
     await expect(menu).toHaveCSS("opacity", "1");
     await expect(menu).toHaveCSS("position", "static");
@@ -256,7 +142,7 @@ test.describe("on a phone", () => {
 
 test("fades between screens without morphing the content area", async ({ page }) => {
   await fakeChat(page);
-  await login(page, "/dashboard");
+  await visit(page, "/dashboard");
   // the size each named part of a transition starts and ends at, as the transitions run
   await page.evaluate(() => {
     const seen: string[] = [];

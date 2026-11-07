@@ -2,6 +2,8 @@ import { execFileSync } from "node:child_process";
 
 import { defineConfig } from "@playwright/test";
 
+import { SESSION } from "./e2e/support/session";
+
 const port = Number(process.env.SMOKE_PORT ?? 5139);
 /** the daemon with real transfers, logged in to a soulfind of its own when there is one */
 const networkPort = port + 10;
@@ -14,6 +16,14 @@ const chromium = (): string => {
   } catch {
     throw new Error("no browser for the smoke test: set CHROMIUM_BIN or put chromium on PATH");
   }
+};
+const launchOptions = { executablePath: chromium() };
+
+/** The daemon on localhost, where the tests start with the session the login project saved */
+const local = {
+  baseURL: `http://127.0.0.1:${port}/reseek/`,
+  launchOptions,
+  storageState: SESSION
 };
 
 /**
@@ -30,32 +40,42 @@ export default defineConfig({
   workers: 1,
   projects: [
     {
-      name: "localhost",
-      testIgnore: ["**/insecure.e2e.ts", "**/network.e2e.ts"],
-      use: {
-        baseURL: `http://127.0.0.1:${port}/reseek/`,
-        launchOptions: { executablePath: chromium() }
-      }
+      // logs in through the form once; the daemon lives for the whole run, so its session does
+      name: "login",
+      testMatch: "**/login.setup.ts",
+      use: { baseURL: local.baseURL, launchOptions }
     },
     {
-      // plain http on a name that is not localhost, as on a LAN address, is no secure context
+      name: "localhost",
+      testIgnore: ["**/insecure.e2e.ts", "**/network.e2e.ts"],
+      dependencies: ["login"],
+      use: local
+    },
+    {
+      // the frame-rate benchmarks, which `pnpm perf` runs and the smoke test leaves out
+      name: "perf",
+      testMatch: "**/*.perf.ts",
+      dependencies: ["login"],
+      use: local
+    },
+    {
+      // plain http on a name that is not localhost, as on a LAN address, is no secure context.
+      // the session cookie is 127.0.0.1's, so these log in through the form
       name: "insecure",
       testMatch: "**/insecure.e2e.ts",
       use: {
         baseURL: `http://reseek.test:${port}/reseek/`,
         launchOptions: {
-          executablePath: chromium(),
+          ...launchOptions,
           args: ["--host-resolver-rules=MAP reseek.test 127.0.0.1"]
         }
       }
     },
     {
+      // a daemon of its own, which the saved session is not one of
       name: "network",
       testMatch: "**/network.e2e.ts",
-      use: {
-        baseURL: `http://127.0.0.1:${networkPort}/reseek/`,
-        launchOptions: { executablePath: chromium() }
-      }
+      use: { baseURL: `http://127.0.0.1:${networkPort}/reseek/`, launchOptions }
     }
   ],
   webServer: [

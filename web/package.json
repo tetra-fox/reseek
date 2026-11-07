@@ -13,7 +13,8 @@
     "format": "oxfmt .",
     "lint": "oxfmt --check . && oxlint",
     "test": "vitest run",
-    "smoke": "playwright test",
+    "smoke": "playwright test --project localhost --project insecure --project network",
+    "perf": "playwright test --project perf",
     "api": "openapi-typescript ../api/openapi.json -o src/lib/api/schema.d.ts --empty-objects-unknown --default-non-nullable false",
     "api-check": "pnpm api --check"
   },

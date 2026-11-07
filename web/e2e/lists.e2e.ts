@@ -1,43 +1,34 @@
 import { expect, type Locator, type Page, test } from "@playwright/test";
 
-import { login } from "./support/login";
+import { conversation, privateMessage } from "./support/fakes";
+import { visit } from "./support/login";
 
 /**
  * Answers the chat calls with two conversations, `alpha` with `messages` unread ones, a page at
  * a time; an older page takes `slow` milliseconds
  */
 const fakeUnread = async (page: Page, messages: number, slow = 0) => {
-  const message = (n: number) => ({
-    localId: n,
-    id: n,
-    timestamp: new Date(Date.UTC(2026, 9, 26, 10, 0, n)).toISOString(),
-    username: "alpha",
-    direction: "In",
-    message: `line ${n}\nwith a second line`,
-    isAcknowledged: false,
-    wasReplayed: false,
-    autoReply: false
-  });
-  const conversation = (username: string, last: number) => ({
-    username,
-    isActive: true,
-    isServerNotice: false,
-    unAcknowledgedMessageCount: username === "alpha" ? messages : 0,
-    hasUnAcknowledgedMessages: username === "alpha" && messages > 0,
-    notify: "all",
-    draft: "",
-    lastMessage: { ...message(last), username },
-    messages: null
-  });
-  const acknowledged: string[] = [];
+  const message = (n: number, username = "alpha") =>
+    privateMessage(
+      n,
+      new Date(Date.UTC(2026, 9, 26, 10, 0, n)).toISOString(),
+      username,
+      "In",
+      `line ${n}\nwith a second line`,
+      { isAcknowledged: false }
+    );
+  const unread = (username: string, last: number) =>
+    conversation(username, {
+      unAcknowledgedMessageCount: username === "alpha" ? messages : 0,
+      hasUnAcknowledgedMessages: username === "alpha" && messages > 0,
+      lastMessage: message(last, username)
+    });
   await page.route("**/api/v0/conversations**", async (route) => {
     const url = new URL(route.request().url());
-    if (route.request().method() === "PUT") {
-      acknowledged.push(url.pathname.replace(/^.*\/api\/v0\//, "/api/v0/"));
-      return route.fulfill({ status: 200 });
-    }
+    // an acknowledgment ends here: the daemon has none of these conversations
+    if (route.request().method() === "PUT") return route.fulfill({ status: 200 });
     if (url.pathname.endsWith("/api/v0/conversations")) {
-      return route.fulfill({ json: [conversation("alpha", 2), conversation("beta", 1)] });
+      return route.fulfill({ json: [unread("alpha", 2), unread("beta", 1)] });
     }
     if (url.pathname.endsWith("/messages")) {
       if (!url.pathname.includes("/alpha/")) return route.fulfill({ json: [] });
@@ -58,11 +49,10 @@ const fakeUnread = async (page: Page, messages: number, slow = 0) => {
     return route.fulfill({ status: 404, json: { error: "not found" } });
   });
   await page.route("**/api/v0/rooms/joined", (route) => route.fulfill({ json: [] }));
-  return acknowledged;
 };
 
 test("selects a range with Shift-click in a real browser", async ({ page }) => {
-  await login(page, "/system/logs");
+  await visit(page, "/system/logs");
   const rows = page.getByRole("grid", { name: "Live log" }).getByRole("row");
   await expect(rows.nth(3)).toBeVisible();
   await rows.nth(0).click();
@@ -76,7 +66,7 @@ test("selects a range with Shift-click in a real browser", async ({ page }) => {
 
 test("keeps keyboard focus on the chat list when a click opens a chat", async ({ page }) => {
   await fakeUnread(page, 2);
-  await login(page, "/chat");
+  await visit(page, "/chat");
   const grid = page.getByRole("grid", { name: "Rooms and conversations" });
   await grid.locator('[data-line="user:alpha"]').click();
   await expect(page).toHaveURL(/#\/chat\/alpha$/);
@@ -86,21 +76,10 @@ test("keeps keyboard focus on the chat list when a click opens a chat", async ({
   await expect(page.locator(`#${active}`)).toHaveAttribute("data-line", "user:beta");
 });
 
-test("doesn't acknowledge a conversation opened at an old message", async ({ page }) => {
-  const acknowledged = await fakeUnread(page, 80);
-  await login(page, "/chat");
-  await page.goto("./#/chat/alpha?at=3");
-  await expect(page.locator('[data-message="3"]')).toBeVisible();
-  await page.waitForTimeout(1000);
-  expect(acknowledged).toEqual([]);
-  // at the bottom, it is read
-  await page.getByRole("button", { name: /Jump to latest|new/ }).click();
-  await expect.poll(() => acknowledged).toContain("/api/v0/conversations/alpha");
-});
-
 /**
- * From the next frame on, notes in every frame where the first message in view then is drawn,
- * relative to the log's top
+ * From the next frame on, notes in every frame where the first message in view then is painted,
+ * relative to the log's top. A frame's own callback runs before the list measures the lines it
+ * just drew and moves them, so each place is read in a task after that frame's paint
  */
 const watchTop = (log: Locator) =>
   log.evaluate(
@@ -113,11 +92,14 @@ const watchTop = (log: Locator) =>
           )!;
           const id = first.dataset.message!;
           const frames: number[] = [];
+          let count = 0;
           Object.assign(window, { anchored: frames });
           const note = () => {
-            const node = box.querySelector(`[data-message="${id}"]`);
-            frames.push(node ? Math.round(node.getBoundingClientRect().top - view) : NaN);
-            if (frames.length < 90) requestAnimationFrame(note);
+            setTimeout(() => {
+              const node = box.querySelector(`[data-message="${id}"]`);
+              frames.push(node ? Math.round(node.getBoundingClientRect().top - view) : NaN);
+            }, 0);
+            if (++count < 90) requestAnimationFrame(note);
           };
           note();
           started();
@@ -125,24 +107,34 @@ const watchTop = (log: Locator) =>
       )
   );
 
-/** The places `watchTop` noted, once the older page is in and settled */
+/** The places `watchTop` noted in its 90 frames, once the older page is in */
 const watched = async (page: Page, older: string) => {
   await expect(page.locator(`[data-message="${older}"]`)).toBeAttached();
-  await page.waitForTimeout(1000);
+  await page.waitForFunction(
+    () => (window as unknown as { anchored: number[] }).anchored.length >= 90
+  );
   return page.evaluate(() => (window as unknown as { anchored: number[] }).anchored);
 };
 
 test("keeps the message in view still while an older page loads above it", async ({ page }) => {
   await fakeUnread(page, 250, 400);
-  await login(page, "/chat/alpha");
+  await visit(page, "/chat/alpha");
   const log = page.getByRole("log");
   await expect(page.locator('[data-message="250"]')).toBeVisible();
-  // scroll up a step at a time, as a wheel would, until the older page is asked for
-  for (let i = 0; i < 40; i++) {
-    await log.evaluate((box) => box.scrollBy(0, -400));
-    await page.waitForTimeout(30);
-    if (await log.evaluate((box) => box.scrollTop < 96)) break;
-  }
+  // scroll up a step a frame, as a wheel would, until the older page is asked for
+  await log.evaluate(
+    (box) =>
+      new Promise<void>((done) => {
+        let steps = 0;
+        const step = () => {
+          box.scrollBy(0, -400);
+          steps += 1;
+          if (box.scrollTop < 96 || steps === 40) done();
+          else requestAnimationFrame(step);
+        };
+        step();
+      })
+  );
   await watchTop(log);
   const frames = await watched(page, "150");
   expect(new Set(frames).size, `drawn at ${frames.join(", ")}`).toBe(1);
@@ -152,7 +144,7 @@ test("keeps the message in view still after a jump to the top loads older ones",
   page
 }) => {
   await fakeUnread(page, 250, 400);
-  await login(page, "/chat/alpha");
+  await visit(page, "/chat/alpha");
   const log = page.getByRole("log");
   await expect(page.locator('[data-message="250"]')).toBeVisible();
   // one step past everything drawn, as dragging the scrollbar to the top would

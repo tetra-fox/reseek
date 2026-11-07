@@ -1,5 +1,8 @@
 import { expect, test } from "@playwright/test";
 
+// logged out, to log in through the form
+test.use({ storageState: { cookies: [], origins: [] } });
+
 test("logs in, shows where it is and moves between screens", async ({ page }) => {
   await page.goto("./#/downloads");
   await expect(page).toHaveURL(/#\/login\?to=%2Fdownloads$/);

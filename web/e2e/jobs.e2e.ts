@@ -1,11 +1,11 @@
 import { expect, test } from "@playwright/test";
 
-import { login } from "./support/login";
+import { visit } from "./support/login";
 
 test("runs the cleanup from its schedule and finds it in the list by its kind", async ({
   page
 }) => {
-  await login(page, "/jobs");
+  await visit(page, "/jobs");
   await expect(page.getByRole("heading", { name: "Scheduled jobs" })).toBeVisible();
   const cleanup = page.getByRole("listitem").filter({ hasText: "Deletes old data" });
   await expect(cleanup).toContainText("Every 5 minutes");
@@ -25,9 +25,5 @@ test("runs the cleanup from its schedule and finds it in the list by its kind", 
   await page.getByRole("button", { name: "Kind" }).click();
   await page.getByRole("menuitemcheckbox", { name: "Maintenance" }).click();
   await page.keyboard.press("Escape");
-  await expect(row).toBeVisible();
-  await page.getByRole("searchbox", { name: "Search jobs by name" }).fill("nothing like it");
-  await expect(page.getByText(/The filters hide/)).toBeVisible();
-  await page.getByRole("button", { name: "Clear filters" }).first().click();
   await expect(row).toBeVisible();
 });

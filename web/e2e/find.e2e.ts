@@ -1,7 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 
 import { fakeConnected, SEARCH_ID } from "./support/fakes";
-import { login, textSize } from "./support/login";
+import { textSize, visit } from "./support/login";
 
 const box = (page: Page) => page.getByRole("combobox", { name: "Search files and users" });
 const options = (page: Page) => page.getByRole("option");
@@ -48,7 +48,7 @@ test("Enter in the Search box always searches, only a chosen row does anything e
     posted.push(body.searchText);
     return route.fulfill({ json: { ...body, id: SEARCH_ID } });
   });
-  await login(page, "/searches");
+  await visit(page, "/searches");
 
   await box(page).fill("aphex");
   await expect(options(page)).toHaveText([
@@ -73,12 +73,21 @@ test("Enter in the Search box always searches, only a chosen row does anything e
   expect(posted).toEqual(["aphex"]);
 });
 
-test("the Search dropdown fits a phone at the largest text size", async ({ page }) => {
+test("the Search box and its dropdown fit a 360 px phone at the largest text size", async ({
+  page
+}) => {
   await page.setViewportSize({ width: 360, height: 640 });
   await textSize(page, 24);
   await fakeConnected(page);
   await directory(page);
-  await login(page, "/searches");
+  await visit(page, "/searches");
+  // the Search button leaves the box its room
+  const button = page.getByRole("button", { name: "Search", exact: true });
+  await expect(button).toBeVisible();
+  const { width } = (await button.boundingBox())!;
+  expect(width).toBeLessThanOrEqual(24 * 2.75);
+  expect((await box(page).boundingBox())!.width).toBeGreaterThan(24 * 7);
+
   await box(page).fill("a-name-as-long-as-they-can-be-0");
   const list = page.getByRole("listbox");
   await expect(list).toBeVisible();

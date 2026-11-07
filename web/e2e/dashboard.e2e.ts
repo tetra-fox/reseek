@@ -1,15 +1,8 @@
 import { expect, test } from "@playwright/test";
 
-import { login } from "./support/login";
-
-const summary = (count: number) => ({
-  count,
-  totalBytes: count * 40_000_000,
-  distinctUsers: 3,
-  averageSpeed: 900_000,
-  averageWait: 4,
-  averageDuration: 30
-});
+import type { Schemas } from "../src/lib/api/client";
+import { summary } from "./support/fakes";
+import { visit } from "./support/login";
 
 test("the dashboard shows more at a glance, each figure a link to its list", async ({ page }) => {
   await page.route("**/api/v0/telemetry/reports/transfers/summary**", (route) =>
@@ -18,19 +11,14 @@ test("the dashboard shows more at a glance, each figure a link to its list", asy
         Download: { Succeeded: summary(40), Errored: summary(3), Cancelled: summary(2) },
         Upload: { Succeeded: summary(25), TimedOut: summary(1) },
         distinctUsers: 9
-      }
+      } satisfies Schemas["SummaryReport"]
     })
   );
-  await login(page, "/dashboard");
+  await visit(page, "/dashboard");
   const now = page.getByRole("region", { name: "Current activity" });
   await expect(now).toContainText("Downloading");
   await expect(now).toContainText("Sharing");
   await expect(page.getByRole("img", { name: "Transfer outcomes" })).toBeVisible();
-  // the chart's bars open their lists, so they take the pointer
-  await expect(
-    page.getByRole("img", { name: "Transfer outcomes" }).locator("rect.cursor-pointer").first()
-  ).toHaveCSS("cursor", "pointer");
-  if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/dashboard.png` });
 
   // a figure opens the list behind it, filtered
   await page
@@ -51,42 +39,10 @@ test("the dashboard shows more at a glance, each figure a link to its list", asy
   );
 });
 
-test("the activity log opens from the footer and lists what others did", async ({ page }) => {
-  await page.route("**/api/v0/activity", (route) =>
-    route.fulfill({
-      json: [
-        { id: 1, at: "2026-10-27T18:00:00Z", username: "alice", kind: { type: "browse" } },
-        {
-          id: 2,
-          at: "2026-10-27T18:01:00Z",
-          username: "bob",
-          kind: { type: "search", query: "boards of canada", results: 12 }
-        },
-        {
-          id: 3,
-          at: "2026-10-27T18:02:00Z",
-          username: "carol",
-          kind: { type: "queued", files: 3, filename: "Music\\Album\\03.flac" }
-        }
-      ]
-    })
-  );
-  await login(page, "/dashboard");
-  await page.getByRole("button", { name: "Activity" }).click();
-  const log = page.getByRole("grid", { name: "Activity" });
-  await expect(log.getByRole("row")).toHaveCount(3);
-  await expect(log.getByRole("row").first()).toContainText("carol queued 3 files");
-  await expect(log).toContainText('bob searched for "boards of canada" (12 results)');
-  await expect(log).toContainText("alice is browsing your shares");
-  if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/activity.png` });
-  await page.getByRole("button", { name: "Close the activity log" }).click();
-  await expect(log).toBeHidden();
-});
-
 test("the activity log docks under the screen, keeps its height and opens with a key", async ({
   page
 }) => {
-  await login(page, "/users");
+  await visit(page, "/users");
   const area = page.locator("[data-content]");
   const dock = page.getByRole("region", { name: "Activity on the network" });
   const height = () => dock.evaluate((e) => e.getBoundingClientRect().height);
@@ -124,7 +80,8 @@ test("the activity log docks under the screen, keeps its height and opens with a
 });
 
 test("a screen that fails says what went wrong", async ({ page }) => {
-  // two errors with one id break the recent errors' keyed list, which the screen's boundary catches
+  // the same error in the answers for both directions breaks the recent errors' list, keyed by
+  // id, which the screen's boundary catches
   await page.route("**/api/v0/telemetry/reports/transfers/exceptions?**", (route) =>
     route.fulfill({
       json: [
@@ -141,13 +98,18 @@ test("a screen that fails says what went wrong", async ({ page }) => {
           averageSpeed: 0,
           exception: "File not shared."
         }
-      ]
+      ] satisfies Schemas["TransferExceptionDetail"][]
     })
   );
-  await login(page, "/dashboard");
+  await visit(page, "/dashboard");
   await page.getByRole("button", { name: "Errors", exact: true }).click();
-  const main = page.locator("main");
-  await expect(main.getByRole("button", { name: "Reload" })).toBeVisible();
-  await expect(main).toContainText("each_key_duplicate");
-  await expect(main).not.toContainText("[object Object]");
+  const failed = page
+    .getByRole("main")
+    .getByRole("alert")
+    .filter({ hasText: "This screen could not be displayed" });
+  await expect(failed.getByRole("button", { name: "Reload" })).toBeVisible();
+  // under the caption, the error's own words rather than a stand-in for them
+  const detail = failed.locator("p").nth(1);
+  await expect(detail).not.toBeEmpty();
+  await expect(detail).not.toHaveText(/^(Internal Error|\[object Object\])$/);
 });

@@ -1,29 +1,7 @@
 import { type CDPSession, expect, type Page, test } from "@playwright/test";
 
-import { fakeChat, fakeConnected } from "./support/fakes";
-import { login } from "./support/login";
-
-const room = (name: string, minute: number) => ({
-  name,
-  unread: 0,
-  mentions: 0,
-  notify: "mentions",
-  userCount: 3,
-  lastMessageAt: new Date(Date.UTC(2026, 9, 27, 18, minute)).toISOString(),
-  lastReadId: 0
-});
-
-const conversation = (username: string) => ({
-  username,
-  isActive: true,
-  isServerNotice: false,
-  unAcknowledgedMessageCount: 0,
-  hasUnAcknowledgedMessages: false,
-  notify: "all",
-  draft: "",
-  lastMessage: null,
-  messages: null
-});
+import { conversation, fakeChat, fakeConnected, joinedRoom } from "./support/fakes";
+import { visit } from "./support/login";
 
 /**
  * The chat fakes with four rooms and `people` conversations, and no stream from the daemon whose
@@ -32,10 +10,12 @@ const conversation = (username: string) => ({
 const fakeChats = async (page: Page, people: string[]) => {
   await fakeConnected(page);
   await fakeChat(page);
-  const rooms = ["indie", "jazz", "ambient", "techno"].map((name, n) => room(name, n));
+  const rooms = ["indie", "jazz", "ambient", "techno"].map((name, n) =>
+    joinedRoom(name, { lastMessageAt: new Date(Date.UTC(2026, 9, 27, 18, n)).toISOString() })
+  );
   await page.route("**/api/v0/rooms/joined", (route) => route.fulfill({ json: rooms }));
   await page.route("**/api/v0/conversations", (route) =>
-    route.fulfill({ json: people.map(conversation) })
+    route.fulfill({ json: people.map((username) => conversation(username)) })
   );
 };
 
@@ -79,7 +59,7 @@ test.afterEach(async ({ page }) => {
 
 test("pins hold their place through a drag, the keys and a reload", async ({ page }) => {
   await fakeChats(page, ["alice", "bob"]);
-  await login(page, "/chat");
+  await visit(page, "/chat");
   await expect(line(page, "room:jazz")).toBeVisible();
   await expect(line(page, "h:pinned")).toHaveCount(0);
 
@@ -117,7 +97,6 @@ test("pins hold their place through a drag, the keys and a reload", async ({ pag
   await expect
     .poll(() => line(page, "room:jazz").evaluate((row) => getComputedStyle(row).translate))
     .toMatch(/^0px [1-9]/);
-  if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/pins-drag.png` });
   await page.mouse.up();
   await expect.poll(() => pinned(page)).toEqual(["room:ambient", "room:jazz", "user:alice"]);
   await expect(page).toHaveURL(/#\/chat$/);
@@ -175,26 +154,6 @@ test("pins hold their place through a drag, the keys and a reload", async ({ pag
     ]);
 });
 
-test("other tabs are told of the pins, on open and on a change", async ({ page }) => {
-  await login(page, "/dashboard");
-  // a stream of the daemon's own, read past its snapshot
-  const stream = await page.evaluateHandle(async () => {
-    const answer = await fetch("api/v0/live?topics=rooms");
-    const reader = answer.body!.pipeThrough(new TextDecoderStream()).getReader();
-    let text = "";
-    while (!text.includes("event: chat.pins")) text += (await reader.read()).value;
-    return reader;
-  });
-  expect((await setPins(page, [{ kind: "room", name: "jazz" }])).status()).toBe(200);
-  const heard = await stream.evaluate(async (reader) => {
-    let text = "";
-    while (!text.includes('"jazz"')) text += (await reader.read()).value;
-    await reader.cancel();
-    return text;
-  });
-  expect(heard).toContain("event: chat.pins");
-});
-
 test.describe("on a phone", () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
@@ -214,7 +173,7 @@ test.describe("on a phone", () => {
   test("a finger drags a pin by its grip, and scrolls the list anywhere else", async ({ page }) => {
     const people = Array.from({ length: 30 }, (_, n) => `person${n}`);
     await fakeChats(page, people);
-    await login(page, "/chat");
+    await visit(page, "/chat");
     await setPins(page, [
       { kind: "room", name: "jazz" },
       { kind: "room", name: "indie" },
@@ -222,8 +181,6 @@ test.describe("on a phone", () => {
     ]);
     await page.reload();
     await expect.poll(() => pinned(page)).toEqual(["room:jazz", "room:indie", "user:person1"]);
-
-    if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/pins-phone.png` });
     const client = await page.context().newCDPSession(page);
     const box = page.getByRole("grid", { name: "Rooms and conversations" });
 

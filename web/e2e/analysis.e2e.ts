@@ -1,15 +1,18 @@
 import { expect, type Locator, type Page, test } from "@playwright/test";
 
+import type { Schemas } from "../src/lib/api/client";
 import { newId } from "../src/lib/ids";
-import { ANALYZED_DOWNLOAD, fakeAnalysis, fakeBatch, fakeDownloads } from "./support/fakes";
-import { login } from "./support/login";
+import { openSlot, rect, settled } from "./support/analysis";
+import {
+  ANALYZED_DOWNLOAD,
+  fakeAnalysis,
+  fakeBatch,
+  fakeDownloads,
+  listedFile,
+  listedFolder
+} from "./support/fakes";
+import { visit } from "./support/login";
 import { wav } from "./support/pictures";
-
-/** A plot's place in the canvas, in CSS pixels, as the canvas writes it */
-const rect = async (plot: Locator, which = "data-plot") => {
-  const [x, y, width, height] = (await plot.getAttribute(which))!.split(" ").map(Number);
-  return { x, y, width, height };
-};
 
 /** The color at a point `across` and `down` a plot, from 0 to 1 */
 const pixel = async (plot: Locator, across: number, down: number, which = "data-plot") => {
@@ -50,31 +53,11 @@ const guideRow = async (plot: Locator, hz: number, scale: "linear" | "mel" = "li
 };
 const mel = (hz: number) => 2595 * Math.log10(1 + hz / 700);
 
-/** A locator's box once it stops moving, as a dialog settles into place */
-const settled = async (locator: Locator) => {
-  let last = await locator.boundingBox();
-  for (;;) {
-    await locator.page().waitForTimeout(100);
-    const now = await locator.boundingBox();
-    if (now && last && now.x === last.x && now.y === last.y && now.width === last.width) {
-      return now;
-    }
-    last = now;
-  }
-};
-
 /** Opens the inspector on a download from its row */
 const details = async (page: Page) => {
   await page.getByRole("button", { name: "More for 2.flac" }).click();
   await page.getByRole("menuitem", { name: "Details" }).click();
   return page.getByRole("complementary", { name: "Details" });
-};
-
-/** Opens a download on the Analysis page from its row, and gives its slot */
-const openSlot = async (page: Page) => {
-  await page.getByRole("button", { name: "More for 2.flac" }).click();
-  await page.getByRole("menuitem", { name: "Open in Analysis" }).click();
-  return page.getByRole("region", { name: "Slot A" });
 };
 
 /** Clicks a plot `across` it, from 0 to 1, half way down */
@@ -86,7 +69,7 @@ const clickAt = async (plot: Locator, across: number) => {
 test("analyzes a finished download from its row and keeps a judgment", async ({ page }) => {
   await fakeDownloads(page);
   await fakeAnalysis(page);
-  await login(page, "/downloads");
+  await visit(page, "/downloads");
   const table = page.getByRole("treegrid", { name: "Downloads" });
   // the analyzed download says so in its row, muted, with the reading in its tooltip
   await expect(table.getByText("Analyzed", { exact: true })).toHaveCount(1);
@@ -184,7 +167,7 @@ test("dragging the cursor on the waveform moves it on the spectrogram and the sp
 }) => {
   await fakeDownloads(page);
   await fakeAnalysis(page);
-  await login(page, "/downloads");
+  await visit(page, "/downloads");
   const viewer = await openSlot(page);
   const plot = viewer.getByRole("slider", { name: "Cursor" });
   const spectrum = viewer
@@ -220,7 +203,7 @@ test("zooms around the pointer, pans, and loads the detail in view", async ({ pa
     const tile = new URL(r.url()).searchParams.get("tile");
     if (tile !== null && r.url().includes("/analysis/spectrogram")) tiles.add(tile);
   });
-  await login(page, "/downloads");
+  await visit(page, "/downloads");
   const viewer = await openSlot(page);
   const plot = viewer.getByRole("slider", { name: "Cursor" });
   await expect(plot).toHaveAttribute("data-view", "0.000 300.000");
@@ -230,14 +213,22 @@ test("zooms around the pointer, pans, and loads the detail in view", async ({ pa
   await page.mouse.move(box.x + spec.x + spec.width / 4, box.y + spec.height / 2);
   for (let i = 0; i < 8; i++) await page.mouse.wheel(0, -200);
   const view = async () => (await plot.getAttribute("data-view"))!.split(" ").map(Number);
-  /** The view once it stops moving, as a zoom eases in */
+  /** The view once two reads 100 ms apart agree, as a zoom eases in */
   const settledView = async () => {
-    for (let last = await view(); ;) {
-      await page.waitForTimeout(100);
-      const now = await view();
-      if (now[0] === last[0] && now[1] === last[1]) return now;
-      last = now;
-    }
+    // the poll's first try is at once, so the first view is read there and compared 100 ms on
+    let last: Awaited<ReturnType<typeof view>> | undefined;
+    await expect
+      .poll(
+        async () => {
+          const now = await view();
+          const still = !!last && now[0] === last[0] && now[1] === last[1];
+          last = now;
+          return still;
+        },
+        { message: "the view keeps moving", intervals: [100] }
+      )
+      .toBe(true);
+    return last!;
   };
   await expect.poll(async () => (await view())[1]).toBeLessThan(30);
   // the time under the pointer stays under it
@@ -280,68 +271,6 @@ test("zooms around the pointer, pans, and loads the detail in view", async ({ pa
   await expect.poll(async () => (await view())[0]).toBe(150);
 });
 
-test("pans a zoomed five-minute file at sixty frames a second", async ({ page }) => {
-  await fakeDownloads(page);
-  await fakeAnalysis(page, { duration: 300 });
-  await login(page, "/downloads");
-  const plot = (await openSlot(page)).getByRole("slider", { name: "Cursor" });
-  const detail = page.waitForResponse((r) => r.url().includes("/analysis/spectrogram?tile="));
-  for (let i = 0; i < 4; i++) {
-    await page
-      .getByRole("region", { name: "Slot A" })
-      .getByRole("button", { name: "Zoom in" })
-      .click();
-  }
-  // the detail for the first stretch arrives before the clock starts
-  await detail;
-  const box = await settled(plot);
-  const spec = await rect(plot, "data-plot");
-  const y = box.y + spec.height / 2;
-  // the main thread's work, which is what decides whether a frame is ready in time; the frame
-  // gaps also count this headless browser's software compositing
-  const cdp = await page.context().newCDPSession(page);
-  await cdp.send("Performance.enable");
-  const work = async () => {
-    const { metrics } = await cdp.send("Performance.getMetrics");
-    const value = (name: string) => metrics.find((m) => m.name === name)!.value * 1000;
-    return { task: value("TaskDuration"), script: value("ScriptDuration") };
-  };
-  const before = await work();
-  const frames = page.evaluate(
-    () =>
-      new Promise<number[]>((done) => {
-        const times: number[] = [];
-        const tick = (t: number) => {
-          times.push(t);
-          if (times.length < 121) requestAnimationFrame(tick);
-          else done(times.slice(1).map((t, i) => t - times[i]));
-        };
-        requestAnimationFrame(tick);
-      })
-  );
-  await page.mouse.move(box.x + spec.x + spec.width * 0.9, y);
-  await page.mouse.down();
-  for (let i = 0; i < 120; i++) {
-    await page.mouse.move(box.x + spec.x + spec.width * (0.9 - (0.8 * i) / 120), y);
-  }
-  await page.mouse.up();
-  const gaps = (await frames).toSorted((a, b) => a - b);
-  const after = await work();
-  const elapsed = gaps.reduce((a, b) => a + b, 0);
-  const mean = elapsed / gaps.length;
-  const p95 = gaps[Math.floor(gaps.length * 0.95)];
-  const task = (after.task - before.task) / gaps.length;
-  const script = (after.script - before.script) / gaps.length;
-  // kept with the test's result, where the report shows it
-  test.info().annotations.push({
-    type: "panning",
-    description:
-      `frames ${mean.toFixed(1)} ms on average, p95 ${p95.toFixed(1)} ms; main thread ` +
-      `${task.toFixed(1)} ms a frame, ${script.toFixed(1)} ms of it script`
-  });
-  expect(task).toBeLessThan(1000 / 60);
-});
-
 /** The rows the MP3 128k guide line is drawn on, sampled every frame until `ms` have passed */
 const guideRows = (plot: Locator, ms: number) =>
   plot.evaluate(
@@ -379,7 +308,7 @@ test("the frequency scale moves between linear and mel through the frames betwee
 }) => {
   await fakeDownloads(page);
   await fakeAnalysis(page);
-  await login(page, "/downloads");
+  await visit(page, "/downloads");
   const viewer = await openSlot(page);
   const plot = viewer.getByRole("slider", { name: "Cursor" });
   const scales = viewer.getByRole("radiogroup", { name: "Frequency scale" });
@@ -408,65 +337,13 @@ test("the frequency scale moves between linear and mel through the frames betwee
   expect(rows.at(-1)).toBe(mel);
 });
 
-test("moves between scales at sixty frames a second on a five-minute file", async ({ page }) => {
-  await fakeDownloads(page);
-  await fakeAnalysis(page, { duration: 300 });
-  await login(page, "/downloads");
-  const dialog = await openSlot(page);
-  const detail = page.waitForResponse((r) => r.url().includes("/analysis/spectrogram?tile="));
-  for (let i = 0; i < 4; i++) await dialog.getByRole("button", { name: "Zoom in" }).click();
-  await detail;
-  await settled(dialog.getByRole("slider", { name: "Cursor" }));
-  const cdp = await page.context().newCDPSession(page);
-  await cdp.send("Performance.enable");
-  const work = async () => {
-    const { metrics } = await cdp.send("Performance.getMetrics");
-    const value = (name: string) => metrics.find((m) => m.name === name)!.value * 1000;
-    return { task: value("TaskDuration"), script: value("ScriptDuration") };
-  };
-  const scales = dialog.getByRole("radiogroup", { name: "Frequency scale" });
-  const before = await work();
-  const frames = page.evaluate(
-    () =>
-      new Promise<number[]>((done) => {
-        const times: number[] = [];
-        const tick = (t: number) => {
-          times.push(t);
-          if (times.length < 121) requestAnimationFrame(tick);
-          else done(times.slice(1).map((t, i) => t - times[i]));
-        };
-        requestAnimationFrame(tick);
-      })
-  );
-  // a new scale every 200 ms, each before the last has landed, so every frame is a moving one
-  let counted = false;
-  void frames.then(() => (counted = true));
-  for (let i = 0; !counted; i++) {
-    await scales.getByRole("radio", { name: ["Log", "Mel", "Linear"][i % 3] }).click();
-    await page.waitForTimeout(200);
-  }
-  const gaps = (await frames).toSorted((a, b) => a - b);
-  const after = await work();
-  const mean = gaps.reduce((a, b) => a + b, 0) / gaps.length;
-  const p95 = gaps[Math.floor(gaps.length * 0.95)];
-  const task = (after.task - before.task) / gaps.length;
-  const script = (after.script - before.script) / gaps.length;
-  test.info().annotations.push({
-    type: "scale moves",
-    description:
-      `frames ${mean.toFixed(1)} ms on average, p95 ${p95.toFixed(1)} ms; main thread ` +
-      `${task.toFixed(1)} ms a frame, ${script.toFixed(1)} ms of it script`
-  });
-  expect(task).toBeLessThan(1000 / 60);
-});
-
 test("the cursor follows playback and a click seeks it", async ({ page }) => {
   await fakeDownloads(page);
   await fakeAnalysis(page);
   await page.route("**/api/v0/transfers/downloads/alice/*/content**", (route) =>
     route.fulfill({ body: wav(6), contentType: "audio/wav" })
   );
-  await login(page, "/downloads");
+  await visit(page, "/downloads");
   const viewer = await openSlot(page);
   const plot = viewer.getByRole("slider", { name: "Cursor" });
   await plot.focus();
@@ -499,7 +376,7 @@ test("a report an older version made asks to be analyzed again", async ({ page }
   page.on("request", (r) => {
     if (r.method() === "POST" && r.url().includes("/analysis")) queued.push(r.url());
   });
-  await login(page, "/downloads");
+  await visit(page, "/downloads");
   const slot = await openSlot(page);
   await expect(
     slot.getByText("Results from an older version of reseek can't be shown")
@@ -516,7 +393,7 @@ test("a report an older version made asks to be analyzed again", async ({ page }
 test("filters downloads by their analysis, by chip and by word", async ({ page }) => {
   await fakeDownloads(page);
   await fakeAnalysis(page);
-  await login(page, "/downloads");
+  await visit(page, "/downloads");
   const table = page.getByRole("treegrid", { name: "Downloads" });
   const shown = (name: string) => table.getByRole("button", { name: `More for ${name}` });
   await expect(shown("3.flac")).toBeVisible();
@@ -549,7 +426,7 @@ test("queues a user's downloads, a folder and a selection for analysis", async (
     queued.push(file.id);
     return "queued";
   });
-  await login(page, "/downloads");
+  await visit(page, "/downloads");
   const grid = page.getByRole("treegrid", { name: "Downloads" });
   const header = (name: string) => grid.getByRole("rowheader").filter({ hasText: name });
 
@@ -581,36 +458,12 @@ test("queues a user's downloads, a folder and a selection for analysis", async (
 
 test("analyzes a file and queues a folder from the Files screen", async ({ page }) => {
   await fakeAnalysis(page);
-  const at = "2026-10-27T18:00:00Z";
-  const file = (fullName: string) => ({
-    attributes: "Normal",
-    createdAt: at,
-    modifiedAt: at,
-    fullName,
-    name: fullName.split("/").pop(),
-    length: 30_000_000
-  });
   await page.route("**/api/v0/files/downloads/directories", (route) =>
     route.fulfill({
-      json: {
-        attributes: "Directory",
-        createdAt: at,
-        modifiedAt: at,
-        fullName: "",
-        name: "downloads",
-        directories: [
-          {
-            attributes: "Directory",
-            createdAt: at,
-            modifiedAt: at,
-            fullName: "Album",
-            name: "Album",
-            directories: null,
-            files: null
-          }
-        ],
-        files: [file("track.flac"), file("notes.txt")]
-      }
+      json: listedFolder("", "downloads", {
+        directories: [listedFolder("Album", "Album")],
+        files: [listedFile("track.flac"), listedFile("notes.txt")]
+      })
     })
   );
   const queued: { id: string; path: string }[] = [];
@@ -621,15 +474,10 @@ test("analyzes a file and queues a folder from the Files screen", async ({ page 
   });
   await page.route("**/api/v0/files/downloads/directories/*", (route) =>
     route.fulfill({
-      json: {
-        attributes: "Directory",
-        createdAt: at,
-        modifiedAt: at,
-        fullName: "",
-        name: "Album",
+      json: listedFolder("", "Album", {
         directories: [],
-        files: [file("01.flac"), file("cover.jpg"), file("CD2/02.wav")]
-      }
+        files: [listedFile("01.flac"), listedFile("cover.jpg"), listedFile("CD2/02.wav")]
+      })
     })
   );
   await page.route(
@@ -651,17 +499,18 @@ test("analyzes a file and queues a folder from the Files screen", async ({ page 
     }
   );
   // the queue, with track.flac queued from another browser before this page opened
-  const job = (id: string, path: string) => ({
-    id,
-    path: `/srv/downloads/${path}`,
-    root: "downloads",
-    relativePath: path,
-    transferId: null,
-    state: "queued",
-    queuedAt: at,
-    startedAt: null,
-    progress: null
-  });
+  const job = (id: string, path: string) =>
+    ({
+      id,
+      path: `/srv/downloads/${path}`,
+      root: "downloads",
+      relativePath: path,
+      transferId: null,
+      state: "queued",
+      queuedAt: "2026-10-27T18:00:00Z",
+      startedAt: null,
+      progress: null
+    }) satisfies Schemas["AnalysisJob"];
   await page.route("**/api/v0/analysis/jobs", (route) =>
     route.fulfill({
       json: {
@@ -670,7 +519,7 @@ test("analyzes a file and queues a folder from the Files screen", async ({ page 
       }
     })
   );
-  await login(page, "/system/files");
+  await visit(page, "/system/files");
   await expect(page.getByRole("button", { name: "More for notes.txt" })).toBeVisible();
   await page.getByRole("button", { name: "More for notes.txt" }).click();
   await expect(page.getByRole("menuitem", { name: "Open in Analysis" })).toHaveCount(0);
@@ -726,7 +575,7 @@ test("opens a file, compares a second, and clears them, with the address followi
 }) => {
   await fakeDownloads(page);
   await fakeAnalysis(page);
-  await login(page, "/downloads");
+  await visit(page, "/downloads");
   await page.getByRole("button", { name: "More for 2.flac" }).click();
   // with nothing to compare to, a list offers only to open
   await expect(page.getByRole("menuitem", { name: "Compare" })).toHaveCount(0);
@@ -788,11 +637,13 @@ test("opens a file, compares a second, and clears them, with the address followi
   await expect(page).toHaveURL(/#\/analysis$/);
 });
 
-test("a file's plot keeps a readable height and the rows fill a tall window", async ({ page }) => {
+test("a local file is tagged and unjudged, and the plots keep a readable height", async ({
+  page
+}) => {
   await fakeDownloads(page);
   await fakeAnalysis(page);
   await page.setViewportSize({ width: 1280, height: 720 });
-  await login(page, "/analysis");
+  await visit(page, "/analysis");
   const a = page.getByRole("region", { name: "Slot A" });
   const b = page.getByRole("region", { name: "Slot B" });
   const scrolls = () =>
@@ -812,6 +663,10 @@ test("a file's plot keeps a readable height and the rows fill a tall window", as
   await upload(a, "A");
   const plotA = a.getByRole("slider", { name: "Cursor" });
   await expect(plotA).toBeVisible();
+  // a file from this device is marked as one, has no judgment and stays out of the address
+  await expect(a.getByText("Local file")).toBeVisible();
+  await expect(a.getByRole("radiogroup", { name: "Your judgment" })).toHaveCount(0);
+  await expect(page).toHaveURL(/#\/analysis$/);
   await page.setViewportSize({ width: 390, height: 844 });
   const phone = await height(plotA);
   await page.setViewportSize({ width: 1280, height: 720 });
@@ -831,46 +686,21 @@ test("a file's plot keeps a readable height and the rows fill a tall window", as
   expect(await scrolls()).toBe(0);
 });
 
-test("a local file goes up with progress, carries a tag and takes no judgment", async ({
-  page
-}) => {
-  await fakeAnalysis(page);
-  await login(page, "/analysis");
-  const a = page.getByRole("region", { name: "Slot A" });
-  await a
-    .getByLabel("Upload a file to slot A")
-    .setInputFiles({ name: "mine.flac", mimeType: "audio/flac", buffer: Buffer.alloc(2048) });
-  await expect(a.getByText("Local file")).toBeVisible();
-  await expect(a.getByRole("slider", { name: "Cursor" })).toBeVisible();
-  await expect(a.getByRole("radiogroup", { name: "Your judgment" })).toHaveCount(0);
-  await expect(page).toHaveURL(/#\/analysis$/);
-});
-
 test("picks a file from the panel of the daemon's files", async ({ page }) => {
   await fakeAnalysis(page);
-  const at = "2026-10-27T18:00:00Z";
-  const file = (fullName: string) => ({
-    attributes: "Normal",
-    createdAt: at,
-    modifiedAt: at,
-    fullName,
-    name: fullName.split("/").pop(),
-    length: 30_000_000
-  });
   await page.route("**/api/v0/files/downloads/directories?recursive=true", (route) =>
     route.fulfill({
-      json: {
-        attributes: "Directory",
-        createdAt: at,
-        modifiedAt: at,
-        fullName: "",
-        name: "downloads",
+      json: listedFolder("", "downloads", {
         directories: [],
-        files: [file("track.flac"), file("Album/01.flac"), file("Album/cover.jpg")]
-      }
+        files: [
+          listedFile("track.flac"),
+          listedFile("Album/01.flac"),
+          listedFile("Album/cover.jpg")
+        ]
+      })
     })
   );
-  await login(page, "/analysis");
+  await visit(page, "/analysis");
   const a = page.getByRole("region", { name: "Slot A" });
   await a.getByRole("button", { name: "Add from Downloads" }).click();
   const tree = a.getByRole("treegrid");

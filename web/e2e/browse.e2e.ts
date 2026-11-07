@@ -1,7 +1,15 @@
 import { expect, type Locator, type Page, test } from "@playwright/test";
 
-import { carolShares, dir, fakeConnected, transfer } from "./support/fakes";
-import { login } from "./support/login";
+import type { Schemas } from "../src/lib/api/client";
+import {
+  carolShares,
+  dir,
+  fakeConnected,
+  fakeDownloadList,
+  transfer,
+  userDownloads
+} from "./support/fakes";
+import { visit } from "./support/login";
 
 const MUSIC = "@@c\\Music";
 const tracks = (prefix: string, n: number) =>
@@ -35,7 +43,7 @@ const fileLine = (tree: Locator, path: string) => line(tree, `${MUSIC}${path}`);
 /** Opens carol's Shares tab, the tree drawn */
 const browseCarol = async (page: Page, opened?: string) => {
   await fakeShare(page);
-  await login(page, "/users/carol/shares");
+  await visit(page, "/users/carol/shares");
   if (opened) await page.goto(`./#/users/carol/shares?path=${encodeURIComponent(opened)}`);
   const tree = page.getByRole("treegrid", { name: "Shared folders" });
   await expect(folder(tree, "")).toBeVisible();
@@ -86,30 +94,6 @@ test("Shift-click ticks a range across two folders, and the bar counts it", asyn
   );
 });
 
-test("the folders a deep line is in stay pinned while it scrolls", async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 700 });
-  const tree = await browseCarol(page);
-  await folder(tree, "\\Deep").click();
-  await folder(tree, "\\Deep\\CD1").click();
-  // D30 is the 35th line: Music, Albums, Bootlegs, Deep, CD1, then its tracks
-  const row = await folder(tree, "").evaluate((l) => l.getBoundingClientRect().height);
-  await tree.evaluate((box, y) => (box.scrollTop = y), 34 * row - 150);
-  const pinned = () =>
-    tree.locator("[data-pinned]").evaluateAll((pins) =>
-      pins
-        .filter((pin) => {
-          const r = pin.getBoundingClientRect();
-          const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-          return !!hit && pin.contains(hit);
-        })
-        .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)
-        .map((pin) => pin.getAttribute("data-line"))
-    );
-  await expect
-    .poll(pinned)
-    .toEqual([`folder:${MUSIC}`, `folder:${MUSIC}\\Deep`, `folder:${MUSIC}\\Deep\\CD1`]);
-});
-
 test("a locked folder is dimmed and nothing in it can be ticked", async ({ page }) => {
   const tree = await browseCarol(page);
   const locked = folder(tree, "\\Locked");
@@ -119,15 +103,6 @@ test("a locked folder is dimmed and nothing in it can be ticked", async ({ page 
   await locked.click();
   await expect(fileLine(tree, "\\Locked\\secret.flac")).toBeVisible();
   await expect(fileLine(tree, "\\Locked\\secret.flac").getByRole("checkbox")).toHaveCount(0);
-});
-
-test("the filter shows the way to each match, open", async ({ page }) => {
-  const tree = await browseCarol(page);
-  await page.getByLabel("Filter", { exact: true }).fill("D07");
-  await expect(fileLine(tree, "\\Deep\\CD1\\D07.flac")).toBeVisible();
-  await expect(folder(tree, "\\Deep")).toBeVisible();
-  await expect(folder(tree, "\\Albums")).toHaveCount(0);
-  await expect(fileLine(tree, "\\Deep\\CD1\\D08.flac")).toHaveCount(0);
 });
 
 test("a link to a folder opens the tree down to it and goes to its line", async ({ page }) => {
@@ -145,21 +120,8 @@ test("a link to a folder opens the tree down to it and goes to its line", async 
 test("a file's row fills as it downloads, then flashes and shows it done", async ({ page }) => {
   await fakeConnected(page);
   // the daemon's list of downloads, which the test moves along
-  let downloads: ReturnType<typeof transfer>[] = [];
-  await page.route(
-    (url) => url.pathname.endsWith("/api/v0/transfers/downloads"),
-    (route) =>
-      route.fulfill({
-        json: downloads.length
-          ? [
-              {
-                username: "carol",
-                directories: [{ directory: "d", fileCount: 1, files: downloads }]
-              }
-            ]
-          : []
-      })
-  );
+  let downloads: Schemas["Transfer"][] = [];
+  await fakeDownloadList(page, () => (downloads.length ? [userDownloads("carol", downloads)] : []));
   await page.route("**/api/v0/transfers/downloads/jobs", (route) =>
     route.fulfill({
       json: { id: "j", groups: [{ username: "carol", enqueued: [], failures: [], error: null }] }
@@ -214,7 +176,7 @@ test("the breadcrumb hands over between a user's tabs and leaves no steps behind
   page
 }) => {
   await fakeShare(page);
-  await login(page, "/users/carol");
+  await visit(page, "/users/carol");
   const crumbs = page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("listitem");
   await expect(crumbs).toHaveText(["Users", "carol"]);
   // the user's step stays put as the Shares tab takes the breadcrumb over

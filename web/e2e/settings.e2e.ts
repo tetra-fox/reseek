@@ -1,9 +1,9 @@
 import { expect, test } from "@playwright/test";
 
-import { login, textSize } from "./support/login";
+import { textSize, visit } from "./support/login";
 
 test("reads an option with its source and saves a change to the file", async ({ page }) => {
-  await login(page, "/system/settings");
+  await visit(page, "/system/settings");
   const description = page.locator('[id="soulseek.description"]');
   await expect(description).toHaveValue("A reseek user.");
   const row = page.locator('[id="soulseek.description-help"]').locator("..");
@@ -20,7 +20,7 @@ test("reads an option with its source and saves a change to the file", async ({ 
 test("finds options by search, follows the section in view and gathers unsaved changes", async ({
   page
 }) => {
-  await login(page, "/system/settings");
+  await visit(page, "/system/settings");
   const side = page.getByRole("navigation", { name: "Settings sections" });
   await expect(side.getByRole("link", { name: "Soulseek" })).toHaveAttribute(
     "aria-current",
@@ -44,7 +44,6 @@ test("finds options by search, follows the section in view and gathers unsaved c
     "aria-current",
     "location"
   );
-  if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/settings.png` });
 
   // the search keeps only what it finds
   await page.getByRole("searchbox", { name: "Search settings" }).fill("highlight words");
@@ -68,7 +67,7 @@ test("finds options by search, follows the section in view and gathers unsaved c
 });
 
 test("says what auto stands for while the option holds it", async ({ page }) => {
-  await login(page, "/system/settings");
+  await visit(page, "/system/settings");
   const workers = page.locator('[id="analysis.workers"]');
   const count = page.locator("#analysis").getByText(/^\d+ files? at once$/);
   await expect(workers).toHaveValue("auto");
@@ -87,7 +86,7 @@ test("sets how a notification is announced, and offers the permission Desktop ne
     Object.defineProperty(Notification, "permission", { value: "default" });
     Notification.requestPermission = async () => "granted";
   });
-  await login(page, "/system/settings");
+  await visit(page, "/system/settings");
   const section = page.locator("#notifications");
   const notice = section.getByText("Desktop notifications are off in this browser");
   const choose = (type: string, mode: string) =>
@@ -130,7 +129,7 @@ test("sets how a notification is announced, and offers the permission Desktop ne
 });
 
 test("a row's control comes before its other buttons in the tab order", async ({ page }) => {
-  await login(page, "/system/settings");
+  await visit(page, "/system/settings");
   await page.locator('[id="soulseek.listen_port"]').focus();
   await page.keyboard.press("Tab");
   const trigger = page.getByRole("button", {
@@ -144,7 +143,7 @@ test("a row's control comes before its other buttons in the tab order", async ({
 });
 
 test("a table's Remove button keeps clear of the fields of its row", async ({ page }) => {
-  await login(page, "/system/settings");
+  await visit(page, "/system/settings");
   const table = page.locator('[id="search.filter_presets"]');
   await table.getByRole("button", { name: "Add to Filter presets" }).click();
   const row = table.locator("tbody tr").last();
@@ -172,13 +171,10 @@ test.describe("at a 24 px text size on a 360 px phone", () => {
 
   test("a notification's four choices stay inside its row", async ({ page }) => {
     await textSize(page, 24);
-    await login(page, "/system/settings");
+    await visit(page, "/system/settings");
     const section = page.locator("#notifications");
     const group = section.getByRole("radiogroup", { name: "Private messages" });
     await group.scrollIntoViewIfNeeded();
-    if (process.env.SHOTS) {
-      await section.screenshot({ path: `${process.env.SHOTS}/notification-modes.png` });
-    }
     const row = (await section.boundingBox())!;
     const choices = await group.getByRole("radio").all();
     expect(choices).toHaveLength(4);

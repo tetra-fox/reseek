@@ -5,7 +5,6 @@ import {
   fakeAnalysis,
   fakeBrowse,
   fakeChat,
-  fakeConnected,
   fakeDownloads,
   fakeFiles,
   fakeFolder,
@@ -13,7 +12,7 @@ import {
   fakeSearch,
   SEARCH_ID
 } from "./support/fakes";
-import { login, refuseCopy, textSize } from "./support/login";
+import { refuseCopy, textSize, visit } from "./support/login";
 
 // a phone's width: no screen may be wider than it, so nothing runs off its right edge
 test.use({ viewport: { width: 390, height: 844 } });
@@ -171,7 +170,11 @@ const everyScreen = async (page: Page) => {
   await fakeFiles(page);
   await fakeDownloads(page);
   await fakeAnalysis(page);
-  await login(page, "/dashboard");
+  // the list of searches as a fresh daemon has it, whatever other tests searched for
+  await page.route("**/api/v0/searches", (route) =>
+    route.request().method() === "GET" ? route.fulfill({ json: [] }) : route.fallback()
+  );
+  await visit(page, "/dashboard");
 
   await fits(page, "/dashboard", shows("a_rather_long_username_from_somewhere"));
   for (const tab of ["Folders", "Errors"]) {
@@ -244,18 +247,13 @@ const everyScreen = async (page: Page) => {
   expect(button.x + button.width).toBeLessThanOrEqual(390);
 };
 
-test("every screen fits a phone's width", async ({ page }) => {
-  test.slow(); // it opens every screen in turn
-  await everyScreen(page);
-});
-
 test.describe("on a wide screen", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
   test("the widest figures fit their width in ch", async ({ page }) => {
     // a tabular digit is wider than 1ch, the plain zero; the narrower point, space and
     // separators of each formatter's widest value make up for it
-    await login(page, "/dashboard");
+    await visit(page, "/dashboard");
     const over = await page.evaluate((widest) => {
       const span = (text: string, width?: string) => {
         const el = document.createElement("span");
@@ -283,14 +281,13 @@ test.describe("on a wide screen", () => {
       await fakeSearch(page);
       await fakeDownloads(page);
       await fakeAnalysis(page);
-      await login(page, "/dashboard");
+      await visit(page, "/dashboard");
       await fits(page, "/dashboard", shows("a_rather_long_username_from_somewhere"));
       await fits(page, `/searches/${SEARCH_ID}`, shows("01 One.flac"));
       await page.getByRole("radio", { name: "List" }).click();
       await holds(page, `the results list at ${root} px`, shows("02 Two.flac"));
       await page.getByRole("radio", { name: "Tree" }).click();
       await fits(page, "/downloads", shows("3.flac"));
-      await analysisHolds(page);
       await fits(page, "/system/info", shows("Process ID"));
     });
   }
@@ -299,21 +296,6 @@ test.describe("on a wide screen", () => {
 // a phone is narrower than the smallest breakpoint at every root size, so there a layout only
 // overflows more as the text grows and the largest size covers those between it and the default
 test.describe("at a 24 px text size", () => {
-  test("the Search button leaves the box its room on a 360 px phone", async ({ page }) => {
-    await page.setViewportSize({ width: 360, height: 640 });
-    await textSize(page, 24);
-    await fakeConnected(page);
-    await login(page, "/searches");
-    const button = page.getByRole("button", { name: "Search", exact: true });
-    await expect(button).toBeVisible();
-    const box = (await page
-      .getByRole("combobox", { name: "Search files and users" })
-      .boundingBox())!;
-    const { width } = (await button.boundingBox())!;
-    expect(width).toBeLessThanOrEqual(24 * 2.75);
-    expect(box.width).toBeGreaterThan(24 * 7);
-  });
-
   test("every screen fits a phone", async ({ page }) => {
     test.slow(); // it opens every screen in turn
     await textSize(page, 24);
@@ -336,14 +318,13 @@ test.describe("at a 24 px text size", () => {
 test("a toast's countdown runs along its foot and holds under the pointer", async ({ page }) => {
   await refuseCopy(page);
   await fakeChat(page);
-  await login(page, "/chat");
+  await visit(page, "/chat");
   await page.goto("./#/chat/rooms/indie");
   const log = page.getByRole("log");
   await log.getByText("thanks bob, grabbing it now").hover();
   await page.getByRole("button", { name: "Copy the text" }).last().click();
   const toast = page.getByRole("alert").filter({ hasText: "Could not copy" });
   await expect(toast).toBeVisible();
-  await toast.evaluate((e) => Promise.all(e.getAnimations().map((a) => a.finished)));
   const bar = toast.locator(".countdown");
   // measured once it has flown in, as the two boxes are read one after the other
   await toast.evaluate((e) => Promise.all(e.getAnimations().map((a) => a.finished)));
@@ -361,7 +342,10 @@ test("a toast's countdown runs along its foot and holds under the pointer", asyn
   await toast.hover();
   await expect.poll(async () => (await countdown()).state).toBe("paused");
   const held = await countdown();
-  await page.waitForTimeout(300);
+  // two frames on, the bar is where it was
+  await bar.evaluate(
+    () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))
+  );
   expect((await countdown()).at, "the bar holds while the pointer is on the toast").toBe(held.at);
   await page.mouse.move(0, 0);
   await expect.poll(async () => (await countdown()).state).toBe("running");

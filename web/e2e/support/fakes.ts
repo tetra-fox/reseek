@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
 
+import type { Schemas } from "../../src/lib/api/client";
 import { newId } from "../../src/lib/ids";
 import { layout, spectra, spectrogram, waveform } from "./pictures";
 
@@ -18,8 +19,15 @@ export const helloFrame = (topics: string[]) =>
     resumed: false,
     serverTime: at(30),
     topics,
-    version: { current: "0.0.0", full: "0.0.0", latest: null, isUpdateAvailable: false }
-  });
+    version: {
+      current: "0.0.0",
+      full: "0.0.0",
+      latest: null,
+      isUpdateAvailable: false,
+      isCanary: false,
+      isDevelopment: false
+    }
+  } satisfies Schemas["Hello"]);
 
 /**
  * Marks the test daemon connected to a server, which it never is, so what is offered only while
@@ -47,6 +55,76 @@ export const fakeConnected = async (page: Page) => {
 
 const MEMBERS = ["alice", "bob", "carol", "dave", "erin", "frank", "grace", "heidi"];
 
+/** A message `username` said in `roomName`; the built-in account's own, or a mention of it */
+export const roomMessage = (
+  localId: number,
+  timestamp: string,
+  username: string,
+  message: string,
+  roomName = "indie"
+) =>
+  ({
+    localId,
+    timestamp,
+    username,
+    message,
+    roomName,
+    self: username === "reseek",
+    isMention: message.includes("reseek"),
+    hidden: false
+  }) satisfies Schemas["RoomMessage"];
+
+/** A joined room with nothing unread, as the list of joined rooms has it */
+export const joinedRoom = (name: string, rest: Partial<Schemas["JoinedRoom"]> = {}) =>
+  ({
+    name,
+    unread: 0,
+    mentions: 0,
+    notify: "mentions",
+    userCount: 3,
+    lastMessageAt: null,
+    lastMessage: null,
+    lastReadId: 0,
+    ...rest
+  }) satisfies Schemas["JoinedRoom"];
+
+/** A conversation with `username` with nothing unread, its messages left to their own call */
+export const conversation = (username: string, rest: Partial<Schemas["Conversation"]> = {}) =>
+  ({
+    username,
+    isActive: true,
+    isServerNotice: false,
+    unAcknowledgedMessageCount: 0,
+    hasUnAcknowledgedMessages: false,
+    notify: "all",
+    draft: "",
+    lastMessage: null,
+    messages: null,
+    ...rest
+  }) satisfies Schemas["Conversation"];
+
+/** A private message with `username`, read unless `rest` says otherwise */
+export const privateMessage = (
+  localId: number,
+  timestamp: string,
+  username: string,
+  direction: Schemas["MessageDirection"],
+  message: string,
+  rest: Partial<Schemas["PrivateMessage"]> = {}
+) =>
+  ({
+    localId,
+    id: localId,
+    timestamp,
+    username,
+    direction,
+    message,
+    isAcknowledged: true,
+    wasReplayed: false,
+    autoReply: false,
+    ...rest
+  }) satisfies Schemas["PrivateMessage"];
+
 /** Answers the chat calls with one room, "indie", one conversation, with "alice", and two notices */
 export const fakeChat = async (page: Page) => {
   const said: [string, string][] = [
@@ -57,27 +135,16 @@ export const fakeChat = async (page: Page) => {
     ["reseek", "thanks bob, grabbing it now"],
     ["dave", "reseek: did you see https://example.com/review ?"]
   ];
-  const roomMessages = said.map(([username, message], n) => ({
-    localId: n + 1,
-    timestamp: at(n),
-    username,
-    message,
-    roomName: "indie",
-    self: username === "reseek",
-    isMention: message.includes("reseek"),
-    hidden: false
-  }));
+  const roomMessages = said.map(([username, message], n) =>
+    roomMessage(n + 1, at(n), username, message)
+  );
   const joined = [
-    {
-      name: "indie",
-      unread: 0,
-      mentions: 0,
-      notify: "mentions",
+    joinedRoom("indie", {
       userCount: MEMBERS.length,
       lastMessageAt: at(5),
       lastMessage: roomMessages.at(-1),
       lastReadId: 6
-    }
+    })
   ];
   await page.route("**/api/v0/rooms/joined", (route) => route.fulfill({ json: joined }));
   // a pane opened before the joined rooms are read asks the history for the same page
@@ -109,71 +176,36 @@ export const fakeChat = async (page: Page) => {
           { username: "bob", ticker: "sharing the whole BoC catalog", hidden: false }
         ],
         messages: null
-      }
+      } satisfies Schemas["Room"]
     });
   });
-  const conversation = {
-    username: "alice",
-    isActive: true,
-    isServerNotice: false,
-    unAcknowledgedMessageCount: 0,
-    hasUnAcknowledgedMessages: false,
-    notify: "all",
-    draft: "",
-    lastMessage: null,
-    messages: null
-  };
+  const alice = conversation("alice");
   const notices = [
     "user portapuppy hasn't enabled private room add. please message them and ask them to do so before trying to add them again.",
     "User portapuppy is now a member of room reseek_private_test"
-  ].map((message, n) => ({
-    localId: n + 1,
-    id: n + 1,
-    timestamp: at(20 + n),
-    username: "server",
-    direction: "In",
-    message,
-    isAcknowledged: true,
-    wasReplayed: false,
-    autoReply: false
-  }));
+  ].map((message, n) => privateMessage(n + 1, at(20 + n), "server", "In", message));
+  const messages = (
+    [
+      ["In", "hey, are you still sharing the warp records stuff?"],
+      ["Out", "yes, browse away"],
+      ["In", "thanks!"]
+    ] as const
+  ).map(([direction, message], n) =>
+    privateMessage(n + 1, at(10 + n), "alice", direction, message)
+  );
   await page.route("**/api/v0/conversations**", (route) => {
     const url = new URL(route.request().url());
-    if (url.pathname.endsWith("/api/v0/conversations"))
-      return route.fulfill({ json: [conversation] });
+    if (url.pathname.endsWith("/api/v0/conversations")) return route.fulfill({ json: [alice] });
     if (url.pathname.endsWith("/conversations/server/messages")) {
       return route.fulfill({ json: notices });
     }
     if (url.pathname.endsWith("/conversations/server")) {
       return route.fulfill({
-        json: {
-          ...conversation,
-          username: "server",
-          isServerNotice: true,
-          lastMessage: notices.at(-1)
-        }
+        json: conversation("server", { isServerNotice: true, lastMessage: notices.at(-1) })
       });
     }
-    if (url.pathname.endsWith("/messages")) {
-      return route.fulfill({
-        json: [
-          ["In", "hey, are you still sharing the warp records stuff?"],
-          ["Out", "yes, browse away"],
-          ["In", "thanks!"]
-        ].map(([direction, message], n) => ({
-          localId: n + 1,
-          id: n + 1,
-          timestamp: at(10 + n),
-          username: "alice",
-          direction,
-          message,
-          isAcknowledged: true,
-          wasReplayed: false,
-          autoReply: false
-        }))
-      });
-    }
-    return route.fulfill({ json: conversation });
+    if (url.pathname.endsWith("/messages")) return route.fulfill({ json: messages });
+    return route.fulfill({ json: alice });
   });
 };
 
@@ -181,30 +213,33 @@ export const fakeChat = async (page: Page) => {
 export const SEARCH_ID = "6f1c9a52-0d1e-4c43-9d55-3a1f0b6e7a10";
 
 /** A shared file as a search response or a browse lists it */
-export const file = (filename: string, size = 4_000_000) => ({
-  filename,
-  size,
-  code: 1,
-  extension: filename.split(".").pop(),
-  isLocked: false,
-  attributeCount: 0,
-  attributes: [],
-  bitRate: 320,
-  length: 200
-});
+export const file = (filename: string, size = 4_000_000) =>
+  ({
+    filename,
+    size,
+    code: 1,
+    extension: filename.slice(filename.lastIndexOf(".") + 1),
+    isLocked: false,
+    attributeCount: 0,
+    attributes: [],
+    bitRate: 320,
+    length: 200
+  }) satisfies Schemas["File"];
 
-const response = (username: string, speed: number, files: string[], size?: number) => ({
-  username,
-  country: "NL",
-  token: 1,
-  hasFreeUploadSlot: true,
-  uploadSpeed: speed,
-  queueLength: 0,
-  fileCount: files.length,
-  files: files.map((f) => file(f, size)),
-  lockedFileCount: 0,
-  lockedFiles: []
-});
+/** `username`'s response to a search, with a free slot and `files` all `size` long */
+export const response = (username: string, speed: number, files: string[], size?: number) =>
+  ({
+    username,
+    country: "NL",
+    token: 1,
+    hasFreeUploadSlot: true,
+    uploadSpeed: speed,
+    queueLength: 0,
+    fileCount: files.length,
+    files: files.map((f) => file(f, size)),
+    lockedFileCount: 0,
+    lockedFiles: []
+  }) satisfies Schemas["SearchResponse"];
 
 /** Answers the search page's calls with one finished search and its responses */
 export const fakeSearch = async (page: Page) => {
@@ -235,19 +270,21 @@ export const fakeSearch = async (page: Page) => {
         responseBytes: 0,
         responses: null,
         scope: { type: "network", subjects: [] }
-      }
+      } satisfies Schemas["Search"]
     });
   });
 };
 
-const summary = (count: number) => ({
-  count,
-  totalBytes: count * 40_000_000,
-  distinctUsers: 3,
-  averageSpeed: 900_000,
-  averageWait: 4,
-  averageDuration: 30
-});
+/** `count` finished transfers with three users, as a report sums them */
+export const summary = (count: number) =>
+  ({
+    count,
+    totalBytes: count * 40_000_000,
+    distinctUsers: 3,
+    averageSpeed: 900_000,
+    averageWait: 4,
+    averageDuration: 30
+  }) satisfies Schemas["TransferSummary"];
 
 /**
  * Answers the dashboard's reports with a week of transfers, a leaderboard with a long name, a
@@ -258,14 +295,14 @@ export const fakeReports = async (page: Page) => {
   await page.route("**/api/v0/telemetry/reports/transfers/**", (route) => {
     const url = new URL(route.request().url());
     const path = url.pathname.split("/").pop();
-    const direction = url.searchParams.get("direction") ?? "Download";
+    const direction = url.searchParams.get("direction") === "Upload" ? "Upload" : "Download";
     if (path === "summary") {
       return route.fulfill({
         json: {
           Download: { Succeeded: summary(40), Errored: summary(3) },
           Upload: { Succeeded: summary(25), TimedOut: summary(1) },
           distinctUsers: 9
-        }
+        } satisfies Schemas["SummaryReport"]
       });
     }
     if (path === "histogram") {
@@ -276,19 +313,24 @@ export const fakeReports = async (page: Page) => {
             {
               Download: { Succeeded: summary(n), Errored: summary(n % 3) },
               Upload: { Succeeded: summary(24 - n) }
-            }
+            } satisfies Schemas["DirectionSummaries"]
           ])
         )
       });
     }
     if (path === "leaderboard") {
       return route.fulfill({
-        json: [long, "alice", "bob"].map((username, n) => ({
-          username,
-          ...summary(30 - n),
-          // the first row's figures are the widest the formatters write
-          ...(n === 0 ? { totalBytes: 1023.99 * 1024 ** 3, averageSpeed: 1023.9 * 1024 ** 2 } : {})
-        }))
+        json: [long, "alice", "bob"].map(
+          (username, n) =>
+            ({
+              username,
+              ...summary(30 - n),
+              // the first row's figures are the widest the formatters write
+              ...(n === 0
+                ? { totalBytes: 1023.99 * 1024 ** 3, averageSpeed: 1023.9 * 1024 ** 2 }
+                : {})
+            }) satisfies Schemas["LeaderboardEntry"]
+        )
       });
     }
     if (path === "directories") {
@@ -299,13 +341,15 @@ export const fakeReports = async (page: Page) => {
             count: 12,
             distinctUsers: 4
           }
-        ]
+        ] satisfies Schemas["DirectoryCount"][]
       });
     }
     const error = "Remote connection closed before the transfer finished, and it was not retried";
     if (path === "pareto") {
       return route.fulfill({
-        json: [{ exception: error, count: 4, distinctUsers: 2 }]
+        json: [
+          { exception: error, count: 4, distinctUsers: 2 }
+        ] satisfies Schemas["ExceptionCount"][]
       });
     }
     return route.fulfill({
@@ -328,16 +372,18 @@ export const fakeReports = async (page: Page) => {
           averageSpeed: 100_000,
           exception: error
         }
-      ]
+      ] satisfies Schemas["TransferExceptionDetail"][]
     });
   });
 };
 
-export const dir = (name: string, files: string[]) => ({
-  name,
-  fileCount: files.length,
-  files: files.map((f) => file(f))
-});
+/** A folder of a browse, with `files` in it */
+export const dir = (name: string, files: string[]) =>
+  ({
+    name,
+    fileCount: files.length,
+    files: files.map((f) => file(f))
+  }) satisfies Schemas["Directory"];
 
 /**
  * Answers a browse of carol's shares with `directories`, never asking the daemon, so no other test
@@ -345,8 +391,8 @@ export const dir = (name: string, files: string[]) => ({
  */
 export const carolShares = (
   page: Page,
-  directories: ReturnType<typeof dir>[],
-  lockedDirectories: ReturnType<typeof dir>[] = []
+  directories: Schemas["Directory"][],
+  lockedDirectories: Schemas["Directory"][] = []
 ) =>
   page.route(
     (url) => url.pathname.includes("/api/v0/users/carol/"),
@@ -362,7 +408,7 @@ export const carolShares = (
           directoryCount: directories.length,
           lockedDirectories,
           lockedDirectoryCount: lockedDirectories.length
-        }
+        } satisfies Schemas["BrowseResponse"]
       });
     }
   );
@@ -387,34 +433,47 @@ export const fakeFolder = async (page: Page) => {
   );
 };
 
-/** Answers the downloads folder's listing on the Files screen with two folders and a file */
-export const fakeFiles = async (page: Page) => {
-  const at = "2026-10-27T18:00:00Z";
-  const folder = (name: string) => ({
-    attributes: "Directory",
-    createdAt: at,
-    modifiedAt: at,
-    fullName: `/downloads/${name}`,
-    name,
+/** When the files in a Files listing were made and changed */
+const LISTED_AT = "2026-10-27T18:00:00Z";
+
+/** A file in a Files listing, `fullName` as the listing writes it */
+export const listedFile = (fullName: string, length = 30_000_000) =>
+  ({
+    attributes: "Normal",
+    createdAt: LISTED_AT,
+    modifiedAt: LISTED_AT,
+    fullName,
+    name: fullName.slice(fullName.lastIndexOf("/") + 1),
+    length
+  }) satisfies Schemas["FilesystemFile"];
+
+/** A folder in a Files listing, its entries unread unless `rest` holds them */
+export const listedFolder = (
+  fullName: string,
+  name: string,
+  rest: Pick<Schemas["FilesystemDirectory"], "directories" | "files"> = {
     directories: null,
     files: null
-  });
+  }
+) =>
+  ({
+    attributes: "Directory",
+    createdAt: LISTED_AT,
+    modifiedAt: LISTED_AT,
+    fullName,
+    name,
+    ...rest
+  }) satisfies Schemas["FilesystemDirectory"];
+
+/** Answers the downloads folder's listing on the Files screen with two folders and a file */
+export const fakeFiles = async (page: Page) => {
+  const folder = (name: string) => listedFolder(`/downloads/${name}`, name);
   await page.route("**/api/v0/files/downloads/directories", (route) =>
     route.fulfill({
-      json: {
-        ...folder(""),
+      json: listedFolder("/downloads/", "", {
         directories: [folder("In Rainbows"), folder("Kid A (Collector's Edition)")],
-        files: [
-          {
-            attributes: "Normal",
-            createdAt: at,
-            modifiedAt: at,
-            fullName: "/downloads/notes.txt",
-            name: "notes.txt",
-            length: 1_234_567
-          }
-        ]
-      }
+        files: [listedFile("/downloads/notes.txt", 1_234_567)]
+      })
     })
   );
 };
@@ -425,21 +484,37 @@ export const transfer = (
   state = "Completed, Succeeded",
   size = 1000,
   username = "alice"
-) => ({
-  id: newId(),
-  username,
-  direction: "Download",
-  filename,
-  size,
-  state,
-  requestedAt: "2026-10-26T10:00:00Z",
-  bytesTransferred: state === "InProgress" ? size * 0.4 : size,
-  bytesRemaining: 0,
-  averageSpeed: state === "InProgress" ? 100 : 0,
-  percentComplete: state === "InProgress" ? 40 : 100,
-  attempts: 1,
-  removed: false
-});
+) =>
+  ({
+    id: newId(),
+    username,
+    direction: "Download",
+    filename,
+    size,
+    state,
+    requestedAt: "2026-10-26T10:00:00Z",
+    bytesTransferred: state === "InProgress" ? size * 0.4 : size,
+    bytesRemaining: 0,
+    averageSpeed: state === "InProgress" ? 100 : 0,
+    percentComplete: state === "InProgress" ? 40 : 100,
+    attempts: 1,
+    paused: false,
+    removed: false
+  }) satisfies Schemas["Transfer"];
+
+/** `username`'s downloads in one remote folder, `directory`, as the list of downloads groups them */
+export const userDownloads = (username: string, files: Schemas["Transfer"][], directory = "d") =>
+  ({
+    username,
+    directories: [{ directory, fileCount: files.length, files }]
+  }) satisfies Schemas["UserResponse"];
+
+/** Answers the list of downloads with `users`, read again on every call */
+export const fakeDownloadList = (page: Page, users: () => Schemas["UserResponse"][]) =>
+  page.route(
+    (url) => url.pathname.endsWith("/api/v0/transfers/downloads"),
+    (route) => route.fulfill({ json: users() })
+  );
 
 /** The finished download of alice's 2.flac, which `fakeAnalysis` has a report of */
 export const ANALYZED_DOWNLOAD = "2f1ac000-0000-4000-8000-000000000002";
@@ -458,74 +533,37 @@ export const fakeDownloads = async (page: Page) => {
     }
   ];
   const large = [transfer("@@b\\Big\\3.flac", "Completed, Succeeded", 1023.99 * 1024 ** 3, "bob")];
-  await page.route(
-    (url) => url.pathname.endsWith("/api/v0/transfers/downloads"),
-    (route) =>
-      route.fulfill({
-        json: [
-          { username: "alice", directories: [{ directory: "d", fileCount: 2, files }] },
-          { username: "bob", directories: [{ directory: "b", fileCount: 1, files: large }] }
-        ]
-      })
-  );
+  await fakeDownloadList(page, () => [
+    userDownloads("alice", files),
+    userDownloads("bob", large, "b")
+  ]);
 };
 
 /** `n` downloads from users of a hundred files each, ten to a folder, every one finished */
 export const manyDownloads = async (page: Page, n: number) => {
-  const users = Array.from({ length: Math.ceil(n / 100) }, (_, u) => ({
-    username: `user${String(u).padStart(3, "0")}`,
-    directories: Array.from({ length: 10 }, (_, d) => ({
-      directory: `Album ${d}`,
-      fileCount: 10,
-      files: Array.from({ length: 10 }, (_, f) => {
-        const k = u * 100 + d * 10 + f;
-        return {
-          ...transfer(`@@u${u}\\Music\\Album ${d}\\${String(k).padStart(5, "0")} Track.flac`),
-          id: `00000000-0000-4000-8000-${String(k).padStart(12, "0")}`,
-          username: `user${String(u).padStart(3, "0")}`
-        };
-      })
-    }))
-  }));
-  await page.route(
-    (url) => url.pathname.endsWith("/api/v0/transfers/downloads"),
-    (route) => route.fulfill({ json: users })
-  );
-};
-
-/** The search `fakeSearch` answers for, with `n` files from ten to a user */
-export const manyResults = async (page: Page, n: number) => {
-  const responses = Array.from({ length: n / 10 }, (_, r) =>
-    response(
-      `peer${String(r).padStart(4, "0")}`,
-      100_000 + r,
-      Array.from(
-        { length: 10 },
-        (_, f) => `@@p${r}\\Music\\${String(r * 10 + f).padStart(5, "0")} Song.flac`
-      )
-    )
-  );
-  await page.route(`**/api/v0/searches/${SEARCH_ID}**`, (route) => {
-    const url = new URL(route.request().url());
-    if (url.pathname.endsWith("/responses")) return route.fulfill({ json: responses });
-    return route.fulfill({
-      json: {
-        id: SEARCH_ID,
-        searchText: "song",
-        token: 1,
-        state: "Completed, TimedOut",
-        isComplete: true,
-        startedAt: "2026-10-26T10:00:00Z",
-        endedAt: "2026-10-26T10:00:15Z",
-        responseCount: responses.length,
-        fileCount: n,
-        lockedFileCount: 0,
-        responseBytes: 0,
-        responses: null,
-        scope: { type: "network", subjects: [] }
-      }
-    });
+  const users = Array.from({ length: Math.ceil(n / 100) }, (_, u) => {
+    const username = `user${String(u).padStart(3, "0")}`;
+    return {
+      username,
+      directories: Array.from({ length: 10 }, (_, d) => ({
+        directory: `Album ${d}`,
+        fileCount: 10,
+        files: Array.from({ length: 10 }, (_, f) => {
+          const k = u * 100 + d * 10 + f;
+          return {
+            ...transfer(
+              `@@u${u}\\Music\\Album ${d}\\${String(k).padStart(5, "0")} Track.flac`,
+              "Completed, Succeeded",
+              1000,
+              username
+            ),
+            id: `00000000-0000-4000-8000-${String(k).padStart(12, "0")}`
+          };
+        })
+      }))
+    } satisfies Schemas["UserResponse"];
   });
+  await fakeDownloadList(page, () => users);
 };
 
 /** A browse of carol's shares with `n` folders, fifty to an artist */
@@ -547,30 +585,24 @@ export const wideBrowse = async (page: Page, n: number) => {
 
 /** Room "indie" with `n` messages in its history, all in one page */
 export const longRoom = async (page: Page, n: number) => {
-  const messages = Array.from({ length: n }, (_, k) => ({
-    localId: k + 1,
-    timestamp: new Date(Date.UTC(2026, 9, 27, 10) + k * 37_000).toISOString(),
-    username: MEMBERS[k % 5],
-    message: k % 9 === 0 ? `a longer message, number ${k}, `.repeat(6) : `message number ${k}`,
-    roomName: "indie",
-    self: false,
-    isMention: false,
-    hidden: false
-  }));
+  const messages = Array.from({ length: n }, (_, k) =>
+    roomMessage(
+      k + 1,
+      new Date(Date.UTC(2026, 9, 27, 10) + k * 37_000).toISOString(),
+      MEMBERS[k % 5],
+      k % 9 === 0 ? `a longer message, number ${k}, `.repeat(6) : `message number ${k}`
+    )
+  );
   const history = { messages, hasMore: false, gaps: [] };
   await page.route("**/api/v0/rooms/joined", (route) =>
     route.fulfill({
       json: [
-        {
-          name: "indie",
-          unread: 0,
-          mentions: 0,
-          notify: "mentions",
+        joinedRoom("indie", {
           userCount: 5,
           lastMessageAt: messages.at(-1)!.timestamp,
           lastMessage: messages.at(-1),
           lastReadId: n
-        }
+        })
       ]
     })
   );
@@ -581,7 +613,13 @@ export const longRoom = async (page: Page, n: number) => {
     new URL(route.request().url()).pathname.endsWith("/messages")
       ? route.fulfill({ json: history })
       : route.fulfill({
-          json: { name: "indie", isPrivate: false, users: [], tickers: [], messages: null }
+          json: {
+            name: "indie",
+            isPrivate: false,
+            users: [],
+            tickers: [],
+            messages: null
+          } satisfies Schemas["Room"]
         })
   );
   await page.route("**/api/v0/conversations**", (route) => route.fulfill({ json: [] }));
@@ -589,51 +627,55 @@ export const longRoom = async (page: Page, n: number) => {
 
 /** A report of a 128 kbps transcode `duration` seconds long, with the judgment `override` */
 const report = (
-  override: unknown,
-  file = { relativePath: "alice/Two/2.flac", transferId: ANALYZED_DOWNLOAD as string | null },
-  scale = "linear",
-  duration = 30.5
-) => ({
-  path: `/downloads/${file.relativePath}`,
-  root: "downloads",
-  ...file,
-  size: 1000,
-  analyzedAt: "2026-10-28T12:00:00Z",
-  durationSeconds: duration,
-  claimed: { codec: "flac", sampleRate: 44100, bitDepth: 16, channels: 2, bitrateKbps: null },
-  verdict: "likely_transcode",
-  confidence: 0.89,
-  flags: [],
-  encoderGuess: { profile: "mp3 ~128 kbps", confidence: 0.95 },
-  summary:
-    "100% of the time stops at 16.8 kHz with a sharp shelf, where an encoder at mp3 ~128 kbps cuts off.",
-  measures: {
-    cutoffHzHistogram: [[17000, 30]],
-    cutoffMedianHz: 16774,
-    shelfSharpnessDbP95: 61.8,
-    sfb21Holes: null,
-    frameArtifactScore: 0.02,
-    upsampleRatio: null,
-    bitDepthEffective: 16,
-    noiseFloorDbfs: -25,
-    stereoCorrelation: 0.6,
-    sideEnergyDb: -6,
-    dcOffset: 0,
-    clippedSamplesPct: 0,
-    peakDbfs: -0.4
+  override: Schemas["AnalysisOverride"] | null,
+  file: { relativePath: string; transferId: string | null } = {
+    relativePath: "alice/Two/2.flac",
+    transferId: ANALYZED_DOWNLOAD
   },
-  windows: Array.from({ length: Math.floor(duration) }, (_, t) => ({
-    t,
-    cutoffHz: 16774,
-    shelfDb: 61.8,
-    rmsDbfs: -20
-  })),
-  spectrogramUrl: "/api/v0/files/downloads/files/x/analysis/spectrogram",
-  spectrogram: layout(duration, scale),
-  override,
-  limitations: ["Of several lossy generations, only the lowest cutoff shows"],
-  stale: false
-});
+  scale: Schemas["SpectrogramScale"] = "linear",
+  duration = 30.5
+) =>
+  ({
+    path: `/downloads/${file.relativePath}`,
+    root: "downloads",
+    ...file,
+    size: 1000,
+    analyzedAt: "2026-10-28T12:00:00Z",
+    durationSeconds: duration,
+    claimed: { codec: "flac", sampleRate: 44100, bitDepth: 16, channels: 2, bitrateKbps: null },
+    verdict: "likely_transcode",
+    confidence: 0.89,
+    flags: [],
+    encoderGuess: { profile: "mp3 ~128 kbps", confidence: 0.95 },
+    summary:
+      "100% of the time stops at 16.8 kHz with a sharp shelf, where an encoder at mp3 ~128 kbps cuts off.",
+    measures: {
+      cutoffHzHistogram: [[17000, 30]],
+      cutoffMedianHz: 16774,
+      shelfSharpnessDbP95: 61.8,
+      sfb21Holes: null,
+      frameArtifactScore: 0.02,
+      upsampleRatio: null,
+      bitDepthEffective: 16,
+      noiseFloorDbfs: -25,
+      stereoCorrelation: 0.6,
+      sideEnergyDb: -6,
+      dcOffset: 0,
+      clippedSamplesPct: 0,
+      peakDbfs: -0.4
+    },
+    windows: Array.from({ length: Math.floor(duration) }, (_, t) => ({
+      t,
+      cutoffHz: 16774,
+      shelfDb: 61.8,
+      rmsDbfs: -20
+    })),
+    spectrogramUrl: "/api/v0/files/downloads/files/x/analysis/spectrogram",
+    spectrogram: layout(duration, scale),
+    override,
+    limitations: ["Of several lossy generations, only the lowest cutoff shows"],
+    stale: false
+  }) satisfies Schemas["AudioAnalysis"];
 
 /**
  * Answers every file's and download's analysis with the report of a transcode `duration` seconds
@@ -642,18 +684,23 @@ const report = (
  * report is one an older version made
  */
 export const fakeAnalysis = async (page: Page, { stale = false, duration = 30.5 } = {}) => {
-  let override: unknown = null;
+  let override: Schemas["AnalysisOverride"] | null = null;
   await page.route(
     (url) => /\/analysis(\/|$)/.test(url.pathname),
     (route) => {
       const { pathname } = new URL(route.request().url());
       const method = route.request().method();
-      if (pathname.endsWith("/analysis/jobs"))
-        return route.fulfill({ json: { jobs: [], backlog: 0 } });
+      if (pathname.endsWith("/analysis/jobs")) {
+        return route.fulfill({ json: { jobs: [], backlog: 0 } satisfies Schemas["AnalysisQueue"] });
+      }
       if (pathname.endsWith("/analysis/uploads")) {
         return route.fulfill({
           status: 201,
-          json: { root: "temporary", path: "1f2e3d4c/mine.flac", size: 2048 }
+          json: {
+            root: "temporary",
+            path: "1f2e3d4c/mine.flac",
+            size: 2048
+          } satisfies Schemas["AnalysisUpload"]
         });
       }
       // the list the chips and filters read: the download's report, and one of a file in Files
@@ -690,7 +737,7 @@ export const fakeAnalysis = async (page: Page, { stale = false, duration = 30.5 
       }
       if (pathname.endsWith("/override")) {
         if (method === "PUT") {
-          const body = route.request().postDataJSON() as { verdict: string; note: string | null };
+          const body = route.request().postDataJSON() as Schemas["SetAnalysisOverride"];
           override = { ...body, by: "local:reseek", at: "2026-10-28T12:05:00Z" };
         } else {
           override = null;
@@ -712,19 +759,19 @@ export const fakeAnalysis = async (page: Page, { stale = false, duration = 30.5 
   );
 };
 
-/** A file a batch analysis names, as the page sends it */
-type BatchFile =
-  | { kind: "file"; root: string; path: string }
-  | { kind: "download"; username: string; id: string };
-
 /** Answers the batch analysis call: `each` says what became of each file it names, in order */
 export const fakeBatch = async (
   page: Page,
-  each: (file: BatchFile) => "queued" | "current" | "refused"
+  each: (file: Schemas["AnalysisTarget"]) => "queued" | "current" | "refused"
 ) => {
   await page.route("**/api/v0/analysis/batch", (route) => {
-    const { files } = route.request().postDataJSON() as { files: BatchFile[] };
-    const result = { queued: 0, current: 0, refused: [] as unknown[], jobId: null };
+    const { files } = route.request().postDataJSON() as Schemas["AnalysisBatch"];
+    const result: Schemas["AnalysisBatchQueued"] = {
+      queued: 0,
+      current: 0,
+      refused: [],
+      jobId: null
+    };
     files.forEach((file, index) => {
       const outcome = each(file);
       if (outcome === "refused") result.refused.push({ index, error: "The file is gone" });

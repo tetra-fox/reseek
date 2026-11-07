@@ -1,18 +1,20 @@
 import { expect, type Page, test } from "@playwright/test";
 
 import { fakeBrowse, fakeConnected, fakeDownloads, fakeSearch, SEARCH_ID } from "./support/fakes";
-import { login } from "./support/login";
+import { visit } from "./support/login";
 
 /** The pane's width before it is resized, in pixels */
 const WIDTH = 384;
 
 const pane = (page: Page) => page.getByRole("complementary", { name: "Details" });
+/** The inspector as a docked pane or a sheet */
+const INSPECTOR = "[data-inspector]";
 const fileName = (page: Page) => pane(page).getByRole("heading", { level: 2 });
 
 /** The Downloads screen in the List view, every transfer on a line of its own, focus in the table */
 const flatDownloads = async (page: Page) => {
   await fakeDownloads(page);
-  await login(page, "/downloads");
+  await visit(page, "/downloads");
   await page.getByRole("radio", { name: "List" }).click();
   const grid = page.getByRole("treegrid", { name: "Downloads" });
   await expect(grid.getByText("3.flac")).toBeVisible();
@@ -22,7 +24,9 @@ const flatDownloads = async (page: Page) => {
 test.describe("on a wide screen", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
-  test("docks beside the list, which narrows, and keeps its width", async ({ page }) => {
+  test("docks under the header beside the list, which narrows, and keeps its width", async ({
+    page
+  }) => {
     await flatDownloads(page);
     const content = page.locator("[data-content]");
     const before = (await content.boundingBox())!;
@@ -39,6 +43,17 @@ test.describe("on a wide screen", () => {
       narrowed.x + narrowed.width
     );
     expect(docked.x + docked.width).toBe(before.x + before.width);
+    // under the header, never beneath it: the header ends above it and the pane shows at its top
+    await expect
+      .poll(() =>
+        page.evaluate((selector) => {
+          const box = document.querySelector(selector)!.getBoundingClientRect();
+          const header = document.querySelector("header")!.getBoundingClientRect();
+          const top = document.elementFromPoint(box.left + box.width / 2, box.top + 4);
+          return { under: box.top >= header.bottom - 0.5, shown: !!top?.closest(selector) };
+        }, INSPECTOR)
+      )
+      .toEqual({ under: true, shown: true });
 
     // wider with the keys, and the same after a reload
     const handle = page.getByRole("separator", { name: "Width of the details pane" });
@@ -49,32 +64,6 @@ test.describe("on a wide screen", () => {
     await page.reload();
     await expect(pane(page)).toBeVisible();
     await expect.poll(async () => (await pane(page).boundingBox())!.width).toBe(WIDTH + 40);
-  });
-
-  test("follows the arrow keys, and Space or i opens and closes it", async ({ page }) => {
-    await flatDownloads(page);
-    await page.keyboard.press("ArrowDown");
-    await page.keyboard.press("Space");
-    await expect(pane(page)).toBeVisible();
-    const first = (await fileName(page).textContent())!;
-
-    await page.keyboard.press("ArrowDown");
-    await expect(fileName(page)).not.toHaveText(first);
-    await page.keyboard.press("ArrowUp");
-    await expect(fileName(page)).toHaveText(first);
-
-    // the row it shows stays marked, with nothing ticked by Space
-    const grid = page.getByRole("treegrid", { name: "Downloads" });
-    await expect(grid.locator("[data-inspected]")).toContainText(first);
-    await expect(grid.locator('[aria-selected="true"]')).toHaveCount(0);
-
-    await page.keyboard.press("i");
-    await expect(pane(page)).toBeHidden();
-    await page.keyboard.press("Space");
-    await expect(pane(page)).toBeVisible();
-    await page.keyboard.press("Shift+Space");
-    await expect(grid.locator('[aria-selected="true"]')).toHaveCount(1);
-    await expect(pane(page)).toBeVisible();
   });
 
   test("an action leaves the keys in the list", async ({ page }) => {
@@ -88,9 +77,11 @@ test.describe("on a wide screen", () => {
     await expect(fileName(page)).not.toHaveText("2.flac");
   });
 
-  test("folds its sections, leaves out empty fields and remembers", async ({ page }) => {
+  test("folds its sections, leaves out empty fields, remembers, and stays on its screen", async ({
+    page
+  }) => {
     await fakeDownloads(page);
-    await login(page, "/downloads");
+    await visit(page, "/downloads");
     await page.getByRole("button", { name: "2.flac", exact: true }).click();
 
     // always in view: what the file is and what to do with it
@@ -130,12 +121,18 @@ test.describe("on a wide screen", () => {
     await page.getByRole("button", { name: "2.flac", exact: true }).click();
     await expect(details).toHaveAttribute("aria-expanded", "false");
     await expect(technical).toHaveAttribute("aria-expanded", "true");
+
+    // a screen without the pane leaves it out, and it is back on the way back
+    await page.goto("./#/dashboard");
+    await expect(pane(page)).toHaveCount(0);
+    await page.goto("./#/downloads");
+    await expect(pane(page)).toBeVisible();
   });
 
   test("shows a search result, and the toolbar opens and closes it", async ({ page }) => {
     await fakeConnected(page);
     await fakeSearch(page);
-    await login(page, `/searches/${SEARCH_ID}`);
+    await visit(page, `/searches/${SEARCH_ID}`);
     await page.getByRole("radio", { name: "List" }).click();
     const grid = page.getByRole("treegrid", { name: "Search results" });
     await expect(grid.getByText("02 Two.flac")).toBeVisible();
@@ -166,36 +163,36 @@ test.describe("on a wide screen", () => {
   test("shows a browsed file", async ({ page }) => {
     await fakeConnected(page);
     await fakeBrowse(page);
-    await login(page, "/users/carol/shares");
+    await visit(page, "/users/carol/shares");
     await page.locator('[data-line$="Bootlegs"]').click();
     await page.getByRole("treegrid", { name: "Shared folders" }).getByText("2.flac").click();
     await page.keyboard.press("i");
     await expect(fileName(page)).toHaveText("2.flac");
     await expect(pane(page).getByRole("button", { name: "Download", exact: true })).toBeVisible();
   });
-
-  test("leaves the pane out of a screen without one", async ({ page }) => {
-    await fakeDownloads(page);
-    await login(page, "/downloads");
-    await page.getByRole("button", { name: "2.flac", exact: true }).click();
-    await expect(pane(page)).toBeVisible();
-    await page.goto("./#/dashboard");
-    await expect(pane(page)).toHaveCount(0);
-    await page.goto("./#/downloads");
-    await expect(pane(page)).toBeVisible();
-  });
 });
 
 test.describe("on a phone", () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test("opens as a sheet from a row, closes with Escape and stays closed", async ({ page }) => {
+  test("opens from a row as a sheet over the screen, closes with Escape and stays closed", async ({
+    page
+  }) => {
     await fakeSearch(page);
-    await login(page, `/searches/${SEARCH_ID}`);
+    await visit(page, `/searches/${SEARCH_ID}`);
     await page.getByRole("button", { name: "Actions for 01 One.flac" }).click();
     await page.getByRole("menuitem", { name: "Details" }).click();
     const sheet = page.getByRole("dialog", { name: "Details" });
     await expect(sheet.getByRole("heading", { name: "01 One.flac" })).toBeVisible();
+    // the whole screen, the header under it
+    await expect
+      .poll(() => page.locator(INSPECTOR).boundingBox())
+      .toEqual({ x: 0, y: 0, width: 390, height: 844 });
+    const onTop = await page.evaluate(
+      (selector) => !!document.elementFromPoint(100, 10)?.closest(selector),
+      INSPECTOR
+    );
+    expect(onTop).toBe(true);
     await page.keyboard.press("Escape");
     await expect(sheet).toBeHidden();
     await page.reload();
