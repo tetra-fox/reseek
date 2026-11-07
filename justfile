@@ -32,7 +32,14 @@ dev: web-install
 # in .dev/daemon
 [doc("the daemon without its built-in ui, restarted on change")]
 dev-daemon:
-    watchexec --restart --watch crates --exts rs,toml -- cargo run -p reseek-bin -- --app-dir "{{ devdir }}/daemon" $(cat crates/reseek-bin/dev-flags)
+    #!/usr/bin/env bash
+    set -euo pipefail
+    watchexec --restart --watch crates --exts rs,toml -- cargo run -p reseek-bin -- --app-dir "{{ devdir }}/daemon" $(cat crates/reseek-bin/dev-flags) &
+    watch=$!
+    # watchexec passes a hangup on to the daemon, which reloads its configuration on one, so a
+    # closed terminal would leave both running; it stops watchexec here instead
+    trap 'kill -TERM "$watch"' HUP
+    wait "$watch" || wait "$watch"
 
 # the vite ui, proxying the api to the daemon
 dev-web: web-install
