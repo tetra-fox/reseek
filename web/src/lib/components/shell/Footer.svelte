@@ -100,27 +100,37 @@
     </span>
   </SpeedLimits>
   {#if jobsText || failed}
-    <a
-      href={href("/jobs")}
-      class="flex h-control-sm shrink-0 items-center gap-1.5 rounded-badge px-2 text-fg-muted hover:bg-hover hover:text-fg"
-      title={failed ? "A job failed" : undefined}>
-      <ListChecksIcon class="size-3.5" />
-      <span class="max-md:hidden">{jobsText ?? "A job failed"}</span>
-      <span class="md:hidden">{jobsShort ?? "A job failed"}</span>
-      {#if failed}<span class="size-2 shrink-0 rounded-full bg-danger" aria-label="A job failed"
-        ></span
-        >{/if}
-    </a>
+    <!-- the red dot says a job failed beside the running jobs, which say it in words otherwise -->
+    <Tooltip text={failed && jobsText ? "A job failed" : undefined}>
+      {#snippet child({ props })}
+        <a
+          {...props}
+          href={href("/jobs")}
+          class="flex h-control-sm shrink-0 items-center gap-1.5 rounded-badge px-2 text-fg-muted hover:bg-hover hover:text-fg">
+          <ListChecksIcon class="size-3.5" />
+          <span class="max-md:hidden">{jobsText ?? "A job failed"}</span>
+          <span class="md:hidden">{jobsShort ?? "A job failed"}</span>
+          {#if failed}<span class="size-2 shrink-0 rounded-full bg-danger" aria-label="A job failed"
+            ></span
+            >{/if}
+        </a>
+      {/snippet}
+    </Tooltip>
   {/if}
-  <button
-    type="button"
-    aria-pressed={activityPrefs.open}
-    class="flex h-control-sm shrink-0 items-center gap-1.5 rounded-badge px-2 text-fg-muted hover:bg-hover hover:text-fg aria-pressed:bg-surface-muted aria-pressed:text-fg max-md:ml-auto"
-    title={`Activity log: browses, searches and downloads by other users (${shortcutText("J")})`}
-    aria-keyshortcuts={shortcutAria("J")}
-    onclick={() => (activityPrefs.open = !activityPrefs.open)}>
-    <ActivityIcon class="size-3.5" /><span class="max-md:sr-only">Activity</span>
-  </button>
+  <Tooltip
+    text={`Activity log: browses, searches and downloads by other users (${shortcutText("J")})`}>
+    {#snippet child({ props })}
+      <button
+        {...props}
+        type="button"
+        aria-pressed={activityPrefs.open}
+        class="flex h-control-sm shrink-0 items-center gap-1.5 rounded-badge px-2 text-fg-muted hover:bg-hover hover:text-fg aria-pressed:bg-surface-muted aria-pressed:text-fg max-md:ml-auto"
+        aria-keyshortcuts={shortcutAria("J")}
+        onclick={() => (activityPrefs.open = !activityPrefs.open)}>
+        <ActivityIcon class="size-3.5" /><span class="max-md:sr-only">Activity</span>
+      </button>
+    {/snippet}
+  </Tooltip>
   <a
     href={REPOSITORY}
     target="_blank"

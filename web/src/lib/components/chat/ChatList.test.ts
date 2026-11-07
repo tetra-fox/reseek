@@ -276,7 +276,7 @@ describe("the chat list", () => {
       { kind: "user", name: "bob" }
     ];
     flushSync();
-    expect(document.querySelector("[aria-hidden=true][title]")).toBeNull();
+    expect(document.querySelector("button[aria-hidden=true]")).toBeNull();
     press(grid(), "ArrowDown");
     expect(press(grid(), "ArrowDown", move).defaultPrevented).toBe(false);
     expect(shown().slice(1, 3)).toEqual(["room:jazz", "user:bob"]);

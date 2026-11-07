@@ -25,6 +25,7 @@
   import Button from "#lib/components/ui/Button.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Notice from "#lib/components/ui/Notice.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import Avatar from "#lib/components/users/Avatar.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { ago, plural } from "#lib/format.js";
@@ -37,6 +38,7 @@
   import { inControl, moveKeys, moveStep } from "#lib/ui/keys.js";
   import { disclose } from "#lib/ui/motion.js";
   import { nameColor } from "#lib/users/colors.js";
+  import { pictureOf } from "#lib/users/profile.svelte.js";
   import { users } from "#lib/users/users.svelte.js";
 
   import ChatMenuItems from "./ChatMenuItems.svelte";
@@ -311,17 +313,23 @@
             if (movable) e.preventDefault();
           }}>
           {#if movable}
-            <button
-              type="button"
-              tabindex="-1"
-              aria-hidden="true"
-              title={`Drag to reorder, or press ${moveKeys}`}
-              class="absolute inset-y-0 left-0 flex w-4 cursor-grab touch-none items-center justify-center text-fg-subtle opacity-0 hover:text-fg-muted active:cursor-grabbing pointer-coarse:static pointer-coarse:-mx-1 pointer-coarse:w-7 pointer-coarse:shrink-0 pointer-coarse:self-stretch pointer-coarse:opacity-100 row-active:opacity-100"
-              onpointerdown={(e) => drag.press(e, line.key, line.ids)}
-              ><GripVerticalIcon class="size-3.5 shrink-0" /></button>
+            <!-- the press is taken in the capture phase, so the tooltip's own pointerdown still
+                 closes it -->
+            <Tooltip text={`Drag to reorder, or press ${moveKeys}`}>
+              {#snippet child({ props })}
+                <button
+                  {...props}
+                  type="button"
+                  tabindex="-1"
+                  aria-hidden="true"
+                  class="absolute inset-y-0 left-0 flex w-4 cursor-grab touch-none items-center justify-center text-fg-subtle opacity-0 hover:text-fg-muted active:cursor-grabbing pointer-coarse:static pointer-coarse:-mx-1 pointer-coarse:w-7 pointer-coarse:shrink-0 pointer-coarse:self-stretch pointer-coarse:opacity-100 row-active:opacity-100"
+                  onpointerdowncapture={(e) => drag.press(e, line.key, line.ids)}
+                  ><GripVerticalIcon class="size-3.5 shrink-0" /></button>
+              {/snippet}
+            </Tooltip>
           {/if}
           {#if person}
-            <Avatar name={t.name} pictureUrl={summary?.info?.pictureUrl} class="size-8 text-xs" />
+            <Avatar name={t.name} pictureUrl={pictureOf(t.name)} class="size-8 text-xs" />
           {:else}
             {@const Icon = notices ? ServerIcon : HashIcon}
             <span
@@ -356,7 +364,11 @@
                   )}{/if}
               </span>
               {#if counts?.mentions}
-                <Badge tone="accent" class={count} title="Mentions">@{counts.mentions}</Badge>
+                <Tooltip text="Mentions" dense spoken>
+                  {#snippet child({ props })}
+                    <Badge {...props} tone="accent" class={count}>@{counts.mentions}</Badge>
+                  {/snippet}
+                </Tooltip>
               {:else if counts?.unread}
                 <Badge class={count}>{counts.unread}</Badge>
               {:else if unread}
@@ -408,13 +420,16 @@
       <Button variant="outline" size="sm" class="flex-auto" onclick={() => onnew()}
         ><MessageSquarePlusIcon />New message</Button>
     {/if}
-    <Button
-      variant="ghost"
-      size="sm"
-      class="flex-auto text-fg-muted aria-[current=page]:nav-current"
-      href={publicFeedHref()}
-      aria-current={feed ? "page" : undefined}
-      title="Messages from every public room, shown live"
-      ><RadioTowerIcon />All public rooms</Button>
+    <Tooltip text="Messages from every public room, shown live">
+      {#snippet child({ props })}
+        <Button
+          {...props}
+          variant="ghost"
+          size="sm"
+          class="flex-auto text-fg-muted aria-[current=page]:nav-current"
+          href={publicFeedHref()}
+          aria-current={feed ? "page" : undefined}><RadioTowerIcon />All public rooms</Button>
+      {/snippet}
+    </Tooltip>
   </div>
 </div>

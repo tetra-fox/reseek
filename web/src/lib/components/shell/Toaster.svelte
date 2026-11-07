@@ -5,6 +5,7 @@
   import { fly } from "svelte/transition";
 
   import Button from "#lib/components/ui/Button.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { dismiss, hold, toasts } from "#lib/feedback/toast.svelte.js";
   import { motionFast } from "#lib/ui/motion.js";
 
@@ -42,21 +43,33 @@
             dismiss(t.id);
           }}>{action.label}</Button>
       {/if}
-      <Button variant="ghost" size="icon-sm" onclick={() => dismiss(t.id)} aria-label="Dismiss">
-        <XIcon />
-      </Button>
+      <Tooltip text="Dismiss">
+        {#snippet child({ props })}
+          <Button
+            {...props}
+            variant="ghost"
+            size="icon-sm"
+            onclick={() => dismiss(t.id)}
+            aria-label="Dismiss">
+            <XIcon />
+          </Button>
+        {/snippet}
+      </Tooltip>
       {#if Number.isFinite(t.ms)}
-        <!-- the time left, run from the toast's own duration and held with it; none under
-        reduced motion, where a bar that does not move says nothing -->
-        <div
-          class={[
-            "countdown absolute inset-x-0 bottom-0 h-0.5 origin-left motion-reduce:hidden",
-            t.kind === "error" ? "bg-danger" : "bg-accent"
-          ]}
-          style:animation-duration="{t.ms}ms"
-          style:animation-play-state={t.held ? "paused" : "running"}
-          aria-hidden="true">
-        </div>
+        <!-- the time left, run from the toast's own duration and held with it, from the start
+        again when another toast takes its place; none under reduced motion, where a bar that
+        does not move says nothing -->
+        {#key t.round}
+          <div
+            class={[
+              "countdown absolute inset-x-0 bottom-0 h-0.5 origin-left motion-reduce:hidden",
+              t.kind === "error" ? "bg-danger" : "bg-accent"
+            ]}
+            style:animation-duration="{t.ms}ms"
+            style:animation-play-state={t.held ? "paused" : "running"}
+            aria-hidden="true">
+          </div>
+        {/key}
       {/if}
     </div>
   {/each}

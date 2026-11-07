@@ -63,6 +63,82 @@ describe("toast countdowns", () => {
   });
 });
 
+describe("toasts with a key", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => {
+    vi.useRealTimers();
+    toasts.splice(0);
+  });
+
+  it("take the place of the one with their key, on top and with the whole time again", () => {
+    const gone = vi.fn();
+    const first = toast("New message from alice", "info", { key: "user:alice", onGone: gone });
+    toast("Saved");
+    vi.advanceTimersByTime(5_000);
+    const again = toast("New message from alice", "info", { key: "user:alice" });
+    expect(again).toBe(first);
+    expect(gone).toHaveBeenCalledOnce();
+    expect(toasts.map((t) => [t.text, t.round])).toEqual([
+      ["New message from alice", 1],
+      ["Saved", 0]
+    ]);
+    vi.advanceTimersByTime(5_999);
+    expect(toasts.map((t) => t.text)).toEqual(["New message from alice"]);
+    vi.advanceTimersByTime(1);
+    expect(toasts).toHaveLength(0);
+  });
+
+  it("held when replaced, run their new countdown once let go", () => {
+    const id = toast("New message from alice", "info", { key: "user:alice" });
+    hold(id, "pointer", true);
+    toast("New message from alice", "info", { key: "user:alice" });
+    vi.advanceTimersByTime(60_000);
+    expect(toasts).toHaveLength(1);
+    hold(id, "pointer", false);
+    vi.advanceTimersByTime(6_000);
+    expect(toasts).toHaveLength(0);
+  });
+});
+
+describe("a crowd of toasts", () => {
+  afterEach(() => {
+    while (toasts.length) dismiss(toasts[0].id);
+  });
+
+  it("lets the oldest go past five, errors last, and runs what each was shown with", () => {
+    const gone = vi.fn();
+    toast("Failed 1", "error");
+    toast("Saved 1", "info", { onGone: () => gone("Saved 1") });
+    toast("Failed 2", "error");
+    toast("Saved 2", "info", { onGone: () => gone("Saved 2") });
+    toast("Saved 3");
+    toast("Saved 4");
+    expect(gone.mock.calls).toEqual([["Saved 1"]]);
+    toast("Failed 3", "error");
+    toast("Saved 5");
+    expect(gone.mock.calls).toEqual([["Saved 1"], ["Saved 2"]]);
+    expect(toasts.map((t) => t.text)).toEqual([
+      "Saved 5",
+      "Failed 3",
+      "Saved 4",
+      "Failed 2",
+      "Failed 1"
+    ]);
+  });
+
+  it("lets the oldest error go when every other one is an error, the newest kept", () => {
+    for (const n of [1, 2, 3, 4, 5]) toast(`Failed ${n}`, "error");
+    toast("Saved");
+    expect(toasts.map((t) => t.text)).toEqual([
+      "Saved",
+      "Failed 5",
+      "Failed 4",
+      "Failed 3",
+      "Failed 2"
+    ]);
+  });
+});
+
 describe("a failed load", () => {
   afterEach(() => toasts.splice(0));
 

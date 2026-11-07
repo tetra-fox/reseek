@@ -36,10 +36,14 @@
 
 <header
   class="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-inline border-b bg-page/75 px-gutter backdrop-blur-md">
-  <Button variant="ghost" size="icon-sm" class="-ml-1.5" onclick={sidebar.toggle}>
-    <PanelLeftIcon />
-    <span class="sr-only">Toggle navigation</span>
-  </Button>
+  <Tooltip text="Toggle navigation">
+    {#snippet child({ props })}
+      <Button {...props} variant="ghost" size="icon-sm" class="-ml-1.5" onclick={sidebar.toggle}>
+        <PanelLeftIcon />
+        <span class="sr-only">Toggle navigation</span>
+      </Button>
+    {/snippet}
+  </Tooltip>
   <div class="mx-1 h-4 w-px bg-border"></div>
   <nav aria-label="Breadcrumb" class="min-w-0 flex-1">
     <ol class="flex min-w-0 items-center gap-1 text-sm">
@@ -50,34 +54,51 @@
           {#if i > 0}<ChevronRightIcon
               class="size-3.5 shrink-0 text-fg-subtle max-sm:hidden" />{/if}
           {#if last}
-            <span aria-current="page" class="truncate font-medium" title={crumb.copy}>
-              {crumb.label}
-            </span>
+            <Tooltip text={crumb.copy} clipped={crumb.copy === crumb.label}>
+              {#snippet child({ props })}
+                <span {...props} aria-current="page" class="truncate font-medium">
+                  {crumb.label}
+                </span>
+              {/snippet}
+            </Tooltip>
             {#if crumb.copy}
               {@const text = crumb.copy}
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                class="size-6"
-                aria-label="Copy the path"
-                onclick={() => void copier.copy(text)}>
-                {#if copier.copied}<CheckIcon class="text-success" />{:else}<CopyIcon />{/if}
-              </Button>
+              <Tooltip text="Copy the path">
+                {#snippet child({ props })}
+                  <Button
+                    {...props}
+                    variant="ghost"
+                    size="icon-sm"
+                    class="size-6"
+                    aria-label="Copy the path"
+                    onclick={() => void copier.copy(text)}>
+                    {#if copier.copied}<CheckIcon class="text-success" />{:else}<CopyIcon />{/if}
+                  </Button>
+                {/snippet}
+              </Tooltip>
             {/if}
-          {:else if crumb.href}
-            <a
-              href={crumb.href}
-              onclick={crumb.onclick}
-              class="max-w-48 truncate rounded-badge px-1 text-fg-muted hover:bg-hover hover:text-fg"
-              >{crumb.label}</a>
-          {:else if crumb.onclick}
-            <button
-              type="button"
-              onclick={crumb.onclick}
-              class="max-w-48 truncate rounded-badge px-1 text-fg-muted hover:bg-hover hover:text-fg"
-              >{crumb.label}</button>
           {:else}
-            <span class="max-w-48 truncate px-1 text-fg-muted">{crumb.label}</span>
+            <Tooltip text={crumb.label} clipped>
+              {#snippet child({ props })}
+                {#if crumb.href}
+                  <a
+                    {...props}
+                    href={crumb.href}
+                    onclick={crumb.onclick}
+                    class="max-w-48 truncate rounded-badge px-1 text-fg-muted hover:bg-hover hover:text-fg"
+                    >{crumb.label}</a>
+                {:else if crumb.onclick}
+                  <button
+                    {...props}
+                    type="button"
+                    onclick={crumb.onclick}
+                    class="max-w-48 truncate rounded-badge px-1 text-fg-muted hover:bg-hover hover:text-fg"
+                    >{crumb.label}</button>
+                {:else}
+                  <span {...props} class="max-w-48 truncate px-1 text-fg-muted">{crumb.label}</span>
+                {/if}
+              {/snippet}
+            </Tooltip>
           {/if}
         </li>
       {/each}

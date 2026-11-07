@@ -2,6 +2,7 @@
   import DownloadIcon from "@lucide/svelte/icons/download";
 
   import { richText } from "#lib/chat/messages/rich.js";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { enqueue } from "#lib/files/downloads.js";
   import { slskBrowse, type SlskLink } from "#lib/files/slsk.js";
@@ -30,16 +31,21 @@
       target="_blank"
       rel="noopener noreferrer"
       class="text-accent underline-offset-2 hover:underline">{part.text}</a
-    >{:else if part.kind === "slsk"}<a
-      href={slskBrowse(part.link)}
-      title={`${part.link.folder ? "Browse this folder" : "Show this file"} in ${part.link.username}'s shares`}
-      class="text-accent underline-offset-2 hover:underline">{part.text}</a
-    >{#if write && !part.link.folder}<button
-        type="button"
-        class="mx-0.5 inline-flex translate-y-0.5 items-center rounded-badge p-0.5 text-fg-muted hover:bg-hover hover:text-fg"
-        aria-label={`Download ${part.link.path}`}
-        title="Download"
-        onclick={() => void download(part.link)}><DownloadIcon class="size-3.5" /></button
+    >{:else if part.kind === "slsk"}<Tooltip
+      text={`${part.link.folder ? "Browse this folder" : "Show this file"} in ${part.link.username}'s shares`}
+      >{#snippet child({ props })}<a
+          {...props}
+          href={slskBrowse(part.link)}
+          class="text-accent underline-offset-2 hover:underline">{part.text}</a
+        >{/snippet}</Tooltip
+    >{#if write && !part.link.folder}<Tooltip text="Download"
+        >{#snippet child({ props })}<button
+            {...props}
+            type="button"
+            class="mx-0.5 inline-flex translate-y-0.5 items-center rounded-badge p-0.5 text-fg-muted hover:bg-hover hover:text-fg"
+            aria-label={`Download ${part.link.path}`}
+            onclick={() => void download(part.link)}><DownloadIcon class="size-3.5" /></button
+          >{/snippet}</Tooltip
       >{/if}{:else if part.kind === "mark"}<mark
       class="rounded-[3px] bg-warning-soft px-0.5 text-warning-soft-fg">{part.text}</mark
     >{:else}{part.text}{/if}{/each}

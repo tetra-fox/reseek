@@ -11,6 +11,7 @@
   import Button from "#lib/components/ui/Button.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
   import Input from "#lib/components/ui/Input.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import Username from "#lib/components/users/Username.svelte";
   import { formatDate, shortTime } from "#lib/format.js";
   import { interaction } from "#lib/lists/interaction.svelte.js";
@@ -100,15 +101,19 @@
         onscroll={seen}>
         {#each shown as line (line.id)}
           <div class="flex items-baseline gap-2 px-3 py-0.5 text-sm leading-5">
-            <time
-              class="shrink-0 text-xs text-fg-subtle tabular-nums"
-              datetime={line.receivedAt}
-              title={formatDate(line.receivedAt)}>{shortTime(line.receivedAt)}</time>
+            <Tooltip text={formatDate(line.receivedAt)} dense>
+              {#snippet child({ props })}
+                <time
+                  {...props}
+                  class="shrink-0 text-xs text-fg-subtle tabular-nums"
+                  datetime={line.receivedAt}>{shortTime(line.receivedAt)}</time>
+              {/snippet}
+            </Tooltip>
             <p class="min-w-0 wrap-anywhere">
               <a
                 href={roomHref(line.roomName)}
                 class="font-medium text-fg-muted underline-offset-2 hover:text-fg hover:underline"
-                title={`Open the room ${line.roomName}`}>#{line.roomName}</a>
+                >#{line.roomName}</a>
               <Username name={line.username} card class="ml-1" />
               <span class="ml-1"><ChatText text={line.message} watch={[]} /></span>
             </p>

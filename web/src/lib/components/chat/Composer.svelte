@@ -25,6 +25,7 @@
   import { chatLayout, roomDrafts } from "#lib/chat/prefs.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Textarea from "#lib/components/ui/Textarea.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { plural } from "#lib/format.js";
   import { chatHref, roomHref, userHref } from "#lib/nav.js";
@@ -313,8 +314,16 @@
       class="absolute bottom-full left-2 z-20 mb-1 w-[min(28rem,calc(100%-1rem))] rounded-card border bg-overlay p-3 text-sm shadow-raised">
       <div class="mb-2 flex items-center justify-between">
         <span class="font-medium">Commands</span>
-        <Button variant="ghost" size="icon-sm" aria-label="Close" onclick={() => (said = null)}
-          ><XIcon /></Button>
+        <Tooltip text="Close">
+          {#snippet child({ props })}
+            <Button
+              {...props}
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Close"
+              onclick={() => (said = null)}><XIcon /></Button>
+          {/snippet}
+        </Tooltip>
       </div>
       <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
         {#each COMMANDS.filter((c) => !c.roomOnly || target.kind === "room") as c (c.name)}
@@ -344,11 +353,16 @@
         if (!text) pasted = null;
       }}
       onclick={(e) => (caret = e.currentTarget.selectionStart ?? 0)} />
-    <Button
-      size="icon"
-      aria-label="Send"
-      disabled={!!disabled || !text.trim() || length > max}
-      onclick={() => void send()}><SendIcon /></Button>
+    <Tooltip text="Send">
+      {#snippet child({ props })}
+        <Button
+          {...props}
+          size="icon"
+          aria-label="Send"
+          disabled={!!disabled || !text.trim() || length > max}
+          onclick={() => void send()}><SendIcon /></Button>
+      {/snippet}
+    </Tooltip>
   </div>
   {#if said?.kind === "error" || pasted || flattened || length > max * 0.9}
     <div class="flex flex-wrap items-center gap-x-3 px-1 text-xs">

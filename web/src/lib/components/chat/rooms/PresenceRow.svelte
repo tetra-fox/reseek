@@ -7,6 +7,7 @@
 
   import { type Burst, burstLine } from "#lib/chat/rooms/presence.js";
   import LogTime from "#lib/components/ui/LogTime.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import Username from "#lib/components/users/Username.svelte";
 
   // the cells of one line of a room's activity: a burst of the same change by its members
@@ -35,7 +36,8 @@
   {#each line.shown as name, i (name)}{#if i > 0}{i === line.shown.length - 1 && !line.others
         ? " and "
         : ", "}{/if}<Username {name} card />{/each}{#if line.others}
-    and <span title={burst.names.slice(line.shown.length).join(", ")}>{line.others} others</span
+    and <Tooltip text={burst.names.slice(line.shown.length).join(", ")} dense spoken
+      >{#snippet child({ props })}<span {...props}>{line.others} others</span>{/snippet}</Tooltip
     >{/if}
   <span class="text-fg-muted">{line.verb}</span>
 </span>

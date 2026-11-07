@@ -440,7 +440,8 @@ describe("a chat pane", () => {
     });
     await flush();
     const card = () => document.querySelector('[role="dialog"][aria-label="Profile of alice"]');
-    row(1).querySelector<HTMLAnchorElement>("a")!.click();
+    // the name, not the face beside it, which links to the profile
+    row(1).querySelector<HTMLAnchorElement>("a:not([aria-hidden])")!.click();
     await flush();
     expect(card()).not.toBeNull();
 

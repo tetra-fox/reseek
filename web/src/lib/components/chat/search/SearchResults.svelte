@@ -224,7 +224,7 @@
             <span role="gridcell" class="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2">
               <time class="text-xs text-fg-subtle" datetime={hit.timestamp}
                 >{formatDate(hit.timestamp)}</time>
-              {#if hit.room}<span class="text-xs font-medium">{hit.username}</span>{/if}
+              {#if hit.room}<Username name={hit.username} class="text-xs" />{/if}
               <span class="min-w-0 flex-1 basis-48 text-sm wrap-anywhere"
                 ><Marked parts={snippetParts(hit.snippet)} /></span>
             </span>

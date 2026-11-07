@@ -9,6 +9,9 @@ import { fields, stored } from "#lib/stored.svelte.js";
 export type ActivityEntry = Schemas["ActivityEntry"];
 export type ActivityType = Schemas["ActivityKind"]["type"];
 
+/** How many entries the page keeps, the newest; as many as the daemon's log keeps */
+const KEPT = 500;
+
 /** The docked activity log's least height, in pixels */
 export const DOCK_MIN = 120;
 /** The docked activity log's default height, in pixels */
@@ -45,14 +48,25 @@ class Activity {
 
   constructor() {
     live.on("activity.buffer", (all) => this.entries.reconcile(all));
-    live.on("activity.entry", (entry) => void this.entries.upsert(entry));
+    live.on("activity.entry", (entry) => {
+      this.entries.upsert(entry);
+      this.#trim();
+    });
   }
 
   /** the entries shown, newest first */
-  get shown(): ActivityEntry[] {
-    return this.entries.rows
-      .filter((e) => e.id > this.clearedThrough)
-      .toSorted((a, b) => b.id - a.id);
+  readonly shown = $derived(
+    this.entries.rows.filter((e) => e.id > this.clearedThrough).toSorted((a, b) => b.id - a.id)
+  );
+
+  /** Lets the entries older than the newest `KEPT` go, as the daemon's log does */
+  #trim() {
+    const { removed } = this.entries;
+    const kept = this.entries.rows.filter((e) => !removed.has(String(e.id)));
+    if (kept.length <= KEPT) return;
+    for (const e of kept.toSorted((a, b) => a.id - b.id).slice(0, -KEPT)) {
+      this.entries.remove(String(e.id));
+    }
   }
 
   /** Follows the log while the dock is open; gives the function that stops following it */
@@ -78,6 +92,7 @@ class Activity {
     if (!outcome.ok) return void (this.error = outcome.error);
     this.error = "";
     for (const entry of outcome.data) this.entries.upsert(entry);
+    this.#trim();
   };
 
   /** Clears the view up to the newest entry; the log itself is the daemon's */

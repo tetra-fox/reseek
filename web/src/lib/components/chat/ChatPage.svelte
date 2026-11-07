@@ -6,7 +6,6 @@
   import MessagesSquareIcon from "@lucide/svelte/icons/messages-square";
   import PanelLeftIcon from "@lucide/svelte/icons/panel-left";
   import { Dialog } from "bits-ui";
-  import { MediaQuery } from "svelte/reactivity";
 
   import { paneKey } from "#lib/chat/chat.svelte.js";
   import { columns } from "#lib/chat/columns.svelte.js";
@@ -24,9 +23,11 @@
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
   import ResizeHandle from "#lib/components/ui/ResizeHandle.svelte";
   import Scrim from "#lib/components/ui/Scrim.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { chatHref, roomHref } from "#lib/nav.js";
   import { useCrumbs } from "#lib/shell/crumbs.svelte.js";
   import { layerOpen } from "#lib/ui/keys.js";
+  import { viewport } from "#lib/ui/viewport.svelte.js";
   import { DESKTOP_NEEDS_HTTPS, TURN_ON_NOTIFICATIONS } from "#lib/wording.js";
 
   import ChatList from "./ChatList.svelte";
@@ -51,9 +52,8 @@
   /** how many messages one page of the search results holds */
   const RESULTS_PAGE = 50;
 
-  const wide = new MediaQuery("min-width: 1024px");
   $effect(() => {
-    columns.listShown = wide.current;
+    columns.listShown = viewport.lg;
   });
   let sheet = $state(false);
   let joining = $state(false);
@@ -140,9 +140,17 @@
 {/snippet}
 
 {#snippet lead()}
-  {#if !wide.current}
-    <Button variant="ghost" size="icon-sm" aria-label="Chats" onclick={() => (sheet = true)}
-      ><PanelLeftIcon /></Button>
+  {#if !viewport.lg}
+    <Tooltip text="Chats">
+      {#snippet child({ props })}
+        <Button
+          {...props}
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Chats"
+          onclick={() => (sheet = true)}><PanelLeftIcon /></Button>
+      {/snippet}
+    </Tooltip>
   {/if}
 {/snippet}
 
@@ -152,7 +160,7 @@
   class="flex h-(--content-h) overflow-hidden bg-surface"
   data-chat
   bind:clientWidth={columns.total}>
-  {#if wide.current}
+  {#if viewport.lg}
     {@const { width, min, max, initial } = columns.listColumn}
     <div class="relative flex shrink-0 flex-col border-r" style:width={`${width}px`}>
       {@render list()}
@@ -203,7 +211,7 @@
       {#key `${current} ${at}`}
         <Pane {target} {at} {lead} />
       {/key}
-    {:else if wide.current}
+    {:else if viewport.lg}
       <EmptyState icon={MessagesSquareIcon} title="No chat selected" />
     {:else}
       {@render list()}
@@ -211,7 +219,7 @@
   </div>
 </div>
 
-{#if !wide.current}
+{#if !viewport.lg}
   <Dialog.Root bind:open={sheet}>
     <Dialog.Portal>
       <Scrim />

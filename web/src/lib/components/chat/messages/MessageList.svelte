@@ -277,8 +277,8 @@
     });
   });
 
-  // a new message is followed at the bottom when the view was there and nothing holds the list;
-  // otherwise the pill counts it
+  // a new message is followed at the bottom when the view was there and nothing holds the list,
+  // and the oldest messages past what a pane keeps go; otherwise the pill counts it
   $effect(() => {
     if (newest === null) return;
     untrack(async () => {
@@ -288,6 +288,7 @@
       // a page read on the way down is history, not news
       if (loadingNewer) return;
       if (atBottom && !interaction.frozen) {
+        pane.trim();
         await tick();
         readIfSeen();
       } else fresh += 1;

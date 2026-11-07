@@ -18,6 +18,9 @@ export type Target = { kind: "user"; name: string } | { kind: "room"; name: stri
 /** How many messages one page of history holds */
 export const PAGE = 100;
 
+/** How many stored messages a pane at the newest keeps; older ones are read again on scrolling up */
+export const KEPT = 2000;
+
 let sent = 0;
 
 /** How long a room message the daemon took waits for the server's echo before it shows as not sent */
@@ -28,6 +31,33 @@ type Page = { messages: Message[]; hasMore: boolean; gaps: Gap[] };
 
 /** 1 for a message still being sent, which goes after the stored ones */
 const sending = (m: Message) => (m.localId < 0 ? 1 : 0);
+
+/** The stored messages by id, then those still being sent, in the order they were sent */
+const byPlace = (a: Message, b: Message) =>
+  sending(a) - sending(b) || Math.abs(a.localId) - Math.abs(b.localId);
+
+/**
+ * `rows` in place order, given `order` for the rows `before`. The rows keep the order they were
+ * added in, new ones at the end, so the rows gone and the rows added since are found in one walk.
+ * An added row goes in from the end, which places a new message at once since ids only grow; one
+ * that lands among the stored messages sorts them all
+ */
+const placed = (before: Message[], order: Message[], rows: Message[]) => {
+  const gone = new Set<Message>();
+  let kept = 0;
+  for (const row of before) {
+    if (rows[kept] === row) kept += 1;
+    else gone.add(row);
+  }
+  if (!gone.size && kept === rows.length) return order;
+  const next = order.filter((r) => !gone.has(r));
+  for (const row of rows.slice(kept)) {
+    const at = next.findLastIndex((r) => byPlace(r, row) < 0) + 1;
+    if (at < next.length && next[at].localId > 0) return rows.toSorted(byPlace);
+    next.splice(at, 0, row);
+  }
+  return next;
+};
 
 /**
  * The messages of one conversation or room, oldest first: the newest page on open, older pages
@@ -71,12 +101,17 @@ export class MessagePane {
    */
   #view = 0;
 
+  /** the rows and their order as `ordered` last worked them out, which new rows are placed into */
+  #placedFrom: Message[] = [];
+  #placed: Message[] = [];
+
   /** the messages in order: the stored ones by id, then those still being sent */
-  readonly ordered = $derived(
-    this.messages.rows.toSorted(
-      (a, b) => sending(a) - sending(b) || Math.abs(a.localId) - Math.abs(b.localId)
-    )
-  );
+  readonly ordered = $derived.by(() => {
+    const rows = this.messages.rows;
+    this.#placed = placed(this.#placedFrom, this.#placed, rows);
+    this.#placedFrom = rows;
+    return this.#placed;
+  });
 
   constructor(target: Target, self: () => string, at: number | null = null) {
     this.target = target;
@@ -153,6 +188,20 @@ export class MessagePane {
     if (this.target.kind === "user") void this.#readConversation();
     this.loaded = true;
   }
+
+  /**
+   * Lets the oldest stored messages past the newest `KEPT` go, and the gaps before them, which
+   * `older` reads again; for a list at the newest messages that the user does not hold
+   */
+  trim = () => {
+    if (this.hasNewer) return;
+    const stored = this.ordered.filter((m) => m.localId > 0);
+    if (stored.length <= KEPT) return;
+    const oldest = Date.parse(stored[stored.length - KEPT].timestamp);
+    for (const m of stored.slice(0, -KEPT)) this.messages.remove(String(m.localId));
+    this.gaps = this.gaps.filter((g) => Date.parse(g.from) >= oldest);
+    this.hasMore = true;
+  };
 
   /** Reads the page before the oldest message shown */
   older = async () => {

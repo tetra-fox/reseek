@@ -54,14 +54,21 @@
           </span>
           <span class={["truncate", sidebar.collapsed && "hidden"]}>{item.title}</span>
           {#if fresh && (fresh.failed || fresh.succeeded)}
-            <Badge
-              tone={fresh.failed ? "danger" : "success"}
-              class={sidebar.collapsed
-                ? "absolute top-0.5 right-0.5 px-1 py-0 text-[0.625rem]"
-                : "ml-auto"}
-              title={`${fresh.succeeded} finished, ${fresh.failed} failed since last viewed`}
-              aria-label={`${fresh.succeeded} finished, ${fresh.failed} failed`}
-              >{fresh.failed || fresh.succeeded}</Badge>
+            <Tooltip
+              text={`${fresh.succeeded} finished, ${fresh.failed} failed since last viewed`}
+              side="right"
+              dense>
+              {#snippet child({ props: badge })}
+                <Badge
+                  {...badge}
+                  tone={fresh.failed ? "danger" : "success"}
+                  class={sidebar.collapsed
+                    ? "absolute top-0.5 right-0.5 px-1 py-0 text-[0.625rem]"
+                    : "ml-auto"}
+                  aria-label={`${fresh.succeeded} finished, ${fresh.failed} failed`}
+                  >{fresh.failed || fresh.succeeded}</Badge>
+              {/snippet}
+            </Tooltip>
           {/if}
           {#if item.path === "/chat" && chat.total && !sidebar.collapsed}
             <Badge

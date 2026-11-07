@@ -17,6 +17,7 @@
   import { ChatSearch } from "#lib/chat/search/search.svelte.js";
   import Marked from "#lib/components/ui/Marked.svelte";
   import * as Suggest from "#lib/components/ui/suggest/suggest.js";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import UserEntry from "#lib/components/users/UserEntry.svelte";
   import { ago, dateTime } from "#lib/format.js";
   import { chatHref, roomHref } from "#lib/nav.js";
@@ -150,10 +151,12 @@
               <span class="min-w-0 truncate font-medium">
                 {chat.kind === "room" ? `#${chat.name}, ${hit.username}` : chatName(chat)}
               </span>
-              <time
-                class="ml-auto shrink-0"
-                datetime={hit.timestamp}
-                title={dateTime(hit.timestamp)}>{ago(hit.timestamp, clock.now)}</time>
+              <Tooltip text={dateTime(hit.timestamp)} dense>
+                {#snippet child({ props })}
+                  <time {...props} class="ml-auto shrink-0" datetime={hit.timestamp}
+                    >{ago(hit.timestamp, clock.now)}</time>
+                {/snippet}
+              </Tooltip>
             </span>
             <span class="line-clamp-2 wrap-anywhere"
               ><Marked parts={snippetParts(hit.snippet)} /></span>

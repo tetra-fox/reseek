@@ -5,7 +5,7 @@ import { flush } from "#lib/testing/flush.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 
 import { chat } from "./chat.svelte";
-import { MessagePane } from "./pane.svelte";
+import { KEPT, MessagePane, PAGE } from "./pane.svelte";
 
 const message = (localId: number) => ({
   localId,
@@ -17,6 +17,46 @@ const message = (localId: number) => ({
   isMention: false,
   hidden: false
 });
+
+/**
+ * A room of `total` messages, which a message arriving raises; `after` and `before` page
+ * through it as the daemon does
+ */
+const stored = (total: number) => {
+  const asked: string[] = [];
+  const held = { asked, total, frame: (() => {}) as ReturnType<typeof fakeNetwork>["frame"] };
+  const net = fakeNetwork((url) => {
+    if (url.pathname.endsWith("/rooms/joined")) return [];
+    if (url.pathname.endsWith("/conversations")) return [];
+    if (!url.pathname.endsWith("/messages")) return undefined;
+    asked.push(url.search);
+    const limit = Number(url.searchParams.get("limit"));
+    const ids = Array.from({ length: held.total }, (_, n) => n + 1);
+    const after = url.searchParams.get("after");
+    if (after !== null) {
+      const past = ids.filter((id) => id > Number(after));
+      return {
+        messages: past.slice(0, limit).map(message),
+        hasMore: past.length > limit,
+        gaps: []
+      };
+    }
+    const before = Number(url.searchParams.get("before") ?? held.total + 1);
+    const up = ids.filter((id) => id < before);
+    return { messages: up.slice(-limit).map(message), hasMore: up.length > limit, gaps: [] };
+  });
+  held.frame = net.frame;
+  return held;
+};
+/** The live stream, followed by `pane` until the returned function is called */
+const following = (pane: MessagePane, frame: ReturnType<typeof stored>["frame"]) => {
+  const stop = $effect.root(() => pane.follow());
+  live.start();
+  frame("hello", { principal: { name: "me", role: "Administrator" } } as never);
+  return stop;
+};
+const ids = (pane: MessagePane) => pane.ordered.map((m) => m.localId);
+const room = { kind: "room", name: "indie" } as const;
 
 describe("a room's pane opened by a link", () => {
   afterEach(() => {
@@ -72,36 +112,6 @@ describe("a pane opened at a message", () => {
   });
 
   /**
-   * A room of `total` messages, which a message arriving raises; `after` and `before` page
-   * through it as the daemon does
-   */
-  const stored = (total: number) => {
-    const asked: string[] = [];
-    const held = { asked, total, frame: (() => {}) as ReturnType<typeof fakeNetwork>["frame"] };
-    const net = fakeNetwork((url) => {
-      if (url.pathname.endsWith("/rooms/joined")) return [];
-      if (url.pathname.endsWith("/conversations")) return [];
-      if (!url.pathname.endsWith("/messages")) return undefined;
-      asked.push(url.search);
-      const limit = Number(url.searchParams.get("limit"));
-      const ids = Array.from({ length: held.total }, (_, n) => n + 1);
-      const after = url.searchParams.get("after");
-      if (after !== null) {
-        const past = ids.filter((id) => id > Number(after));
-        return {
-          messages: past.slice(0, limit).map(message),
-          hasMore: past.length > limit,
-          gaps: []
-        };
-      }
-      const before = Number(url.searchParams.get("before") ?? held.total + 1);
-      const up = ids.filter((id) => id < before);
-      return { messages: up.slice(-limit).map(message), hasMore: up.length > limit, gaps: [] };
-    });
-    held.frame = net.frame;
-    return held;
-  };
-  /**
    * Holds every answer about the messages until `wait` is done, or gives what it answers
    * instead; the answer is made before the wait, as the room was when it was asked
    */
@@ -114,15 +124,6 @@ describe("a pane opened at a message", () => {
       return (await wait(url)) ?? answer;
     });
   };
-  /** The live stream, followed by `pane` until the returned function is called */
-  const following = (pane: MessagePane, frame: ReturnType<typeof stored>["frame"]) => {
-    const stop = $effect.root(() => pane.follow());
-    live.start();
-    frame("hello", { principal: { name: "me", role: "Administrator" } } as never);
-    return stop;
-  };
-  const ids = (pane: MessagePane) => pane.ordered.map((m) => m.localId);
-  const room = { kind: "room", name: "indie" } as const;
 
   it("holds the pages around it, then reads down to the newest", async () => {
     stored(450);
@@ -311,5 +312,55 @@ describe("a pane opened at a message", () => {
     await pane.load();
     expect(pane.error).toBe("");
     expect(pane.ordered).toEqual([]);
+  });
+});
+
+describe("a pane at the newest messages", () => {
+  afterEach(() => {
+    live.stop();
+    chat.clear();
+    vi.unstubAllGlobals();
+  });
+
+  it("places messages that arrive in order, and older pages before them", async () => {
+    const room450 = stored(450);
+    const pane = new MessagePane(room, () => "me");
+    await pane.load();
+    const stop = following(pane, room450.frame);
+    for (const id of [451, 453, 452]) {
+      room450.frame("rooms.message", { roomName: "indie", message: message(id) });
+    }
+    await flush();
+    stop();
+    expect(ids(pane).slice(-4)).toEqual([450, 451, 452, 453]);
+    await pane.older();
+    expect(ids(pane)).toEqual(Array.from({ length: 2 * PAGE + 3 }, (_, n) => n + 251));
+  });
+
+  it("lets the oldest messages past what it keeps go, and reads them back", async () => {
+    const total = KEPT + PAGE + 50;
+    const history = stored(total);
+    const pane = new MessagePane(room, () => "me");
+    await pane.load();
+    while (pane.hasMore) await pane.older();
+    expect(ids(pane).length).toBe(total);
+
+    pane.trim();
+    expect(ids(pane)).toEqual(Array.from({ length: KEPT }, (_, n) => n + total - KEPT + 1));
+    expect(pane.hasMore).toBe(true);
+
+    const stop = following(pane, history.frame);
+    history.total = total + 1;
+    history.frame("rooms.message", { roomName: "indie", message: message(total + 1) });
+    await flush();
+    stop();
+    expect(ids(pane).at(-1)).toBe(total + 1);
+
+    await pane.older();
+    expect(ids(pane)[0]).toBe(total - KEPT - PAGE + 1);
+    expect(pane.hasMore).toBe(true);
+    await pane.older();
+    expect(ids(pane)[0]).toBe(1);
+    expect(pane.hasMore).toBe(false);
   });
 });

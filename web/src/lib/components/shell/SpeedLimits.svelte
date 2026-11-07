@@ -4,6 +4,7 @@
 
   import { app } from "#lib/app.svelte.js";
   import Switch from "#lib/components/ui/Switch.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { href } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
@@ -61,16 +62,20 @@
 {/snippet}
 
 <Popover.Root>
-  <Popover.Trigger
-    class="flex h-control-sm shrink-0 items-center gap-3 rounded-badge px-1 hover:bg-hover md:gap-4"
-    title="Speed limits">
-    <span class="sr-only">Speed limits:</span>
-    {@render children()}
-    {#if alternative}
-      <span class="rounded-badge bg-warning-soft px-1.5 text-warning-soft-fg max-md:sr-only"
-        >Alternative limits</span>
-    {/if}
-  </Popover.Trigger>
+  <Tooltip text="Speed limits">
+    {#snippet child({ props })}
+      <Popover.Trigger
+        {...props}
+        class="flex h-control-sm shrink-0 items-center gap-3 rounded-badge px-1 hover:bg-hover md:gap-4">
+        <span class="sr-only">Speed limits:</span>
+        {@render children()}
+        {#if alternative}
+          <span class="rounded-badge bg-warning-soft px-1.5 text-warning-soft-fg max-md:sr-only"
+            >Alternative limits</span>
+        {/if}
+      </Popover.Trigger>
+    {/snippet}
+  </Tooltip>
   <Popover.Portal>
     <Popover.Content
       side="top"

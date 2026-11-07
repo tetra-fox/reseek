@@ -8,6 +8,10 @@ export type Toast = {
   ms: number;
   /** its countdown is held, while the pointer is over it or it has focus */
   held: boolean;
+  /** shown with this key, a later toast with the same key takes its place */
+  key?: string;
+  /** counts the times a toast with its key took its place, which starts its bar again */
+  round: number;
 };
 
 export const toasts = $state<Toast[]>([]);
@@ -29,6 +33,9 @@ const countdowns = new Map<number, Countdown>();
 
 let next = 0;
 
+/** How many toasts show at once */
+const SHOWN = 5;
+
 /** Takes the toast away, however it goes; what it was shown with runs `onGone` */
 export const dismiss = (id: number) => {
   const i = toasts.findIndex((t) => t.id === id);
@@ -48,7 +55,9 @@ const run = (id: number, countdown: Countdown) => {
 /**
  * Shows `text` for a while, errors for longer; `ms: Infinity` keeps it until dismissed. An
  * action's button dismisses it when pressed. `onGone` runs once it is taken away, by its
- * countdown or by the user
+ * countdown, by the user, or by a toast that takes its place. One shown with a `key` takes the
+ * place of the toast with that key, on top and with its countdown started again. Past `SHOWN`
+ * toasts the oldest goes, an error only when all the others are errors
  */
 export const toast = (
   text: string,
@@ -56,15 +65,42 @@ export const toast = (
   {
     action,
     ms = kind === "error" ? 12_000 : 6_000,
-    onGone
-  }: { action?: ToastAction; ms?: number; onGone?: () => void } = {}
+    onGone,
+    key
+  }: { action?: ToastAction; ms?: number; onGone?: () => void; key?: string } = {}
 ) => {
+  const at = key === undefined ? -1 : toasts.findIndex((t) => t.key === key);
+  if (at !== -1) return replace(at, { text, kind, action, ms }, onGone);
   const id = next++;
-  toasts.unshift({ id, text, kind, action, ms, held: false });
+  toasts.unshift({ id, text, kind, action, ms, held: false, key, round: 0 });
   const countdown: Countdown = { remaining: ms, started: 0, causes: new Set(), gone: onGone };
   countdowns.set(id, countdown);
   if (Number.isFinite(ms)) run(id, countdown);
+  while (toasts.length > SHOWN) {
+    // the newest stays, so what was just done always shows
+    const oldest = toasts.findLastIndex((t) => t.kind !== "error");
+    dismiss(toasts[oldest > 0 ? oldest : toasts.length - 1].id);
+  }
   return id;
+};
+
+/** Puts `fields` in place of the toast at `at`, moved on top, its countdown started again */
+const replace = (
+  at: number,
+  fields: Pick<Toast, "text" | "kind" | "action" | "ms">,
+  onGone?: () => void
+) => {
+  const [shown] = toasts.splice(at, 1);
+  const countdown = countdowns.get(shown.id)!;
+  clearTimeout(countdown.timer);
+  countdown.gone?.();
+  Object.assign(shown, fields, { round: shown.round + 1 });
+  toasts.unshift(shown);
+  countdown.remaining = fields.ms;
+  countdown.gone = onGone;
+  // a toast held now runs its new countdown once it is let go
+  if (Number.isFinite(fields.ms) && !shown.held) run(shown.id, countdown);
+  return shown.id;
 };
 
 /**

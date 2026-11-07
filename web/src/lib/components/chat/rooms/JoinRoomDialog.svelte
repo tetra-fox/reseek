@@ -1,4 +1,5 @@
 <script lang="ts" module>
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { gridView } from "#lib/lists/table.svelte.js";
 
   /** the room list's sort and column widths, kept in this browser */
@@ -169,11 +170,16 @@
         e.preventDefault();
         joinFocused();
       }} />
-    <Button
-      variant="outline"
-      size="icon"
-      aria-label="Refresh the room list"
-      onclick={() => void available.load()}><RefreshCwIcon /></Button>
+    <Tooltip text="Refresh the room list">
+      {#snippet child({ props })}
+        <Button
+          {...props}
+          variant="outline"
+          size="icon"
+          aria-label="Refresh the room list"
+          onclick={() => void available.load()}><RefreshCwIcon /></Button>
+      {/snippet}
+    </Tooltip>
   </div>
   {#if available.loading}
     <div class="flex items-center justify-center gap-2 py-8 text-sm text-fg-muted">
@@ -219,11 +225,15 @@
               {#if busy.has(room.name)}
                 <Spinner class="size-4" />
               {:else if isJoined(room.name)}
-                <button
-                  type="button"
-                  class="flex items-center gap-1 rounded-badge px-1.5 text-xs text-success hover:underline"
-                  title={`Open ${room.name}`}
-                  onclick={() => enter(room.name)}><CheckIcon class="size-3.5" />Joined</button>
+                <Tooltip text={`Open ${room.name}`}>
+                  {#snippet child({ props })}
+                    <button
+                      {...props}
+                      type="button"
+                      class="flex items-center gap-1 rounded-badge px-1.5 text-xs text-success hover:underline"
+                      onclick={() => enter(room.name)}><CheckIcon class="size-3.5" />Joined</button>
+                  {/snippet}
+                </Tooltip>
                 <Button
                   variant="ghost"
                   size="sm"

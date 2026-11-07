@@ -47,7 +47,11 @@
               "flex min-h-control w-full min-w-0 items-center gap-2 rounded-control text-left text-sm transition-colors duration-(--motion-fast) hover:bg-hover active:bg-press data-[state=open]:bg-hover",
               sidebar.collapsed ? "justify-center" : "py-1 pr-1.5 pl-0.5"
             ]}>
-            <Avatar {name} pictureUrl={ownProfile.data?.pictureUrl} class="size-7 text-xs" />
+            <Avatar
+              {name}
+              pictureUrl={ownProfile.data?.pictureUrl}
+              link={false}
+              class="size-7 text-xs" />
             {#if !sidebar.collapsed}
               <span class="grid flex-1 leading-tight">
                 <span class="truncate font-medium">{name}</span>

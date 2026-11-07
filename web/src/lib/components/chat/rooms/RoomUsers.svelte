@@ -13,6 +13,7 @@
   import Input from "#lib/components/ui/Input.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Notice from "#lib/components/ui/Notice.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import Presence from "#lib/components/users/Presence.svelte";
   import Username from "#lib/components/users/Username.svelte";
   import { confirmation } from "#lib/feedback/confirm.svelte.js";
@@ -192,12 +193,17 @@
         placeholder="Add a member"
         aria-label="Username to add"
         bind:value={adding} />
-      <Button
-        type="submit"
-        size="icon-sm"
-        variant="outline"
-        aria-label="Add"
-        disabled={!adding.trim()}><UserPlusIcon /></Button>
+      <Tooltip text="Add">
+        {#snippet child({ props })}
+          <Button
+            {...props}
+            type="submit"
+            size="icon-sm"
+            variant="outline"
+            aria-label="Add"
+            disabled={!adding.trim()}><UserPlusIcon /></Button>
+        {/snippet}
+      </Tooltip>
     </form>
   {/if}
   <div
@@ -238,9 +244,11 @@
               {#if u.username === room?.owner}<CrownIcon
                   class="size-3 shrink-0 text-warning"
                   aria-label="Owner" />{/if}
-              {#if blocked(u.username)}<span
-                  class="size-2 shrink-0 rounded-full bg-danger"
-                  title="Blocked"></span
+              {#if blocked(u.username)}<Tooltip text="Blocked" dense spoken
+                  >{#snippet child({ props })}<span
+                      {...props}
+                      class="size-2 shrink-0 rounded-full bg-danger"></span
+                    >{/snippet}</Tooltip
                 >{/if}
               {#if u.self}<span class="text-xs text-accent">you</span>{/if}
             </span>

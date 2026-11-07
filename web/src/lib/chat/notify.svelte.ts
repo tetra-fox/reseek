@@ -132,7 +132,9 @@ class Notifier {
     if (!toasts() && !shouldNotify(mode(), seen, notifyOptions().onlyWhenHidden)) return;
     arrival.muted = await this.#muted(username);
     if (toasts()) {
+      // one toast per conversation, which a burst of messages keeps up rather than stacks
       toast(`New message from ${username}`, "info", {
+        key,
         action: { label: "Open", run: () => void this.#go(chatHref(username)) }
       });
     }
@@ -196,7 +198,16 @@ class Notifier {
 
 export const notifier = new Notifier();
 
+/** The least time between two notification sounds, so a burst of messages plays one */
+export const CHIME_GAP_MS = 1_000;
+
+/** when the sound last played, by performance.now */
+let chimed = -Infinity;
+
 /** Plays the notification sound; a browser that refuses until the page is used stays silent */
 const chime = () => {
+  const now = performance.now();
+  if (now - chimed < CHIME_GAP_MS) return;
+  chimed = now;
   new Audio(notificationSound).play().catch(() => {});
 };

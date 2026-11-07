@@ -10,6 +10,7 @@ import type { NotifyMode } from "./modes";
 import {
   type Arrival,
   arrivalMode,
+  CHIME_GAP_MS,
   notifier,
   type NotifyOptions,
   shouldNotify
@@ -85,10 +86,15 @@ describe("what a mode delivers", () => {
   const played = vi.fn();
   const shown = vi.fn();
   const permission = notifier.permission;
+  /** the clock the sound is spaced by, moved past the gap before each delivery */
+  let now = 0;
+  const later = () => (now += CHIME_GAP_MS);
 
   beforeEach(() => {
     played.mockClear();
     shown.mockClear();
+    later();
+    vi.spyOn(performance, "now").mockImplementation(() => now);
     vi.stubGlobal(
       "Audio",
       class {
@@ -110,6 +116,7 @@ describe("what a mode delivers", () => {
     toasts.splice(0);
     users.clear();
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   const MATRIX: [NotifyMode, typeof permission, boolean, boolean][] = [
@@ -140,6 +147,7 @@ describe("what a mode delivers", () => {
         expect(shown).toHaveBeenCalledTimes(desktop ? 1 : 0);
         played.mockClear();
         shown.mockClear();
+        later();
       };
       notifier.other(mode, "Download finished", "a.flac from alice", "download:1", "/downloads");
       expectDelivered();
@@ -159,6 +167,16 @@ describe("what a mode delivers", () => {
     expect(played).toHaveBeenCalledOnce();
     expect(shown).toHaveBeenCalledOnce();
     visible.mockRestore();
+  });
+
+  it("plays one sound for a burst of messages", () => {
+    app.options = { chat: { notifications: { only_when_hidden: false } } } as never;
+    notifier.other("sound", "Download finished", "", "download:1", "/downloads");
+    notifier.other("sound", "Download finished", "", "download:2", "/downloads");
+    expect(played).toHaveBeenCalledOnce();
+    later();
+    notifier.other("sound", "Download finished", "", "download:3", "/downloads");
+    expect(played).toHaveBeenCalledTimes(2);
   });
 });
 

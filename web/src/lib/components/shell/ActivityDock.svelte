@@ -28,6 +28,7 @@
   import LogTime from "#lib/components/ui/LogTime.svelte";
   import Notice from "#lib/components/ui/Notice.svelte";
   import ResizeHandle from "#lib/components/ui/ResizeHandle.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import Username from "#lib/components/users/Username.svelte";
   import { formatBytes } from "#lib/format.js";
   import type { ActiveFilter } from "#lib/lists/filtered.js";
@@ -127,17 +128,26 @@
             onclick={() => toggle(k.type)}>{k.label}</Filter.Chip>
         {/each}
       </Filter.Group>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        aria-label="Clear the list"
-        title="Clear the list"
-        onclick={() => activity.clearView()}><EraserIcon /></Button>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        aria-label="Close the activity log"
-        onclick={() => (activityPrefs.open = false)}><XIcon /></Button>
+      <Tooltip text="Clear the list">
+        {#snippet child({ props })}
+          <Button
+            {...props}
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Clear the list"
+            onclick={() => activity.clearView()}><EraserIcon /></Button>
+        {/snippet}
+      </Tooltip>
+      <Tooltip text="Close the activity log">
+        {#snippet child({ props })}
+          <Button
+            {...props}
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Close the activity log"
+            onclick={() => (activityPrefs.open = false)}><XIcon /></Button>
+        {/snippet}
+      </Tooltip>
     </div>
   </header>
   {#if activity.error}
@@ -190,9 +200,10 @@
         </span>
         <span role="gridcell" class="min-w-0 truncate">
           {#each activityParts(e, formatBytes) as part, n (n)}{#if part.kind === "user"}<Username
-                name={part.name} />{:else if part.kind === "file"}<span
-                class="font-medium"
-                title={part.path}>{baseName(part.path)}</span
+                name={part.name} />{:else if part.kind === "file"}<Tooltip text={part.path} dense
+                >{#snippet child({ props })}<span {...props} class="font-medium"
+                    >{baseName(part.path)}</span
+                  >{/snippet}</Tooltip
               >{:else if part.kind === "room"}<a
                 class="font-medium text-accent hover:underline"
                 href={roomHref(part.name)}>{part.name}</a

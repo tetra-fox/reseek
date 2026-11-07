@@ -17,9 +17,8 @@
   import { clock } from "#lib/ui/clock.svelte.js";
   import { inControl } from "#lib/ui/keys.js";
   import { reach } from "#lib/users/actions.js";
-  import { nameColor } from "#lib/users/colors.js";
   import { LONG_PRESS_MS } from "#lib/users/hover.svelte.js";
-  import { users } from "#lib/users/users.svelte.js";
+  import { pictureOf } from "#lib/users/profile.svelte.js";
 
   import ChatText from "./ChatText.svelte";
 
@@ -166,20 +165,21 @@
   data-message={m.localId}>
   <div class="flex justify-end">
     {#if head}
-      <Avatar
-        name={m.author}
-        pictureUrl={users.get(m.author)?.info?.pictureUrl}
-        class="mt-0.5 size-9 text-sm" />
+      <Avatar name={m.author} pictureUrl={pictureOf(m.author)} class="mt-0.5 size-9 text-sm" />
     {:else}
-      <time
-        class={[
-          "pt-px leading-5 whitespace-nowrap text-fg-subtle tabular-nums",
-          notice
-            ? "text-xs"
-            : "invisible text-[0.625rem] group-focus-within/message:visible group-hover/message:visible"
-        ]}
-        datetime={m.timestamp}
-        title={formatDate(m.timestamp)}>{shortTime(m.timestamp)}</time>
+      <Tooltip text={formatDate(m.timestamp)} dense>
+        {#snippet child({ props })}
+          <time
+            {...props}
+            class={[
+              "pt-px leading-5 whitespace-nowrap text-fg-subtle tabular-nums",
+              notice
+                ? "text-xs"
+                : "invisible text-[0.625rem] group-focus-within/message:visible group-hover/message:visible"
+            ]}
+            datetime={m.timestamp}>{shortTime(m.timestamp)}</time>
+        {/snippet}
+      </Tooltip>
     {/if}
   </div>
   <div class="min-w-0">
@@ -187,17 +187,21 @@
       <div class="flex items-baseline gap-2 leading-5">
         <Username name={m.author} card class="text-sm font-semibold" />
         {#if m.self}<span class="text-xs text-fg-subtle">you</span>{/if}
-        <time class="text-xs text-fg-subtle" datetime={m.timestamp} title={formatDate(m.timestamp)}
-          >{chatTime(m.timestamp, clock.now)}</time>
+        <Tooltip text={formatDate(m.timestamp)} dense>
+          {#snippet child({ props })}
+            <time {...props} class="text-xs text-fg-subtle" datetime={m.timestamp}
+              >{chatTime(m.timestamp, clock.now)}</time>
+          {/snippet}
+        </Tooltip>
         {#if m.replayed}
-          <Tooltip text="The server held it until you connected">
+          <Tooltip text="The server held it until you connected" dense>
             {#snippet child({ props })}
               <span {...props} class="text-xs text-fg-subtle italic">sent while offline</span>
             {/snippet}
           </Tooltip>
         {/if}
         {#if m.automatic}
-          <Tooltip text="Sent automatically because you were away">
+          <Tooltip text="Sent automatically because you were away" dense>
             {#snippet child({ props })}
               <span {...props} class="text-xs text-fg-subtle italic">sent automatically</span>
             {/snippet}
@@ -214,9 +218,7 @@
       <!-- an action reads as a sentence: the name starts it unless the header above shows it -->
       <p
         class="cursor-text text-sm leading-5 wrap-anywhere whitespace-pre-wrap text-fg-muted italic">
-        {#if !head}<span class="font-medium not-italic" style:color={nameColor(m.author)}
-            >{m.author}</span
-          >{" "}{/if}{@render body()}
+        {#if !head}<Username name={m.author} card class="not-italic" />{" "}{/if}{@render body()}
       </p>
     {:else}
       <p class="cursor-text text-sm leading-5 wrap-anywhere whitespace-pre-wrap">
@@ -246,13 +248,17 @@
         menu ? "flex" : "hidden"
       ]}>
       {#each actions as action (action.label)}
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          href={action.href}
-          aria-label={action.label}
-          title={action.label}
-          onclick={action.run}><action.icon /></Button>
+        <Tooltip text={action.label}>
+          {#snippet child({ props })}
+            <Button
+              {...props}
+              variant="ghost"
+              size="icon-sm"
+              href={action.href}
+              aria-label={action.label}
+              onclick={action.run}><action.icon /></Button>
+          {/snippet}
+        </Tooltip>
       {/each}
     </div>
   {/if}

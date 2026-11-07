@@ -4,7 +4,7 @@
   import LockIcon from "@lucide/svelte/icons/lock";
   import PanelRightIcon from "@lucide/svelte/icons/panel-right";
   import ServerIcon from "@lucide/svelte/icons/server";
-  import { Dialog } from "bits-ui";
+  import { Dialog, Tabs } from "bits-ui";
   import type { Snippet } from "svelte";
 
   import { app } from "#lib/app.svelte.js";
@@ -13,7 +13,7 @@
   import type { Message } from "#lib/chat/messages/messages.js";
   import { chatName, isNotices } from "#lib/chat/notices.js";
   import { MessagePane, type Target } from "#lib/chat/pane.svelte.js";
-  import { chatLayout as layout, SIDE_TABS } from "#lib/chat/prefs.svelte.js";
+  import { chatLayout as layout, SIDE_TABS, type SideTab } from "#lib/chat/prefs.svelte.js";
   import { RoomMembers } from "#lib/chat/rooms/room.svelte.js";
   import MessageList from "#lib/components/chat/messages/MessageList.svelte";
   import RoomActivity from "#lib/components/chat/rooms/RoomActivity.svelte";
@@ -26,6 +26,7 @@
   import ResizeHandle from "#lib/components/ui/ResizeHandle.svelte";
   import Scrim from "#lib/components/ui/Scrim.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import Presence from "#lib/components/users/Presence.svelte";
   import Username from "#lib/components/users/Username.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
@@ -127,30 +128,35 @@
 </script>
 
 {#snippet side(members: RoomMembers)}
-  <div role="tablist" aria-label="Side panel" class="flex gap-1 border-b p-1.5">
+  <!-- the values come only from SIDE_TABS, so the string bits-ui gives back is one of its ids -->
+  <Tabs.Root bind:value={() => layout.side, (v) => (layout.side = v as SideTab)} class="contents">
+    <Tabs.List aria-label="Side panel" class="flex gap-1 border-b p-1.5">
+      {#each SIDE_TABS as t (t.id)}
+        <Tabs.Trigger
+          value={t.id}
+          class="flex h-control-sm flex-1 items-center justify-center rounded-control text-sm text-fg-muted hover:bg-hover hover:text-fg data-[state=active]:nav-current">
+          {t.title}
+          {#if t.id === "wall" && members.wall.length}
+            <span class="ml-1 text-xs text-fg-subtle tabular-nums">{members.wall.length}</span>
+          {/if}
+        </Tabs.Trigger>
+      {/each}
+    </Tabs.List>
+    <!-- only the open tab's panel draws its list -->
     {#each SIDE_TABS as t (t.id)}
-      <button
-        type="button"
-        role="tab"
-        aria-selected={layout.side === t.id}
-        class="flex h-control-sm flex-1 items-center justify-center rounded-control text-sm text-fg-muted hover:bg-hover hover:text-fg aria-selected:nav-current"
-        onclick={() => (layout.side = t.id)}>
-        {t.title}
-        {#if t.id === "wall" && members.wall.length}
-          <span class="ml-1 text-xs text-fg-subtle tabular-nums">{members.wall.length}</span>
+      <Tabs.Content value={t.id} class="flex min-h-0 flex-1 outline-none">
+        {#if layout.side === t.id}
+          {#if t.id === "wall"}
+            <RoomWall {members} />
+          {:else if t.id === "activity"}
+            <RoomActivity {members} />
+          {:else}
+            <RoomUsers {members} />
+          {/if}
         {/if}
-      </button>
+      </Tabs.Content>
     {/each}
-  </div>
-  <div role="tabpanel" class="flex min-h-0 flex-1">
-    {#if layout.side === "wall"}
-      <RoomWall {members} />
-    {:else if layout.side === "activity"}
-      <RoomActivity {members} />
-    {:else}
-      <RoomUsers {members} />
-    {/if}
-  </div>
+  </Tabs.Root>
 {/snippet}
 
 <section
@@ -165,7 +171,7 @@
         <span class="text-xs text-fg-muted"><span>Notices from the Soulseek server</span></span>
       </div>
     {:else if target.kind === "user"}
-      <Presence presence={summary?.presence} />
+      <Presence presence={summary?.presence} worded={!!summary?.presence} />
       <Username name={target.name} class="text-base" />
       <span class="text-xs text-fg-muted">{summary?.presence ?? ""}</span>
     {:else}
@@ -186,18 +192,28 @@
       {/if}
       {#if target.kind === "room" && joined}
         {#if !viewport.phone}
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={layout.users ? "Hide the side panel" : "Show the side panel"}
-            aria-pressed={layout.users}
-            onclick={() => (layout.users = !layout.users)}><PanelRightIcon /></Button>
+          <Tooltip text={layout.users ? "Hide the side panel" : "Show the side panel"}>
+            {#snippet child({ props })}
+              <Button
+                {...props}
+                variant="ghost"
+                size="icon-sm"
+                aria-label={layout.users ? "Hide the side panel" : "Show the side panel"}
+                aria-pressed={layout.users}
+                onclick={() => (layout.users = !layout.users)}><PanelRightIcon /></Button>
+            {/snippet}
+          </Tooltip>
         {:else}
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Show the side panel"
-            onclick={() => (sheet = true)}><PanelRightIcon /></Button>
+          <Tooltip text="Show the side panel">
+            {#snippet child({ props })}
+              <Button
+                {...props}
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Show the side panel"
+                onclick={() => (sheet = true)}><PanelRightIcon /></Button>
+            {/snippet}
+          </Tooltip>
         {/if}
       {/if}
       <Menu.Root>
