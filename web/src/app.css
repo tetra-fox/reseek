@@ -442,19 +442,20 @@
 }
 
 /* the nav link for where the page is, marked with aria-current. No change of weight, which would
-   move the links beside it */
+   move the links beside it. The frame is drawn inside the link, so a scrolling strip never cuts
+   it off */
 @utility nav-current {
-  @apply bg-surface-muted text-fg shadow-xs ring-1 ring-border;
+  @apply bg-surface-muted text-fg inset-ring-1 inset-ring-border;
 }
 
 /* a line of the sidebar */
 @utility nav-item {
-  @apply flex h-control w-full items-center gap-2.5 rounded-control px-2 text-sm whitespace-nowrap text-fg-muted transition-colors duration-(--motion-fast) select-none not-disabled:hover:bg-hover not-disabled:hover:text-fg not-disabled:active:bg-press aria-[current]:nav-current;
+  @apply flex h-control w-full items-center gap-2.5 rounded-control px-2 text-sm whitespace-nowrap text-fg-muted transition-colors duration-(--motion-fast) select-none not-disabled:hover:bg-hover not-disabled:hover:text-fg focus-visible:-outline-offset-2 not-disabled:active:bg-press aria-[current]:nav-current;
 }
 
 /* a tab of a screen, a link to one of its parts */
 @utility nav-tab {
-  @apply flex h-control shrink-0 items-center gap-1.5 rounded-control px-3 text-sm whitespace-nowrap text-fg-muted transition-colors duration-(--motion-fast) hover:bg-hover hover:text-fg aria-[current]:nav-current;
+  @apply flex h-control shrink-0 items-center gap-1.5 rounded-control px-3 text-sm whitespace-nowrap text-fg-muted transition-colors duration-(--motion-fast) hover:bg-hover hover:text-fg focus-visible:-outline-offset-2 aria-[current]:nav-current;
 }
 
 /* a list line's tint: hovered, its menu open, the page it leads to, and selected, which hover

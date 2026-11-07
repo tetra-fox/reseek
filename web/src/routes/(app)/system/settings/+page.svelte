@@ -16,6 +16,7 @@
   import Input from "#lib/components/ui/Input.svelte";
   import Notice from "#lib/components/ui/Notice.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { currentSection, fieldMatches } from "#lib/config/find.js";
   import { sections } from "#lib/config/sections.js";
   import { plural } from "#lib/format.js";
@@ -155,7 +156,7 @@
           bind:value={typed} />
         <nav
           aria-label="Settings sections"
-          class="-mx-1 flex gap-1 overflow-x-auto px-1 max-lg:py-1 lg:min-h-0 lg:flex-col lg:gap-5 lg:overflow-y-auto">
+          class="flex gap-1 overflow-x-auto lg:min-h-0 lg:flex-col lg:gap-5 lg:overflow-y-auto">
           {#each groups as { group, members } (group)}
             <!-- one line of tabs on a phone, where the headings have no place -->
             <div role="group" aria-label={group} class="contents lg:flex lg:flex-col lg:gap-0.5">
@@ -173,16 +174,22 @@
                 <a
                   href={href(`/system/settings?section=${section.id}`)}
                   aria-current={current === section.id ? "location" : undefined}
-                  class={["nav-tab h-control-sm gap-2 px-2.5 lg:mx-px", q && !n && "hidden"]}
+                  class={["nav-tab h-control-sm gap-2 px-2.5", q && !n && "hidden"]}
                   onclick={(e) => {
                     e.preventDefault();
                     jump(section.id);
                   }}>
                   <span class="truncate">{section.title}</span>
                   {#if pending}
-                    <span
-                      class="ml-auto size-1.5 shrink-0 rounded-full bg-accent"
-                      title={plural(pending, "unsaved change", "unsaved changes")}></span>
+                    <Tooltip
+                      text={plural(pending, "unsaved change", "unsaved changes")}
+                      dense
+                      spoken>
+                      {#snippet child({ props })}
+                        <span {...props} class="ml-auto size-1.5 shrink-0 rounded-full bg-accent"
+                        ></span>
+                      {/snippet}
+                    </Tooltip>
                   {:else if q}
                     <span class="ml-auto text-xs text-fg-subtle tabular-nums">{n}</span>
                   {/if}

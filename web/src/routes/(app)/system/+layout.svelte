@@ -22,7 +22,7 @@
 </script>
 
 <!-- the padding gives the current tab's ring and shadow room inside the scrolling strip -->
-<nav aria-label="System" class="-mx-1 -my-1 flex gap-1 overflow-x-auto px-1 py-1">
+<nav aria-label="System" class="flex gap-1 overflow-x-auto">
   {#each systemTabs as { tab, title } (tab)}
     {@const current = path === `/system/${tab}` || path.startsWith(`/system/${tab}/`)}
     <a href={href(`/system/${tab}`)} aria-current={current ? "page" : undefined} class="nav-tab">
