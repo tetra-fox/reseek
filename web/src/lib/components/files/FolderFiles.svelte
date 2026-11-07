@@ -13,6 +13,7 @@
   import { session } from "#lib/session.svelte.js";
   import { Expansion } from "#lib/tree/expansion.svelte.js";
   import {
+    type FolderNode,
     folderTree,
     itemsUnder,
     separatorOf,
@@ -25,6 +26,8 @@
   import FileHeader from "./FileHeader.svelte";
   import FileTree from "./FileTree.svelte";
   import FolderLine from "./FolderLine.svelte";
+  import RemoteFileItems from "./RemoteFileItems.svelte";
+  import RemoteFolderItems from "./RemoteFolderItems.svelte";
   import SelectionBar from "./SelectionBar.svelte";
 
   type Props = {
@@ -75,6 +78,13 @@
   };
 </script>
 
+{#snippet folderItems(node: FolderNode<Schemas["File"]>)}
+  <RemoteFolderItems
+    folder={node.path}
+    {username}
+    ondownload={write ? () => void downloadNow(itemsUnder(node)) : undefined} />
+{/snippet}
+
 <Dialog
   bind:open
   title={folder}
@@ -109,7 +119,11 @@
               else selected.delete(f.filename);
             }
           }
-        }} />
+        }}>
+        {#snippet menu()}
+          {@render folderItems(node)}
+        {/snippet}
+      </FolderLine>
     {/snippet}
     {#snippet item(file, _depth, tick)}
       <FileCells
@@ -119,6 +133,17 @@
         selected={selected.has(file.filename)}
         ontick={tick}
         ondownload={write ? () => void downloadNow([file]) : undefined} />
+    {/snippet}
+    <!-- a right-click, a long press or the menu key opens what the line's ... button offers -->
+    {#snippet menu(line)}
+      {#if line.kind === "item"}
+        <RemoteFileItems
+          path={line.item.filename}
+          {username}
+          ondownload={write ? () => void downloadNow([line.item]) : undefined} />
+      {:else}
+        {@render folderItems(line.node)}
+      {/if}
     {/snippet}
   </FileTree>
   {#if write && chosen.length}

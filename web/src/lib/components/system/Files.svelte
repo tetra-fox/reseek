@@ -388,7 +388,39 @@
   noun={["file", "files"]}
   refocus={() => tree?.focus()} />
 
-{#snippet menu(e: Entry)}
+<!-- what a line offers, from its ... button and from a right-click, a long press or the menu key -->
+{#snippet entryItems(e: Entry)}
+  {#if e.kind === "file"}
+    <LocalFileItems
+      onopen={() => void open(e)}
+      analysis={analyzable(e.name)
+        ? { target: { kind: "file", root, path: e.path }, name: e.name }
+        : null}
+      onsave={() => void save(e)}
+      path={e.path} />
+    <Menu.Item
+      onSelect={() => {
+        shownKey = e.key;
+        inspector.show();
+      }}><InfoIcon />Details</Menu.Item>
+  {:else}
+    <Menu.Item onSelect={() => void open(e)}><FolderOpenIcon />Open</Menu.Item>
+    <Menu.Item onSelect={() => saveUrl(archiveUrl(root, e.path))}
+      ><FileArchiveIcon />Download as zip</Menu.Item>
+    {#if write && analyzerOffered()}
+      <Menu.Item onSelect={() => void analyzeFolder(e)}
+        ><A.analyze.icon />{A.analyze.label}</Menu.Item>
+    {/if}
+    <Menu.Item onSelect={() => void copyText(e.path)}
+      ><A.copyPath.icon />{A.copyPath.label}</Menu.Item>
+  {/if}
+  {#if canDelete}
+    <Menu.Separator />
+    <Menu.Item onSelect={() => askRemove([e])}><Trash2Icon />Delete</Menu.Item>
+  {/if}
+{/snippet}
+
+{#snippet entryMenu(e: Entry)}
   <Menu.Root>
     <Menu.Trigger>
       {#snippet child({ props })}
@@ -397,34 +429,7 @@
       {/snippet}
     </Menu.Trigger>
     <Menu.Content align="end">
-      {#if e.kind === "file"}
-        <LocalFileItems
-          onopen={() => void open(e)}
-          analysis={analyzable(e.name)
-            ? { target: { kind: "file", root, path: e.path }, name: e.name }
-            : null}
-          onsave={() => void save(e)}
-          path={e.path} />
-        <Menu.Item
-          onSelect={() => {
-            shownKey = e.key;
-            inspector.show();
-          }}><InfoIcon />Details</Menu.Item>
-      {:else}
-        <Menu.Item onSelect={() => void open(e)}><FolderOpenIcon />Open</Menu.Item>
-        <Menu.Item onSelect={() => saveUrl(archiveUrl(root, e.path))}
-          ><FileArchiveIcon />Download as zip</Menu.Item>
-        {#if write && analyzerOffered()}
-          <Menu.Item onSelect={() => void analyzeFolder(e)}
-            ><A.analyze.icon />{A.analyze.label}</Menu.Item>
-        {/if}
-        <Menu.Item onSelect={() => void copyText(e.path)}
-          ><A.copyPath.icon />{A.copyPath.label}</Menu.Item>
-      {/if}
-      {#if canDelete}
-        <Menu.Separator />
-        <Menu.Item onSelect={() => askRemove([e])}><Trash2Icon />Delete</Menu.Item>
-      {/if}
+      {@render entryItems(e)}
     </Menu.Content>
   </Menu.Root>
 {/snippet}
@@ -478,6 +483,7 @@
     {selected}
     idOf={(e) => e.key}
     tickable={(e) => e.kind !== "up"}
+    menuable={(line) => (line.kind === "folder" ? !!dirEntry(line.node) : line.item.kind !== "up")}
     folderId={(node) => `d:${node.path}`}
     onopen={(e) => void open(e)}
     onopenfolder={(node) => go(node.path.split("/"))}
@@ -498,6 +504,10 @@
       <span role="columnheader" class="max-md:hidden">{@render sortable("Modified", "date")}</span>
       {#if !viewport.phone}<span role="columnheader" class="pr-3 text-right">Size</span>{/if}
       <span role="columnheader" class="sr-only">Actions</span>
+    {/snippet}
+    {#snippet menu(line)}
+      {@const e = line.kind === "folder" ? dirEntry(line.node) : line.item}
+      {#if e}{@render entryItems(e)}{/if}
     {/snippet}
     {#snippet folder(node)}
       {@const e = dirEntry(node)}
@@ -520,7 +530,8 @@
       </span>
       <span class="w-28 shrink-0 max-md:hidden"></span>
       <!-- the width that leaves the columns above under the file lines' columns -->
-      {#if e}<span class="flex w-8 justify-end row-action max-md:ml-auto">{@render menu(e)}</span>
+      {#if e}<span class="flex w-8 justify-end row-action max-md:ml-auto"
+          >{@render entryMenu(e)}</span>
       {/if}
     {/snippet}
     {#snippet item(e)}
@@ -555,7 +566,7 @@
           >{e.size ? formatBytes(e.size) : ""}</span>
       {/if}
       <span role="gridcell" class="flex justify-end pr-1"
-        >{#if e.kind !== "up"}{@render menu(e)}{/if}</span>
+        >{#if e.kind !== "up"}{@render entryMenu(e)}{/if}</span>
     {/snippet}
   </FileTree>
   {#if chosen.length}

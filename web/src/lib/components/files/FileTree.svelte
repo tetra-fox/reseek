@@ -68,6 +68,8 @@
      * Shift+F10
      */
     menu?: Snippet<[TreeLine<T>]>;
+    /** whether a line has anything in its menu; a line without opens none */
+    menuable?: (line: TreeLine<T>) => boolean;
     /** a line's height in rem, on a wider screen and on a phone; every line has the same */
     lineRem?: { wide: number; phone: number };
     /**
@@ -113,6 +115,7 @@
     item,
     header,
     menu,
+    menuable = () => true,
     lineRem = { wide: 2.25, phone: 3 },
     slot = (depth) => (viewport.phone ? 0 : depth),
     height = "max(20rem, calc(var(--content-h) - 14rem))",
@@ -293,6 +296,7 @@
   /** Opens a line's menu at the point `at`, or under the line */
   const openMenu = (line: TreeLine<T>, at?: { x: number; y: number }) => {
     list.focusedKey = line.key;
+    if (!menuable(line)) return;
     const anchor = at
       ? { getBoundingClientRect: () => new DOMRect(at.x, at.y, 0, 0) }
       : activeId === undefined

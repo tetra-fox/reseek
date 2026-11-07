@@ -3,7 +3,6 @@
   import type { SvelteSet } from "svelte/reactivity";
 
   import FileCells from "#lib/components/files/FileCells.svelte";
-  import FileMenu from "#lib/components/files/FileMenu.svelte";
   import FileTree from "#lib/components/files/FileTree.svelte";
   import RemoteFileItems from "#lib/components/files/RemoteFileItems.svelte";
   import RemoteFolderItems from "#lib/components/files/RemoteFolderItems.svelte";
@@ -150,6 +149,34 @@
   export const focus = () => tree?.focus();
 </script>
 
+<!-- a file row's whole menu: the file, its folder and its user, which the list has no lines for -->
+{#snippet rowItems(row: ResultRow)}
+  {@const folder = folderOf(row)}
+  <RemoteFileItems
+    path={row.file.filename}
+    username={row.username}
+    ondownload={canDownload ? () => void downloadNow([row]) : undefined}
+    ondetails={() => details(row)} />
+  <Menu.Separator />
+  <!-- the whole path, which a menu has no room to cut and show on hover -->
+  <Menu.Label class="wrap-anywhere">{row.folder}</Menu.Label>
+  <RemoteFolderItems
+    folder={row.folder}
+    username={row.username}
+    ondownload={canDownload ? () => void downloadNow(folder) : undefined}
+    onallfiles={() => void allFiles.show(row.username, row.folder)}
+    browse={false} />
+  <Menu.Separator />
+  <ResultUserItems
+    name={row.username}
+    named
+    folder={row.folder}
+    ondownload={canDownload
+      ? () => void downloadNow(rows.filter((r) => r.username === row.username))
+      : undefined}
+    ondismiss={() => ondismiss(row.username)} />
+{/snippet}
+
 <FileTree
   bind:this={tree}
   {lines}
@@ -173,34 +200,9 @@
       {all}
       class="h-8 border-b bg-surface-muted text-sm font-medium text-fg-muted" />
   {/snippet}
+  <!-- a right-click, a long press or the menu key opens what the row's ... button offers -->
   {#snippet menu(line)}
-    {#if line.kind === "item"}
-      {@const row = line.item}
-      {@const folder = folderOf(row)}
-      <RemoteFileItems
-        path={row.file.filename}
-        username={row.username}
-        ondownload={canDownload ? () => void downloadNow([row]) : undefined}
-        ondetails={() => details(row)} />
-      <Menu.Separator />
-      <!-- the whole path, which a menu has no room to cut and show on hover -->
-      <Menu.Label class="wrap-anywhere">{row.folder}</Menu.Label>
-      <RemoteFolderItems
-        folder={row.folder}
-        username={row.username}
-        ondownload={canDownload ? () => void downloadNow(folder) : undefined}
-        onallfiles={() => void allFiles.show(row.username, row.folder)}
-        browse={false} />
-      <Menu.Separator />
-      <ResultUserItems
-        name={row.username}
-        named
-        folder={row.folder}
-        ondownload={canDownload
-          ? () => void downloadNow(rows.filter((r) => r.username === row.username))
-          : undefined}
-        ondismiss={() => ondismiss(row.username)} />
-    {/if}
+    {#if line.kind === "item"}{@render rowItems(line.item)}{/if}
   {/snippet}
   {#snippet folder()}{/snippet}
   {#snippet item(row, _depth, tick)}
@@ -254,17 +256,16 @@
           {/snippet}
         </Tooltip>
       {/if}
-      <FileMenu
-        path={row.file.filename}
-        username={row.username}
-        ondownload={canDownload ? () => void downloadNow([row]) : undefined}
-        ondetails={() => details(row)}>
+      <Menu.LazyRoot>
         {#snippet trigger({ props })}
           <Button {...props} variant="ghost" size="icon-sm" aria-label={`Actions for ${fileName}`}>
             <EllipsisIcon />
           </Button>
         {/snippet}
-      </FileMenu>
+        <Menu.Content align="end" class="min-w-56">
+          {@render rowItems(row)}
+        </Menu.Content>
+      </Menu.LazyRoot>
     </span>
   {/snippet}
 </FileTree>

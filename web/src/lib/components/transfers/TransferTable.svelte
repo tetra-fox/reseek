@@ -1,9 +1,12 @@
 <script lang="ts">
   import type { SvelteSet } from "svelte/reactivity";
 
+  import { rowAnalysis } from "#lib/analysis/batch.js";
   import { app } from "#lib/app.svelte.js";
   import FileTree from "#lib/components/files/FileTree.svelte";
   import GridHeader from "#lib/components/ui/GridHeader.svelte";
+  import * as Menu from "#lib/components/ui/menu/menu.js";
+  import UserMenuItems from "#lib/components/users/UserMenuItems.svelte";
   import { getFileName, parseDuration } from "#lib/format.js";
   import type { Grid } from "#lib/lists/table.svelte.js";
   import { session } from "#lib/session.svelte.js";
@@ -11,6 +14,7 @@
   import type { ColumnId } from "#lib/transfers/grid/columns.js";
   import type { ViewSettings } from "#lib/transfers/grid/settings.svelte.js";
   import { type Group, groupingOf, type Item, treeOf } from "#lib/transfers/grid/view.js";
+  import { type GroupHandlers, groupActions } from "#lib/transfers/groupActions.js";
   import type { Direction, Transfer } from "#lib/transfers/states.js";
   import type { Transfers } from "#lib/transfers/transfers.svelte.js";
   import type { Expansion } from "#lib/tree/expansion.svelte.js";
@@ -18,6 +22,8 @@
   import { viewport } from "#lib/ui/viewport.svelte.js";
 
   import GroupHeader from "./GroupHeader.svelte";
+  import GroupItems from "./GroupItems.svelte";
+  import TransferItems from "./TransferItems.svelte";
   import TransferRow from "./TransferRow.svelte";
 
   type Props = {
@@ -69,6 +75,25 @@
   };
 
   const columns = $derived(grid.columns.map((c) => c.id as ColumnId));
+
+  // what a row's and a group's actions ask of this list, the same from their buttons and menus
+  const rowHandlers = (t: Transfer) => ({
+    ondetails: () => ondetails(t),
+    onremove: () => onremove([t]),
+    onblock: (deny: boolean) => onblock(t.username, deny)
+  });
+  const groupHandlers = (group: Group): GroupHandlers => ({
+    onremove: () => onremove(group.transfers),
+    oncancel: () => oncancel(group.transfers),
+    onblock: (deny) => onblock(group.username, deny)
+  });
+  const actionsOf = (group: Group) => groupActions(group, store, direction, groupHandlers(group));
+  /** a user's or a folder's line always has the user's items; a job's only its own actions */
+  const menuable = (line: TreeLine<Transfer>) => {
+    if (line.kind === "item") return true;
+    const group = tree.groups.get(line.node.key);
+    return !!group && (group.kind !== "job" || actionsOf(group).length > 0);
+  };
   /**
    * A group header's slot in the pinned stack: a line per level, so the user, their folder and its
    * subfolder stack in order. A phone keeps two, the top group and the innermost folder
@@ -147,6 +172,7 @@
   idOf={(t) => t.id}
   nameOf={(line) => (line.kind === "folder" ? line.node.label : getFileName(line.item.filename))}
   lineRem={LINES[view.density]}
+  {menuable}
   {slot}
   framed={false}
   class="tabular-nums"
@@ -176,9 +202,7 @@
             else selected.delete(id);
           }
         }}
-        onremove={() => onremove(group.transfers)}
-        oncancel={() => oncancel(group.transfers)}
-        onblock={(deny) => onblock(group.username, deny)} />
+        {...groupHandlers(group)} />
     {/if}
   {/snippet}
   {#snippet item(t, depth, tick)}
@@ -191,8 +215,26 @@
       selected={selected.has(t.id)}
       speeds={store.speeds.get(t.id) ?? []}
       onselect={tick}
-      ondetails={() => ondetails(t)}
-      onremove={() => onremove([t])}
-      onblock={(deny) => onblock(t.username, deny)} />
+      {...rowHandlers(t)} />
+  {/snippet}
+  <!-- a right-click, a long press or the menu key opens what the line's buttons offer -->
+  {#snippet menu(line)}
+    {#if line.kind === "item"}
+      <TransferItems
+        transfer={line.item}
+        {direction}
+        {...rowHandlers(line.item)}
+        analysis={rowAnalysis(line.item, direction)} />
+    {:else}
+      {@const group = tree.groups.get(line.node.key)}
+      {#if group}
+        {@const actions = actionsOf(group)}
+        <GroupItems {actions} />
+        {#if group.kind !== "job"}
+          {#if actions.length}<Menu.Separator />{/if}
+          <UserMenuItems name={group.username} named />
+        {/if}
+      {/if}
+    {/if}
   {/snippet}
 </FileTree>

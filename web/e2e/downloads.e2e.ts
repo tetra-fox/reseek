@@ -72,3 +72,29 @@ test("a filter on is named above the list, and Clear filters brings every row ba
   await expect(page.getByRole("searchbox", { name: "Filter" })).toHaveValue("");
   await expect(table).toBeFocused();
 });
+
+test("a right-click on a download offers what its ... button does, and on its user the group's", async ({
+  page
+}) => {
+  const files = [transfer("@@a\\One\\finished.flac")];
+  await page.route(
+    (url) => url.pathname.endsWith("/api/v0/transfers/downloads"),
+    (route) =>
+      route.fulfill({
+        json: [{ username: "alice", directories: [{ directory: "d", fileCount: 1, files }] }]
+      })
+  );
+  await login(page, "/downloads");
+  const table = page.getByRole("treegrid", { name: "Downloads" });
+  const row = table.getByRole("row").filter({ hasText: "finished.flac" });
+  await row.getByRole("button", { name: "More for finished.flac" }).click();
+  const offered = await page.getByRole("menuitem").allTextContents();
+  expect(offered).toContain("Remove");
+  await page.keyboard.press("Escape");
+  await row.getByText("finished.flac").click({ button: "right" });
+  await expect(page.getByRole("menuitem")).toHaveText(offered);
+  await page.keyboard.press("Escape");
+
+  await table.getByRole("row").filter({ hasText: "alice" }).first().click({ button: "right" });
+  await expect(page.getByRole("menuitem", { name: "Remove the group" })).toBeVisible();
+});
