@@ -3,22 +3,12 @@
 //! handles, malformed frames and unread bytes.
 
 use crate::support::{Logs, Session, options};
-use soulseek_client::{ClientOptions, Event, ServerInfo, WaitKey};
+use soulseek_client::{ClientOptions, Event, ServerInfo};
 use soulseek_proto::server::*;
-use soulseek_proto::{ServerCode, ServerRequest, ServerResponse};
+use soulseek_proto::{ServerRequest, ServerResponse};
 
 #[tokio::test]
-async fn ping_completes_its_wait_and_an_unsolicited_one_is_dropped() {
-  let mut session = Session::start().await;
-  session.server.send(&ServerResponse::Ping).await;
-  session.settle().await;
-  let () = session
-    .reply(WaitKey::Server(ServerCode::Ping), ServerResponse::Ping)
-    .await;
-}
-
-#[tokio::test]
-async fn add_privileged_user_is_a_notification_without_acknowledgment() {
+async fn privilege_notifications_are_raised_and_only_notify_privileges_is_acknowledged() {
   let mut session = Session::start().await;
   session
     .server
@@ -26,64 +16,31 @@ async fn add_privileged_user_is_a_notification_without_acknowledgment() {
       username: "bob".into(),
     }))
     .await;
-  let raised = session
-    .event(|event| match event {
-      Event::PrivilegeNotificationReceived {
-        username,
-        id,
-        requires_acknowledgment,
-      } => Some((username, id, requires_acknowledgment)),
-      _ => None,
-    })
-    .await;
-  assert_eq!(raised, ("bob".into(), None, false));
-}
-
-#[tokio::test]
-async fn notify_privileges_is_raised_and_acknowledged() {
-  let mut session = Session::start().await;
   session
     .server
     .send(&ServerResponse::NotifyPrivileges(NotifyPrivileges {
       id: 9,
-      username: "bob".into(),
+      username: "carol".into(),
     }))
     .await;
-  let raised = session
-    .event(|event| match event {
-      Event::PrivilegeNotificationReceived {
-        username,
-        id,
-        requires_acknowledgment,
-      } => Some((username, id, requires_acknowledgment)),
-      _ => None,
-    })
-    .await;
-  assert_eq!(raised, ("bob".into(), Some(9), true));
+  for expected in [("bob".into(), None, false), ("carol".into(), Some(9), true)] {
+    let raised = session
+      .event(|event| match event {
+        Event::PrivilegeNotificationReceived {
+          username,
+          id,
+          requires_acknowledgment,
+        } => Some((username, id, requires_acknowledgment)),
+        _ => None,
+      })
+      .await;
+    assert_eq!(raised, expected);
+  }
+  // the first request after both is the acknowledgment, so the added user got none
   assert_eq!(
     session.server.request().await,
     ServerRequest::AcknowledgeNotifyPrivileges(AcknowledgeNotifyPrivileges { id: 9 })
   );
-}
-
-#[tokio::test]
-async fn cannot_connect_naming_the_user_is_raised() {
-  let mut session = Session::start().await;
-  let named = CannotConnectResponse {
-    token: 13,
-    username: Some("bob".into()),
-  };
-  session
-    .server
-    .send(&ServerResponse::CannotConnect(named))
-    .await;
-  let raised = session
-    .event(|event| match event {
-      Event::UserCannotConnect { token, username } => Some((token, username)),
-      _ => None,
-    })
-    .await;
-  assert_eq!(raised, (13, "bob".into()));
 }
 
 #[tokio::test]

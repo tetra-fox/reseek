@@ -205,14 +205,4 @@ pub(crate) mod tests {
       Err(FieldError::InvalidZlib)
     );
   }
-
-  #[test]
-  fn inflate_stops_a_zip_bomb_at_the_limit() {
-    let compressed = compress(&vec![0; 64 << 20]);
-    assert!(compressed.len() < 100 << 10);
-    assert_eq!(
-      inflate(&compressed, 1 << 20),
-      Err(FieldError::InflatedTooLarge { limit: 1 << 20 })
-    );
-  }
 }

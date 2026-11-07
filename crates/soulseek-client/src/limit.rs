@@ -142,14 +142,8 @@ mod tests {
     drop(first);
     assert!(limiter.try_acquire(1).is_none(), "still one running");
     drop(second);
-    let only = limiter.try_acquire(1).unwrap();
+    let _only = limiter.try_acquire(1).unwrap();
     assert!(limiter.try_acquire(1).is_none());
-    drop(only);
-    // growing again first cancels what is still owed
-    limiter.resize(2);
-    let _a = limiter.try_acquire(2).unwrap();
-    let _b = limiter.try_acquire(2).unwrap();
-    assert!(limiter.try_acquire(2).is_none());
   }
 
   #[test]

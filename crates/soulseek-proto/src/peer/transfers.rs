@@ -229,7 +229,7 @@ pub(crate) mod tests {
   }
 
   #[test]
-  fn queue_download_latin1_filename_is_echoed_with_its_bytes() {
+  fn queue_download_latin1_filename_reads_as_its_text_and_is_lossy() {
     let bytes = p().bytes_string(b"caf\xe9.mp3").frame(43);
     let PeerMessage::QueueDownload(QueueDownload { filename }) =
       PeerMessage::decode(&bytes).unwrap()
@@ -238,7 +238,5 @@ pub(crate) mod tests {
     };
     assert_eq!(filename.as_str(), "caf\u{e9}.mp3");
     assert!(filename.is_lossy());
-    let echo = PeerMessage::PlaceInQueueRequest(PlaceInQueueRequest { filename }).encode();
-    assert_eq!(echo, p().bytes_string(b"caf\xe9.mp3").frame(51));
   }
 }

@@ -631,14 +631,18 @@ mod tests {
       write_queue_size: 1,
       ..ConnectionOptions::default()
     };
-    // the remote never reads, so the writer blocks once the socket buffers are full
+    // the remote never reads, so the writer blocks on a frame larger than the socket buffers
     let (conn, _remote) = pair(options, FrameKind::Peer).await;
-    let large = vec![0; 64 << 20];
-    conn.send(large.clone()).unwrap();
-    // let the writer take the first frame off the queue and block on the socket
-    tokio::time::sleep(Duration::from_millis(100)).await;
-    conn.send(large.clone()).unwrap();
-    let error = conn.send(large).unwrap_err();
+    conn.send(vec![0; 64 << 20]).unwrap();
+    tokio::time::timeout(Duration::from_secs(5), async {
+      while conn.write_queue_depth() > 0 {
+        tokio::task::yield_now().await;
+      }
+    })
+    .await
+    .expect("the writer takes the first frame");
+    conn.send(vec![1]).unwrap();
+    let error = conn.send(vec![1]).unwrap_err();
     assert_eq!(
       error.connection_kind(),
       Some(ConnectionErrorKind::WriteDropped)

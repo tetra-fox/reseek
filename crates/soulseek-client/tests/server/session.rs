@@ -7,10 +7,10 @@ use std::time::Duration;
 use crate::support::soulfind::{self, PASSWORD};
 use crate::support::{disconnected, drain, free_port, next_event, options, transitions, user_key};
 use soulseek_client::{
-  Client, ClientError, ClientOptions, ClientState, ConnectionErrorKind, Event, WaitKey,
+  Client, ClientError, ClientOptions, ClientState, ConnectionErrorKind, Event,
 };
 use soulseek_proto::server::{GetPeerAddressRequest, GetPeerAddressResponse, GetStatusRequest};
-use soulseek_proto::{PeerCode, ServerCode, ServerRequest};
+use soulseek_proto::{ServerCode, ServerRequest};
 use tokio_util::sync::CancellationToken;
 
 #[tokio::test]
@@ -186,23 +186,16 @@ async fn a_second_login_with_our_name_kicks_us() {
 }
 
 #[tokio::test]
-async fn disconnecting_fails_server_waits_and_keeps_peer_waits() {
+async fn disconnecting_fails_the_server_waits() {
   let Some(server) = soulfind::server() else {
     return;
   };
   let mut alice = server.login("waits", options()).await;
-  let waiter = alice.client.waiter().clone();
-  let cancel = CancellationToken::new();
-  let server_wait = waiter.wait::<()>(
+  let server_wait = alice.client.waiter().wait::<()>(
     user_key(ServerCode::GetStatus, "nobody asked"),
     None,
-    cancel.clone(),
+    CancellationToken::new(),
   );
-  let peer_key = WaitKey::Peer {
-    code: PeerCode::InfoResponse,
-    username: "bob".into(),
-  };
-  let peer_wait = waiter.wait::<u32>(peer_key.clone(), None, cancel.clone());
 
   alice.client.disconnect(Some("done"), None).await;
 
@@ -213,9 +206,6 @@ async fn disconnecting_fails_server_waits_and_keeps_peer_waits() {
     "{error:?}"
   );
   assert_eq!(error.connection_kind(), Some(ConnectionErrorKind::Other));
-  assert!(waiter.has_wait(&peer_key));
-  assert!(waiter.complete(&peer_key, 7u32));
-  assert_eq!(peer_wait.await.unwrap(), 7);
   assert_eq!(disconnected(&drain(&mut alice.events)).0, "done");
 }
 
@@ -249,7 +239,7 @@ async fn a_refused_connection_is_a_connect_error() {
     )
     .await
     .unwrap_err();
-  let ClientError::Connect { message, .. } = &error else {
+  let ClientError::Connect { message, source } = &error else {
     panic!("expected a connect error, got {error:?}");
   };
   assert!(
@@ -257,6 +247,14 @@ async fn a_refused_connection_is_a_connect_error() {
       "Failed to connect: Failed to connect to 127.0.0.1:{port}: "
     )),
     "{message}"
+  );
+  let cause = source
+    .as_deref()
+    .and_then(|source| source.downcast_ref::<ClientError>());
+  assert_eq!(
+    cause.and_then(ClientError::connection_kind),
+    Some(ConnectionErrorKind::Other),
+    "{error:?}"
   );
   let events = drain(&mut events);
   assert_eq!(

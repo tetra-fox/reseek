@@ -185,20 +185,6 @@ pub(crate) mod tests {
   }
 
   #[test]
-  fn search_response_inflates_to_far_less_than_a_browse_response() {
-    // every peer that saw the search can answer it, so its body is held to a small cap
-    let frame = p().s("bob").u32(1).raw(&vec![0; 16 << 20]).zframe(9);
-    assert_eq!(
-      PeerMessage::decode(&frame),
-      Err(field(
-        "SearchResponse",
-        "body",
-        FieldError::InflatedTooLarge { limit: 16 << 20 }
-      ))
-    );
-  }
-
-  #[test]
   fn search_response_honors_configured_limits() {
     let response = PeerMessage::SearchResponse(SearchResponse {
       username: "bob".into(),

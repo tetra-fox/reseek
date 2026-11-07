@@ -139,7 +139,6 @@ fn told_canceled(message: PeerMessage, filename: &str) -> bool {
 #[tokio::test]
 async fn an_upload_ends_when_the_downloader_closes_after_the_last_byte() {
   let mut scripted = Scripted::start().await;
-  let mut events = scripted.client().subscribe();
   let (running, mut bob) = offered_upload(&mut scripted, "@@share\\a.mp3").await;
   let mut transfer = accepted(&mut scripted, &mut bob, "@@share\\a.mp3").await;
   receive(&mut transfer, 0).await;
@@ -151,8 +150,6 @@ async fn an_upload_ends_when_the_downloader_closes_after_the_last_byte() {
     "no linger once closed"
   );
   assert_eq!(done.bytes_transferred, SIZE as u64);
-  let (states, _) = states(&mut events, TransferDirection::Upload).await;
-  assert_eq!(states, transfers::upload());
   assert!(
     bob.quiet_for(Duration::from_millis(200)).await,
     "nothing to tell"

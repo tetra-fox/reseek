@@ -4,7 +4,7 @@
 use std::time::Duration;
 
 use crate::support::scripted::{BOB, SIZE, Scripted, offer, queued, send_file};
-use crate::support::transfers::{content, states};
+use crate::support::transfers::{content, reached, states};
 use crate::support::{listening_options, next_event};
 use soulseek_client::{ClientError, Event, RequestStyle, Transfer, TransferState};
 use soulseek_proto::TransferDirection;
@@ -159,11 +159,12 @@ async fn a_download_canceled_at_any_stage_ends_canceled() {
 
   // with bytes moving: the connection closes and what arrived stays
   let mut scripted = Scripted::start().await;
+  let mut events = scripted.client().subscribe();
   let (running, mut bob) = scripted.queued_download("@@share\\moving.mp3").await;
   offer(&mut bob, "@@share\\moving.mp3", 18, Some(SIZE)).await;
   let mut transfer = scripted.connect_for_transfer(18).await;
   send_file(&mut transfer, 0, 3000).await;
-  tokio::time::sleep(Duration::from_millis(100)).await;
+  reached(&mut events, 3000).await;
   running.cancel.cancel();
   let destination = running.destination.clone();
   assert!(canceled(running.result().await));

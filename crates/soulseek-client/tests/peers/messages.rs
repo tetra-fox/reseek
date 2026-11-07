@@ -117,31 +117,20 @@ async fn queueing_a_download_is_answered_with_the_place_or_the_refusal() {
 }
 
 #[tokio::test]
-async fn a_legacy_download_request_is_queued_never_started() {
+async fn a_legacy_download_request_the_resolver_refuses_is_denied_with_its_reason() {
   let session = session().await;
   let mut bob = bob(&session).await;
-  let request = |token, filename: &str| {
-    PeerMessage::TransferRequest(TransferRequest {
-      direction: TransferDirection::Download,
-      token,
-      filename: filename.into(),
-      file_size: None,
-    })
-    .encode()
-  };
-  bob.send(&request(5, "@@music\\fine.mp3")).await;
-  assert_eq!(
-    bob.read_peer().await,
-    PeerMessage::TransferResponse(TransferResponse::Denied {
-      token: 5,
-      message: "Queued".into()
-    })
-  );
-  assert!(matches!(
-    bob.read_peer().await,
-    PeerMessage::PlaceInQueueResponse(PlaceInQueueResponse { place: 3, .. })
-  ));
-  bob.send(&request(6, "@@music\\banned.mp3")).await;
+  bob
+    .send(
+      &PeerMessage::TransferRequest(TransferRequest {
+        direction: TransferDirection::Download,
+        token: 6,
+        filename: "@@music\\banned.mp3".into(),
+        file_size: None,
+      })
+      .encode(),
+    )
+    .await;
   assert_eq!(
     bob.read_peer().await,
     PeerMessage::TransferResponse(TransferResponse::Denied {

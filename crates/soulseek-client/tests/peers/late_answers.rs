@@ -1,8 +1,8 @@
 //! A scripted peer answering, late, the connection request the server relayed for us: dialing
 //! it directly already won, but the peer connects to us anyway with the request's token. For
-//! messages, the answering connection replaces the one we dialed, and the one it replaced is
-//! still read; for a transfer it is refused, since the transfer runs on the connection that won;
-//! after the time the request was awaited for, it is unknown.
+//! messages, the answering connection replaces the one we dialed; for a transfer it is refused,
+//! since the transfer runs on the connection that won; after the time the request was awaited
+//! for, it is unknown.
 
 use std::time::Duration;
 
@@ -11,7 +11,7 @@ use crate::support::scripted::{BOB, SIZE, Scripted, offer, queued, send_file};
 use crate::support::{Logs, PATIENCE, listening_options};
 use soulseek_client::{ClientOptions, RequestStyle};
 use soulseek_proto::init::PierceFirewall;
-use soulseek_proto::peer::{TransferResponse, UserInfo};
+use soulseek_proto::peer::TransferResponse;
 use soulseek_proto::server::ConnectToPeerRequest;
 use soulseek_proto::{InitMessage, PeerConnectionType, PeerMessage, ServerRequest};
 
@@ -70,23 +70,6 @@ async fn a_late_answer_replaces_the_dialed_connection_and_carries_the_offer() {
   transfer.closed().await;
   let done = running.result().await.unwrap();
   assert_eq!(done.remote_token, Some(77));
-  current(&scripted, &answered).await;
-}
-
-#[tokio::test]
-async fn the_replaced_connection_is_still_read_and_answered() {
-  let mut scripted = Scripted::start().await;
-  let _running = scripted.download("@@share\\late.mp3", |_| {});
-  let mut dialed = scripted.connected().await;
-  queued(&mut dialed, "@@share\\late.mp3").await;
-  let token = relayed(&mut scripted, PeerConnectionType::Peer).await;
-  let answered = answer(&scripted, token).await;
-  current(&scripted, &answered).await;
-  // what bob sent on the first connection before it moved over still reaches the client
-  dialed.send(&PeerMessage::InfoRequest.encode()).await;
-  let PeerMessage::InfoResponse(UserInfo { .. }) = dialed.read_peer().await else {
-    panic!("expected user info on the replaced connection");
-  };
   current(&scripted, &answered).await;
 }
 

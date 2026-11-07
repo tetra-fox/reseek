@@ -100,12 +100,18 @@ async fn network_and_room_searches_take_the_answers_and_end_when_they_stop() {
       SearchState::COMPLETED | SearchState::TIMED_OUT,
       "{scope:?}"
     );
-    let from: Vec<_> = responses
+    // the server is shared with other tests, whose users answer a network search as well
+    let ours: Vec<_> = responses
       .iter()
       .map(|response| response.username.as_str())
+      .filter(|&from| from == responder.username || from == searcher.username)
       .collect();
-    assert_eq!(from, [responder.username.as_str()], "{scope:?}");
-    assert_eq!((done.response_count, done.file_count), (1, 2));
+    assert_eq!(ours, [responder.username.as_str()], "{scope:?}");
+    let files: usize = responses.iter().map(|response| response.files.len()).sum();
+    assert_eq!(
+      (done.response_count, done.file_count),
+      (responses.len() as u64, files as u64)
+    );
     assert_eq!(done.query.search_text(), "flac match");
     let states = search_states(&mut events).await;
     assert_eq!(
@@ -162,7 +168,11 @@ async fn a_wishlist_search_goes_out_like_a_network_search() {
   let searcher = server.login("searcher", soulfind::listening()).await;
   let (done, responses) = search(&searcher, SearchScope::Wishlist, quick()).await;
   assert_eq!(done.state, SearchState::COMPLETED | SearchState::TIMED_OUT);
-  assert_eq!(responses[0].username, responder.username);
+  assert!(
+    responses
+      .iter()
+      .any(|response| response.username == responder.username)
+  );
 }
 
 #[tokio::test]
@@ -202,11 +212,19 @@ async fn filtered_out_responses_are_not_taken() {
   let Some(server) = soulfind::server() else {
     return;
   };
-  let _responder = responder(&server, "responder", 2).await;
+  let responder = responder(&server, "responder", 2).await;
   let searcher = server.login("searcher", soulfind::listening()).await;
+  let (_, responses) = search(&searcher, SearchScope::Network, quick()).await;
+  assert!(
+    responses
+      .iter()
+      .any(|response| response.username == responder.username),
+    "the responder answers when nothing filters it"
+  );
   let mut options = quick();
   options.minimum_peer_upload_speed = 1_000_000;
   let (done, responses) = search(&searcher, SearchScope::Network, options).await;
+  // no user on the server uploads this fast
   assert!(responses.is_empty());
   assert_eq!(done.response_count, 0);
 }

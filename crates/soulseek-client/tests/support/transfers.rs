@@ -9,7 +9,7 @@ use soulseek_client::{ClientOptions, Event, Transfer, TransferState};
 use soulseek_proto::{RemoteFilename, TransferDirection};
 use tokio::sync::{broadcast, mpsc};
 
-use super::PATIENCE;
+use super::{PATIENCE, next_event};
 
 static DIRECTORIES: AtomicU32 = AtomicU32::new(0);
 
@@ -88,8 +88,19 @@ pub async fn states(
   .expect("the transfer ends")
 }
 
-/// the states a download asked for with `QueueDownload` goes through when it succeeds
-pub fn queued_download() -> Vec<TransferState> {
+/// waits until a transfer's progress reaches `bytes`
+pub async fn reached(events: &mut broadcast::Receiver<Event>, bytes: u64) {
+  next_event(events, |event| match event {
+    Event::TransferProgressUpdated { transfer, .. } if transfer.bytes_transferred >= bytes => {
+      Some(())
+    }
+    _ => None,
+  })
+  .await;
+}
+
+/// the states a download goes through when it succeeds
+pub fn download() -> Vec<TransferState> {
   vec![
     TransferState::QUEUED_LOCALLY,
     TransferState::REQUESTED,

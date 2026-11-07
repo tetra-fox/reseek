@@ -283,26 +283,7 @@ async fn user_info_too_large_to_read_fails_the_request() {
     .unwrap_err();
   assert!(error.to_string().contains("invalid user info"), "{error:?}");
 
-  // a folder request waits as long as it is told to
-  let started = tokio::time::Instant::now();
-  let folder = scripted
-    .client()
-    .get_directory_contents(
-      BOB,
-      "@@music",
-      None,
-      Some(Duration::from_millis(200)),
-      &CancellationToken::new(),
-    )
-    .await;
-  assert!(matches!(folder, Err(ClientError::Timeout(_))), "{folder:?}");
-  assert!(started.elapsed() < Duration::from_secs(2));
-
   // one longer than any user info may be fails the request from its header
-  assert!(matches!(
-    bob.read_peer().await,
-    PeerMessage::FolderContentsRequest(_)
-  ));
   let asked = ask();
   assert_eq!(bob.read_peer().await, PeerMessage::InfoRequest);
   let len = Limits::DEFAULT.peer_message_bytes(PeerCode::InfoResponse) + 1;
@@ -318,6 +299,35 @@ async fn user_info_too_large_to_read_fails_the_request() {
     error.to_string().contains("user info too large"),
     "{error:?}"
   );
+}
+
+#[tokio::test]
+async fn a_folder_request_waits_only_as_long_as_it_is_told_to() {
+  let mut scripted = Scripted::start().await;
+  let client = scripted.client().clone();
+  let started = tokio::time::Instant::now();
+  let folder = tokio::spawn(async move {
+    client
+      .get_directory_contents(
+        BOB,
+        "@@music",
+        None,
+        Some(Duration::from_millis(200)),
+        &CancellationToken::new(),
+      )
+      .await
+  });
+  let mut bob = scripted.connected().await;
+  assert!(matches!(
+    bob.read_peer().await,
+    PeerMessage::FolderContentsRequest(_)
+  ));
+  let folder = tokio::time::timeout(PATIENCE, folder)
+    .await
+    .unwrap()
+    .unwrap();
+  assert!(matches!(folder, Err(ClientError::Timeout(_))), "{folder:?}");
+  assert!(started.elapsed() < Duration::from_secs(2));
 }
 
 #[tokio::test]

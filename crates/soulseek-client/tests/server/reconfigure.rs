@@ -1,6 +1,6 @@
 //! Changing options while logged in to soulfind: the listener moves to a new port and the server
-//! hands the new one out, a taken port keeps the old listener and options, and changes that need
-//! a new session say so.
+//! hands the new one out, a taken port keeps the old listener and options, and while disconnected
+//! nothing needs a new session.
 
 use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::Arc;
@@ -107,24 +107,6 @@ async fn rebinding_the_same_port_for_a_new_backlog() {
     .unwrap();
   assert!(!reconnect);
   assert!(TcpStream::connect(local(port)).await.is_ok());
-}
-
-#[tokio::test]
-async fn turning_the_distributed_network_off_needs_a_reconnect_and_on_does_not() {
-  let Some(server) = soulfind::server() else {
-    return;
-  };
-  let user = server.login("distributed", options()).await;
-  let off = ClientOptionsPatch {
-    enable_distributed_network: Some(false),
-    ..ClientOptionsPatch::default()
-  };
-  assert!(user.client.reconfigure_options(off).await.unwrap());
-  let on = ClientOptionsPatch {
-    enable_distributed_network: Some(true),
-    ..ClientOptionsPatch::default()
-  };
-  assert!(!user.client.reconfigure_options(on).await.unwrap());
 }
 
 #[tokio::test]

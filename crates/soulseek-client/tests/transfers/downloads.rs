@@ -60,7 +60,7 @@ async fn a_queued_download_goes_through_every_state_and_arrives_whole() {
     tokio::spawn(async move { client.download(request, &CancellationToken::new()).await });
   serve(&uploader, &mut requests, source, true).await;
   let (downloaded, transfer) = states(&mut downloader.events, TransferDirection::Download).await;
-  assert_eq!(downloaded, transfers::queued_download());
+  assert_eq!(downloaded, transfers::download());
   assert_eq!(transfer.bytes_transferred, SIZE as u64);
   assert!(transfer.remote_token.is_some());
   let (uploaded, _) = states(&mut uploader.events, TransferDirection::Upload).await;
@@ -94,7 +94,7 @@ async fn a_download_asked_with_a_transfer_request_is_queued_by_the_answer() {
     tokio::spawn(async move { client.download(request, &CancellationToken::new()).await });
   serve(&uploader, &mut requests, source, true).await;
   let (downloaded, _) = states(&mut downloader.events, TransferDirection::Download).await;
-  assert_eq!(downloaded, transfers::queued_download());
+  assert_eq!(downloaded, transfers::download());
   download.await.unwrap().unwrap();
   assert_eq!(
     std::fs::read(dir.join("destination.flac")).unwrap(),

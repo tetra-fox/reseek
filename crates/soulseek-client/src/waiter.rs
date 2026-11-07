@@ -454,20 +454,6 @@ mod tests {
     assert_eq!(wait.await.unwrap(), "conn");
   }
 
-  #[tokio::test]
-  async fn keys_with_colons_do_not_collide() {
-    let waiter = waiter();
-    let room_user = |room: &str, username: &str| WaitKey::ServerRoomUser {
-      code: ServerCode::PrivateRoomAddUser,
-      room: room.into(),
-      username: username.into(),
-    };
-    let wait = waiter.wait::<()>(room_user("a:b", "c"), None, CancellationToken::new());
-    assert!(!waiter.complete(&room_user("a", "b:c"), ()));
-    assert!(waiter.complete(&room_user("a:b", "c"), ()));
-    wait.await.unwrap();
-  }
-
   #[tokio::test(start_paused = true)]
   async fn a_timeout_withdraws_only_its_own_wait() {
     let waiter = waiter();

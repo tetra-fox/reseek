@@ -463,29 +463,6 @@ pub(crate) mod tests {
   }
 
   #[tokio::test]
-  async fn refused_connect_is_a_connection_error() {
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let remote = listener.local_addr().unwrap();
-    drop(listener);
-    let error = Conn::connect(
-      remote,
-      None,
-      ConnKind::OUTBOUND | ConnKind::DIRECT,
-      ConnectionOptions::default(),
-      &CancellationToken::new(),
-    )
-    .await
-    .unwrap_err();
-    assert_eq!(error.connection_kind(), Some(ConnectionErrorKind::Other));
-    assert!(
-      error
-        .to_string()
-        .starts_with(&format!("Failed to connect to {remote}: ")),
-      "{error}"
-    );
-  }
-
-  #[tokio::test]
   async fn a_stalled_proxy_handshake_counts_against_the_connect_deadline() {
     let proxy = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let proxy_address = proxy.local_addr().unwrap();

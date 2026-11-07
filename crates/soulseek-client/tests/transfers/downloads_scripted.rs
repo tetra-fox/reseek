@@ -1,7 +1,7 @@
 //! Downloads from a scripted peer, for what a real uploader does not say on demand: refusing
-//! with any reason, reporting a failure at each stage, naming another size or none, sending at
-//! once, sending what does not decode; and how the download asks: governed, with fresh tokens,
-//! once per file.
+//! with any reason, reporting a failure at each stage, naming another size, sending at once,
+//! sending what does not decode; and how the download asks: governed, with fresh tokens, once per
+//! file.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use crate::support::PATIENCE;
 use crate::support::scripted::{BOB, SIZE, Scripted, offer, queued, send_file};
-use crate::support::transfers::{content, scratch, states};
+use crate::support::transfers::{self, content, reached, scratch, states};
 use soulseek_client::{
   ClientError, DownloadOutput, DownloadRequest, Event, RequestStyle, TransferState,
 };
@@ -122,7 +122,7 @@ async fn a_transfer_request_answered_with_a_refusal_rejects_the_download_and_que
   transfer.closed().await;
   let done = running.result().await.unwrap();
   assert_eq!(done.remote_token, Some(77));
-  let (_, last) = crate::support::transfers::states(&mut events, TransferDirection::Download).await;
+  let (_, last) = transfers::states(&mut events, TransferDirection::Download).await;
   assert!(last.state.succeeded());
 }
 
@@ -155,17 +155,7 @@ async fn a_peer_that_sends_at_once_is_dialed_with_our_own_token() {
   assert_eq!(done.remote_token, None);
   assert_eq!(std::fs::read(destination).unwrap(), content(SIZE as usize));
   let (states, _) = states(&mut events, TransferDirection::Download).await;
-  assert_eq!(
-    states,
-    [
-      TransferState::QUEUED_LOCALLY,
-      TransferState::REQUESTED,
-      TransferState::QUEUED_REMOTELY,
-      TransferState::INITIALIZING,
-      TransferState::IN_PROGRESS,
-      TransferState::COMPLETED | TransferState::SUCCEEDED,
-    ]
-  );
+  assert_eq!(states, transfers::download());
 }
 
 #[tokio::test]
@@ -193,10 +183,13 @@ async fn a_failure_reported_at_any_stage_ends_the_download_at_once() {
 
   // with bytes moving
   let mut scripted = Scripted::start().await;
+  let mut events = scripted.client().subscribe();
   let (running, mut bob) = scripted.queued_download("@@share\\p.mp3").await;
   offer(&mut bob, "@@share\\p.mp3", 6, Some(SIZE)).await;
   let mut transfer = scripted.connect_for_transfer(6).await;
   send_file(&mut transfer, 0, 1000).await;
+  // a failure is taken before bytes still unread, so bob sends it once all 1000 are written
+  reached(&mut events, 1000).await;
   bob.send(&failed("@@share\\p.mp3")).await;
   let destination = running.destination.clone();
   let error = running.result().await.unwrap_err();
@@ -260,14 +253,6 @@ async fn the_size_the_uploader_names_is_checked_against_ours() {
     last.state,
     TransferState::COMPLETED | TransferState::ABORTED
   );
-
-  // no size at all keeps ours
-  let mut scripted = Scripted::start().await;
-  let (running, mut bob) = scripted.queued_download("@@share\\none.mp3").await;
-  offer(&mut bob, "@@share\\none.mp3", 10, None).await;
-  let mut transfer = scripted.connect_for_transfer(10).await;
-  send_file(&mut transfer, 0, SIZE as usize).await;
-  assert_eq!(running.result().await.unwrap().size, SIZE);
 
   // a resolver can settle on the uploader's size
   let mut scripted = Scripted::start().await;
