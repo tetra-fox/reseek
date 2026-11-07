@@ -305,7 +305,12 @@ pub async fn cleanup(app: &AppState, starter: JobStarter, listed: bool) -> RunOu
     .await;
   run
     .step(CLEANUP[6], of, async {
-      app.files.prune().await.map(u64::from)
+      let pruned = app.files.prune().await.map(u64::from);
+      // the reports of pruned files, and of files deleted in any other way
+      if let Err(e) = app.analysis.forget_missing().await {
+        warn!(error = %e, "reports of files no longer on disk not removed");
+      }
+      pruned
     })
     .await;
   run

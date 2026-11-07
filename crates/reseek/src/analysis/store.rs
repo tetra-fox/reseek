@@ -334,6 +334,38 @@ pub(super) async fn forget_temporary(db: &Database, relative: Option<&str>) -> R
   .await
 }
 
+/// The file of every report but the uploads', with when it had last changed when analyzed.
+pub(super) async fn analyzed_files(db: &Database) -> Result<Vec<(String, String)>, DbError> {
+  db.read(|conn| {
+    conn
+      .prepare("SELECT path, modified FROM reports WHERE root != ?1")?
+      .query_map([FileRoot::Temporary.to_string()], |row| {
+        Ok((row.get(0)?, row.get(1)?))
+      })?
+      .collect()
+  })
+  .await
+}
+
+/// Removes the reports of the files in `gone`, given as [`analyzed_files`] lists them, each
+/// only while it is still the report of the file as it was then; returns how many went.
+pub(super) async fn forget(db: &Database, gone: Vec<(String, String)>) -> Result<usize, DbError> {
+  db.write(move |conn| {
+    let transaction = conn.transaction()?;
+    let mut forgotten = 0;
+    {
+      let mut statement =
+        transaction.prepare("DELETE FROM reports WHERE path = ?1 AND modified = ?2")?;
+      for (path, modified) in &gone {
+        forgotten += statement.execute([path, modified])?;
+      }
+    }
+    transaction.commit()?;
+    Ok(forgotten)
+  })
+  .await
+}
+
 /// Forgets the least recently used spectrogram and waveform files until the rest take no more
 /// than `limit` bytes, keeping the most recently used whatever its size; returns the names
 /// forgotten, whose files are to go.
@@ -434,5 +466,57 @@ mod tests {
     let stored = find(&db, PATH).await.unwrap().unwrap();
     assert!(stored.report.stale);
     assert!(stored.unreadable.unwrap().contains("missing field"));
+  }
+
+  #[tokio::test]
+  async fn only_reports_of_the_files_as_they_were_listed_are_forgotten() {
+    let db = Database::memory(&SCHEMA).await;
+    db.write(|conn| {
+      for (path, root, modified) in [
+        ("/srv/downloads/gone.flac", "downloads", "then"),
+        ("/srv/downloads/again.flac", "downloads", "now"),
+        ("/srv/uploads/held.flac", "temporary", "then"),
+      ] {
+        conn.execute(
+          "INSERT INTO reports \
+           (path, root, relative, size, modified, transfer_id, analyzed_at, verdict, spectra, \
+           report, format) \
+           VALUES (?1, ?2, 'x.flac', 10, ?3, NULL, 'then', 'likely_transcode', 'img', '{}', ?4)",
+          params![path, root, modified, REPORT_FORMAT],
+        )?;
+      }
+      Ok(())
+    })
+    .await
+    .unwrap();
+    let mut listed = analyzed_files(&db).await.unwrap();
+    listed.sort();
+    assert_eq!(
+      listed,
+      [
+        ("/srv/downloads/again.flac".to_string(), "now".to_string()),
+        ("/srv/downloads/gone.flac".to_string(), "then".to_string()),
+      ],
+      "uploads are not listed"
+    );
+    let gone = vec![
+      ("/srv/downloads/gone.flac".to_string(), "then".to_string()),
+      // analyzed again since it was listed
+      ("/srv/downloads/again.flac".to_string(), "then".to_string()),
+    ];
+    assert_eq!(forget(&db, gone).await.unwrap(), 1);
+    let left: Vec<String> = db
+      .read(|conn| {
+        conn
+          .prepare("SELECT path FROM reports ORDER BY path")?
+          .query_map([], |row| row.get(0))?
+          .collect()
+      })
+      .await
+      .unwrap();
+    assert_eq!(
+      left,
+      ["/srv/downloads/again.flac", "/srv/uploads/held.flac"]
+    );
   }
 }
