@@ -1,6 +1,4 @@
 <script lang="ts">
-  import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
-  import ChevronUpIcon from "@lucide/svelte/icons/chevron-up";
   import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
   import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
   import { untrack } from "svelte";
@@ -8,6 +6,7 @@
   import { app } from "#lib/app.svelte.js";
   import { browser } from "#lib/browse/browse.svelte.js";
   import { browseFilter } from "#lib/browse/filter.js";
+  import ExpandAll from "#lib/components/files/ExpandAll.svelte";
   import FileCells from "#lib/components/files/FileCells.svelte";
   import FileHeader from "#lib/components/files/FileHeader.svelte";
   import FileTree from "#lib/components/files/FileTree.svelte";
@@ -331,12 +330,7 @@
             aria-label="Filter"
             placeholder={FILTER_PLACEHOLDER} />
         </div>
-        <Button variant="outline" size="sm" onclick={() => expansion.reset(true)}>
-          <ChevronDownIcon />Expand all
-        </Button>
-        <Button variant="outline" size="sm" onclick={() => expansion.reset(false)}>
-          <ChevronUpIcon />Collapse all
-        </Button>
+        <ExpandAll {expansion} />
         <InspectorToggle />
       </div>
     </section>

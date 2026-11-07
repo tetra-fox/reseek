@@ -51,13 +51,20 @@ export type ResultColumn =
 /**
  * The list layout's columns in order, with their default widths as CSS lengths that grow with the
  * text: a column of figures holds its widest value, the others are in rem. The checkbox and the
- * actions sit either side
+ * actions sit either side. The user, the file and its size always show: a file's cells put its
+ * size under its name when there is no size column, which a line of the list has no room for
  */
 export const RESULT_COLUMNS: (GridColumn<ResultRow> & {
   id: ResultColumn | "select" | "actions";
 })[] = [
-  { id: "select", label: "Select", width: "2.5rem", quiet: true, fixed: true },
-  { id: "user", label: "User", width: "8.75rem", value: (r) => r.username.toLowerCase() },
+  { id: "select", label: "Select", width: "2.5rem", quiet: true, fixed: true, always: true },
+  {
+    id: "user",
+    label: "User",
+    width: "8.75rem",
+    always: true,
+    value: (r) => r.username.toLowerCase()
+  },
   {
     id: "speed",
     label: "Speed",
@@ -78,6 +85,7 @@ export const RESULT_COLUMNS: (GridColumn<ResultRow> & {
     id: "file",
     label: "File",
     width: "17.5rem",
+    always: true,
     value: (r) => getFileName(r.file.filename).toLowerCase()
   },
   {
@@ -85,6 +93,7 @@ export const RESULT_COLUMNS: (GridColumn<ResultRow> & {
     label: "Size",
     width: columnWidth(WIDEST.size),
     end: true,
+    always: true,
     value: (r) => r.file.size
   },
   {
@@ -101,34 +110,39 @@ export const RESULT_COLUMNS: (GridColumn<ResultRow> & {
     value: (r) => r.file.length ?? -1
   },
   { id: "folder", label: "Folder", width: "16.25rem", value: (r) => r.folder.toLowerCase() },
-  { id: "actions", label: "Actions", width: "4.5rem", quiet: true, fixed: true }
+  { id: "actions", label: "Actions", width: "4.5rem", quiet: true, fixed: true, always: true }
 ];
 
 export type ResultListSort = { id: ResultColumn; dir: "asc" | "desc" } | null;
 
+const readResultList = (saved: unknown) => {
+  const s = fields(saved);
+  const sort = fields(s.sort);
+  const dragged = fields(s.dragged);
+  const hidden = Array.isArray(s.hidden) ? s.hidden : [];
+  const known = RESULT_COLUMNS.find((c) => c.value && c.id === sort.id);
+  return {
+    sort: (known
+      ? { id: known.id, dir: sort.dir === "desc" ? "desc" : "asc" }
+      : null) as ResultListSort,
+    dragged: Object.fromEntries(
+      RESULT_COLUMNS.filter((c) => !c.fixed).flatMap((c) => {
+        const w = dragged[c.id];
+        return typeof w === "number" && w >= 40 ? [[c.id, w]] : [];
+      })
+    ) as Partial<Record<ResultColumn, number>>,
+    hidden: RESULT_COLUMNS.filter((c) => !c.always && hidden.includes(c.id)).map(
+      (c) => c.id
+    ) as ResultColumn[]
+  };
+};
+
 /**
- * The list layout's sort and the widths the user dragged columns to, in pixels, in this browser,
- * once kept as `reseek.search.dense`. Only a drag is kept, so a column never dragged follows its
- * default as that changes
+ * The list layout's sort, the columns the user hid and the widths they dragged columns to, in
+ * pixels, in this browser, once kept as `reseek.search.dense`. Only a drag is kept, so a column
+ * never dragged follows its default as that changes
  */
-export const resultList = stored(
-  "reseek.search.list",
-  (saved) => {
-    const s = fields(saved);
-    const sort = fields(s.sort);
-    const dragged = fields(s.dragged);
-    const known = RESULT_COLUMNS.find((c) => c.value && c.id === sort.id);
-    return {
-      sort: (known
-        ? { id: known.id, dir: sort.dir === "desc" ? "desc" : "asc" }
-        : null) as ResultListSort,
-      dragged: Object.fromEntries(
-        RESULT_COLUMNS.filter((c) => !c.fixed).flatMap((c) => {
-          const w = dragged[c.id];
-          return typeof w === "number" && w >= 40 ? [[c.id, w]] : [];
-        })
-      ) as Partial<Record<ResultColumn, number>>
-    };
-  },
-  "reseek.search.dense"
-);
+export const resultList = stored("reseek.search.list", readResultList, "reseek.search.dense");
+
+/** The list layout as it is with nothing saved, which Reset view goes back to */
+export const resultListDefaults = () => readResultList(undefined);

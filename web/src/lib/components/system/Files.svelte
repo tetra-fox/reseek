@@ -23,6 +23,7 @@
   import FileTree from "#lib/components/files/FileTree.svelte";
   import LocalFileItems from "#lib/components/files/LocalFileItems.svelte";
   import SelectionBar from "#lib/components/files/SelectionBar.svelte";
+  import SortMenu from "#lib/components/files/SortMenu.svelte";
   import InspectorToggle from "#lib/components/inspector/InspectorToggle.svelte";
   import LocalFileInspector from "#lib/components/inspector/LocalFileInspector.svelte";
   import Button from "#lib/components/ui/Button.svelte";
@@ -67,6 +68,11 @@
   let error = $state("");
   let loading = $state(false);
   let sort = $state<{ by: SortBy; dir: "asc" | "desc" }>({ by: "name", dir: "asc" });
+  /** what the column headers and the Sort menu sort by */
+  const SORTS: { id: SortBy; label: string }[] = [
+    { id: "name", label: "Name" },
+    { id: "date", label: "Modified" }
+  ];
   const listing = $derived(listings.get(path) ?? null);
 
   /**
@@ -323,12 +329,12 @@
   {/if}
 {/snippet}
 
-{#snippet sortable(label: string, by: SortBy)}
+{#snippet sortable(by: SortBy)}
   <button
     type="button"
     class="-my-1.5 flex items-center gap-1 py-1.5 hover:text-fg"
     onclick={() => sortBy(by)}>
-    {label}
+    {SORTS.find((s) => s.id === by)!.label}
     {#if sort.by === by}
       {#if sort.dir === "asc"}<ArrowUpIcon class="size-3" />{:else}<ArrowDownIcon
           class="size-3" />{/if}
@@ -377,6 +383,10 @@
     {/if}
     <Button variant="outline" size="sm" disabled={loading} onclick={load}
       ><RefreshCwIcon />Refresh</Button>
+    <SortMenu
+      options={SORTS}
+      sort={{ id: sort.by, dir: sort.dir }}
+      onsort={(s) => (sort = { by: s.id as SortBy, dir: s.dir })} />
     <InspectorToggle />
   </div>
 </div>
@@ -500,8 +510,8 @@
     {#snippet header(all)}
       <span role="columnheader" class="flex"
         >{#if all}<SelectAll {all} />{/if}</span>
-      <span role="columnheader">{@render sortable("Name", "name")}</span>
-      <span role="columnheader" class="max-md:hidden">{@render sortable("Modified", "date")}</span>
+      <span role="columnheader">{@render sortable("name")}</span>
+      <span role="columnheader" class="max-md:hidden">{@render sortable("date")}</span>
       {#if !viewport.phone}<span role="columnheader" class="pr-3 text-right">Size</span>{/if}
       <span role="columnheader" class="sr-only">Actions</span>
     {/snippet}

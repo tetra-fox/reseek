@@ -114,7 +114,8 @@ test("goes to a screen from the command palette", async ({ page }) => {
 test("keeps a compact row's controls between its dividers", async ({ page }) => {
   await manyDownloads(page, 30);
   await login(page, "/downloads");
-  await page.getByRole("radio", { name: "Compact" }).click();
+  await page.getByRole("button", { name: "Density: Comfortable" }).click();
+  await expect(page.getByRole("button", { name: "Density: Compact" })).toBeVisible();
   const grid = page.getByRole("treegrid", { name: "Downloads" });
   const row = grid.locator("[role=row]").filter({ hasText: "00002 Track.flac" });
   const header = grid.locator("[role=row]").filter({ hasText: "Album 0" }).first();

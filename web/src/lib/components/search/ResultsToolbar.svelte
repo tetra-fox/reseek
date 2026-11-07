@@ -1,20 +1,28 @@
 <script lang="ts">
-  import ArrowUpDownIcon from "@lucide/svelte/icons/arrow-up-down";
   import FilterIcon from "@lucide/svelte/icons/filter";
 
+  import ColumnsMenu from "#lib/components/files/ColumnsMenu.svelte";
+  import ExpandAll from "#lib/components/files/ExpandAll.svelte";
   import LayoutToggle from "#lib/components/files/LayoutToggle.svelte";
+  import SortMenu from "#lib/components/files/SortMenu.svelte";
   import InspectorToggle from "#lib/components/inspector/InspectorToggle.svelte";
   import * as Filter from "#lib/components/ui/filter/filter.js";
   import Input from "#lib/components/ui/Input.svelte";
-  import Select from "#lib/components/ui/Select.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import Switch from "#lib/components/ui/Switch.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { FILTER_PLACEHOLDER } from "#lib/files/filters.js";
   import { plural } from "#lib/format.js";
   import type { ActiveFilter } from "#lib/lists/filtered.js";
+  import {
+    RESULT_COLUMNS,
+    type ResultColumn,
+    resultList,
+    resultListDefaults
+  } from "#lib/search/list.js";
   import { HIDING } from "#lib/search/results.js";
   import { type ResultSort, searchOptions } from "#lib/settings.svelte.js";
+  import type { Expansion } from "#lib/tree/expansion.svelte.js";
 
   import FilterHelp from "./FilterHelp.svelte";
   import FilterPresets from "./FilterPresets.svelte";
@@ -32,8 +40,8 @@
     /** how many users are blocked, whose results show only when asked */
     blockedCount: number;
     showBlocked: boolean;
-    /** the Fold toggle changed: every card folds or unfolds */
-    onfold: (fold: boolean) => void;
+    /** which users and folders of the tree layout are open */
+    expansion: Expansion;
   };
 
   let {
@@ -44,28 +52,48 @@
     sortable,
     blockedCount,
     showBlocked = $bindable(),
-    onfold
+    expansion
   }: Props = $props();
 
-  const SORTS: { value: ResultSort; label: string }[] = [
-    { value: "uploadSpeed", label: "Fastest upload speed" },
-    { value: "queueLength", label: "Shortest queue" }
+  /** the tree's sorts, each of which names its own direction */
+  const TREE_SORTS: { id: ResultSort; label: string }[] = [
+    { id: "uploadSpeed", label: "Fastest upload speed" },
+    { id: "queueLength", label: "Shortest queue" }
   ];
+  /** the list's sorts, the columns whose headers sort */
+  const LIST_SORTS = RESULT_COLUMNS.flatMap((c) =>
+    c.value ? [{ id: c.id, label: c.label, descFirst: c.descFirst }] : []
+  );
+  const OPTIONAL = RESULT_COLUMNS.filter((c) => !c.always);
 </script>
 
 <div class="flex flex-col gap-2.5">
-  <div class="flex flex-wrap items-center gap-x-5 gap-y-2">
+  <div class="flex flex-wrap items-center gap-x-inline gap-y-2">
     <LayoutToggle bind:value={searchOptions.layout} />
     {#if searchOptions.layout === "tree"}
-      <div class="flex max-w-full min-w-0 items-center gap-2">
-        <ArrowUpDownIcon class="size-4 shrink-0 text-fg-muted" />
-        <Select
-          bind:value={searchOptions.sort}
-          options={SORTS}
-          aria-label="Sort"
-          class="h-control-sm w-64 min-w-0"
-          disabled={!sortable} />
-      </div>
+      <SortMenu
+        options={TREE_SORTS}
+        sort={{ id: searchOptions.sort }}
+        onsort={(sort) => (searchOptions.sort = sort.id as ResultSort)}
+        directed={false}
+        disabled={!sortable} />
+      <ExpandAll {expansion} />
+    {:else}
+      <SortMenu
+        options={LIST_SORTS}
+        sort={resultList.sort}
+        onsort={(sort) => (resultList.sort = { id: sort.id as ResultColumn, dir: sort.dir })} />
+      <ColumnsMenu
+        columns={OPTIONAL.map((c) => ({
+          id: c.id,
+          label: c.label,
+          visible: !resultList.hidden.includes(c.id as ResultColumn)
+        }))}
+        ontoggle={(id, visible) => {
+          const hidden = resultList.hidden.filter((h) => h !== id);
+          resultList.hidden = visible ? hidden : [...hidden, id as ResultColumn];
+        }}
+        onreset={() => Object.assign(resultList, resultListDefaults())} />
     {/if}
     <InspectorToggle />
     <p class="ml-auto flex items-center gap-1.5 text-sm text-fg-muted tabular-nums" role="status">
@@ -97,12 +125,6 @@
         {/each}
       </Filter.Group>
     </Filter.Panel>
-    {#if searchOptions.layout === "tree"}
-      <label class="flex items-center gap-2">
-        <Switch bind:checked={searchOptions.fold} onCheckedChange={(fold) => onfold(fold)} />Fold
-        results
-      </label>
-    {/if}
     {#if blockedCount}
       <label class="flex items-center gap-2">
         <Switch bind:checked={showBlocked} />Show blocked users

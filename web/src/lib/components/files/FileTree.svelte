@@ -6,9 +6,11 @@
 
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import { Arrivals } from "#lib/lists/arrivals.svelte.js";
+  import { LINE_REM } from "#lib/lists/density.js";
   import { freezesWhileUsed, interaction } from "#lib/lists/interaction.svelte.js";
   import { type AllTick, ListControl } from "#lib/lists/list.svelte.js";
   import { ListWindow } from "#lib/lists/virtual.svelte.js";
+  import { settings } from "#lib/settings.svelte.js";
   import { type Expansion, withSiblings } from "#lib/tree/expansion.svelte.js";
   import { type FolderNode, itemsUnder, type TreeLine } from "#lib/tree/folders.js";
   import { GAP_REM, itemStart, lineStart } from "#lib/tree/indent.js";
@@ -70,8 +72,11 @@
     menu?: Snippet<[TreeLine<T>]>;
     /** whether a line has anything in its menu; a line without opens none */
     menuable?: (line: TreeLine<T>) => boolean;
-    /** a line's height in rem, on a wider screen and on a phone; every line has the same */
-    lineRem?: { wide: number; phone: number };
+    /**
+     * The lines keep a wider screen's height on a phone, for a list whose phone lines stay one line
+     * and scroll sideways. Every line has the same height, which the density setting picks
+     */
+    oneLine?: boolean;
     /**
      * The pinned folder lines' slot for a depth, counted in lines from the top: a line per level
      * by default, so a folder's chain stacks in order, and on a phone one, the innermost folder's
@@ -116,7 +121,7 @@
     header,
     menu,
     menuable = () => true,
-    lineRem = { wide: 2.25, phone: 3 },
+    oneLine = false,
     slot = (depth) => (viewport.phone ? 0 : depth),
     height = "max(20rem, calc(var(--content-h) - 14rem))",
     width,
@@ -127,7 +132,9 @@
   }: Props = $props();
 
   /** one line's height in pixels */
-  const row = $derived(rem.px * lineRem[viewport.phone ? "phone" : "wide"]);
+  const row = $derived(
+    rem.px * LINE_REM[settings.density][viewport.phone && !oneLine ? "phone" : "wide"]
+  );
   /** how far the lines have scrolled, which decides the folder lines pinned at the top */
   let scrollTop = $state(0);
   /** where the lines start in the scrolled content, under the column header */

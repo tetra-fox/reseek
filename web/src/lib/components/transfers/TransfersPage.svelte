@@ -329,6 +329,7 @@
 <Toolbar
   {direction}
   {view}
+  expansion={folds}
   {counts}
   {filters}
   {markCounts}

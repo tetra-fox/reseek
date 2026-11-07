@@ -31,8 +31,6 @@ export type Column = GridColumn<Transfer> & {
   sort?: SortKey;
   /** the only direction it is offered in */
   only?: Direction;
-  /** always shown, never in the picker */
-  always?: boolean;
 };
 
 /** How wide the select column is, in rem; a phone leaves it out */

@@ -68,12 +68,6 @@
     onkey
   }: Props = $props();
 
-  /** a line's height in rem for each density, on a wider screen and on a phone */
-  const LINES = {
-    comfortable: { wide: 2.25, phone: 3.25 },
-    compact: { wide: 1.75, phone: 2.75 }
-  };
-
   const columns = $derived(grid.columns.map((c) => c.id as ColumnId));
 
   // what a row's and a group's actions ask of this list, the same from their buttons and menus
@@ -171,7 +165,6 @@
   {selected}
   idOf={(t) => t.id}
   nameOf={(line) => (line.kind === "folder" ? line.node.label : getFileName(line.item.filename))}
-  lineRem={LINES[view.density]}
   {menuable}
   {slot}
   framed={false}

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-describe("the results list's saved widths", () => {
+describe("the results list's saved view", () => {
   afterEach(() => localStorage.clear());
 
   const load = async (key: string, saved: unknown) => {
@@ -14,6 +14,13 @@ describe("the results list's saved widths", () => {
       dragged: { file: 400, size: 12, select: 90 }
     });
     expect(resultList.dragged).toEqual({ file: 400 });
+  });
+
+  it("hides only the columns that can be hidden", async () => {
+    const { resultList } = await load("reseek.search.list", {
+      hidden: ["folder", "size", "file", "nonsense", "queue"]
+    });
+    expect(resultList.hidden).toEqual(["queue", "folder"]);
   });
 
   it("takes what was kept under the dense view's key, once", async () => {

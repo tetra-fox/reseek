@@ -94,9 +94,7 @@
   const dismissed = new SvelteSet<string>();
   /** the ticked files, kept across the layouts, each by its result's key and its path */
   const selected = new SvelteSet<string>();
-  /** whether a user's line is open unless toggled, which folding every result sets */
-  let usersOpen = $state(!searchOptions.fold);
-  const expansion = new Expansion(true, (key) => (key.startsWith("user:") ? usersOpen : undefined));
+  const expansion = new Expansion(true);
 
   useCrumbs(() => (search ? [{ label: search.searchText }] : []));
 
@@ -407,10 +405,7 @@
       sortable={results.stored}
       blockedCount={blocked.size}
       bind:showBlocked
-      onfold={(fold) => {
-        usersOpen = !fold;
-        expansion.forget((key) => key.startsWith("user:"));
-      }} />
+      {expansion} />
     <Filter.Summary
       {filters}
       shown={counts.files}

@@ -10,7 +10,6 @@ export type ViewSettings = {
   layout: Layout;
   /** what the tree layout groups by */
   groupBy: GroupBy;
-  density: "comfortable" | "compact";
   /** every column in the order shown, with the width in pixels the user dragged it to, if any */
   columns: { id: ColumnId; visible: boolean; dragged?: number }[];
   sort: { id: SortKey; dir: "asc" | "desc" };
@@ -36,7 +35,6 @@ const SORTS: SortKey[] = [
 export const defaults = (direction: Direction): ViewSettings => ({
   layout: "tree",
   groupBy: "user",
-  density: "comfortable",
   columns: columnsFor(direction).map(({ id, visible }) => ({ id, visible })),
   sort: { id: "file", dir: "asc" },
   filters: { states: [], analysis: null }
@@ -71,7 +69,6 @@ const read = (direction: Direction, saved: unknown): ViewSettings => {
   return {
     layout: readLayout(s.layout, s.groupBy === "flat" ? "list" : base.layout),
     groupBy: GROUPINGS.includes(s.groupBy as GroupBy) ? (s.groupBy as GroupBy) : base.groupBy,
-    density: s.density === "compact" ? "compact" : "comfortable",
     columns,
     sort: {
       id: SORTS.includes(sort.id as SortKey) ? (sort.id as SortKey) : base.sort.id,

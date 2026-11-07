@@ -1,10 +1,15 @@
+import type { Density } from "./lists/density";
 import { readLayout } from "./lists/layout";
 import { fields, stored } from "./stored.svelte";
 
 /** The UI's own preferences in this browser */
-export const settings = stored("reseek.ui.settings", (saved) => ({
-  sidebar: fields(saved).sidebar === "collapsed" ? ("collapsed" as const) : ("expanded" as const)
-}));
+export const settings = stored("reseek.ui.settings", (saved) => {
+  const s = fields(saved);
+  return {
+    sidebar: s.sidebar === "collapsed" ? ("collapsed" as const) : ("expanded" as const),
+    density: (s.density === "compact" ? "compact" : "comfortable") as Density
+  };
+});
 
 /** How a search's results are sorted */
 export type ResultSort = "uploadSpeed" | "queueLength";
@@ -34,7 +39,6 @@ export const searchOptions = stored("reseek.search.options", (saved) => {
     hideLocked: flag(s.hideLocked, HIDE_DEFAULTS.hideLocked),
     hideNoFreeSlots: flag(s.hideNoFreeSlots, HIDE_DEFAULTS.hideNoFreeSlots),
     hideOffline: flag(s.hideOffline, HIDE_DEFAULTS.hideOffline),
-    hideLongQueues: flag(s.hideLongQueues, HIDE_DEFAULTS.hideLongQueues),
-    fold: flag(s.fold, false)
+    hideLongQueues: flag(s.hideLongQueues, HIDE_DEFAULTS.hideLongQueues)
   };
 });

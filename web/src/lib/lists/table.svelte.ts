@@ -54,6 +54,8 @@ export type GridColumn<T> = {
   quiet?: boolean;
   /** its edge can't be dragged */
   fixed?: boolean;
+  /** always shown, never offered in the Columns menu */
+  always?: boolean;
 };
 
 /** A grid's sort: the column and the direction, or none */

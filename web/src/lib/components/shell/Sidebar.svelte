@@ -2,6 +2,8 @@
   import { afterNavigate } from "$app/navigation";
   import { page } from "$app/state";
   import FlaskConicalIcon from "@lucide/svelte/icons/flask-conical";
+  import Rows3Icon from "@lucide/svelte/icons/rows-3";
+  import Rows4Icon from "@lucide/svelte/icons/rows-4";
   import SunMoonIcon from "@lucide/svelte/icons/sun-moon";
   import { Dialog } from "bits-ui";
   import { toggleMode } from "mode-watcher";
@@ -14,7 +16,9 @@
   import Badge from "#lib/components/ui/Badge.svelte";
   import Scrim from "#lib/components/ui/Scrim.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
+  import { DENSITY_LABELS } from "#lib/lists/density.js";
   import { href, navCurrent, navItems, type NavItem, route, systemItem } from "#lib/nav.js";
+  import { settings } from "#lib/settings.svelte.js";
   import { sidebar } from "#lib/shell/sidebar.svelte.js";
   import { unseen } from "#lib/transfers/unseen.svelte.js";
   import { crossFade, easeOutSoft, motionFast } from "#lib/ui/motion.js";
@@ -28,6 +32,7 @@
 
   const current = $derived(navCurrent(route(page.url).path)?.path);
   const canary = $derived(app.state?.version.isCanary ?? false);
+  const density = $derived(`Density: ${DENSITY_LABELS[settings.density]}`);
 </script>
 
 {#snippet link(item: NavItem)}
@@ -129,6 +134,28 @@
                   })}>
                 <SunMoonIcon class="size-4 shrink-0" />
                 <span class={["truncate", sidebar.collapsed && "hidden"]}>Theme</span>
+              </button>
+            {/snippet}
+          </Tooltip>
+        </li>
+        <li>
+          <Tooltip text={sidebar.collapsed ? density : undefined} side="right">
+            {#snippet child({ props })}
+              <button
+                {...props}
+                type="button"
+                class="nav-item"
+                aria-label={density}
+                onclick={() =>
+                  (settings.density = settings.density === "compact" ? "comfortable" : "compact")}>
+                {#if settings.density === "compact"}
+                  <Rows4Icon class="size-4 shrink-0" />
+                {:else}
+                  <Rows3Icon class="size-4 shrink-0" />
+                {/if}
+                <span class={["truncate", sidebar.collapsed && "hidden"]}>Density</span>
+                <span class={["ml-auto text-xs text-fg-subtle", sidebar.collapsed && "hidden"]}
+                  >{DENSITY_LABELS[settings.density]}</span>
               </button>
             {/snippet}
           </Tooltip>

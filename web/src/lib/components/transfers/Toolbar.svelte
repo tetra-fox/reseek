@@ -1,8 +1,5 @@
 <script lang="ts">
-  import ArrowDownIcon from "@lucide/svelte/icons/arrow-down";
-  import ArrowUpIcon from "@lucide/svelte/icons/arrow-up";
   import BrushCleaningIcon from "@lucide/svelte/icons/brush-cleaning";
-  import Columns3Icon from "@lucide/svelte/icons/columns-3";
   import MessageSquareIcon from "@lucide/svelte/icons/message-square";
   import PlusIcon from "@lucide/svelte/icons/plus";
   import RotateCwIcon from "@lucide/svelte/icons/rotate-cw";
@@ -12,7 +9,10 @@
   import { MARK_FILTERS, type MarkFilter } from "#lib/analysis/marks.js";
   import { analyzerOffered } from "#lib/analysis/marks.svelte.js";
   import { app } from "#lib/app.svelte.js";
+  import ColumnsMenu from "#lib/components/files/ColumnsMenu.svelte";
+  import ExpandAll from "#lib/components/files/ExpandAll.svelte";
   import LayoutToggle from "#lib/components/files/LayoutToggle.svelte";
+  import SortMenu from "#lib/components/files/SortMenu.svelte";
   import InspectorToggle from "#lib/components/inspector/InspectorToggle.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import * as Filter from "#lib/components/ui/filter/filter.js";
@@ -33,11 +33,14 @@
     TRANSFER_PLACEHOLDER
   } from "#lib/transfers/grid/view.js";
   import { type ChipId, type Direction, isSucceeded, STATE_CHIPS } from "#lib/transfers/states.js";
+  import type { Expansion } from "#lib/tree/expansion.svelte.js";
   import { viewport } from "#lib/ui/viewport.svelte.js";
 
   type Props = {
     direction: Direction;
     view: ViewSettings;
+    /** which groups of the tree layout are open */
+    expansion: Expansion;
     /** how many transfers each state chip stands for, and all of them */
     counts: Record<ChipId | "all", number>;
     /** the filters on, the state and analysis chips' and the text's */
@@ -56,6 +59,7 @@
   let {
     direction,
     view,
+    expansion,
     counts,
     filters,
     markCounts,
@@ -72,10 +76,6 @@
 
   const write = $derived(session.can("ReadWrite"));
   const metrics = $derived(app.metrics?.[direction === "download" ? "downloads" : "uploads"]);
-  const DENSITIES = [
-    { id: "comfortable", label: "Comfortable" },
-    { id: "compact", label: "Compact" }
-  ] as const;
   const GROUPINGS: { id: GroupBy; label: string }[] = $derived([
     { id: "user", label: "User › folder" },
     { id: "folder", label: "Folder" },
@@ -91,7 +91,6 @@
       .filter((s, i, all) => all.findIndex((o) => o.id === s.id) === i)
       .filter((s) => !(s.id === "user" && groupingOf(view) === "user"))
   );
-  const sortLabel = $derived(SORTS.find((s) => s.id === view.sort.id)?.label ?? view.sort.id);
 
   const reset = () => Object.assign(view, defaults(direction));
 
@@ -151,70 +150,29 @@
     {#if view.layout === "tree"}
       <Segmented options={GROUPINGS} bind:value={view.groupBy} label="Group by" size="sm" />
     {/if}
-    <Segmented options={DENSITIES} bind:value={view.density} label="Density" size="sm" />
-    <Menu.Root>
-      <Menu.Trigger>
-        {#snippet child({ props })}
-          <Button {...props} variant="outline" size="sm">
-            {#if view.sort.dir === "asc"}<ArrowUpIcon />{:else}<ArrowDownIcon />{/if}Sort: {sortLabel}
-          </Button>
-        {/snippet}
-      </Menu.Trigger>
-      <Menu.Content align="start" class="min-w-48">
-        <Menu.RadioGroup
-          aria-label="Sort by"
-          bind:value={
-            () => view.sort.id, (id) => (view.sort = { id: id as SortKey, dir: view.sort.dir })
-          }>
-          {#each SORTS as s (s.id)}
-            <Menu.RadioItem value={s.id} closeOnSelect={false}>{s.label}</Menu.RadioItem>
-          {/each}
-        </Menu.RadioGroup>
-        <Menu.Separator />
-        <Menu.RadioGroup
-          aria-label="Direction"
-          bind:value={
-            () => view.sort.dir,
-            (dir) => (view.sort = { id: view.sort.id, dir: dir as "asc" | "desc" })
-          }>
-          <Menu.RadioItem value="asc" closeOnSelect={false}>Ascending</Menu.RadioItem>
-          <Menu.RadioItem value="desc" closeOnSelect={false}>Descending</Menu.RadioItem>
-        </Menu.RadioGroup>
-        {#if viewport.phone}
-          <!-- a phone has no Columns menu, which holds this on a wider screen -->
-          <Menu.Separator />
-          <Menu.Item onSelect={reset}>Reset view</Menu.Item>
-        {/if}
-      </Menu.Content>
-    </Menu.Root>
+    <SortMenu
+      options={SORTS}
+      sort={view.sort}
+      onsort={(sort) => (view.sort = { id: sort.id as SortKey, dir: sort.dir })}>
+      {#if viewport.phone}
+        <!-- a phone has no Columns menu, which holds this on a wider screen -->
+        <Menu.Item onSelect={reset}>Reset view</Menu.Item>
+      {/if}
+    </SortMenu>
     <!-- a phone shows a fixed few columns, so it has nothing to choose -->
     {#if !viewport.phone}
-      <Menu.Root>
-        <Menu.Trigger>
-          {#snippet child({ props })}
-            <Button {...props} variant="outline" size="sm"><Columns3Icon />Columns</Button>
-          {/snippet}
-        </Menu.Trigger>
-        <Menu.Content align="start" class="min-w-48">
-          {#each view.columns as column (column.id)}
-            {@const known = COLUMNS.find((c) => c.id === column.id)}
-            {#if known && !known.always}
-              <Menu.Item
-                closeOnSelect={false}
-                onSelect={() => (column.visible = !column.visible)}
-                aria-checked={column.visible}
-                role="menuitemcheckbox">
-                <span
-                  class={["rounded-sm size-3 border", column.visible && "border-accent bg-accent"]}
-                ></span>
-                {known.label}
-              </Menu.Item>
-            {/if}
-          {/each}
-          <Menu.Separator />
-          <Menu.Item onSelect={reset}>Reset view</Menu.Item>
-        </Menu.Content>
-      </Menu.Root>
+      <ColumnsMenu
+        columns={view.columns.flatMap((column) => {
+          const known = COLUMNS.find((c) => c.id === column.id);
+          return known && !known.always
+            ? [{ id: column.id, label: known.label, visible: column.visible }]
+            : [];
+        })}
+        ontoggle={(id, visible) => (view.columns.find((c) => c.id === id)!.visible = visible)}
+        onreset={reset} />
+    {/if}
+    {#if view.layout === "tree"}
+      <ExpandAll {expansion} />
     {/if}
     <InspectorToggle />
     {#if write}

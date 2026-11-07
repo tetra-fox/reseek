@@ -53,11 +53,6 @@
 
   let { rows, searchId, canDownload, inspect, ondismiss, allFiles, selected }: Props = $props();
 
-  /** the file's own cells, drawn as every list of remote files draws them */
-  const FILE_CELLS: FileColumn[] = ["name", "size", "quality", "length"];
-  /** a line's height in rem, the same on a phone, which scrolls the columns sideways */
-  const LINE_REM = { wide: 1.75, phone: 1.75 };
-
   followDownloads();
   /** a list has no folders to open, the tree it is drawn by wants one */
   const expansion = new Expansion(true);
@@ -70,8 +65,21 @@
     setSort: (sort) => (resultList.sort = sort as typeof resultList.sort),
     dragged: () => resultList.dragged,
     drag: (id, width) => (resultList.dragged[id as ResultColumn] = width),
+    shown: () =>
+      RESULT_COLUMNS.filter((c) => !resultList.hidden.includes(c.id as ResultColumn)).map(
+        (c) => c.id
+      ),
     clearable: true
   });
+  /** the columns shown, which the row's cells follow */
+  const shows = $derived(new Set(grid.columns.map((c) => c.id)));
+  /** the file's own cells, drawn as every list of remote files draws them */
+  const fileCells = $derived<FileColumn[]>([
+    "name",
+    "size",
+    ...(shows.has("bitrate") ? (["quality"] as const) : []),
+    ...(shows.has("length") ? (["length"] as const) : [])
+  ]);
 
   // while the user holds the list still, rows keep their places and new ones go below
   const hold = heldOrder<ResultRow>((r) => r.key);
@@ -188,7 +196,7 @@
   {selected}
   idOf={(r) => r.key}
   nameOf={(line) => (line.kind === "item" ? getFileName(line.item.file.filename) : "")}
-  lineRem={LINE_REM}
+  oneLine
   framed={false}
   class="tabular-nums"
   onopen={canDownload ? (r) => void downloadNow(selected.size > 1 ? chosen : [r]) : undefined}
@@ -222,25 +230,33 @@
       <span class="min-w-0 truncate"><Username name={row.username} folder={row.folder} /></span>
       <Flag code={row.country} />
     </span>
-    <span role="gridcell" class="truncate px-2 text-right tabular-nums"
-      >{formatSpeed(row.speed)}</span>
-    <span role="gridcell" class="truncate px-2 text-right tabular-nums">{row.queue}</span>
-    <span role="gridcell" class={["px-2", row.free ? "text-success" : "text-fg-muted"]}>
-      {row.free ? "Yes" : "No"}
-    </span>
+    {#if shows.has("speed")}
+      <span role="gridcell" class="truncate px-2 text-right tabular-nums"
+        >{formatSpeed(row.speed)}</span>
+    {/if}
+    {#if shows.has("queue")}
+      <span role="gridcell" class="truncate px-2 text-right tabular-nums">{row.queue}</span>
+    {/if}
+    {#if shows.has("free")}
+      <span role="gridcell" class={["px-2", row.free ? "text-success" : "text-fg-muted"]}>
+        {row.free ? "Yes" : "No"}
+      </span>
+    {/if}
     <FileCells
       file={row.file}
       username={row.username}
-      columns={FILE_CELLS}
+      columns={fileCells}
       selected={selected.has(row.key)}
       ontick={tick} />
-    <Tooltip text={row.folder} clipped>
-      {#snippet child({ props })}
-        <span {...props} role="gridcell" class="truncate px-2 font-mono text-xs text-fg-muted">
-          {row.folder}
-        </span>
-      {/snippet}
-    </Tooltip>
+    {#if shows.has("folder")}
+      <Tooltip text={row.folder} clipped>
+        {#snippet child({ props })}
+          <span {...props} role="gridcell" class="truncate px-2 font-mono text-xs text-fg-muted">
+            {row.folder}
+          </span>
+        {/snippet}
+      </Tooltip>
+    {/if}
     <span role="gridcell" class="flex items-center justify-end gap-0.5 pr-1 row-action">
       {#if canDownload}
         <Tooltip text={`${A.downloadFolder.label}: ${folderText(folder)}`}>
