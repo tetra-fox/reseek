@@ -4,6 +4,10 @@
 # `just test` finds everything compiled
 tested := "--workspace --all-features"
 
+# what the dev recipes run keeps its files here, gitignored: the daemon its config, data and logs,
+# soulfind its database
+devdir := justfile_directory() / ".dev"
+
 default:
     @just --list
 
@@ -24,10 +28,11 @@ dev: web-install
     {{ just_executable() }} --justfile {{ justfile() }} dev-daemon &
     {{ just_executable() }} --justfile {{ justfile() }} dev-web
 
-# its flags are in crates/reseek-bin/dev-flags, which the cli tests start it with
+# its flags are in crates/reseek-bin/dev-flags, which the cli tests start it with; its files are
+# in .dev/daemon
 [doc("the daemon without its built-in ui, restarted on change")]
 dev-daemon:
-    watchexec --restart --watch crates --exts rs,toml -- cargo run -p reseek-bin -- $(cat crates/reseek-bin/dev-flags)
+    watchexec --restart --watch crates --exts rs,toml -- cargo run -p reseek-bin -- --app-dir "{{ devdir }}/daemon" $(cat crates/reseek-bin/dev-flags)
 
 # the vite ui, proxying the api to the daemon
 dev-web: web-install
@@ -239,10 +244,10 @@ soulseek-rs-bin:
 # the gate for every push
 ci: lint test api-check web-smoke e2e
 
-# soulfind on its default port 2242 with its data under target/soulfind, for trying things by hand
+# soulfind on its default port 2242 with its data under .dev/soulfind, for trying things by hand
 soulfind:
-    mkdir -p target/soulfind
-    "${SOULFIND_BIN:-soulfind}" -p 2242 -d target/soulfind/soulfind.db
+    mkdir -p "{{ devdir }}/soulfind"
+    "${SOULFIND_BIN:-soulfind}" -p 2242 -d "{{ devdir }}/soulfind/soulfind.db"
 
 # the fuzz recipes need nightly cargo and cargo-fuzz: run them inside `nix develop .#fuzz`
 

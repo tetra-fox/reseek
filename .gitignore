@@ -17,6 +17,9 @@
 # release binaries
 /dist/
 
+# the files of `just dev` and `just soulfind`
+/.dev/
+
 # web
 /web/node_modules/
 /web/build/
