@@ -162,16 +162,7 @@ mod tests {
 
   #[test]
   fn every_field_error_is_reported_at_once() {
-    let message = error(parse_quote!(
-      struct A {
-        #[cascade(apply = "never")]
-        a: u8,
-        #[cascade(kind = "color")]
-        b: u8,
-      }
-    ));
-    assert!(message.contains("unknown apply"), "{message}");
-    let all = expand(&parse_quote!(
+    let errors = expand(&parse_quote!(
       struct A {
         #[cascade(apply = "never")]
         a: u8,
@@ -180,6 +171,8 @@ mod tests {
       }
     ))
     .unwrap_err();
-    assert_eq!(all.into_iter().count(), 2);
+    let message = errors.to_string();
+    assert!(message.contains("unknown apply"), "{message}");
+    assert_eq!(errors.into_iter().count(), 2);
   }
 }

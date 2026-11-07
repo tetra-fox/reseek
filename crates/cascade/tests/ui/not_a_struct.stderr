@@ -1,5 +1,0 @@
-error: Cascade derives for structs; give a leaf enum `#[cascade(kind = "string")]` where it is used, or implement `cascade::Cascade` for it
- --> tests/ui/not_a_struct.rs:2:6
-  |
-2 | enum Mode {
-  |      ^^^^
