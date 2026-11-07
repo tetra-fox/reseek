@@ -441,6 +441,21 @@
   backdrop-filter: none;
 }
 
+/* text whose weight follows its state, always as wide as its medium weight so the change moves
+   nothing beside it. The element repeats its text in data-text; screen readers skip the copy */
+@utility weight-steady {
+  &::after {
+    content: attr(data-text) / "";
+    display: block;
+    height: 0;
+    overflow: hidden;
+    visibility: hidden;
+    font-weight: var(--font-weight-medium);
+    pointer-events: none;
+    user-select: none;
+  }
+}
+
 /* the nav link for where the page is, marked with aria-current. No change of weight, which would
    move the links beside it. The frame is drawn inside the link, so a scrolling strip never cuts
    it off */

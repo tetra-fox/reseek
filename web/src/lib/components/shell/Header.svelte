@@ -56,7 +56,11 @@
           {#if last}
             <Tooltip text={crumb.copy} clipped={crumb.copy === crumb.label}>
               {#snippet child({ props })}
-                <span {...props} aria-current="page" class="truncate font-medium">
+                <span
+                  {...props}
+                  aria-current="page"
+                  data-text={crumb.label}
+                  class="weight-steady truncate px-1 font-medium">
                   {crumb.label}
                 </span>
               {/snippet}
@@ -85,17 +89,22 @@
                     {...props}
                     href={crumb.href}
                     onclick={crumb.onclick}
-                    class="max-w-48 truncate rounded-badge px-1 text-fg-muted hover:bg-hover hover:text-fg"
+                    data-text={crumb.label}
+                    class="weight-steady max-w-48 truncate rounded-badge px-1 text-fg-muted hover:bg-hover hover:text-fg"
                     >{crumb.label}</a>
                 {:else if crumb.onclick}
                   <button
                     {...props}
                     type="button"
                     onclick={crumb.onclick}
-                    class="max-w-48 truncate rounded-badge px-1 text-fg-muted hover:bg-hover hover:text-fg"
+                    data-text={crumb.label}
+                    class="weight-steady max-w-48 truncate rounded-badge px-1 text-fg-muted hover:bg-hover hover:text-fg"
                     >{crumb.label}</button>
                 {:else}
-                  <span {...props} class="max-w-48 truncate px-1 text-fg-muted">{crumb.label}</span>
+                  <span
+                    {...props}
+                    data-text={crumb.label}
+                    class="weight-steady max-w-48 truncate px-1 text-fg-muted">{crumb.label}</span>
                 {/if}
               {/snippet}
             </Tooltip>

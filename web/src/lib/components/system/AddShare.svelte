@@ -191,9 +191,10 @@
           <button
             type="button"
             class={[
-              "min-w-0 truncate text-left hover:underline",
+              "weight-steady min-w-0 truncate text-left hover:underline",
               node.path === chosen && "font-medium text-accent"
             ]}
+            data-text={node.label}
             aria-pressed={node.path === chosen}
             onclick={() => (chosen = node.path)}>
             {node.label}
