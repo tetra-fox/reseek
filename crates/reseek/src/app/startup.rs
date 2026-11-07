@@ -22,7 +22,7 @@ pub(super) fn log_startup(
   let info = version::info();
   info!(version = info.full, "Version");
   if info.is_development {
-    warn!("This is a Development build; YMMV");
+    warn!("You are running a development build of reseek.");
   }
   let processors = std::thread::available_parallelism().map_or(1, |n| n.get());
   info!(
