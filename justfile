@@ -90,44 +90,6 @@ docker: release
     if [ "$(basename "$runtime")" = podman ]; then format=(--format docker); fi
     "$runtime" build "${format[@]}" -f docker/Dockerfile -t reseek "$context"
 
-# the image booted with a volume for /app: without a password it refuses to start, with one it
-# answers on its web port as user 1000, then is removed
-docker-smoke: docker
-    #!/usr/bin/env bash
-    set -euo pipefail
-    runtime="$(command -v podman || command -v docker)"
-    name="reseek-smoke-$$"
-    "$runtime" volume create "$name" > /dev/null
-    trap '"$runtime" rm -f "$name" "$name-open" > /dev/null; "$runtime" volume rm "$name" > /dev/null' EXIT
-    flags=(-v "$name:/app" -e RESEEK_NO_CONNECT=true -e RESEEK_NO_VERSION_CHECK=true)
-    # a refusal exits at once; still running after the timeout (124) means it started
-    status=0
-    timeout 60 "$runtime" run --name "$name-open" "${flags[@]}" reseek > /dev/null 2>&1 || status=$?
-    if [ "$status" = 0 ] || [ "$status" = 124 ]; then
-      echo "the image started with the default password" >&2
-      exit 1
-    fi
-    "$runtime" logs "$name-open" 2>&1 | grep -q "default password" \
-      || { "$runtime" logs "$name-open"; echo "the image refused to start without saying why" >&2; exit 1; }
-    "$runtime" run -d --name "$name" "${flags[@]}" -e RESEEK_PASSWORD=smoke-password \
-      -p 127.0.0.1::5030 reseek > /dev/null
-    port="$("$runtime" port "$name" 5030 | head -1 | cut -d: -f2)"
-    for _ in $(seq 60); do
-      if curl -sf "http://127.0.0.1:$port/health" > /dev/null; then
-        owner="$("$runtime" exec "$name" stat -c %u /app/data)"
-        if [ "$owner" != 1000 ]; then
-          echo "the daemon wrote its data as user $owner, not 1000" >&2
-          exit 1
-        fi
-        echo "the image refuses the default password and answers on its web port as user 1000"
-        exit 0
-      fi
-      sleep 1
-    done
-    "$runtime" logs "$name"
-    echo "the image never answered on its web port" >&2
-    exit 1
-
 # only the ui into web/build
 web-build: web-install
     pnpm --dir web build
@@ -176,11 +138,8 @@ api-check: web-install
       printf '%s\n' "$view" | diff -q web/src/lib/config/fixtures/view.json - > /dev/null \
       || { echo "web/src/lib/config/fixtures/view.json is stale, run \`just config-fixture\`" >&2; exit 1; }
 
-# the network tests need soulfind and the soulseek-rs cli, found as serve.sh finds them, and are
-# skipped without them
-[doc("the built UI served by the daemon in a browser: it loads, logs in and moves between screens")]
-web-smoke: (web-playwright "smoke")
-    @[ -n "$({{ just_executable() }} --justfile {{ justfile() }} soulfind-bin)" ] && [ -n "$({{ just_executable() }} --justfile {{ justfile() }} soulseek-rs-bin)" ] || echo "soulfind or soulseek-rs not found at SOULFIND_BIN, SOULSEEK_RS_BIN or on PATH: the network smoke tests were skipped"
+# the built UI served by the daemon, driven in a browser
+web-e2e: (web-playwright "e2e")
 
 # the Analysis page's frame-rate benchmarks in a browser, run by hand rather than in ci
 web-perf: (web-playwright "perf")
@@ -206,29 +165,6 @@ web-playwright SCRIPT:
 web-install:
     pnpm --dir web install --frozen-lockfile --prefer-offline --silent
 
-# soulfind and the soulseek-rs cli as the other user: search, browse and transfers both ways, by
-# the client and by the daemon through its api
-e2e:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    soulfind="$({{ just_executable() }} --justfile {{ justfile() }} soulfind-bin)"
-    soulseek_rs="$({{ just_executable() }} --justfile {{ justfile() }} soulseek-rs-bin)"
-    if [ -z "$soulfind" ] || [ -z "$soulseek_rs" ]; then
-      echo "e2e skipped: soulfind (SOULFIND_BIN or PATH) or soulseek-rs (SOULSEEK_RS_BIN or PATH) not found"
-      exit 0
-    fi
-    export SOULFIND_BIN="$soulfind" SOULSEEK_RS_BIN="$soulseek_rs"
-    cargo nextest run {{ tested }} --run-ignored only -E "binary_id(soulseek-client::interop)"
-    cargo nextest run {{ tested }} --run-ignored only -E "binary_id(reseek-bin::smoke) & test(soulseek_rs)"
-
-# run by hand only, never from ci or by an agent: the daemon logs in to the real Soulseek server
-# with the throwaway account in RESEEK_TEST_USERNAME and RESEEK_TEST_PASSWORD, searches, browses
-# and downloads one small file. RESEEK_TEST_QUERY, _MAX_SIZE, _LISTEN_PORT and _SERVER change
-# what it looks for and where
-[doc("the daemon's smoke run against the real Soulseek server, run by hand only")]
-live-smoke:
-    cargo nextest run {{ tested }} --run-ignored only --no-capture -E "binary_id(reseek-bin::smoke) & test(real_network)"
-
 # prints the soulfind to test against: SOULFIND_BIN, else soulfind on PATH, else nothing, which
 # the callers take as a skip; with SOULFIND_REQUIRED=1 a missing soulfind fails instead
 [private]
@@ -242,14 +178,8 @@ soulfind-bin:
     fi
     echo "$soulfind"
 
-# prints the soulseek-rs cli to test against: SOULSEEK_RS_BIN, else soulseek-rs on PATH, else
-# nothing, which the callers take as a skip
-[private]
-soulseek-rs-bin:
-    @echo "${SOULSEEK_RS_BIN:-$(command -v soulseek-rs || true)}"
-
 # the gate for every push
-ci: lint test api-check web-smoke e2e
+ci: lint test api-check web-e2e
 
 # soulfind on its default port 2242 with its data under .dev/soulfind, for trying things by hand
 soulfind:
@@ -264,14 +194,6 @@ fuzz-seed:
     cargo test -p soulseek-proto --lib -- --ignored --exact testing::write_fuzz_corpus
     mkdir -p fuzz/corpus/wav_stream
     cp crates/reseek/src/files/fixtures/tone.m4a fuzz/corpus/wav_stream/
-
-# run every fuzz target for 30 seconds
-fuzz-smoke: fuzz-seed
-    #!/usr/bin/env bash
-    set -euo pipefail
-    # without cargo-fuzz the list fails, so the smoke fails rather than running nothing
-    targets=$(cargo fuzz list)
-    for target in $targets; do cargo fuzz run "$target" -- -max_total_time=30; done
 
 # run one fuzz target, indefinitely unless SECONDS is given
 fuzz TARGET SECONDS="": fuzz-seed

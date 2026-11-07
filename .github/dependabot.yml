@@ -26,7 +26,7 @@ updates:
       - dependency-name: "*"
         update-types: [version-update:semver-major]
   # the image's base; ci does not build the image, so this bump is merged by hand after
-  # `just docker-smoke`
+  # building it with `just docker` and starting it
   - package-ecosystem: docker
     directory: /docker
     schedule:

@@ -15,8 +15,6 @@
   version,
   # the commit the build is of, shown beside the version; none outside a git checkout
   revision ? null,
-  # the tests of the package beyond its own suite, such as the NixOS VM test
-  tests ? { },
   nix-update-script,
 }:
 let
@@ -75,7 +73,7 @@ rustPlatform.buildRustPackage {
   '';
 
   passthru = {
-    inherit web tests;
+    inherit web;
     updateScript = nix-update-script { };
   };
 

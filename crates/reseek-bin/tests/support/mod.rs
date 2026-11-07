@@ -14,7 +14,10 @@ use std::time::{Duration, Instant};
 
 use api_client::Client;
 use api_types::state::State;
-use api_types::transfers::{Transfer, TransferDirection, TransferStates};
+use api_types::transfers::{
+  EnqueueDownloadFile, EnqueueDownloadGroup, EnqueueDownloadJobRequest, Transfer,
+  TransferDirection, TransferStates,
+};
 use soulfind::{PASSWORD, Soulfind};
 use uuid::Uuid;
 
@@ -24,13 +27,37 @@ use uuid::Uuid;
 pub mod client;
 
 #[allow(unused_imports, reason = "each test binary uses a part of it")]
-pub use client::{free_port, options as quiet, peer, soulfind, soulseek_rs, transfers};
+pub use client::{free_port, options as quiet, peer, soulfind, transfers};
 
-/// The smoke run through the API, shared with the smoke program.
-pub mod smoke;
+/// A download job of `filename`, `size` bytes, from `username`.
+pub fn job(username: &str, filename: &str, size: u64) -> EnqueueDownloadJobRequest {
+  EnqueueDownloadJobRequest {
+    groups: vec![EnqueueDownloadGroup {
+      username: username.to_string(),
+      files: vec![EnqueueDownloadFile {
+        filename: filename.to_string(),
+        size,
+      }],
+      destination: None,
+      search_id: None,
+    }],
+  }
+}
 
-#[allow(unused_imports, reason = "each test binary uses a part of it")]
-pub use smoke::{enqueue, job};
+/// Asks the daemon to download `filename` of `size` bytes from `username` as a job of its own,
+/// and returns the download's id.
+pub async fn enqueue(api: &Client, username: &str, filename: &str, size: u64) -> Uuid {
+  let answer = api
+    .enqueue_download_job(&job(username, filename, size))
+    .await
+    .unwrap();
+  let group = &answer.groups[0];
+  assert!(
+    group.error.is_none() && group.failures.is_empty(),
+    "not enqueued: {group:?}"
+  );
+  group.enqueued[0].id
+}
 
 /// How long a test waits for something that should happen promptly.
 pub const PATIENCE: Duration = Duration::from_secs(20);

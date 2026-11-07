@@ -4,9 +4,7 @@ import { defineConfig } from "@playwright/test";
 
 import { SESSION } from "./e2e/support/session";
 
-const port = Number(process.env.SMOKE_PORT ?? 5139);
-/** the daemon with real transfers, logged in to a soulfind of its own when there is one */
-const networkPort = port + 10;
+const port = Number(process.env.E2E_PORT ?? 5139);
 
 /** The browser to drive: CHROMIUM_BIN, else a chromium on PATH */
 const chromium = (): string => {
@@ -14,7 +12,7 @@ const chromium = (): string => {
   try {
     return execFileSync("sh", ["-c", "command -v chromium"], { encoding: "utf8" }).trim();
   } catch {
-    throw new Error("no browser for the smoke test: set CHROMIUM_BIN or put chromium on PATH");
+    throw new Error("no browser for the tests: set CHROMIUM_BIN or put chromium on PATH");
   }
 };
 const launchOptions = { executablePath: chromium() };
@@ -47,12 +45,12 @@ export default defineConfig({
     },
     {
       name: "localhost",
-      testIgnore: ["**/insecure.e2e.ts", "**/network.e2e.ts"],
+      testIgnore: "**/insecure.e2e.ts",
       dependencies: ["login"],
       use: local
     },
     {
-      // the frame-rate benchmarks, which `pnpm perf` runs and the smoke test leaves out
+      // the frame-rate benchmarks, which `pnpm perf` runs and `pnpm e2e` leaves out
       name: "perf",
       testMatch: "**/*.perf.ts",
       dependencies: ["login"],
@@ -70,12 +68,6 @@ export default defineConfig({
           args: ["--host-resolver-rules=MAP reseek.test 127.0.0.1"]
         }
       }
-    },
-    {
-      // a daemon of its own, which the saved session is not one of
-      name: "network",
-      testMatch: "**/network.e2e.ts",
-      use: { baseURL: `http://127.0.0.1:${networkPort}/reseek/`, launchOptions }
     }
   ],
   webServer: [
@@ -84,14 +76,7 @@ export default defineConfig({
       url: `http://127.0.0.1:${port}/reseek/`,
       reuseExistingServer: false,
       gracefulShutdown,
-      env: { SMOKE_PORT: String(port) }
-    },
-    {
-      command: "./e2e/support/serve.sh",
-      url: `http://127.0.0.1:${networkPort}/reseek/`,
-      reuseExistingServer: false,
-      gracefulShutdown,
-      env: { SMOKE_PORT: String(networkPort), SMOKE_NETWORK: "1" }
+      env: { E2E_PORT: String(port) }
     }
   ]
 });

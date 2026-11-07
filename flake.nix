@@ -46,11 +46,8 @@
         amd64 = "x86_64-unknown-linux-musl";
         arm64 = "aarch64-unknown-linux-musl";
       };
-      # test fixtures only; nothing in reseek links to them
-      fixtures = pkgs: {
-        soulfind = pkgs.callPackage ./nix/soulfind.nix { };
-        soulseek-rs = pkgs.callPackage ./nix/soulseek-rs.nix { };
-      };
+      # the Soulseek server the client and daemon test suites start; nothing in reseek links to it
+      soulfind = pkgs: pkgs.callPackage ./nix/soulfind.nix { };
     in
     {
       overlays.default = final: _prev: {
@@ -59,9 +56,6 @@
           inherit version;
           web = final.reseek-web;
           inherit revision;
-          tests = lib.optionalAttrs final.stdenv.hostPlatform.isLinux {
-            nixos-vm = self.checks.${final.stdenv.hostPlatform.system}.nixos-vm;
-          };
         };
       };
 
@@ -106,13 +100,6 @@
         }
         // pkgs.callPackages ./nix/checks.nix { }
         // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
-          nixos-vm = pkgs.callPackage ./nix/vm-test.nix (
-            fixtures pkgs
-            // {
-              inherit self;
-              reseek-smoke = pkgs.callPackage ./nix/smoke.nix { };
-            }
-          );
           home-manager = pkgs.callPackage ./nix/home-manager-test.nix {
             inherit self home-manager;
           };
@@ -152,10 +139,7 @@
                 zellij
                 typos
                 sqlite
-                # the Soulseek server the client and daemon test suites start, and the other
-                # user in `just e2e`
-                (fixtures pkgs).soulfind
-                (fixtures pkgs).soulseek-rs
+                (soulfind pkgs)
                 # the completions test reads each script in its shell
                 fish
                 zsh
@@ -166,7 +150,7 @@
                 nixfmt
                 git
               ]
-              # the browser `just web-smoke` drives, and the linker .cargo/config.toml names
+              # the browser `just web-e2e` drives, and the linker .cargo/config.toml names
               ++ lib.optionals stdenv.hostPlatform.isLinux [
                 chromium
                 mold

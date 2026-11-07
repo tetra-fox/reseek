@@ -6,7 +6,6 @@
 pub mod peer;
 pub mod scripted;
 pub mod soulfind;
-pub mod soulseek_rs;
 pub mod transfers;
 pub mod tree;
 
