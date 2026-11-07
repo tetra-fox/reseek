@@ -20,6 +20,7 @@
   import UserMenuItems from "#lib/components/users/UserMenuItems.svelte";
   import { confirmation } from "#lib/feedback/confirm.svelte.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
+  import { saveUrl } from "#lib/format.js";
   import { href, segment } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
   import { canManage } from "#lib/users/actions.js";
@@ -116,10 +117,8 @@
   <UserMenuItems name={target.name} only={["profile", "shares", "search"]} />
   {#if canManage(target.name)}<UserManageItems name={target.name} />{/if}
 {/if}
-<Menu.Item onSelect={() => window.location.assign(exportUrl("text"))}
-  ><DownloadIcon />Export as text</Menu.Item>
-<Menu.Item onSelect={() => window.location.assign(exportUrl("json"))}
-  ><DownloadIcon />Export as JSON</Menu.Item>
+<Menu.Item onSelect={() => saveUrl(exportUrl("text"))}><DownloadIcon />Export as text</Menu.Item>
+<Menu.Item onSelect={() => saveUrl(exportUrl("json"))}><DownloadIcon />Export as JSON</Menu.Item>
 {#if write}
   <Menu.Separator />
   <Menu.Item onSelect={clear}><EraserIcon />Clear history</Menu.Item>

@@ -40,7 +40,7 @@
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { FILE_ACTIONS as A } from "#lib/files/actions.js";
   import { folderCaption } from "#lib/files/summary.js";
-  import { dateTime, formatBytes, plural } from "#lib/format.js";
+  import { dateTime, formatBytes, plural, saveUrl } from "#lib/format.js";
   import { inspector, useInspector } from "#lib/inspector/inspector.svelte.js";
   import type { ActiveFilter } from "#lib/lists/filtered.js";
   import { href } from "#lib/nav.js";
@@ -228,7 +228,7 @@
   };
   const save = async (e: Entry) => {
     const url = await fileUrl(root, e.path, "attachment");
-    if (url.ok) window.location.assign(url.data);
+    if (url.ok) saveUrl(url.data);
     else toast(url.error, "error");
   };
 
@@ -412,7 +412,7 @@
           }}><InfoIcon />Details</Menu.Item>
       {:else}
         <Menu.Item onSelect={() => void open(e)}><FolderOpenIcon />Open</Menu.Item>
-        <Menu.Item onSelect={() => window.location.assign(archiveUrl(root, e.path))}
+        <Menu.Item onSelect={() => saveUrl(archiveUrl(root, e.path))}
           ><FileArchiveIcon />Download as zip</Menu.Item>
         {#if write && analyzerOffered()}
           <Menu.Item onSelect={() => void analyzeFolder(e)}

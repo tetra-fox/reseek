@@ -232,6 +232,20 @@ export const listText = (parts: string[]) => LIST.format(parts);
 
 export const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+/**
+ * Saves what `url` serves as a file, under `filename` or the name the response gives. A link with
+ * `download` saves without navigating: a navigation, which location.assign starts, can cancel the
+ * page's open requests, the live stream among them, before the browser sees it is a download
+ */
+export const saveUrl = (url: string, filename = "") => {
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+};
+
 /** Hands `data` to the browser as a file to save */
 export const downloadFile = (
   data: BlobPart,
@@ -239,12 +253,7 @@ export const downloadFile = (
   mime = "application/octet-stream"
 ) => {
   const url = URL.createObjectURL(new Blob([data], { type: mime }));
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.append(link);
-  link.click();
-  link.remove();
+  saveUrl(url, filename);
   URL.revokeObjectURL(url);
 };
 

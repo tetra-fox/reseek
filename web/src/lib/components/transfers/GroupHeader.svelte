@@ -29,7 +29,7 @@
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { FILE_ACTIONS as A } from "#lib/files/actions.js";
   import { folderLinks, remoteFolder } from "#lib/files/links.js";
-  import { formatBytes, formatDuration, plural } from "#lib/format.js";
+  import { formatBytes, formatDuration, plural, saveUrl } from "#lib/format.js";
   import { href } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
   import { act, folderOf, openFolder } from "#lib/transfers/actions.js";
@@ -88,7 +88,7 @@
     if (list.some((t) => !isSucceeded(t.state)))
       toast("Only finished files are included in the zip");
     const name = local.split("/").pop() || "downloads";
-    window.location.assign(
+    saveUrl(
       `${root()}/api/v0/files/downloads/directories/${encodePath(local)}/archive?name=${encodeURIComponent(name)}`
     );
   };

@@ -3,7 +3,7 @@ import { goto } from "$app/navigation";
 import { app } from "#lib/app.svelte.js";
 import { copyText } from "#lib/feedback/clipboard.svelte.js";
 import { toast } from "#lib/feedback/toast.svelte.js";
-import { downloadFile } from "#lib/format.js";
+import { downloadFile, saveUrl } from "#lib/format.js";
 import { href } from "#lib/nav.js";
 import { blocking } from "#lib/users/block.svelte.js";
 
@@ -38,7 +38,7 @@ export const open = async (t: Transfer) => {
 /** Saves a finished download to this device */
 export const saveToDevice = async (t: Transfer) => {
   const url = await contentUrl(t, "attachment");
-  if (url.ok) window.location.assign(url.data);
+  if (url.ok) saveUrl(url.data);
   else toast(url.error, "error");
 };
 
