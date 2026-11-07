@@ -76,8 +76,11 @@ describe("a username", () => {
     );
     expect(card()!.textContent).toContain("plays bass\nlikes dub");
     expect(card()!.textContent).toContain("owes me a record");
-    const dot = card()!.querySelector<HTMLElement>('[title="Upload group friends"] span');
-    expect(dot?.style.backgroundColor).toBe("blue");
+    // the face's initial has a background color of its own, so the dot is found in the badge
+    const badge = [...card()!.querySelectorAll<HTMLElement>("span")].find(
+      (s) => s.textContent.trim() === "friends"
+    );
+    expect(badge?.querySelector<HTMLElement>("span")?.style.backgroundColor).toBe("blue");
 
     link.dispatchEvent(pointer("pointerleave", "mouse"));
     await vi.advanceTimersByTimeAsync(CLOSE_DELAY_MS);

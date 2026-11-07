@@ -18,7 +18,7 @@
   import { clock } from "#lib/ui/clock.svelte.js";
   import { canManage, configBlocked, reach, setBuddy, USER_ACTIONS } from "#lib/users/actions.js";
   import { nameColor } from "#lib/users/colors.js";
-  import { firstLines, ownProfile } from "#lib/users/profile.svelte.js";
+  import { firstLines, ownProfile, pictureOf } from "#lib/users/profile.svelte.js";
   import { type UserSummary, users } from "#lib/users/users.svelte.js";
   import { BUDDY, CONFIG_BLOCKED } from "#lib/wording.js";
 
@@ -66,9 +66,7 @@
   $effect(() => {
     if (own) ownProfile.need();
   });
-  const pictureUrl = $derived(
-    draft ? draft.pictureUrl : own ? ownProfile.data?.pictureUrl : user?.info?.pictureUrl
-  );
+  const pictureUrl = $derived(draft ? draft.pictureUrl : pictureOf(name, user));
   const description = $derived.by(() => {
     const text = draft ? draft.description : own ? ownProfile.data?.description : null;
     return text === null || text === undefined ? user?.description : firstLines(text, 3) || null;
@@ -86,9 +84,19 @@
 
 <div class="flex flex-col gap-3 text-sm">
   <div class="flex items-center gap-3">
-    <Avatar {name} {pictureUrl} src={draft?.src} class="size-12" />
+    <!-- the face and the name go to the profile, as the Profile button does; a draft is our own
+         profile being edited, which a link would leave -->
+    <Avatar {name} {pictureUrl} src={draft?.src} link={!draft} class="size-12" />
     <div class="flex min-w-0 flex-col">
-      <span class="font-mono font-medium wrap-anywhere" style:color={nameColor(name)}>{name}</span>
+      {#if draft}
+        <span class="font-mono font-medium wrap-anywhere" style:color={nameColor(name)}
+          >{name}</span>
+      {:else}
+        <a
+          href={userHref(name)}
+          class="font-mono font-medium wrap-anywhere underline-offset-2 hover:underline"
+          style:color={nameColor(name)}>{name}</a>
+      {/if}
       <span class="flex items-center gap-1.5 text-xs text-fg-muted">
         <span class={["size-2 rounded-full", presence.dot]}></span>
         {presence.text}
@@ -114,7 +122,7 @@
             text={[block.reason, block.expiresAt && `expires ${ago(block.expiresAt, clock.now)}`]
               .filter(Boolean)
               .join(", ") || undefined}
-            hint>
+            spoken>
             {#snippet child({ props })}
               <Badge {...props} tone="danger">blocked</Badge>
             {/snippet}
@@ -173,18 +181,20 @@
     <span class="ml-auto flex">
       {#if manageable}
         {@const byConfig = configBlocked(user?.block)}
-        <Tooltip text={byConfig ? undefined : user?.block ? "Unblock" : "Block"}>
+        <!-- a disabled button takes no focus, so the reason is on a span around it -->
+        <Tooltip text={byConfig ? CONFIG_BLOCKED : user?.block ? "Unblock" : "Block"}>
           {#snippet child({ props })}
-            <Button
-              {...props}
-              variant="ghost"
-              size="icon-sm"
-              aria-label={user?.block ? "Unblock" : "Block"}
-              disabled={byConfig}
-              title={byConfig ? CONFIG_BLOCKED : undefined}
-              onclick={onblock}>
-              {#if user?.block}<ShieldCheckIcon />{:else}<BanIcon />{/if}
-            </Button>
+            <span {...byConfig ? props : {}} class="inline-flex">
+              <Button
+                {...byConfig ? {} : props}
+                variant="ghost"
+                size="icon-sm"
+                aria-label={user?.block ? "Unblock" : "Block"}
+                disabled={byConfig}
+                onclick={onblock}>
+                {#if user?.block}<ShieldCheckIcon />{:else}<BanIcon />{/if}
+              </Button>
+            </span>
           {/snippet}
         </Tooltip>
       {/if}

@@ -65,7 +65,7 @@
     over = false;
     take(e.dataTransfer?.files[0]);
   }}>
-  <Avatar {name} {pictureUrl} {src} {alt} class="size-24 text-3xl" />
+  <Avatar {name} {pictureUrl} {src} {alt} link={false} class="size-24 text-3xl" />
   <div class="flex min-w-48 flex-1 flex-col gap-2">
     <p class="text-sm">{over ? "Drop to use this picture" : "Drag a picture here"}</p>
     <p class="text-xs text-fg-muted">

@@ -13,6 +13,7 @@
   import Notice from "#lib/components/ui/Notice.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Textarea from "#lib/components/ui/Textarea.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { ago, dateTime, listText, plural } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
@@ -182,35 +183,48 @@
             <Username name={b.username} />
             {#if b.source === "config"}<Badge tone="outline">configuration</Badge>{/if}
             {#if b.addresses.length}
-              <span
-                class="truncate font-mono text-xs text-fg-muted"
-                title={`Also blocked from ${b.addresses.join(", ")}`}
-                >{b.addresses.join(", ")}</span>
+              <Tooltip text={`Also blocked from ${b.addresses.join(", ")}`} dense>
+                {#snippet child({ props })}
+                  <span {...props} class="truncate font-mono text-xs text-fg-muted"
+                    >{b.addresses.join(", ")}</span>
+                {/snippet}
+              </Tooltip>
             {/if}
           </span>
-          <span role="gridcell" class="truncate" title={b.reason}>{b.reason}</span>
+          <Tooltip text={b.reason} clipped>
+            {#snippet child({ props })}
+              <span {...props} role="gridcell" class="truncate">{b.reason}</span>
+            {/snippet}
+          </Tooltip>
           <span role="gridcell" class="truncate text-xs text-fg-muted">{b.scopes.join(", ")}</span>
-          <span
-            role="gridcell"
-            class="text-xs"
-            title={b.expiresAt ? dateTime(b.expiresAt) : undefined}>
-            {b.expiresAt ? ago(b.expiresAt, clock.now) : "never"}
-          </span>
-          <span
-            role="gridcell"
-            class="text-xs text-fg-muted"
-            title={b.createdAt ? dateTime(b.createdAt) : undefined}>
-            {b.createdAt ? ago(b.createdAt, clock.now) : ""}
-          </span>
+          <Tooltip text={b.expiresAt ? dateTime(b.expiresAt) : undefined} dense>
+            {#snippet child({ props })}
+              <span {...props} role="gridcell" class="text-xs">
+                {b.expiresAt ? ago(b.expiresAt, clock.now) : "never"}
+              </span>
+            {/snippet}
+          </Tooltip>
+          <Tooltip text={b.createdAt ? dateTime(b.createdAt) : undefined} dense>
+            {#snippet child({ props })}
+              <span {...props} role="gridcell" class="text-xs text-fg-muted">
+                {b.createdAt ? ago(b.createdAt, clock.now) : ""}
+              </span>
+            {/snippet}
+          </Tooltip>
           <span role="gridcell" class="flex justify-end">
             {#if write && !configBlocked(b)}
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={`Unblock ${b.username}`}
-                onclick={() => void unblock(b.username)}>
-                <ShieldCheckIcon />
-              </Button>
+              <Tooltip text="Unblock">
+                {#snippet child({ props })}
+                  <Button
+                    {...props}
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`Unblock ${b.username}`}
+                    onclick={() => void unblock(b.username)}>
+                    <ShieldCheckIcon />
+                  </Button>
+                {/snippet}
+              </Tooltip>
             {/if}
           </span>
         </div>

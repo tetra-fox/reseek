@@ -4,6 +4,7 @@
   import type { Schemas } from "#lib/api/client.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Card from "#lib/components/ui/Card.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import { formatBytes } from "#lib/format.js";
   import { session } from "#lib/session.svelte.js";
@@ -61,11 +62,16 @@
       <p class="mt-4 flex items-center gap-1 text-sm">
         <span class="text-fg-muted">Address</span>
         <span class="font-mono">{endpoint}</span>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label="Copy the address"
-          onclick={() => void copyText(endpoint)}><CopyIcon /></Button>
+        <Tooltip text="Copy the address">
+          {#snippet child({ props })}
+            <Button
+              {...props}
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Copy the address"
+              onclick={() => void copyText(endpoint)}><CopyIcon /></Button>
+          {/snippet}
+        </Tooltip>
       </p>
     {/if}
   </Card>

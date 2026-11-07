@@ -13,6 +13,7 @@
   import Input from "#lib/components/ui/Input.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Switch from "#lib/components/ui/Switch.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { chatTime, dateTime, formatSpeed, plural } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
@@ -25,6 +26,7 @@
   import { session } from "#lib/session.svelte.js";
   import { clock } from "#lib/ui/clock.svelte.js";
   import { befriend, reach, setBuddy } from "#lib/users/actions.js";
+  import { pictureOf } from "#lib/users/profile.svelte.js";
   import type { UserSummary } from "#lib/users/users.svelte.js";
   import { BUDDY } from "#lib/wording.js";
 
@@ -164,8 +166,13 @@
       <span role="columnheader">Speed</span>
       <span role="columnheader">Files</span>
       <span role="columnheader">Note</span>
-      <span role="columnheader" title={BUDDY.trustedHint}>{BUDDY.trusted}</span>
-      <span role="columnheader" title={BUDDY.notifyHint}>Notify</span>
+      <Tooltip text={BUDDY.trustedHint}>
+        {#snippet child({ props })}<span {...props} role="columnheader">{BUDDY.trusted}</span
+          >{/snippet}
+      </Tooltip>
+      <Tooltip text={BUDDY.notifyHint}>
+        {#snippet child({ props })}<span {...props} role="columnheader">Notify</span>{/snippet}
+      </Tooltip>
       <span role="columnheader" class="sr-only">Actions</span>
     </div>
     <div role="rowgroup" {@attach freezesWhileUsed}>
@@ -177,23 +184,31 @@
           class="grid min-w-max items-center gap-2 list-row px-2 py-1.5"
           style:grid-template-columns={COLUMNS}>
           <span role="gridcell" class="flex w-0 min-w-full items-center gap-2">
-            <Avatar name={u.username} pictureUrl={u.info?.pictureUrl} class="size-7 text-xs" />
+            <Avatar
+              name={u.username}
+              pictureUrl={pictureOf(u.username, u)}
+              class="size-7 text-xs" />
             <Username name={u.username} />
             {#if u.block}<Badge tone="danger">blocked</Badge>{/if}
           </span>
-          <span
-            role="gridcell"
-            class="flex items-center gap-1.5 text-xs"
-            title={u.presenceAt ? dateTime(u.presenceAt) : undefined}>
-            <Presence presence={u.presence} />{since(u)}
-            <Flag code={u.countryCode} />
-          </span>
+          <Tooltip text={u.presenceAt ? dateTime(u.presenceAt) : undefined} dense>
+            {#snippet child({ props })}
+              <span {...props} role="gridcell" class="flex items-center gap-1.5 text-xs">
+                <Presence presence={u.presence} worded />{since(u)}
+                <Flag code={u.countryCode} />
+              </span>
+            {/snippet}
+          </Tooltip>
           <span role="gridcell" class="text-xs tabular-nums"
             >{u.statistics ? formatSpeed(u.statistics.averageSpeed) : ""}</span>
           <span role="gridcell" class="text-xs tabular-nums"
             >{u.statistics?.fileCount.toLocaleString() ?? ""}</span>
-          <span role="gridcell" class="truncate text-xs text-fg-muted" title={u.notes ?? undefined}
-            >{u.notes ?? ""}</span>
+          <Tooltip text={u.notes ?? undefined} clipped>
+            {#snippet child({ props })}
+              <span {...props} role="gridcell" class="truncate text-xs text-fg-muted"
+                >{u.notes ?? ""}</span>
+            {/snippet}
+          </Tooltip>
           <span role="gridcell">
             <Switch
               aria-label={`${BUDDY.trusted}: ${u.username}`}
@@ -211,21 +226,29 @@
           </span>
           <span role="gridcell" class="flex justify-end">
             {#each reach(u.username, { only: ["message", "shares"] }) as action (action.id)}
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                href={action.href}
-                aria-label={action.of(u.username)}
-                title={action.label}><action.icon /></Button>
+              <Tooltip text={action.label}>
+                {#snippet child({ props })}
+                  <Button
+                    {...props}
+                    variant="ghost"
+                    size="icon-sm"
+                    href={action.href}
+                    aria-label={action.of(u.username)}><action.icon /></Button>
+                {/snippet}
+              </Tooltip>
             {/each}
             {#if write}
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={`${BUDDY.remove}: ${u.username}`}
-                title={BUDDY.remove}
-                onclick={() => void change(() => setBuddy(u.username, false))}
-                ><UserMinusIcon /></Button>
+              <Tooltip text={BUDDY.remove}>
+                {#snippet child({ props })}
+                  <Button
+                    {...props}
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`${BUDDY.remove}: ${u.username}`}
+                    onclick={() => void change(() => setBuddy(u.username, false))}
+                    ><UserMinusIcon /></Button>
+                {/snippet}
+              </Tooltip>
             {/if}
           </span>
         </div>

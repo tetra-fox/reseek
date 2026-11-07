@@ -21,6 +21,7 @@
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Select from "#lib/components/ui/Select.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { ago, dateTime, plural } from "#lib/format.js";
@@ -36,6 +37,7 @@
   import { clock } from "#lib/ui/clock.svelte.js";
   import { canManage, configBlocked, reach, setBuddy, userGroups } from "#lib/users/actions.js";
   import { blocking, toggleBlock, unblockMany } from "#lib/users/block.svelte.js";
+  import { pictureOf } from "#lib/users/profile.svelte.js";
   import { type UserSummary, users as usersStore } from "#lib/users/users.svelte.js";
   import { BUDDY, CONFIG_BLOCKED } from "#lib/wording.js";
 
@@ -344,27 +346,38 @@
                 on !== list.selected.has(u.username) && list.toggle(u.username)} />
           </span>
           <span role="gridcell" class="flex w-0 min-w-full items-center gap-2">
-            <Avatar name={u.username} pictureUrl={u.info?.pictureUrl} class="size-7 text-xs" />
+            <Avatar
+              name={u.username}
+              pictureUrl={pictureOf(u.username, u)}
+              class="size-7 text-xs" />
             <Username name={u.username} />
             {#if u.buddy}<Badge tone="info">{BUDDY.badge}</Badge>{/if}
             {#if u.block}<Badge tone="danger">blocked</Badge>{/if}
           </span>
           <span role="gridcell" class="flex items-center gap-1.5 text-xs">
-            <Presence presence={u.presence} />{u.presence ?? "?"}
+            <Presence presence={u.presence} worded />{u.presence ?? "?"}
           </span>
           <span role="gridcell" class="max-2xl:hidden"><GroupBadge group={u.group} /></span>
           <span role="gridcell" class="flex min-w-0 flex-wrap gap-1">
             {#each u.tags as t (t)}
-              <button
-                type="button"
-                class="rounded-badge border px-1 text-xs text-fg-muted hover:bg-hover"
-                title={`Show only users tagged ${t}`}
-                onclick={() => refilter(() => (tag = t))}>{t}</button>
+              <Tooltip text={`Show only users tagged ${t}`}>
+                {#snippet child({ props })}
+                  <button
+                    {...props}
+                    type="button"
+                    class="rounded-badge border px-1 text-xs text-fg-muted hover:bg-hover"
+                    onclick={() => refilter(() => (tag = t))}>{t}</button>
+                {/snippet}
+              </Tooltip>
             {/each}
           </span>
-          <span role="gridcell" class="text-xs" title={u.lastSeenAt ? dateTime(u.lastSeenAt) : ""}>
-            {u.lastSeenAt ? ago(u.lastSeenAt, clock.now) : "never"}
-          </span>
+          <Tooltip text={u.lastSeenAt ? dateTime(u.lastSeenAt) : undefined} dense>
+            {#snippet child({ props })}
+              <span {...props} role="gridcell" class="text-xs">
+                {u.lastSeenAt ? ago(u.lastSeenAt, clock.now) : "never"}
+              </span>
+            {/snippet}
+          </Tooltip>
           <span role="gridcell" class="text-right tabular-nums">{u.figures.uploads.succeeded}</span>
           <span role="gridcell" class="text-right tabular-nums"
             >{u.figures.downloads.succeeded}</span>
@@ -373,32 +386,48 @@
           </span>
           <span role="gridcell" class="flex justify-end">
             {#each reach(u.username, { only: ["message", "shares"] }) as action (action.id)}
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                href={action.href}
-                aria-label={action.label}
-                title={action.label}><action.icon /></Button>
+              <Tooltip text={action.label}>
+                {#snippet child({ props })}
+                  <Button
+                    {...props}
+                    variant="ghost"
+                    size="icon-sm"
+                    href={action.href}
+                    aria-label={action.label}><action.icon /></Button>
+                {/snippet}
+              </Tooltip>
             {/each}
             {#if canManage(u.username)}
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={u.buddy ? BUDDY.remove : BUDDY.add}
-                title={u.buddy ? BUDDY.remove : BUDDY.add}
-                aria-pressed={!!u.buddy}
-                onclick={() => void toggleBuddy(u)}>
-                {#if u.buddy}<UserCheckIcon class="text-accent" />{:else}<UserPlusIcon />{/if}
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={u.block ? "Unblock" : "Block"}
-                disabled={configBlocked(u.block)}
-                title={configBlocked(u.block) ? CONFIG_BLOCKED : undefined}
-                onclick={() => toggleBlock(u.username, !!u.block)}>
-                {#if u.block}<ShieldCheckIcon />{:else}<BanIcon />{/if}
-              </Button>
+              <Tooltip text={u.buddy ? BUDDY.remove : BUDDY.add}>
+                {#snippet child({ props })}
+                  <Button
+                    {...props}
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={u.buddy ? BUDDY.remove : BUDDY.add}
+                    aria-pressed={!!u.buddy}
+                    onclick={() => void toggleBuddy(u)}>
+                    {#if u.buddy}<UserCheckIcon class="text-accent" />{:else}<UserPlusIcon />{/if}
+                  </Button>
+                {/snippet}
+              </Tooltip>
+              {@const byConfig = configBlocked(u.block)}
+              <!-- a disabled button takes no focus, so the reason is on a span around it -->
+              <Tooltip text={byConfig ? CONFIG_BLOCKED : u.block ? "Unblock" : "Block"}>
+                {#snippet child({ props })}
+                  <span {...byConfig ? props : {}} class="inline-flex">
+                    <Button
+                      {...byConfig ? {} : props}
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={u.block ? "Unblock" : "Block"}
+                      disabled={byConfig}
+                      onclick={() => toggleBlock(u.username, !!u.block)}>
+                      {#if u.block}<ShieldCheckIcon />{:else}<BanIcon />{/if}
+                    </Button>
+                  </span>
+                {/snippet}
+              </Tooltip>
             {/if}
             <Menu.Root>
               <Menu.Trigger>

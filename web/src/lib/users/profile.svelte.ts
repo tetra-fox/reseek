@@ -1,7 +1,10 @@
 import { api, type Schemas } from "#lib/api/client.js";
+import { app } from "#lib/app.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { Loader } from "#lib/loader.svelte.js";
 import { call } from "#lib/request.js";
+
+import { users } from "./users.svelte";
 
 export type OwnProfile = Schemas["OwnProfile"];
 
@@ -32,6 +35,23 @@ class Own {
 }
 
 export const ownProfile = new Own();
+
+/**
+ * The picture a username shows. Ours comes from our own profile, fetched on first need, since
+ * the directory holds only what peers send; anyone else's from `known`, a summary or profile
+ * already in hand, else the directory. `need` sends its request before writing any state, so
+ * this can be read in a template
+ */
+export const pictureOf = (
+  name: string,
+  known?: { info?: { pictureUrl?: string | null } | null }
+): string | null | undefined => {
+  if (name !== app.state?.user.username) {
+    return (known ?? users.get(name))?.info?.pictureUrl;
+  }
+  ownProfile.need();
+  return ownProfile.data?.pictureUrl;
+};
 
 /** The first `n` lines of a text, as the hover card shows a profile */
 export const firstLines = (text: string, n: number) => text.split("\n").slice(0, n).join("\n");

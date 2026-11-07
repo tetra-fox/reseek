@@ -26,7 +26,7 @@
 </script>
 
 <div class="flex flex-col gap-4 sm:flex-row">
-  <Avatar {name} {pictureUrl} {src} {alt} class="size-32 text-4xl" />
+  <Avatar {name} {pictureUrl} {src} {alt} link={false} class="size-32 text-4xl" />
   <div class="flex min-w-0 flex-1 flex-col gap-3">
     {#if description}
       <p class="cursor-text text-sm wrap-anywhere whitespace-pre-wrap">

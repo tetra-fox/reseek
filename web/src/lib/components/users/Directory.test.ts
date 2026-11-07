@@ -99,7 +99,9 @@ describe("the users directory", () => {
     await start([summary("bob", { block } as never), summary("carol")]);
     const unblock = line("bob").querySelector<HTMLButtonElement>('button[aria-label="Unblock"]')!;
     expect(unblock.disabled).toBe(true);
-    expect(unblock.title).toBe("Blocked by the configuration");
+    // the reason is the tooltip of the span around it, which the keys can reach
+    expect(unblock.parentElement!.hasAttribute("data-tooltip-trigger")).toBe(true);
+    expect(unblock.parentElement!.tabIndex).toBe(0);
     line("bob").querySelector<HTMLElement>("[role=checkbox]")!.click();
     await flushFaked();
     const bar = () => document.querySelector("[role=toolbar]")!;

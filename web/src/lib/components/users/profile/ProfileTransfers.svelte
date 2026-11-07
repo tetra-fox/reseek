@@ -12,6 +12,7 @@
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
   import Segmented from "#lib/components/ui/Segmented.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { plural } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { Keyed } from "#lib/lists/keyed.svelte.js";
@@ -156,9 +157,15 @@
             rows.removed.has(t.id) && "opacity-40"
           ]}
           style:grid-template-columns={template}>
-          <span role="gridcell" title={t.direction}>
-            {#if t.direction === "Upload"}<ArrowUpIcon class="size-4 text-upload" />{:else}
-              <ArrowDownIcon class="size-4 text-download" />{/if}
+          <span role="gridcell">
+            <Tooltip text={t.direction} dense spoken>
+              {#snippet child({ props })}
+                <span {...props} class="inline-flex">
+                  {#if t.direction === "Upload"}<ArrowUpIcon class="size-4 text-upload" />{:else}
+                    <ArrowDownIcon class="size-4 text-download" />{/if}
+                </span>
+              {/snippet}
+            </Tooltip>
           </span>
           <TransferRow
             transfer={t}

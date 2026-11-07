@@ -190,6 +190,11 @@
         onpointerenter={() => clearTimeout(timer)}
         onpointerleave={(e: PointerEvent) =>
           e.pointerType !== "touch" && !clicked && later(hide, CLOSE_DELAY_MS)}
+        onclick={(e: MouseEvent) => {
+          // following a link in the card closes it, opening one in another tab does not
+          const followed = e.target instanceof Element && e.target.closest("a[href]");
+          if (followed && !e.ctrlKey && !e.metaKey && !e.shiftKey) hide();
+        }}
         role="dialog"
         aria-label={`Profile of ${name}`}
         class="z-50 w-80 max-w-[calc(100vw-1rem)] rounded-card border bg-overlay p-3 text-fg shadow-raised outline-none motion-safe:animate-popover-in">

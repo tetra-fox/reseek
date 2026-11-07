@@ -47,6 +47,7 @@
   } from "#lib/users/actions.js";
   import { blocking, unblock } from "#lib/users/block.svelte.js";
   import { nameColor } from "#lib/users/colors.js";
+  import { pictureOf } from "#lib/users/profile.svelte.js";
   import { BUDDY, CONFIG_BLOCKED } from "#lib/wording.js";
 
   import GivePrivileges from "./GivePrivileges.svelte";
@@ -107,30 +108,44 @@
 
 <section class="flex flex-col gap-4 rounded-card border bg-surface p-5 shadow-card">
   <div class="flex flex-wrap items-start gap-4">
-    <Avatar {name} pictureUrl={p.info?.pictureUrl} class="size-16 text-2xl" />
+    <Avatar {name} pictureUrl={pictureOf(name, p)} link={false} class="size-16 text-2xl" />
     <div class="flex min-w-0 flex-1 flex-col gap-1.5">
       <div class="flex flex-wrap items-center gap-2">
-        <span
-          title={p.presence && p.presenceAt
+        <Presence
+          presence={p.presence}
+          text={p.presence && p.presenceAt
             ? `${p.presence} since ${chatTime(p.presenceAt, clock.now)}`
-            : undefined}>
-          <Presence presence={p.presence} />
-        </span>
-        <h1 class="truncate font-mono text-lg font-medium" style:color={nameColor(name)}>
-          {name}
-        </h1>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label="Copy username"
-          onclick={() => void copyText(name)}><CopyIcon /></Button>
+            : undefined} />
+        <Tooltip text={name} clipped>
+          {#snippet child({ props })}
+            <h1
+              {...props}
+              class="truncate font-mono text-lg font-medium"
+              style:color={nameColor(name)}>
+              {name}
+            </h1>
+          {/snippet}
+        </Tooltip>
+        <Tooltip text="Copy username">
+          {#snippet child({ props })}
+            <Button
+              {...props}
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Copy username"
+              onclick={() => void copyText(name)}><CopyIcon /></Button>
+          {/snippet}
+        </Tooltip>
         {#if !p.known}<Badge tone="outline">Not seen before</Badge>{/if}
         {#if p.isPrivileged}<Badge tone="warning">privileged</Badge>{/if}
         <Flag code={p.countryCode} />
         <GroupBadge group={p.group} />
         {#if lostGroup}
-          <Badge tone="warning" title={`Assigned to ${p.groupOverride}`}
-            >Group no longer exists</Badge>
+          <Tooltip text={`Assigned to ${p.groupOverride}`} spoken>
+            {#snippet child({ props })}
+              <Badge {...props} tone="warning">Group no longer exists</Badge>
+            {/snippet}
+          </Tooltip>
         {/if}
         {#if p.block}
           {@const b = p.block}
@@ -138,7 +153,7 @@
             text={[b.reason, b.expiresAt && `ends ${ago(b.expiresAt, clock.now)}`]
               .filter(Boolean)
               .join(", ") || undefined}
-            hint>
+            spoken>
             {#snippet child({ props })}
               <Badge {...props} tone="danger">blocked</Badge>
             {/snippet}
@@ -195,12 +210,19 @@
     {#if write && p.known}
       {#if canManage(name)}
         {#if p.block}
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={configBlocked(p.block)}
-            title={configBlocked(p.block) ? CONFIG_BLOCKED : undefined}
-            onclick={() => void unblock(name).then(onchanged)}><ShieldCheckIcon />Unblock</Button>
+          <!-- a disabled button takes no focus, so the reason is on a span around it -->
+          <Tooltip text={configBlocked(p.block) ? CONFIG_BLOCKED : undefined}>
+            {#snippet child({ props })}
+              <span {...props} class="inline-flex">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={configBlocked(p.block)}
+                  onclick={() => void unblock(name).then(onchanged)}
+                  ><ShieldCheckIcon />Unblock</Button>
+              </span>
+            {/snippet}
+          </Tooltip>
         {:else}
           <Button variant="outline" size="sm" onclick={() => blocking.ask(name)}
             ><BanIcon />Block</Button>
@@ -215,16 +237,24 @@
               {/snippet}
             </Menu.Trigger>
             <Menu.Content align="start">
-              <Menu.CheckboxItem
-                checked={buddy.trusted}
-                title={BUDDY.trustedHint}
-                onCheckedChange={(on) => void run(() => befriend(name, { trusted: on }))}
-                >{BUDDY.trusted}</Menu.CheckboxItem>
-              <Menu.CheckboxItem
-                checked={buddy.notifyPresence}
-                title={BUDDY.notifyHint}
-                onCheckedChange={(on) => void run(() => befriend(name, { notifyPresence: on }))}
-                >{BUDDY.notify}</Menu.CheckboxItem>
+              <Tooltip text={BUDDY.trustedHint} side="right">
+                {#snippet child({ props })}
+                  <Menu.CheckboxItem
+                    {...props}
+                    checked={buddy.trusted}
+                    onCheckedChange={(on) => void run(() => befriend(name, { trusted: on }))}
+                    >{BUDDY.trusted}</Menu.CheckboxItem>
+                {/snippet}
+              </Tooltip>
+              <Tooltip text={BUDDY.notifyHint} side="right">
+                {#snippet child({ props })}
+                  <Menu.CheckboxItem
+                    {...props}
+                    checked={buddy.notifyPresence}
+                    onCheckedChange={(on) => void run(() => befriend(name, { notifyPresence: on }))}
+                    >{BUDDY.notify}</Menu.CheckboxItem>
+                {/snippet}
+              </Tooltip>
               <Menu.Separator />
               <Menu.Item onSelect={() => void run(() => setBuddy(name, false))}
                 ><UserMinusIcon />{BUDDY.remove}</Menu.Item>

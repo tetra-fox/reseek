@@ -8,6 +8,7 @@
   import Dialog from "#lib/components/ui/Dialog.svelte";
   import Input from "#lib/components/ui/Input.svelte";
   import Notice from "#lib/components/ui/Notice.svelte";
+  import Username from "#lib/components/users/Username.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { href } from "#lib/nav.js";
   import { SOULSEEK_SETTINGS } from "#lib/reachability.js";
@@ -62,7 +63,7 @@
 <Card title="Account">
   <dl class="flex flex-col gap-1 text-sm">
     <dt class="text-xs font-medium text-fg-muted">Soulseek username</dt>
-    <dd class="font-mono wrap-anywhere">{name}</dd>
+    <dd class="min-w-0"><Username {name} /></dd>
   </dl>
   <div class="flex flex-wrap gap-inline">
     {#if allowed}
