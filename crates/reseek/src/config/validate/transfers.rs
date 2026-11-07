@@ -1,11 +1,11 @@
-//! Uploads, downloads and the user groups: slots, speeds, limits, retries, where downloads go,
+//! Uploads, downloads and the user groups: slots, speeds, retries, where downloads go,
 //! and the groups' names, patterns and networks.
 
 use std::time::Duration;
 
 use super::Report;
 use super::fields::{at_least, cidr, duration_at_least, is_regex, optional_at_least};
-use crate::config::{Destination, GroupUpload, Limits, Transfers};
+use crate::config::{Destination, GroupUpload, Transfers};
 use crate::files::mode::to_unix_file_mode;
 use crate::safety::{non_traversing, relative_everywhere};
 
@@ -24,7 +24,6 @@ pub(super) fn check(transfers: &Transfers, case_sensitive: bool, report: &mut Re
     upload.alt_speed_limit,
     report,
   );
-  check_limits("transfers.upload.limits", &upload.limits, report);
 
   let download = &transfers.download;
   report.check(
@@ -135,23 +134,6 @@ pub(super) fn check_speed(key: &str, limit: Option<u32>, report: &mut Report) {
   }
 }
 
-fn check_limits(prefix: &str, limits: &Limits, report: &mut Report) {
-  for (window, limit) in [
-    ("queued", &limits.queued),
-    ("daily", &limits.daily),
-    ("weekly", &limits.weekly),
-  ] {
-    for (what, value) in [
-      ("files", limit.files),
-      ("megabytes", limit.megabytes),
-      ("failures", limit.failures),
-    ] {
-      let key = format!("{prefix}.{window}.{what}");
-      report.check(&key, optional_at_least(&key, value, 1));
-    }
-  }
-}
-
 /// A group's upload settings, each reported under its own key.
 fn check_group(prefix: &str, upload: &GroupUpload, report: &mut Report) {
   let key = format!("{prefix}.priority");
@@ -159,7 +141,6 @@ fn check_group(prefix: &str, upload: &GroupUpload, report: &mut Report) {
   let key = format!("{prefix}.slots");
   report.check(&key, optional_at_least(&key, upload.slots, 1));
   check_speed(&format!("{prefix}.speed_limit"), upload.speed_limit, report);
-  check_limits(&format!("{prefix}.limits"), &upload.limits, report);
 }
 
 fn check_destination(destination: &Destination, report: &mut Report) {

@@ -83,8 +83,7 @@ impl Default for Upload {
   }
 }
 
-/// Limits on what one user may queue and download, over three windows. A limit that is not set
-/// does not apply.
+/// Limits on what one user may queue and download, over three windows.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Limits {
@@ -100,11 +99,11 @@ pub struct Limits {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Limit {
-  /// Maximum number of files.
+  /// Maximum number of files. `0` for no limit.
   pub files: Option<u32>,
-  /// Maximum number of megabytes.
+  /// Maximum number of megabytes. `0` for no limit.
   pub megabytes: Option<u32>,
-  /// Maximum number of failed transfers.
+  /// Maximum number of failed transfers. `0` for no limit.
   pub failures: Option<u32>,
 }
 
@@ -250,7 +249,7 @@ pub struct GroupUpload {
   pub slots: Option<u32>,
   /// Total upload speed limit of the group in KiB/s. No limit when not set.
   pub speed_limit: Option<u32>,
-  /// Per-user limits of the group, replacing the global ones.
+  /// Per-user limits of the group. Each one not set is taken from the global ones.
   pub limits: Limits,
 }
 

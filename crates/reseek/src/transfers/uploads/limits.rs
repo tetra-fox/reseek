@@ -88,7 +88,7 @@ pub fn statistics(
   )
 }
 
-/// One window's limits after the fall-back to the global ones.
+/// One window's limits after the fall-back to the global ones, `None` where nothing is limited.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct Window {
   files: Option<u32>,
@@ -97,12 +97,15 @@ struct Window {
 }
 
 impl Window {
-  /// `group`'s limits, each one it leaves unset taken from `global`.
+  /// `group`'s limits, each one it leaves unset taken from `global`. A `0` from either is no
+  /// limit, so a group's `0` lifts the global limit instead of inheriting it.
   fn of(group: &Limit, global: &Limit) -> Self {
+    let pick =
+      |own: Option<u32>, inherited: Option<u32>| own.or(inherited).filter(|&limit| limit != 0);
     Self {
-      files: group.files.or(global.files),
-      megabytes: group.megabytes.or(global.megabytes),
-      failures: group.failures.or(global.failures),
+      files: pick(group.files, global.files),
+      megabytes: pick(group.megabytes, global.megabytes),
+      failures: pick(group.failures, global.failures),
     }
   }
 
@@ -385,6 +388,41 @@ mod tests {
     );
     assert_eq!(
       refusal(&options, "friends", &Statistics::default(), 1),
+      None
+    );
+  }
+
+  #[test]
+  fn zero_is_no_limit_in_a_group_and_globally() {
+    let thousand_queued = Statistics {
+      queued_files: 1000,
+      ..Statistics::default()
+    };
+    let grouped = options(
+      "[transfers.groups.user_defined.friends.upload.limits.queued]\nfiles = 0\n\
+       [transfers.groups.user_defined.others]\nmembers = [\"bob\"]\n",
+    );
+    assert_eq!(
+      grouped.transfers.upload.limits.queued.files,
+      Some(1000),
+      "the default global limit"
+    );
+    assert_eq!(refusal(&grouped, "friends", &thousand_queued, 1), None);
+    assert_eq!(
+      refusal(&grouped, "others", &thousand_queued, 1),
+      Some(TOO_MANY_FILES),
+      "a group that leaves it unset inherits the global limit"
+    );
+    let unlimited = options("[transfers.upload.limits.queued]\nfiles = 0\n");
+    assert_eq!(
+      refusal(&unlimited, DEFAULT_GROUP, &thousand_queued, 1),
+      None
+    );
+    assert_eq!(
+      usage(&unlimited, DEFAULT_GROUP, &thousand_queued)
+        .queued
+        .files
+        .limit,
       None
     );
   }
