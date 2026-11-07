@@ -26,6 +26,7 @@
   import ResizeHandle from "#lib/components/ui/ResizeHandle.svelte";
   import Scrim from "#lib/components/ui/Scrim.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
+  import Thumb from "#lib/components/ui/Thumb.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import Presence from "#lib/components/users/Presence.svelte";
   import Username from "#lib/components/users/Username.svelte";
@@ -130,11 +131,12 @@
 {#snippet side(members: RoomMembers)}
   <!-- the values come only from SIDE_TABS, so the string bits-ui gives back is one of its ids -->
   <Tabs.Root bind:value={() => layout.side, (v) => (layout.side = v as SideTab)} class="contents">
-    <Tabs.List aria-label="Side panel" class="flex gap-1 border-b p-1.5">
+    <Tabs.List aria-label="Side panel" class="relative flex gap-1 border-b p-1.5">
+      <Thumb value={layout.side} class="rounded-control nav-current" />
       {#each SIDE_TABS as t (t.id)}
         <Tabs.Trigger
           value={t.id}
-          class="flex h-control-sm flex-1 items-center justify-center rounded-control text-sm text-fg-muted hover:bg-hover hover:text-fg data-[state=active]:nav-current">
+          class="relative z-1 flex h-control-sm flex-1 items-center justify-center rounded-control text-sm text-fg-muted transition-colors duration-(--motion-fast) hover:text-fg data-[state=active]:text-fg data-[state=inactive]:hover:bg-hover">
           {t.title}
           {#if t.id === "wall" && members.wall.length}
             <span class="ml-1 text-xs text-fg-subtle tabular-nums">{members.wall.length}</span>

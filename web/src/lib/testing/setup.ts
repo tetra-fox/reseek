@@ -8,6 +8,10 @@ globalThis.ResizeObserver ??= class {
   unobserve() {}
   disconnect() {}
 };
+// nor getAnimations, which `animate:flip` asks of an item leaving a keyed list
+Element.prototype.getAnimations ??= function () {
+  return [];
+};
 // and gives every box no height, so a virtual list would draw no lines: its scroll box, a grid,
 // tree, treegrid or log, reports the height of a screen
 const clientHeight = Object.getOwnPropertyDescriptor(Element.prototype, "clientHeight")!;

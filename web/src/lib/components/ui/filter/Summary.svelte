@@ -2,6 +2,8 @@
   import FunnelIcon from "@lucide/svelte/icons/funnel";
   import XIcon from "@lucide/svelte/icons/x";
   import { tick, untrack } from "svelte";
+  import { flip } from "svelte/animate";
+  import { scale } from "svelte/transition";
 
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import {
@@ -13,6 +15,7 @@
     showing
   } from "#lib/lists/filtered.js";
   import { cn } from "#lib/ui/cn.js";
+  import { easeOutSoft, motionFast } from "#lib/ui/motion.js";
 
   // the line above a filtered list: how much of it shows, a chip for each filter that takes that
   // one off, and Clear filters. Nothing while no filter is on, or while the list holds nothing
@@ -74,20 +77,26 @@
       <FunnelIcon class="size-4 shrink-0" />{showing(shown, total, noun)}
     </span>
     <div class="flex flex-wrap items-center gap-1.5" bind:this={chips}>
+      <!-- svelte makes a leaving chip inert while it fades, so it takes no click or focus -->
       {#each filters as f, at (f.id)}
-        <Tooltip text={`Remove filter ${f.label}`}>
-          {#snippet child({ props })}
-            <button
-              {...props}
-              type="button"
-              class="inline-flex h-6 max-w-64 items-center gap-1 rounded-full border border-accent/40 bg-surface pr-1.5 pl-2.5 text-xs text-fg transition-colors duration-(--motion-fast) hover:border-accent"
-              aria-label={`Remove filter ${f.label}`}
-              data-id={f.id}
-              onclick={() => remove(at)}>
-              <span class="truncate">{f.label}</span><XIcon class="size-3 shrink-0" />
-            </button>
-          {/snippet}
-        </Tooltip>
+        <span
+          class="flex"
+          animate:flip={{ duration: motionFast(), easing: easeOutSoft }}
+          transition:scale={{ start: 0.95, duration: motionFast(), easing: easeOutSoft }}>
+          <Tooltip text={`Remove filter ${f.label}`}>
+            {#snippet child({ props })}
+              <button
+                {...props}
+                type="button"
+                class="inline-flex h-6 max-w-64 items-center gap-1 rounded-full border border-accent/40 bg-surface pr-1.5 pl-2.5 text-xs text-fg transition-colors duration-(--motion-fast) hover:border-accent"
+                aria-label={`Remove filter ${f.label}`}
+                data-id={f.id}
+                onclick={() => remove(at)}>
+                <span class="truncate">{f.label}</span><XIcon class="size-3 shrink-0" />
+              </button>
+            {/snippet}
+          </Tooltip>
+        </span>
       {/each}
     </div>
     <!-- an emptied list offers its own Clear filters where the rows would be -->

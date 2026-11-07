@@ -36,6 +36,7 @@
   import { href } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
   import { PAUSE_WARNING } from "#lib/transfers/bulk.js";
+  import { disclose } from "#lib/ui/motion.js";
 
   // one job: what it is, where it is and how far, who started it, its controls, and its parts
   // once opened
@@ -130,7 +131,11 @@
             aria-expanded={open}
             aria-label={open ? `Hide the parts of ${job.name}` : `Show the parts of ${job.name}`}
             onclick={ontoggle}>
-            <ChevronRightIcon class={["size-4 transition-transform", open && "rotate-90"]} />
+            <ChevronRightIcon
+              class={[
+                "size-4 transition-transform duration-(--motion-fast)",
+                open && "rotate-90"
+              ]} />
           </button>
         {/snippet}
       </Tooltip>
@@ -265,7 +270,9 @@
     </div>
   </div>
   {#if open}
-    <div class="col-span-full border-t bg-surface-muted/50 px-4 py-2 pl-14 text-xs">
+    <div
+      class="col-span-full border-t bg-surface-muted/50 px-4 py-2 pl-14 text-xs"
+      transition:disclose>
       {#if partsError}
         <span class="text-danger">{partsError}</span>
       {:else if parts === null}

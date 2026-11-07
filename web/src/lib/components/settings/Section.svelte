@@ -1,7 +1,5 @@
 <script lang="ts">
-  import CheckIcon from "@lucide/svelte/icons/check";
   import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
-  import CopyIcon from "@lucide/svelte/icons/copy";
   import { untrack } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
 
@@ -10,6 +8,7 @@
   import AddShare from "#lib/components/system/AddShare.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Card from "#lib/components/ui/Card.svelte";
+  import CopyIcon from "#lib/components/ui/CopyIcon.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Textarea from "#lib/components/ui/Textarea.svelte";
   import { editability, fileOf } from "#lib/config/editability.js";
@@ -351,7 +350,7 @@
     <div class="flex items-center gap-2">
       {#if holdsSecret}<span class="text-xs text-fg-muted">Secrets are left out</span>{/if}
       <Button variant="ghost" size="sm" class="text-fg-muted" onclick={copyNix}>
-        {#if copying.copied}<CheckIcon />{:else}<CopyIcon />{/if}
+        <CopyIcon copied={copying.copied} />
         {copying.copied ? "Copied" : "Copy as Nix"}
       </Button>
     </div>

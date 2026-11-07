@@ -4,6 +4,8 @@
 
   import { cn } from "#lib/ui/cn.js";
 
+  import Thumb from "./Thumb.svelte";
+
   // a choice of one among a few, all in view, on more lines where a large text size leaves no room
   // on one. The `sm` size stands beside `sm` buttons, at their height, and the chosen one keeps the
   // weight of the others, so none of them moves
@@ -39,16 +41,17 @@
   {disabled}
   aria-label={label}
   class={cn(
-    "inline-flex max-w-full flex-wrap rounded-control border p-0.5",
+    "relative inline-flex max-w-full flex-wrap rounded-control border p-0.5",
     size === "sm" ? "min-h-control-sm" : "min-h-6.5",
     className
   )}
   {...rest}>
+  <Thumb {value} class={["rounded-badge bg-surface-muted", disabled && "opacity-50"]} />
   {#each options as option (option.id)}
     <RadioGroup.Item
       value={option.id}
       class={[
-        "flex items-center gap-1.5 rounded-badge px-2 text-fg-muted transition-colors duration-(--motion-fast) not-disabled:hover:text-fg disabled:opacity-50 data-[state=checked]:bg-surface-muted data-[state=checked]:text-fg",
+        "relative z-1 flex items-center gap-1.5 rounded-badge px-2 text-fg-muted transition-colors duration-(--motion-fast) not-disabled:hover:text-fg disabled:opacity-50 data-[state=checked]:text-fg",
         size === "xs" ? "text-xs" : "text-sm"
       ]}>
       {#if option.icon}<option.icon class="size-3.5" />{/if}{option.label}

@@ -6,6 +6,7 @@
   import { Dialog } from "bits-ui";
   import { toggleMode } from "mode-watcher";
   import { tick } from "svelte";
+  import { scale } from "svelte/transition";
 
   import { screenHref } from "#lib/analysis/slots.svelte.js";
   import { app } from "#lib/app.svelte.js";
@@ -16,7 +17,7 @@
   import { href, navCurrent, navItems, type NavItem, route, systemItem } from "#lib/nav.js";
   import { sidebar } from "#lib/shell/sidebar.svelte.js";
   import { unseen } from "#lib/transfers/unseen.svelte.js";
-  import { crossFade } from "#lib/ui/motion.js";
+  import { crossFade, easeOutSoft, motionFast } from "#lib/ui/motion.js";
 
   import AccountMenu from "./AccountMenu.svelte";
   import ConnectButton from "./ConnectButton.svelte";
@@ -70,11 +71,16 @@
               {/snippet}
             </Tooltip>
           {/if}
-          {#if item.path === "/chat" && chat.total && !sidebar.collapsed}
-            <Badge
-              tone={chat.totalMentions ? "accent" : "danger"}
-              class="ml-auto"
-              aria-label={`${chat.total} unread`}>{chat.total}</Badge>
+          <!-- kept while collapsed, so it pops in as the count leaves 0 and not as the sidebar
+               opens -->
+          {#if item.path === "/chat" && chat.total}
+            <span
+              class={["ml-auto flex", sidebar.collapsed && "hidden"]}
+              in:scale={{ start: 0.9, duration: motionFast(), easing: easeOutSoft }}>
+              <Badge
+                tone={chat.totalMentions ? "accent" : "danger"}
+                aria-label={`${chat.total} unread`}>{chat.total}</Badge>
+            </span>
           {/if}
         </a>
       {/snippet}

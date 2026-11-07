@@ -1,9 +1,8 @@
 <script lang="ts">
-  import CheckIcon from "@lucide/svelte/icons/check";
-  import CopyIcon from "@lucide/svelte/icons/copy";
   import TriangleAlertIcon from "@lucide/svelte/icons/triangle-alert";
 
   import Button from "#lib/components/ui/Button.svelte";
+  import CopyIcon from "#lib/components/ui/CopyIcon.svelte";
   import { CopyButton } from "#lib/feedback/clipboard.svelte.js";
 
   type Props = {
@@ -34,7 +33,7 @@
     <Button
       variant="ghost"
       onclick={() => void copier.copy([caption, detail].filter(Boolean).join("\n"))}>
-      {#if copier.copied}<CheckIcon />Copied{:else}<CopyIcon />Copy the error{/if}
+      <CopyIcon copied={copier.copied} />{copier.copied ? "Copied" : "Copy the error"}
     </Button>
   </div>
 </div>

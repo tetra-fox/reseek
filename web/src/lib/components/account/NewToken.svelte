@@ -1,11 +1,9 @@
 <script lang="ts">
-  import CheckIcon from "@lucide/svelte/icons/check";
-  import CopyIcon from "@lucide/svelte/icons/copy";
-
   import { api, root, type Schemas } from "#lib/api/client.js";
   import Field from "#lib/components/Field.svelte";
   import Form from "#lib/components/Form.svelte";
   import Button from "#lib/components/ui/Button.svelte";
+  import CopyIcon from "#lib/components/ui/CopyIcon.svelte";
   import Dialog from "#lib/components/ui/Dialog.svelte";
   import Input from "#lib/components/ui/Input.svelte";
   import Select from "#lib/components/ui/Select.svelte";
@@ -80,7 +78,7 @@
             size="icon-sm"
             aria-label="Copy the secret"
             onclick={() => copying.copy(created!.secret)}>
-            {#if copying.copied}<CheckIcon />{:else}<CopyIcon />{/if}
+            <CopyIcon copied={copying.copied} />
           </Button>
         {/snippet}
       </Tooltip>
