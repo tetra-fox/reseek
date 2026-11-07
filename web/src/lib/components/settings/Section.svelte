@@ -394,7 +394,7 @@
           {#snippet extra()}
             {#if field.key === "web.authentication.oidc"}
               <OidcTest names={Object.keys(valueAt(view.values, field.key) ?? {})} />
-            {:else if field.key === "soulseek.description" || field.key === "soulseek.picture"}
+            {:else if field.key === "soulseek.description" || field.key === "soulseek.picture" || field.key.startsWith("soulseek.interests.")}
               <a href={href("/profile")} class="text-xs text-accent hover:underline"
                 >Edit on the profile page</a>
             {:else if field.key === "shares.directories"}

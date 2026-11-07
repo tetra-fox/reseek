@@ -1,4 +1,4 @@
-//! The calls on our own profile: the text and picture other users are sent.
+//! The calls on our own profile: the text and picture other users are sent, and our interests.
 
 use api_types::profile::{Interests, OwnProfile, PasswordChange, ProfileText};
 use bytes::Bytes;
@@ -19,14 +19,9 @@ impl Client {
     done(self.put(Route::new("profile")).json(&text)).await
   }
 
-  /// `GET /interests`: what we like and hate.
-  pub async fn interests(&self) -> Result<Interests> {
-    json(self.get(Route::new("interests"))).await
-  }
-
-  /// `PUT /interests`: replaces what we like and hate.
-  pub async fn set_interests(&self, interests: &Interests) -> Result<Interests> {
-    json(self.put(Route::new("interests")).json(interests)).await
+  /// `PUT /profile/interests`: replaces what we like and hate.
+  pub async fn set_interests(&self, interests: &Interests) -> Result<()> {
+    done(self.put(Route::new("profile/interests")).json(interests)).await
   }
 
   /// `PUT /application/password`: changes our Soulseek account's password, at the server first

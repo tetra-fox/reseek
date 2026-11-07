@@ -81,14 +81,14 @@ const under = (heading: string, fields: Field[]): Field[] =>
 const LIMIT_WINDOWS = ["queued", "daily", "weekly"];
 const LIMIT_MEASURES = ["files", "megabytes", "failures"];
 
-/** The nine per-user limits under `prefix`: files, megabytes and failures, queued, daily and weekly */
-const limits = (prefix: string, who: string): Field[] =>
+/** The nine per-user limits under `prefix`, `unset` saying what an empty one means */
+const limits = (prefix: string, who: string, unset: string): Field[] =>
   LIMIT_WINDOWS.flatMap((window) =>
     LIMIT_MEASURES.map((what) => ({
       key: `${prefix}.limits.${window}.${what}`,
       label: `${who}: ${window} ${what}`,
-      ...AT_LEAST_1,
-      placeholder: NO_LIMIT
+      min: 0,
+      placeholder: unset
     }))
   );
 
@@ -142,7 +142,7 @@ const groupUpload = (prefix: string, group: string): Field[] => [
   },
   { key: `${prefix}.upload.slots`, label: `${group} upload slots`, ...AT_LEAST_1 },
   { key: `${prefix}.upload.speed_limit`, label: `${group} speed limit (KiB/s)`, ...AT_LEAST_1 },
-  ...limits(`${prefix}.upload`, group)
+  ...limits(`${prefix}.upload`, group, "global limit")
 ];
 
 /** The four outcome ages of one transfer direction's retention, by the option key's outcome */
@@ -172,7 +172,9 @@ export const sections: Section[] = [
         { key: "soulseek.username", label: "Username" },
         { key: "soulseek.password", label: "Password", control: "secret" },
         { key: "soulseek.description", label: "Profile text" },
-        { key: "soulseek.picture", label: "Profile picture" }
+        { key: "soulseek.picture", label: "Profile picture" },
+        { key: "soulseek.interests.liked", label: "Interests" },
+        { key: "soulseek.interests.hated", label: "Dislikes" }
       ]),
       ...under("Server", [
         { key: "soulseek.address", label: "Server" },
@@ -366,7 +368,7 @@ export const sections: Section[] = [
           placeholder: NO_LIMIT
         }
       ]),
-      ...under("Limits", limits("transfers.upload", "Per user"))
+      ...under("Limits", limits("transfers.upload", "Per user", NO_LIMIT))
     ]
   },
   {

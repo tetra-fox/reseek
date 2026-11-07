@@ -78,12 +78,14 @@ async fn two_watches_of_one_user_at_once_ask_the_server_once() {
 #[tokio::test]
 async fn our_interests_reach_the_server_when_changed_and_at_every_login() {
   let dir = tempfile::tempdir().unwrap();
+  let config = dir.path().join("config.toml");
+  std::fs::write(&config, "remote_configuration = true\n").unwrap();
   let (running, api, mut server) = scripted(dir.path()).await;
   let lists = Interests {
     liked: vec!["jazz".into()],
     hated: vec!["polka".into()],
   };
-  assert_eq!(api.set_interests(&lists).await.unwrap(), lists);
+  api.set_interests(&lists).await.unwrap();
   let told = server
     .request_matching(|request| match request {
       ServerRequest::LikedInterestAdd(LikedInterestAdd { interest }) => Some(interest),
@@ -91,11 +93,13 @@ async fn our_interests_reach_the_server_when_changed_and_at_every_login() {
     })
     .await;
   assert_eq!(told, "jazz");
+  let written = std::fs::read_to_string(&config).unwrap();
+  assert!(written.contains("[soulseek.interests]"), "{written}");
   drop(running);
 
   // the server keeps nothing between sessions, so a new one is told both lists
   let (_running, api, mut server) = scripted(dir.path()).await;
-  assert_eq!(api.interests().await.unwrap(), lists);
+  assert_eq!(api.profile().await.unwrap().interests, lists);
   let liked = server
     .request_matching(|request| match request {
       ServerRequest::LikedInterestAdd(LikedInterestAdd { interest }) => Some(interest),

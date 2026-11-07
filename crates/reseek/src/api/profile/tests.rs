@@ -1,6 +1,6 @@
-//! The profile routes: the text and the picture round trip through the file or an override,
-//! a write leaves its value in effect, and what is locked, not allowed, too large or not a
-//! picture is refused without changing the picture peers get.
+//! The profile routes: the text, the picture and the interests round trip through the file or
+//! an override, a write leaves its value in effect, and what is locked, not allowed, too large
+//! or not a picture is refused without changing the picture peers get.
 
 use axum::body::Body;
 use image::Rgba;
@@ -88,6 +88,32 @@ async fn the_text_and_the_picture_round_trip_through_the_file() {
 }
 
 #[tokio::test]
+async fn interests_move_between_lists_in_one_write_but_are_never_in_both() {
+  let app = app(CONFIG, &[]).await;
+  let put = async |lists: &serde_json::Value| {
+    let body = Some(lists.clone());
+    app
+      .send(request("PUT", "/api/v0/profile/interests", body))
+      .await
+  };
+  let lists = json!({ "liked": ["jazz", "dub"], "hated": ["polka"] });
+  let first = put(&lists).await;
+  assert_eq!(first.status, 204, "{:?}", first.body);
+  let changed = profile(&app).await;
+  assert_eq!(changed["interests"], lists);
+  let file = json!({ "layer": "file", "file": "config.toml" });
+  assert_eq!(changed["sources"]["liked"], file);
+  assert_eq!(changed["sources"]["hated"], file);
+
+  let moved = json!({ "liked": ["dub"], "hated": ["polka", "jazz"] });
+  let second = put(&moved).await;
+  assert_eq!(second.status, 204, "{:?}", second.body);
+  let both = put(&json!({ "liked": ["jazz"], "hated": ["jazz"] })).await;
+  assert_eq!(both.status, 400, "{:?}", both.body);
+  assert_eq!(profile(&app).await["interests"], moved);
+}
+
+#[tokio::test]
 async fn a_new_picture_is_fetched_from_a_new_url() {
   let app = app(CONFIG, &[]).await;
   let url = async || {
@@ -137,6 +163,12 @@ async fn a_managed_file_takes_the_profile_as_an_override() {
     profile(&app).await["sources"]["picture"]["layer"],
     "runtime"
   );
+  let lists = json!({ "liked": ["jazz"], "hated": [] });
+  let put = app
+    .send(request("PUT", "/api/v0/profile/interests", Some(lists)))
+    .await;
+  assert_eq!(put.status, 204, "{:?}", put.body);
+  assert_eq!(profile(&app).await["sources"]["liked"]["layer"], "runtime");
 }
 
 #[tokio::test]

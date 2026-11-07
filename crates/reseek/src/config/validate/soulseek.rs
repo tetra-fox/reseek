@@ -1,12 +1,12 @@
-//! The Soulseek options: ports, the listen address, the picture, timeouts, buffers, the proxy
-//! and the server MTU.
+//! The Soulseek options: ports, the listen address, the picture, the interests, timeouts,
+//! buffers, the proxy and the server MTU.
 
 use std::time::Duration;
 
 use super::Report;
 use super::fields::{at_least, duration_at_least, ip_address, length, range};
 use super::paths::readable_file;
-use crate::config::Soulseek;
+use crate::config::{Soulseek, SoulseekInterests};
 
 pub(super) fn check(soulseek: &Soulseek, report: &mut Report) {
   for (key, port) in [
@@ -25,6 +25,7 @@ pub(super) fn check(soulseek: &Soulseek, report: &mut Report) {
       readable_file("soulseek.picture", picture),
     );
   }
+  check_interests(&soulseek.interests, report);
   let key = "soulseek.search.max_concurrent";
   report.check(key, at_least(key, soulseek.search.max_concurrent, 1));
   let key = "soulseek.browse.response_timeout";
@@ -118,6 +119,49 @@ pub(super) fn check(soulseek: &Soulseek, report: &mut Report) {
   check_limits(soulseek, report);
 }
 
+/// Each interest as the server is sent it, once: not blank, trimmed and lowercase, as other
+/// clients keep theirs, and in one of the two lists at most.
+fn check_interests(interests: &SoulseekInterests, report: &mut Report) {
+  for (key, list) in [
+    ("soulseek.interests.liked", &interests.liked),
+    ("soulseek.interests.hated", &interests.hated),
+  ] {
+    for (at, interest) in list.iter().enumerate() {
+      if interest.trim().is_empty() {
+        report.add(
+          key,
+          format!("The field {key} must not hold a blank interest."),
+        );
+      } else if interest.trim() != interest || interest.to_lowercase() != *interest {
+        report.add(
+          key,
+          format!(
+            "The interest '{interest}' in {key} must be lowercase, without spaces around it."
+          ),
+        );
+      } else if list[..at].contains(interest) {
+        report.add(
+          key,
+          format!("The interest '{interest}' is listed twice in {key}."),
+        );
+      }
+    }
+  }
+  for interest in interests
+    .liked
+    .iter()
+    .filter(|i| interests.hated.contains(i))
+  {
+    report.add(
+      "soulseek.interests.hated",
+      format!(
+        "The interest '{interest}' is in both soulseek.interests.liked and \
+         soulseek.interests.hated."
+      ),
+    );
+  }
+}
+
 fn check_keepalive(soulseek: &Soulseek, report: &mut Report) {
   let keepalive = &soulseek.server_keepalive;
   // the other fields mean nothing while it is off
@@ -176,4 +220,32 @@ fn check_limits(soulseek: &Soulseek, report: &mut Report) {
       Duration::from_millis(1),
     ),
   );
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn interests_are_lowercase_once_and_in_one_list() {
+    let owned = |list: &[&str]| list.iter().map(ToString::to_string).collect();
+    let interests = SoulseekInterests {
+      liked: owned(&["jazz", "Dub", " folk", "", "jazz", "noise"]),
+      hated: owned(&["polka", "noise"]),
+    };
+    let mut report = Report::default();
+    check_interests(&interests, &mut report);
+    assert_eq!(
+      report.messages(),
+      [
+        "The interest 'Dub' in soulseek.interests.liked must be lowercase, without spaces around \
+         it.",
+        "The interest ' folk' in soulseek.interests.liked must be lowercase, without spaces \
+         around it.",
+        "The field soulseek.interests.liked must not hold a blank interest.",
+        "The interest 'jazz' is listed twice in soulseek.interests.liked.",
+        "The interest 'noise' is in both soulseek.interests.liked and soulseek.interests.hated.",
+      ]
+    );
+  }
 }

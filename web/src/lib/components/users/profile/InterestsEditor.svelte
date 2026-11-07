@@ -3,16 +3,16 @@
   import XIcon from "@lucide/svelte/icons/x";
   import { tick } from "svelte";
 
-  import LoadError from "#lib/components/LoadError.svelte";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Input from "#lib/components/ui/Input.svelte";
   import type { OwnInterests, Side } from "#lib/users/interests.svelte.js";
 
-  // what we like and dislike, two lists that save as they change. Adding something to one list
-  // takes it off the other
-  type Props = { interests: OwnInterests; disabled: boolean };
-  let { interests, disabled }: Props = $props();
+  // what we like and dislike, two lists that save as they change, or are only shown when they
+  // cannot be changed from here, with `notice` saying why. Adding something to one list takes it
+  // off the other
+  type Props = { interests: OwnInterests; disabled: boolean; notice?: string | null };
+  let { interests, disabled, notice = null }: Props = $props();
 
   const typed = $state<Record<Side, string>>({ liked: "", hated: "" });
   const lists = $derived(interests.lists);
@@ -78,8 +78,8 @@
   </div>
 {/snippet}
 
-<LoadError loader={interests.loader} />
 <div class="grid grid-cols-[minmax(0,1fr)] gap-group sm:grid-cols-2">
   {@render list("liked", "Interests", "Add an interest")}
   {@render list("hated", "Dislikes", "Add a dislike")}
 </div>
+{#if notice}<p class="text-xs text-fg-muted">{notice}</p>{/if}

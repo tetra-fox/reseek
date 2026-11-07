@@ -43,7 +43,7 @@ pub use schedules::Schedules;
 pub use search::{FilterPreset, Search};
 pub use soulseek::{
   ConnectionBuffers, ConnectionTimeouts, DistributedNetwork, ServerKeepalive, Soulseek,
-  SoulseekConnection, SoulseekLimits, SoulseekProxy,
+  SoulseekConnection, SoulseekInterests, SoulseekLimits, SoulseekProxy,
 };
 pub use transfers::{
   Blacklisted, Destination, Download, Group, GroupUpload, Groups, LeecherThresholds, Leechers,

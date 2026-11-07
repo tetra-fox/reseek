@@ -18,7 +18,11 @@
   import { Loader } from "#lib/loader.svelte.js";
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
-  import { INTERESTS_HINT, OwnInterests } from "#lib/users/interests.svelte.js";
+  import {
+    INTERESTS_HINT,
+    OwnInterests,
+    interestsEditability
+  } from "#lib/users/interests.svelte.js";
   import { ownProfile } from "#lib/users/profile.svelte.js";
   import { users } from "#lib/users/users.svelte.js";
 
@@ -37,7 +41,6 @@
   });
   ownProfile.need();
   const interests = new OwnInterests();
-  void interests.loader.load();
 
   const profile = $derived(ownProfile.data);
   const name = $derived(app.state?.user.username ?? session.principal?.name ?? "");
@@ -50,6 +53,10 @@
   );
   const canText = $derived(admin && remote && !!textEdit && textEdit.mode !== "locked");
   const canPicture = $derived(admin && remote && !!pictureEdit && pictureEdit.mode !== "locked");
+  const interestsEdit = $derived(view.data ? interestsEditability(view.data) : null);
+  const canInterests = $derived(
+    admin && remote && !!interestsEdit && interestsEdit.mode !== "locked"
+  );
   const passwordEdit = $derived(
     view.data ? editability(view.data, "soulseek.password", "page") : null
   );
@@ -267,7 +274,7 @@
       </Card>
 
       <Card title="Interests and dislikes" description={INTERESTS_HINT}>
-        <InterestsEditor {interests} disabled={!admin} />
+        <InterestsEditor {interests} disabled={!canInterests} notice={interestsEdit?.notice} />
       </Card>
 
       <AccountCard {name} allowed={canPassword} notice={passwordNotice} />

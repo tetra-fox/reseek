@@ -5,6 +5,7 @@
 
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { href } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
   import type { Interests, Side } from "#lib/users/interests.svelte.js";
@@ -42,32 +43,48 @@
           <a
             class="min-w-0 flex-1 text-sm wrap-anywhere hover:underline"
             href={interestHref(interest)}>{interest}</a>
-          <span class="w-14 shrink-0 text-right text-xs text-fg-muted tabular-nums" title="Score"
-            >{score.toLocaleString()}</span>
+          <Tooltip text="Score" dense spoken>
+            {#snippet child({ props })}
+              <span {...props} class="w-14 shrink-0 text-right text-xs text-fg-muted tabular-nums"
+                >{score.toLocaleString()}</span>
+            {/snippet}
+          </Tooltip>
           <span class="flex w-28 shrink-0 justify-end gap-0.5">
             {#if mine}
               <Badge tone="outline">{mine}</Badge>
             {:else if canMark}
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={`Like ${interest}`}
-                title="Like"
-                onclick={() => onmark("liked", interest)}><ThumbsUpIcon /></Button>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={`Dislike ${interest}`}
-                title="Dislike"
-                onclick={() => onmark("hated", interest)}><ThumbsDownIcon /></Button>
+              <Tooltip text="Like">
+                {#snippet child({ props })}
+                  <Button
+                    {...props}
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`Like ${interest}`}
+                    onclick={() => onmark("liked", interest)}><ThumbsUpIcon /></Button>
+                {/snippet}
+              </Tooltip>
+              <Tooltip text="Dislike">
+                {#snippet child({ props })}
+                  <Button
+                    {...props}
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`Dislike ${interest}`}
+                    onclick={() => onmark("hated", interest)}><ThumbsDownIcon /></Button>
+                {/snippet}
+              </Tooltip>
             {/if}
             {#if search}
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                href={searchHref(interest)}
-                aria-label={`Search for ${interest}`}
-                title="Search for it"><SearchIcon /></Button>
+              <Tooltip text="Search for it">
+                {#snippet child({ props })}
+                  <Button
+                    {...props}
+                    variant="ghost"
+                    size="icon-sm"
+                    href={searchHref(interest)}
+                    aria-label={`Search for ${interest}`}><SearchIcon /></Button>
+                {/snippet}
+              </Tooltip>
             {/if}
           </span>
         </li>

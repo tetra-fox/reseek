@@ -1,4 +1,5 @@
-//! Our own profile: the text and picture other users are sent when they ask for our user info.
+//! Our own profile: the text and picture other users are sent when they ask for our user info,
+//! and what we like and hate.
 
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
@@ -14,7 +15,7 @@ pub struct PictureVersion {
   pub v: Option<String>,
 }
 
-/// Where the text and the picture of our profile come from.
+/// Where the text, the picture and the interests of our profile come from.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ProfileSources {
@@ -22,10 +23,14 @@ pub struct ProfileSources {
   pub description: OptionSource,
   /// the layer that sets `soulseek.picture`
   pub picture: OptionSource,
+  /// the layer that sets `soulseek.interests.liked`
+  pub liked: OptionSource,
+  /// the layer that sets `soulseek.interests.hated`
+  pub hated: OptionSource,
 }
 
-/// Our profile as a user asking for our user info is sent it now, with where the text and the
-/// picture come from. The reply of `GET /profile`.
+/// Our profile as a user asking for our user info is sent it now, with what we like and hate
+/// and where each comes from. The reply of `GET /profile`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct OwnProfile {
@@ -44,6 +49,8 @@ pub struct OwnProfile {
   pub free_upload_slot: bool,
   /// the place in the queue such a user is told a new request would take
   pub queue_length: u32,
+  /// what we like and hate, which the server is told
+  pub interests: Interests,
   /// the layer each value comes from
   pub sources: ProfileSources,
 }
@@ -56,14 +63,14 @@ pub struct ProfileText {
   pub description: String,
 }
 
-/// What we like and what we hate, each in the order listed. The reply of `GET /interests` and the
-/// body of `PUT /interests`.
+/// What a user likes and hates, each in the order listed: ours in `GET /profile` and the body of
+/// `PUT /profile/interests`, another user's in the reply of `GET /users/{username}/interests`.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Interests {
-  /// what we like
+  /// what they like
   pub liked: Vec<String>,
-  /// what we hate
+  /// what they hate
   pub hated: Vec<String>,
 }
 

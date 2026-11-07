@@ -43,6 +43,8 @@ pub struct Soulseek {
   /// Profile picture shown to other users. JPEG, GIF or BMP.
   #[cascade(env = "RESEEK_SLSK_PICTURE", cli = "--slsk-picture")]
   pub picture: Option<PathBuf>,
+  /// What we like and hate, which the server suggests users and interests from.
+  pub interests: SoulseekInterests,
   /// IP address on which to accept connections from other users.
   #[cascade(
     env = "RESEEK_SLSK_LISTEN_IP_ADDRESS",
@@ -90,6 +92,7 @@ impl Default for Soulseek {
       password: None,
       description: "A reseek user.".to_string(),
       picture: None,
+      interests: SoulseekInterests::default(),
       listen_ip_address: "0.0.0.0".to_string(),
       listen_port: 50300,
       port_mapping: true,
@@ -102,6 +105,18 @@ impl Default for Soulseek {
       browse: SoulseekBrowse::default(),
     }
   }
+}
+
+/// What we like and hate, told to the server at every login and whenever the lists change.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Cascade)]
+#[serde(default)]
+pub struct SoulseekInterests {
+  /// Interests we like, in lowercase, such as `jazz`.
+  #[cascade(env = "RESEEK_SLSK_INTERESTS_LIKED", cli = "--slsk-interests-liked")]
+  pub liked: Vec<String>,
+  /// Interests we hate, in lowercase. An interest is in one of the two lists at most.
+  #[cascade(env = "RESEEK_SLSK_INTERESTS_HATED", cli = "--slsk-interests-hated")]
+  pub hated: Vec<String>,
 }
 
 /// Distributed search network.

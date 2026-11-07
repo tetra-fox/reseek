@@ -6,12 +6,13 @@ import fixture from "#lib/config/fixtures/view.json";
 import { session } from "#lib/session.svelte.js";
 import { flush } from "#lib/testing/flush.js";
 import { fakeNetwork } from "#lib/testing/network.js";
+import { ownProfile } from "#lib/users/profile.svelte.js";
 
 import MyProfile from "./MyProfile.svelte";
 
 vi.mock("$app/navigation", () => ({ beforeNavigate: () => {}, goto: vi.fn() }));
 
-const interests = { liked: ["jazz", "dub"], hated: ["polka"] };
+const file = { layer: "file", file: "config.toml" };
 
 const own = {
   description: "hello",
@@ -20,7 +21,8 @@ const own = {
   uploadSlots: 2,
   freeUploadSlot: true,
   queueLength: 0,
-  sources: { description: { layer: "file", file: "config.toml" }, picture: { layer: "default" } }
+  interests: { liked: ["jazz", "dub"], hated: ["polka"] },
+  sources: { description: file, picture: { layer: "default" }, liked: file, hated: file }
 };
 
 describe("your own profile page", () => {
@@ -74,8 +76,6 @@ describe("your own profile page", () => {
     const net = fakeNetwork((url, method) => {
       if (url.pathname.endsWith("/api/v0/options/view")) return view;
       if (url.pathname.endsWith("/api/v0/profile") && method === "GET") return own;
-      if (url.pathname.endsWith("/api/v0/interests") && method === "GET") return interests;
-      if (url.pathname.endsWith("/api/v0/interests")) return interests;
       if (method === "PUT") return { status: 204 };
       return undefined;
     });
@@ -109,7 +109,6 @@ describe("your own profile page", () => {
     let reread: Promise<void> | null = null;
     const net = fakeNetwork(async (url, method, body) => {
       if (url.pathname.endsWith("/api/v0/options/view")) return view;
-      if (url.pathname.endsWith("/api/v0/interests")) return interests;
       if (url.pathname.endsWith("/api/v0/profile") && method === "GET") {
         if (reread) await reread;
         return stored;
@@ -145,7 +144,6 @@ describe("your own profile page", () => {
     let refuse = true;
     const net = fakeNetwork((url, method) => {
       if (url.pathname.endsWith("/api/v0/options/view")) return view;
-      if (url.pathname.endsWith("/api/v0/interests")) return interests;
       if (url.pathname.endsWith("/api/v0/profile") && method === "GET") return own;
       if (url.pathname.endsWith("/api/v0/profile") && refuse)
         return { status: 409, body: { error: "The configuration file changed on disk" } };
@@ -168,12 +166,15 @@ describe("your own profile page", () => {
   });
 
   it("saves interests as they change, each on one list only", async () => {
-    session.principal = { name: "me", role: "Administrator" } as never;
-    app.state = { user: { username: "me" }, server: { isLoggedIn: true } } as never;
+    const view = asAdmin();
+    let stored = own;
     const net = fakeNetwork((url, method, body) => {
-      if (url.pathname.endsWith("/api/v0/options/view")) return fixture;
-      if (url.pathname.endsWith("/api/v0/profile") && method === "GET") return own;
-      if (url.pathname.endsWith("/api/v0/interests")) return method === "PUT" ? body : interests;
+      if (url.pathname.endsWith("/api/v0/options/view")) return view;
+      if (url.pathname.endsWith("/api/v0/profile") && method === "GET") return stored;
+      if (url.pathname.endsWith("/api/v0/profile/interests")) {
+        stored = { ...stored, interests: body as typeof own.interests };
+        return { status: 204 };
+      }
       return undefined;
     });
     component = mount(MyProfile, { target: document.body });
@@ -197,5 +198,23 @@ describe("your own profile page", () => {
     document.querySelector<HTMLButtonElement>('[aria-label="Remove jazz"]')!.click();
     await flush();
     expect(document.activeElement).toBe(dislike);
+  });
+
+  it("shows the interests without a way to change them while remote configuration is off", async () => {
+    asAdmin();
+    fakeNetwork((url, method) => {
+      if (url.pathname.endsWith("/api/v0/options/view")) return fixture;
+      if (url.pathname.endsWith("/api/v0/profile") && method === "GET") return own;
+      return undefined;
+    });
+    // the profile is fetched once for the page and kept, so it still holds what the tests
+    // before saved
+    await ownProfile.loader.load();
+    component = mount(MyProfile, { target: document.body });
+    await flush();
+    const liked = document.querySelector('[aria-label="Interests"]');
+    expect(liked?.textContent).toContain("jazz");
+    expect(document.querySelector('[aria-label="Remove jazz"]')).toBeNull();
+    expect(document.querySelector('[aria-label="Add a dislike"]')).toBeNull();
   });
 });

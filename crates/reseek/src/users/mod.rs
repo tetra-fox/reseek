@@ -17,6 +17,7 @@ mod groups;
 mod identity;
 mod info;
 mod interests;
+mod interests_table;
 mod known;
 mod listing;
 mod network;
@@ -31,6 +32,7 @@ mod transfers;
 
 pub use blocking::reason_fits;
 pub use groups::{DEFAULT as DEFAULT_GROUP, LEECHERS, PRIVILEGED};
+pub use interests::{HATED, LIKED};
 
 use std::collections::{BTreeMap, HashMap};
 use std::net::IpAddr;
@@ -56,7 +58,7 @@ pub use network::Users;
 pub(crate) use service::{picture_response, picture_tag};
 pub use touch::Touch;
 
-use crate::config::Options;
+use crate::config::{Options, SoulseekInterests};
 use crate::db::{Database, DbError, Location};
 use crate::events::EventBus;
 use crate::live::Live;
@@ -102,16 +104,16 @@ pub struct Directory {
   buddies: Buddies,
   /// when a request in a buddy's name from another address was last warned of
   impersonations: Impersonations,
-  /// held while our interests are read or written and then sent, so a login's send and a
-  /// change made during it cannot interleave
-  interests_sending: tokio::sync::Mutex<()>,
+  /// the interests the server holds this session, as we told it; held while telling it more,
+  /// so a login's send and a change made during it cannot interleave
+  interests_told: tokio::sync::Mutex<SoulseekInterests>,
 }
 
 impl Directory {
-  /// Opens `users.db` in `location` and loads the blocks, the groups we put users in and the
-  /// blocklist file, then starts the touch writer and the follower of the configuration, which
-  /// all stop when `shutdown` is canceled. A user's figures are read from `transfers` and
-  /// `messaging`.
+  /// Opens `users.db` in `location`, after moving the interests an older one kept into the
+  /// configuration, and loads the blocks, the groups we put users in and the blocklist file,
+  /// then starts the touch writer and the follower of the configuration, which all stop when
+  /// `shutdown` is canceled. A user's figures are read from `transfers` and `messaging`.
   pub async fn open(
     location: &Location,
     transfers: Database,
@@ -121,6 +123,7 @@ impl Directory {
     events: EventBus,
     shutdown: CancellationToken,
   ) -> Result<Arc<Self>, String> {
+    interests_table::move_to_configuration(location, &config).await?;
     let db = Database::open(&store::SCHEMA, location)
       .await
       .map_err(|e| format!("users.db: {e}"))?;
@@ -164,7 +167,7 @@ impl Directory {
       known,
       buddies,
       impersonations: Impersonations::default(),
-      interests_sending: tokio::sync::Mutex::new(()),
+      interests_told: tokio::sync::Mutex::new(SoulseekInterests::default()),
     });
     tokio::spawn(
       directory
@@ -462,8 +465,8 @@ impl Directory {
   }
 
   /// Takes every configuration change: the blacklist is compiled again, the blocklist file
-  /// read again when its settings changed, and the cached summaries dropped, since groups may
-  /// have moved.
+  /// read again when its settings changed, the server told what changed in our interests, and
+  /// the cached summaries dropped, since groups may have moved.
   async fn follow_configuration(self: Arc<Self>, shutdown: CancellationToken) {
     let mut changes = self.config.changes();
     loop {
@@ -482,6 +485,13 @@ impl Directory {
           {
             self.reload_blocklist(options).await;
           }
+          if change
+            .changed
+            .iter()
+            .any(|key| key == LIKED || key == HATED)
+          {
+            self.interests_changed().await;
+          }
         }
         Err(RecvError::Lagged(missed)) => {
           debug!(
@@ -491,6 +501,7 @@ impl Directory {
           let options = self.config.current().values.clone();
           self.blocks.configure(&options);
           self.reload_blocklist(&options).await;
+          self.interests_changed().await;
         }
         Err(RecvError::Closed) => return,
       }

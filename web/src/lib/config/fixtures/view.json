@@ -265,6 +265,10 @@
         "disabled": false,
         "logging": false
       },
+      "interests": {
+        "hated": [],
+        "liked": []
+      },
       "limits": {
         "distributed_parent_negotiation_timeout": "5s",
         "max_cached_peer_connections": 1000,
@@ -2890,6 +2894,42 @@
       "notApplied": null,
       "entries": []
     },
+    "soulseek.interests.hated": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SLSK_INTERESTS_HATED",
+      "cliFlag": "--slsk-interests-hated",
+      "kind": {
+        "list": "string"
+      },
+      "doc": "Interests we hate, in lowercase. An interest is in one of the two lists at most.",
+      "choices": null,
+      "default": [],
+      "apply": "live",
+      "secret": false,
+      "notApplied": null,
+      "entries": []
+    },
+    "soulseek.interests.liked": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SLSK_INTERESTS_LIKED",
+      "cliFlag": "--slsk-interests-liked",
+      "kind": {
+        "list": "string"
+      },
+      "doc": "Interests we like, in lowercase, such as `jazz`.",
+      "choices": null,
+      "default": [],
+      "apply": "live",
+      "secret": false,
+      "notApplied": null,
+      "entries": []
+    },
     "soulseek.limits.distributed_parent_negotiation_timeout": {
       "source": {
         "layer": "default"
@@ -3494,7 +3534,7 @@
       "envVar": null,
       "cliFlag": null,
       "kind": "integer",
-      "doc": "Maximum number of failed transfers.",
+      "doc": "Maximum number of failed transfers. `0` for no limit.",
       "choices": null,
       "default": null,
       "apply": "live",
@@ -3510,7 +3550,7 @@
       "envVar": null,
       "cliFlag": null,
       "kind": "integer",
-      "doc": "Maximum number of files.",
+      "doc": "Maximum number of files. `0` for no limit.",
       "choices": null,
       "default": null,
       "apply": "live",
@@ -3526,7 +3566,7 @@
       "envVar": null,
       "cliFlag": null,
       "kind": "integer",
-      "doc": "Maximum number of megabytes.",
+      "doc": "Maximum number of megabytes. `0` for no limit.",
       "choices": null,
       "default": null,
       "apply": "live",
@@ -3542,7 +3582,7 @@
       "envVar": null,
       "cliFlag": null,
       "kind": "integer",
-      "doc": "Maximum number of failed transfers.",
+      "doc": "Maximum number of failed transfers. `0` for no limit.",
       "choices": null,
       "default": null,
       "apply": "live",
@@ -3558,7 +3598,7 @@
       "envVar": null,
       "cliFlag": null,
       "kind": "integer",
-      "doc": "Maximum number of files.",
+      "doc": "Maximum number of files. `0` for no limit.",
       "choices": null,
       "default": null,
       "apply": "live",
@@ -3574,7 +3614,7 @@
       "envVar": null,
       "cliFlag": null,
       "kind": "integer",
-      "doc": "Maximum number of megabytes.",
+      "doc": "Maximum number of megabytes. `0` for no limit.",
       "choices": null,
       "default": null,
       "apply": "live",
@@ -3590,7 +3630,7 @@
       "envVar": null,
       "cliFlag": null,
       "kind": "integer",
-      "doc": "Maximum number of failed transfers.",
+      "doc": "Maximum number of failed transfers. `0` for no limit.",
       "choices": null,
       "default": null,
       "apply": "live",
@@ -3606,7 +3646,7 @@
       "envVar": null,
       "cliFlag": null,
       "kind": "integer",
-      "doc": "Maximum number of files.",
+      "doc": "Maximum number of files. `0` for no limit.",
       "choices": null,
       "default": null,
       "apply": "live",
@@ -3622,7 +3662,7 @@
       "envVar": null,
       "cliFlag": null,
       "kind": "integer",
-      "doc": "Maximum number of megabytes.",
+      "doc": "Maximum number of megabytes. `0` for no limit.",
       "choices": null,
       "default": null,
       "apply": "live",
@@ -3737,7 +3777,7 @@
       "envVar": null,
       "cliFlag": null,
       "kind": "integer",
-      "doc": "Maximum number of failed transfers.",
+      "doc": "Maximum number of failed transfers. `0` for no limit.",
       "choices": null,
       "default": null,
       "apply": "live",
@@ -3753,7 +3793,7 @@
       "envVar": null,
       "cliFlag": null,
       "kind": "integer",
-      "doc": "Maximum number of files.",
+      "doc": "Maximum number of files. `0` for no limit.",
       "choices": null,
       "default": null,
       "apply": "live",
@@ -3769,7 +3809,7 @@
       "envVar": null,
       "cliFlag": null,
       "kind": "integer",
-      "doc": "Maximum number of megabytes.",
+      "doc": "Maximum number of megabytes. `0` for no limit.",
       "choices": null,
       "default": null,
       "apply": "live",
@@ -3785,7 +3825,7 @@
       "envVar": null,
       "cliFlag": null,
       "kind": "integer",
-      "doc": "Maximum number of failed transfers.",
+      "doc": "Maximum number of failed transfers. `0` for no limit.",
       "choices": null,
       "default": null,
       "apply": "live",
@@ -3801,7 +3841,7 @@
       "envVar": null,
       "cliFlag": null,
       "kind": "integer",
-      "doc": "Maximum number of files.",
+      "doc": "Maximum number of files. `0` for no limit.",
       "choices": null,
       "default": null,
       "apply": "live",
@@ -3817,7 +3857,7 @@
       "envVar": null,
       "cliFlag": null,
       "kind": "integer",
-      "doc": "Maximum number of megabytes.",
+      "doc": "Maximum number of megabytes. `0` for no limit.",
       "choices": null,
       "default": null,
       "apply": "live",
@@ -3833,7 +3873,7 @@
       "envVar": null,
       "cliFlag": null,
       "kind": "integer",
-      "doc": "Maximum number of failed transfers.",
+      "doc": "Maximum number of failed transfers. `0` for no limit.",
       "choices": null,
       "default": null,
       "apply": "live",
@@ -3849,7 +3889,7 @@
       "envVar": null,
       "cliFlag": null,
       "kind": "integer",
-      "doc": "Maximum number of files.",
+      "doc": "Maximum number of files. `0` for no limit.",
       "choices": null,
       "default": null,
       "apply": "live",
@@ -3865,7 +3905,7 @@
       "envVar": null,
       "cliFlag": null,
       "kind": "integer",
-      "doc": "Maximum number of megabytes.",
+      "doc": "Maximum number of megabytes. `0` for no limit.",
       "choices": null,
       "default": null,
       "apply": "live",
@@ -3993,7 +4033,7 @@
         {
           "key": "upload.limits.queued.files",
           "kind": "integer",
-          "doc": "Maximum number of files.",
+          "doc": "Maximum number of files. `0` for no limit.",
           "choices": null,
           "default": null,
           "secret": false
@@ -4001,7 +4041,7 @@
         {
           "key": "upload.limits.queued.megabytes",
           "kind": "integer",
-          "doc": "Maximum number of megabytes.",
+          "doc": "Maximum number of megabytes. `0` for no limit.",
           "choices": null,
           "default": null,
           "secret": false
@@ -4009,7 +4049,7 @@
         {
           "key": "upload.limits.queued.failures",
           "kind": "integer",
-          "doc": "Maximum number of failed transfers.",
+          "doc": "Maximum number of failed transfers. `0` for no limit.",
           "choices": null,
           "default": null,
           "secret": false
@@ -4017,7 +4057,7 @@
         {
           "key": "upload.limits.daily.files",
           "kind": "integer",
-          "doc": "Maximum number of files.",
+          "doc": "Maximum number of files. `0` for no limit.",
           "choices": null,
           "default": null,
           "secret": false
@@ -4025,7 +4065,7 @@
         {
           "key": "upload.limits.daily.megabytes",
           "kind": "integer",
-          "doc": "Maximum number of megabytes.",
+          "doc": "Maximum number of megabytes. `0` for no limit.",
           "choices": null,
           "default": null,
           "secret": false
@@ -4033,7 +4073,7 @@
         {
           "key": "upload.limits.daily.failures",
           "kind": "integer",
-          "doc": "Maximum number of failed transfers.",
+          "doc": "Maximum number of failed transfers. `0` for no limit.",
           "choices": null,
           "default": null,
           "secret": false
@@ -4041,7 +4081,7 @@
         {
           "key": "upload.limits.weekly.files",
           "kind": "integer",
-          "doc": "Maximum number of files.",
+          "doc": "Maximum number of files. `0` for no limit.",
           "choices": null,
           "default": null,
           "secret": false
@@ -4049,7 +4089,7 @@
         {
           "key": "upload.limits.weekly.megabytes",
           "kind": "integer",
-          "doc": "Maximum number of megabytes.",
+          "doc": "Maximum number of megabytes. `0` for no limit.",
           "choices": null,
           "default": null,
           "secret": false
@@ -4057,7 +4097,7 @@
         {
           "key": "upload.limits.weekly.failures",
           "kind": "integer",
-          "doc": "Maximum number of failed transfers.",
+          "doc": "Maximum number of failed transfers. `0` for no limit.",
           "choices": null,
           "default": null,
           "secret": false
@@ -4114,7 +4154,7 @@
       "envVar": null,
       "cliFlag": null,
       "kind": "integer",
-      "doc": "Maximum number of failed transfers.",
+      "doc": "Maximum number of failed transfers. `0` for no limit.",
       "choices": null,
       "default": null,
       "apply": "live",
@@ -4130,7 +4170,7 @@
       "envVar": null,
       "cliFlag": null,
       "kind": "integer",
-      "doc": "Maximum number of files.",
+      "doc": "Maximum number of files. `0` for no limit.",
       "choices": null,
       "default": null,
       "apply": "live",
@@ -4146,7 +4186,7 @@
       "envVar": null,
       "cliFlag": null,
       "kind": "integer",
-      "doc": "Maximum number of megabytes.",
+      "doc": "Maximum number of megabytes. `0` for no limit.",
       "choices": null,
       "default": null,
       "apply": "live",
@@ -4162,7 +4202,7 @@
       "envVar": null,
       "cliFlag": null,
       "kind": "integer",
-      "doc": "Maximum number of failed transfers.",
+      "doc": "Maximum number of failed transfers. `0` for no limit.",
       "choices": null,
       "default": null,
       "apply": "live",
@@ -4178,7 +4218,7 @@
       "envVar": null,
       "cliFlag": null,
       "kind": "integer",
-      "doc": "Maximum number of files.",
+      "doc": "Maximum number of files. `0` for no limit.",
       "choices": null,
       "default": 1000,
       "apply": "live",
@@ -4194,7 +4234,7 @@
       "envVar": null,
       "cliFlag": null,
       "kind": "integer",
-      "doc": "Maximum number of megabytes.",
+      "doc": "Maximum number of megabytes. `0` for no limit.",
       "choices": null,
       "default": null,
       "apply": "live",
@@ -4210,7 +4250,7 @@
       "envVar": null,
       "cliFlag": null,
       "kind": "integer",
-      "doc": "Maximum number of failed transfers.",
+      "doc": "Maximum number of failed transfers. `0` for no limit.",
       "choices": null,
       "default": null,
       "apply": "live",
@@ -4226,7 +4266,7 @@
       "envVar": null,
       "cliFlag": null,
       "kind": "integer",
-      "doc": "Maximum number of files.",
+      "doc": "Maximum number of files. `0` for no limit.",
       "choices": null,
       "default": null,
       "apply": "live",
@@ -4242,7 +4282,7 @@
       "envVar": null,
       "cliFlag": null,
       "kind": "integer",
-      "doc": "Maximum number of megabytes.",
+      "doc": "Maximum number of megabytes. `0` for no limit.",
       "choices": null,
       "default": null,
       "apply": "live",

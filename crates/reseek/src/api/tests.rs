@@ -144,8 +144,6 @@ async fn each_route_takes_its_least_role() {
     (Method::GET, "/api/v0/messages/search", read),
     (Method::GET, "/api/v0/shares", read),
     (Method::GET, "/api/v0/profile", read),
-    (Method::GET, "/api/v0/interests", read),
-    (Method::PUT, "/api/v0/interests", admin),
     (Method::PUT, "/api/v0/application/password", admin),
     (Method::PUT, "/api/v0/shares", write),
     (Method::GET, "/api/v0/shares/folders", admin),

@@ -4157,96 +4157,6 @@
         }
       }
     },
-    "/api/v0/interests": {
-      "get": {
-        "tags": [
-          "profile"
-        ],
-        "summary": "What we like and hate.",
-        "operationId": "get_interests",
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Interests"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "profile"
-        ],
-        "summary": "Replaces what we like and hate and answers with the lists kept, trimmed, lowercased and\nwithout repeats. The server is told what changed, now when logged in and at the next login\notherwise.",
-        "operationId": "put_interests",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Interests"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Interests"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v0/interests/popular": {
       "get": {
         "tags": [
@@ -6087,7 +5997,7 @@
         "tags": [
           "profile"
         ],
-        "summary": "Our profile as a user asking for our user info is sent it now: the text, whether a picture\ngoes with it, and the slots and queue a user we know nothing about is told of, with where\nthe text and the picture come from.",
+        "summary": "Our profile as a user asking for our user info is sent it now: the text, whether a picture\ngoes with it, and the slots and queue a user we know nothing about is told of, with what we\nlike and hate and where each comes from.",
         "operationId": "get_profile",
         "responses": {
           "200": {
@@ -6123,6 +6033,70 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ProfileText"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "changed"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/profile/interests": {
+      "put": {
+        "tags": [
+          "profile"
+        ],
+        "summary": "Replaces what we like and hate, each list in the order listed. The server is told what\nchanged, now when logged in and at the next login otherwise.",
+        "operationId": "put_interests",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Interests"
               }
             }
           },
@@ -21053,7 +21027,7 @@
       },
       "Interests": {
         "type": "object",
-        "description": "What we like and what we hate, each in the order listed. The reply of `GET /interests` and the\nbody of `PUT /interests`.",
+        "description": "What a user likes and hates, each in the order listed: ours in `GET /profile` and the body of\n`PUT /profile/interests`, another user's in the reply of `GET /users/{username}/interests`.",
         "required": [
           "liked",
           "hated"
@@ -21064,14 +21038,14 @@
             "items": {
               "type": "string"
             },
-            "description": "what we hate"
+            "description": "what they hate"
           },
           "liked": {
             "type": "array",
             "items": {
               "type": "string"
             },
-            "description": "what we like"
+            "description": "what they like"
           }
         }
       },
@@ -23691,13 +23665,14 @@
       },
       "OwnProfile": {
         "type": "object",
-        "description": "Our profile as a user asking for our user info is sent it now, with where the text and the\npicture come from. The reply of `GET /profile`.",
+        "description": "Our profile as a user asking for our user info is sent it now, with what we like and hate\nand where each comes from. The reply of `GET /profile`.",
         "required": [
           "description",
           "hasPicture",
           "uploadSlots",
           "freeUploadSlot",
           "queueLength",
+          "interests",
           "sources"
         ],
         "properties": {
@@ -23712,6 +23687,10 @@
           "hasPicture": {
             "type": "boolean",
             "description": "a picture is sent with it"
+          },
+          "interests": {
+            "$ref": "#/components/schemas/Interests",
+            "description": "what we like and hate, which the server is told"
           },
           "pictureUrl": {
             "type": [
@@ -24264,15 +24243,25 @@
       },
       "ProfileSources": {
         "type": "object",
-        "description": "Where the text and the picture of our profile come from.",
+        "description": "Where the text, the picture and the interests of our profile come from.",
         "required": [
           "description",
-          "picture"
+          "picture",
+          "liked",
+          "hated"
         ],
         "properties": {
           "description": {
             "$ref": "#/components/schemas/OptionSource",
             "description": "the layer that sets `soulseek.description`"
+          },
+          "hated": {
+            "$ref": "#/components/schemas/OptionSource",
+            "description": "the layer that sets `soulseek.interests.hated`"
+          },
+          "liked": {
+            "$ref": "#/components/schemas/OptionSource",
+            "description": "the layer that sets `soulseek.interests.liked`"
           },
           "picture": {
             "$ref": "#/components/schemas/OptionSource",
@@ -25782,6 +25771,7 @@
           "logout",
           "admin",
           "backchannel",
+          "proxy",
           "expired"
         ]
       },
@@ -25800,7 +25790,7 @@
               "string",
               "null"
             ],
-            "description": "the subject of the principal that ended it, null when it expired or the identity provider\nended it"
+            "description": "the subject of the principal that ended it, null when it expired or the identity provider\nor the reverse proxy ended it"
           },
           "reason": {
             "$ref": "#/components/schemas/SessionRevokeReason",

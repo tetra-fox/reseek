@@ -778,28 +778,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v0/interests": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** What we like and hate. */
-        get: operations["get_interests"];
-        /**
-         * Replaces what we like and hate and answers with the lists kept, trimmed, lowercased and
-         *     without repeats. The server is told what changed, now when logged in and at the next login
-         *     otherwise.
-         */
-        put: operations["put_interests"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v0/interests/popular": {
         parameters: {
             query?: never;
@@ -1291,12 +1269,32 @@ export interface paths {
         };
         /**
          * Our profile as a user asking for our user info is sent it now: the text, whether a picture
-         *     goes with it, and the slots and queue a user we know nothing about is told of, with where
-         *     the text and the picture come from.
+         *     goes with it, and the slots and queue a user we know nothing about is told of, with what we
+         *     like and hate and where each comes from.
          */
         get: operations["get_profile"];
         /** Changes the profile text other users read. */
         put: operations["put_profile"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v0/profile/interests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replaces what we like and hate, each list in the order listed. The server is told what
+         *     changed, now when logged in and at the next login otherwise.
+         */
+        put: operations["put_interests"];
         post?: never;
         delete?: never;
         options?: never;
@@ -5305,13 +5303,13 @@ export interface components {
             queueDepth: number;
         };
         /**
-         * @description What we like and what we hate, each in the order listed. The reply of `GET /interests` and the
-         *     body of `PUT /interests`.
+         * @description What a user likes and hates, each in the order listed: ours in `GET /profile` and the body of
+         *     `PUT /profile/interests`, another user's in the reply of `GET /users/{username}/interests`.
          */
         Interests: {
-            /** @description what we hate */
+            /** @description what they hate */
             hated: string[];
-            /** @description what we like */
+            /** @description what they like */
             liked: string[];
         };
         /** @description A job, as the list shows it. */
@@ -6326,8 +6324,8 @@ export interface components {
             value: Record<string, unknown>;
         };
         /**
-         * @description Our profile as a user asking for our user info is sent it now, with where the text and the
-         *     picture come from. The reply of `GET /profile`.
+         * @description Our profile as a user asking for our user info is sent it now, with what we like and hate
+         *     and where each comes from. The reply of `GET /profile`.
          */
         OwnProfile: {
             /** @description the profile text */
@@ -6336,6 +6334,8 @@ export interface components {
             freeUploadSlot: boolean;
             /** @description a picture is sent with it */
             hasPicture: boolean;
+            /** @description what we like and hate, which the server is told */
+            interests: components["schemas"]["Interests"];
             /**
              * @description where the picture is fetched, a URL that changes whenever the picture does; null without one
              * @example /api/v0/profile/picture?v=2cea274d0bedc39ec4ab6ba9e59ec889e3ed6fb56a1cf088a64d9b383378dc97
@@ -6660,10 +6660,14 @@ export interface components {
              */
             uploadMaxBytes: number;
         };
-        /** @description Where the text and the picture of our profile come from. */
+        /** @description Where the text, the picture and the interests of our profile come from. */
         ProfileSources: {
             /** @description the layer that sets `soulseek.description` */
             description: components["schemas"]["OptionSource"];
+            /** @description the layer that sets `soulseek.interests.hated` */
+            hated: components["schemas"]["OptionSource"];
+            /** @description the layer that sets `soulseek.interests.liked` */
+            liked: components["schemas"]["OptionSource"];
             /** @description the layer that sets `soulseek.picture` */
             picture: components["schemas"]["OptionSource"];
         };
@@ -7467,12 +7471,12 @@ export interface components {
          * @description Why a session ended.
          * @enum {string}
          */
-        SessionRevokeReason: "logout" | "admin" | "backchannel" | "expired";
+        SessionRevokeReason: "logout" | "admin" | "backchannel" | "proxy" | "expired";
         /** @description The data of `SessionRevoked`. */
         SessionRevoked: {
             /**
              * @description the subject of the principal that ended it, null when it expired or the identity provider
-             *     ended it
+             *     or the reverse proxy ended it
              */
             by?: string | null;
             /** @description why it ended */
@@ -11947,80 +11951,6 @@ export interface operations {
             };
         };
     };
-    get_interests: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Interests"];
-                };
-            };
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-        };
-    };
-    put_interests: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["Interests"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Interests"];
-                };
-            };
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-        };
-    };
     popular: {
         parameters: {
             query?: never;
@@ -13495,6 +13425,60 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ProfileText"];
+            };
+        };
+        responses: {
+            /** @description changed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    put_interests: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Interests"];
             };
         };
         responses: {

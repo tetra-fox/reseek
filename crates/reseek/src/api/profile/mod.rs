@@ -1,12 +1,12 @@
 //! Our own profile: the text and picture other users are sent when they ask for our user info,
-//! read with the figures they are told, and changed where the settings page would change
-//! `soulseek.description` and `soulseek.picture`: in the configuration file when it can be
-//! written, else as a runtime override that lasts until removed.
+//! read with the figures they are told and what we like and hate, and changed where the
+//! settings page would change `soulseek.description`, `soulseek.picture` and
+//! `soulseek.interests`: in the configuration file when it can be written, else as a runtime
+//! override that lasts until removed.
 //!
 //! Reading takes any role; changing takes an administrator and `remote_configuration`, and a
 //! change written to the file also someone at the UI rather than a stored API key.
 
-mod interests;
 mod password;
 mod recommendations;
 
@@ -14,7 +14,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use api_types::auth::Principal;
-use api_types::profile::{OwnProfile, ProfileSources, ProfileText};
+use api_types::profile::{Interests, OwnProfile, ProfileSources, ProfileText};
 use axum::body::Body;
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode, header};
@@ -34,7 +34,7 @@ use crate::app::AppState;
 use crate::auth::{Administrator, AnyRole, Authorized, require_interactive};
 use crate::config::{Options, view};
 use crate::profile::{self, MAX_UPLOAD, UPLOAD_TYPES};
-use crate::users::{picture_response, picture_tag};
+use crate::users::{HATED, LIKED, picture_response, picture_tag};
 
 /// The option that holds the profile text.
 const DESCRIPTION: &str = "soulseek.description";
@@ -52,14 +52,14 @@ pub fn routes() -> OpenApiRouter<AppState> {
       put_profile_picture,
       delete_profile_picture
     ))
-    .merge(interests::routes())
+    .routes(routes!(put_interests))
     .merge(recommendations::routes())
     .merge(password::routes())
 }
 
 /// Our profile as a user asking for our user info is sent it now: the text, whether a picture
-/// goes with it, and the slots and queue a user we know nothing about is told of, with where
-/// the text and the picture come from.
+/// goes with it, and the slots and queue a user we know nothing about is told of, with what we
+/// like and hate and where each comes from.
 #[utoipa::path(
   get, path = "/profile", tag = "profile",
   responses((status = 200, body = OwnProfile), (status = 401, body = api_types::ErrorBody))
@@ -71,6 +71,7 @@ async fn get_profile(
   let current = app.config.current();
   let picture = profile::picture(&current.values).await;
   let forecast = app.uploads.default_forecast();
+  let interests = &current.values.soulseek.interests;
   Json(OwnProfile {
     description: current.values.soulseek.description.clone(),
     has_picture: picture.is_some(),
@@ -79,9 +80,15 @@ async fn get_profile(
     upload_slots: forecast.total_slots,
     free_upload_slot: forecast.free_slots > 0,
     queue_length: forecast.position,
+    interests: Interests {
+      liked: interests.liked.clone(),
+      hated: interests.hated.clone(),
+    },
     sources: ProfileSources {
       description: source_of(&current, DESCRIPTION),
       picture: source_of(&current, PICTURE),
+      liked: source_of(&current, LIKED),
+      hated: source_of(&current, HATED),
     },
   })
 }
@@ -107,15 +114,52 @@ async fn put_profile(
   let _writing = app.profile_writes.lock().await;
   let target = target(&app.config.current(), &admin.principal, DESCRIPTION, false)?;
   let description = Value::String(text.description);
-  write(
-    &app,
-    &admin.principal,
-    DESCRIPTION,
-    target,
-    Some(description),
-  )
-  .await?;
+  let set = BTreeMap::from([(DESCRIPTION.to_string(), description)]);
+  write(&app, &admin.principal, target, set, Vec::new()).await?;
   info!(by = admin.principal.subject, "profile text changed");
+  Ok(StatusCode::NO_CONTENT)
+}
+
+/// Replaces what we like and hate, each list in the order listed. The server is told what
+/// changed, now when logged in and at the next login otherwise.
+#[utoipa::path(
+  put, path = "/profile/interests", tag = "profile", request_body = Interests,
+  responses(
+    (status = 204, description = "changed"), (status = 400, body = api_types::ErrorBody),
+    (status = 401, body = api_types::ErrorBody), (status = 403, body = api_types::ErrorBody),
+    (status = 409, body = api_types::ErrorBody)
+  )
+)]
+async fn put_interests(
+  State(app): State<AppState>,
+  admin: Authorized<Administrator>,
+  Json(interests): Json<Interests>,
+) -> Result<StatusCode, ApiError> {
+  remote(
+    &app.config.current(),
+    "Blocked interests change; remote configuration is disabled",
+  )?;
+  let _writing = app.profile_writes.lock().await;
+  let current = app.config.current();
+  // both lists go in one write, so an interest moved from one to the other is never in both
+  let liked_to = target(&current, &admin.principal, LIKED, false)?;
+  if liked_to != target(&current, &admin.principal, HATED, false)? {
+    let detail = format!("Set {LIKED} and {HATED} in one file to change them here");
+    return Err(ApiError::conflict(
+      "The interests are set in different files",
+      Some(detail),
+    ));
+  }
+  let (liked, hated) = (interests.liked.len(), interests.hated.len());
+  let set = BTreeMap::from([
+    (LIKED.to_string(), Value::from(interests.liked)),
+    (HATED.to_string(), Value::from(interests.hated)),
+  ]);
+  write(&app, &admin.principal, liked_to, set, Vec::new()).await?;
+  info!(
+    by = admin.principal.subject,
+    liked, hated, "interests changed"
+  );
   Ok(StatusCode::NO_CONTENT)
 }
 
@@ -204,7 +248,10 @@ async fn put_profile_picture(
   // checked again under the lock, against the file as the change before this one left it
   let target = target(&app.config.current(), &admin.principal, PICTURE, false)?;
   let path = profile::stored_path(&app.paths.data);
-  let pointed = Value::String(path.display().to_string());
+  let pointed = BTreeMap::from([(
+    PICTURE.to_string(),
+    Value::String(path.display().to_string()),
+  )]);
   let staged = stage(&path, &jpeg).await.map_err(|e| {
     ApiError::internal(format!(
       "writing the picture next to {}: {e}",
@@ -216,7 +263,7 @@ async fn put_profile_picture(
   };
   if tokio::fs::try_exists(&path).await.map_err(replaced)? {
     // the old picture stays in place until the option is written, which can still be refused
-    match write(&app, &admin.principal, PICTURE, target, Some(pointed)).await {
+    match write(&app, &admin.principal, target, pointed, Vec::new()).await {
       Ok(()) => {}
       Err(Failed::Unwritten(e)) => {
         discard(&staged).await;
@@ -232,7 +279,7 @@ async fn put_profile_picture(
     // the option is checked against a readable file, so the first picture goes in place first;
     // nothing pointed at it before and no other change runs, so only a refused write removes it
     tokio::fs::rename(&staged, &path).await.map_err(replaced)?;
-    match write(&app, &admin.principal, PICTURE, target, Some(pointed)).await {
+    match write(&app, &admin.principal, target, pointed, Vec::new()).await {
       Ok(()) => {}
       Err(Failed::Unwritten(e)) => {
         discard(&path).await;
@@ -267,7 +314,8 @@ async fn delete_profile_picture(
   )?;
   let _writing = app.profile_writes.lock().await;
   let target = target(&app.config.current(), &admin.principal, PICTURE, true)?;
-  write(&app, &admin.principal, PICTURE, target, None).await?;
+  let unset = vec![PICTURE.to_string()];
+  write(&app, &admin.principal, target, BTreeMap::new(), unset).await?;
   let path = profile::stored_path(&app.paths.data);
   match tokio::fs::remove_file(&path).await {
     Ok(()) => {}
@@ -303,6 +351,7 @@ fn locked(current: &Loaded<Options>, key: &str) -> Result<(), ApiError> {
 }
 
 /// Where a change of a profile option goes.
+#[derive(PartialEq, Eq)]
 enum Target {
   /// the configuration file `name`, as it was read at `revision`
   File {
@@ -368,49 +417,60 @@ impl From<Failed> for ApiError {
   }
 }
 
-/// Sets `key` to `value`, or takes it out with `None`, at `target`. A runtime override of the
-/// key from before is removed after the write, so the value written is the one in effect.
+/// Sets the keys of `set` and takes out those of `unset`, in one write at `target`. A runtime
+/// override of one of them from before is removed after the write, so the values written are
+/// the ones in effect.
 async fn write(
   app: &AppState,
   by: &Principal,
-  key: &str,
   target: Target,
-  value: Option<Value>,
+  set: BTreeMap<String, Value>,
+  unset: Vec<String>,
 ) -> Result<(), Failed> {
-  if let (Target::Override, Some(value)) = (&target, &value) {
-    let set = BTreeMap::from([(key.to_string(), value.clone())]);
-    app
-      .config
-      .set_overrides(set, Vec::new(), &by.subject, Lasts::UntilRemoved)
-      .await
-      .map_err(|e| Failed::Unwritten(e.into()))?;
-    debug!(key, "profile set as a runtime override");
-    return Ok(());
+  let keys: Vec<String> = set.keys().chain(&unset).cloned().collect();
+  match target {
+    Target::Override if !set.is_empty() => {
+      app
+        .config
+        .set_overrides(set, Vec::new(), &by.subject, Lasts::UntilRemoved)
+        .await
+        .map_err(|e| Failed::Unwritten(e.into()))?;
+      debug!(keys = keys.join(", "), "profile set as a runtime override");
+      return Ok(());
+    }
+    // taking out a key no file sets only removes its override
+    Target::Override => {}
+    Target::File { name, revision } => {
+      app
+        .config
+        .patch_file(&name, revision.as_deref(), set, unset)
+        .await
+        .map_err(|e| Failed::Unwritten(e.into()))?;
+      debug!(
+        keys = keys.join(", "),
+        file = name,
+        "profile written to the configuration file"
+      );
+    }
   }
-  if let Target::File { name, revision } = &target {
-    let (set, unset) = match value {
-      Some(value) => (BTreeMap::from([(key.to_string(), value)]), Vec::new()),
-      None => (BTreeMap::new(), vec![key.to_string()]),
-    };
+  let current = app.config.current();
+  let overridden: Vec<String> = keys
+    .into_iter()
+    .filter(|key| current.overrides.contains_key(key))
+    .collect();
+  if !overridden.is_empty() {
+    let removed = overridden.join(", ");
     app
       .config
-      .patch_file(name, revision.as_deref(), set, unset)
-      .await
-      .map_err(|e| Failed::Unwritten(e.into()))?;
-    debug!(
-      key,
-      file = name,
-      "profile written to the configuration file"
-    );
-  }
-  if app.config.current().overrides.contains_key(key) {
-    let unset = vec![key.to_string()];
-    app
-      .config
-      .set_overrides(BTreeMap::new(), unset, &by.subject, Lasts::UntilRemoved)
+      .set_overrides(
+        BTreeMap::new(),
+        overridden,
+        &by.subject,
+        Lasts::UntilRemoved,
+      )
       .await
       .map_err(|e| Failed::Overridden(e.into()))?;
-    debug!(key, "runtime override of the profile removed");
+    debug!(keys = removed, "runtime override of the profile removed");
   }
   Ok(())
 }

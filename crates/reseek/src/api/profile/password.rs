@@ -2,6 +2,8 @@
 //! password the option is written where the settings page would write it, so the next login
 //! uses it. Whatever would keep the option from being written refuses the change beforehand.
 
+use std::collections::BTreeMap;
+
 use api_types::profile::PasswordChange;
 use axum::extract::State;
 use axum::http::StatusCode;
@@ -66,8 +68,8 @@ async fn change_password(
         Some(e.to_string()),
       )
     })?;
-  let password = Value::String(change.password);
-  write(&app, &admin.principal, PASSWORD, target, Some(password))
+  let set = BTreeMap::from([(PASSWORD.to_string(), Value::String(change.password))]);
+  write(&app, &admin.principal, target, set, Vec::new())
     .await
     .map_err(|e| {
       let e = ApiError::from(e);
