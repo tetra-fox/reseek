@@ -8,24 +8,21 @@ import fixture from "./fixtures/view.json";
 const view = fixture as unknown as ConfigView;
 
 describe("editability", () => {
-  /** the fixture with remote configuration on, without which nothing can be changed */
-  const remote = (): ConfigView => {
-    const v = structuredClone(view);
-    (v.values as Record<string, unknown>).remote_configuration = true;
-    return v;
-  };
+  const copy = (): ConfigView => structuredClone(view);
 
   it("saves to a writable file", () => {
-    expect(editability(remote(), "soulseek.description")).toEqual({ mode: "save", notice: null });
-    expect(editability(remote(), "web.port")).toEqual({ mode: "save", notice: null });
+    expect(editability(copy(), "soulseek.description")).toEqual({ mode: "save", notice: null });
+    expect(editability(copy(), "web.port")).toEqual({ mode: "save", notice: null });
   });
 
   it("locks everything while remote configuration is off, which the page says once", () => {
-    expect(editability(view, "soulseek.description")).toEqual({ mode: "locked", notice: null });
+    const v = copy();
+    (v.values as Record<string, unknown>).remote_configuration = false;
+    expect(editability(v, "soulseek.description")).toEqual({ mode: "locked", notice: null });
   });
 
   it("locks what the environment or the command line set, naming where", () => {
-    const v = remote();
+    const v = copy();
     v.fields["soulseek.username"].source = { layer: "env", var: "RESEEK_SLSK_USERNAME" };
     v.fields["web.port"].source = { layer: "cli", flag: "--http-port" };
     expect(editability(v, "soulseek.username")).toEqual({
@@ -36,7 +33,7 @@ describe("editability", () => {
   });
 
   it("applies at runtime what a managed file holds, unless it needs a restart", () => {
-    const v = remote();
+    const v = copy();
     v.managedBy = "Nix";
     v.files[0].writable = false;
     expect(editability(v, "soulseek.description")).toEqual({ mode: "runtime", notice: null });
@@ -47,7 +44,7 @@ describe("editability", () => {
   });
 
   it("says on a page that keeps a change until removed what it overrides", () => {
-    const v = remote();
+    const v = copy();
     v.files[0].writable = false;
     v.files[0].readOnlyReason = "permission denied";
     expect(editability(v, "soulseek.description", "page")).toEqual({
@@ -63,7 +60,7 @@ describe("editability", () => {
   });
 
   it("names why a file can't be written", () => {
-    const v = remote();
+    const v = copy();
     v.files[0].writable = false;
     v.files[0].readOnlyReason = "permission denied";
     expect(editability(v, "soulseek.description")).toEqual({
@@ -73,7 +70,7 @@ describe("editability", () => {
   });
 
   it("says whether a value applied at runtime lasts until restart or until removed", () => {
-    const v = remote();
+    const v = copy();
     v.files[0].writable = false;
     const applied = (untilRestart: boolean) => {
       v.fields["soulseek.description"].source = {

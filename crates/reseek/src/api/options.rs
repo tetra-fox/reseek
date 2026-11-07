@@ -592,7 +592,11 @@ mod tests {
 
   #[tokio::test]
   async fn changing_anything_needs_remote_configuration() {
-    let app = app(crate::testing::TRUSTED, &[]).await;
+    let app = app(
+      &format!("remote_configuration = false\n{}", crate::testing::TRUSTED),
+      &[],
+    )
+    .await;
     assert_eq!(
       app
         .send(request("GET", "/api/v0/options", None))

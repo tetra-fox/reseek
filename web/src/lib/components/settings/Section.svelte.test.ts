@@ -9,9 +9,7 @@ import { flush } from "#lib/testing/flush.js";
 
 import Section from "./Section.svelte";
 
-/** the fixture with remote configuration on, without which every option is locked */
 const view = structuredClone(fixture) as unknown as ConfigView;
-(view.values as Record<string, unknown>).remote_configuration = true;
 
 describe("a settings section", () => {
   let mounted: ReturnType<typeof mount>[] = [];

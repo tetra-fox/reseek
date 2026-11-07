@@ -47,7 +47,6 @@ describe("your own profile page", () => {
       server: { isLoggedIn: true }
     } as never;
     const view = structuredClone(fixture) as typeof fixture;
-    (view.values as Record<string, unknown>).remote_configuration = true;
     for (const file of view.files) file.writable = true;
     vi.stubGlobal(
       "URL",

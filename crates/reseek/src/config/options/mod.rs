@@ -145,7 +145,7 @@ impl Default for Options {
     Self {
       debug: false,
       headless: false,
-      remote_configuration: false,
+      remote_configuration: true,
       remote_file_management: false,
       instance_name: "default".to_string(),
       shutdown_timeout: Duration::from_secs(10),

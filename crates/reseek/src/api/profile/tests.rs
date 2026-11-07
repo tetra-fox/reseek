@@ -210,7 +210,11 @@ async fn what_is_locked_too_large_or_no_picture_is_refused() {
   assert_eq!(garbage.status, 400);
   assert!(!open.state.paths.data.join("profile/picture.jpg").exists());
 
-  let closed = crate::testing::app(crate::testing::TRUSTED, &[]).await;
+  let closed = crate::testing::app(
+    &format!("remote_configuration = false\n{}", crate::testing::TRUSTED),
+    &[],
+  )
+  .await;
   let text = json!({ "description": "x" });
   let refused = closed
     .send(request("PUT", "/api/v0/profile", Some(text)))

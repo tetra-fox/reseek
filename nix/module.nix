@@ -90,8 +90,8 @@ let
           options = {
             remote_configuration = mkOption {
               type = types.bool;
-              default = false;
-              description = "Lets administrators change the runtime overrides through the API.";
+              default = true;
+              description = "Lets administrators change settings from the web UI and the API.";
             };
             soulseek = mkOption {
               default = { };
