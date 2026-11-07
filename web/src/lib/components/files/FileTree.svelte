@@ -285,8 +285,10 @@
     const at = menuAt;
     return at ? (lines.find((line) => line.key === at.key) ?? null) : null;
   });
-  // the lines hold still while a line's menu is open
-  $effect(() => (menuLine ? interaction.hold() : undefined));
+  // the lines hold still while a line's menu is open. The hold follows whether one is open, not
+  // the line, which is a new object each time the lines are made again
+  const menuOpen = $derived(menuLine !== null);
+  $effect(() => (menuOpen ? interaction.hold() : undefined));
 
   /** Opens a line's menu at the point `at`, or under the line */
   const openMenu = (line: TreeLine<T>, at?: { x: number; y: number }) => {

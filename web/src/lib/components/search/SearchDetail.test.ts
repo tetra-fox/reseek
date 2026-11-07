@@ -213,6 +213,22 @@ describe("search results", () => {
     expect(selection.toString()).toBe(selected);
   });
 
+  it("open a list row's menu with a right-click, the lines holding still", async () => {
+    searchOptions.layout = "list";
+    const stored = [response("alice", 300), response("bob", 200)];
+    const net = await open(stored);
+    net.frame("search.response", { searchId: ID, response: stored[0] });
+    net.frame("search.response", { searchId: ID, response: stored[1] });
+    await streamed();
+    const grid = document.querySelector('[role=treegrid][aria-label^="Search results"]')!;
+    const row = grid.querySelector("[role=row][data-line] [role=gridcell]")!;
+    const at = { bubbles: true, cancelable: true, clientX: 5, clientY: 5 };
+    row.dispatchEvent(new MouseEvent("contextmenu", at));
+    flushSync();
+    await flushFaked();
+    expect(document.querySelector("[role=menu]")).not.toBeNull();
+  });
+
   it("show no file in the inspector once the filter takes it out of the results", async () => {
     searchOptions.layout = "list";
     const stored = [response("alice", 300)];
