@@ -306,7 +306,7 @@
       <EmptyState icon={FolderOpenIcon} title={`${browser.username} is not sharing any files`} />
     {/if}
   {:else}
-    <section class="flex flex-col rounded-card border bg-surface shadow-card">
+    <section class="flex flex-col rounded-card border bg-surface">
       <header class="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 pt-3">
         {#if info}
           <span class="text-sm text-fg-muted">

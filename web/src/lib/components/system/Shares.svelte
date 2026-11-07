@@ -198,7 +198,7 @@
 {#if scan?.scanning}
   {@const percent = Math.round(scan.scanProgress * 100)}
   <div
-    class="flex flex-col gap-2 rounded-card border bg-surface p-4 shadow-card"
+    class="flex flex-col gap-2 rounded-card border bg-surface p-4"
     role="status"
     aria-live="polite">
     <div class="flex items-baseline gap-3">

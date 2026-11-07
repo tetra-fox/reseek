@@ -77,11 +77,12 @@
   </Card>
 </div>
 
-<div class="grid grid-cols-2 gap-section md:grid-cols-4">
+<div class="tile-strip grid-cols-2 md:grid-cols-4">
   {#each tiles as tile (tile.label)}
-    <div class="flex flex-col gap-0.5 rounded-card border bg-surface p-4 shadow-card">
+    <div class="flex flex-col gap-0.5 p-4">
       <span class="text-xs text-fg-muted">{tile.label}</span>
-      <span class="text-2xl font-medium tabular-nums">{tile.value.toLocaleString()}</span>
+      <span class="text-3xl font-semibold tracking-tight tabular-nums"
+        >{tile.value.toLocaleString()}</span>
       <span class="text-xs text-fg-subtle">{tile.sub}</span>
     </div>
   {/each}

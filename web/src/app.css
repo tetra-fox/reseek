@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
-@import "@fontsource-variable/inter";
+/* with the optical size axis, so large figures and headings take the display cut */
+@import "@fontsource-variable/inter/opsz.css";
 @import "@fontsource-variable/jetbrains-mono";
 
 @custom-variant dark (&:where(.dark, .dark *));
@@ -29,30 +30,32 @@
   /* only the tokens below exist, tailwind's default palette and radius scale are off */
   --color-*: initial;
   --radius-*: initial;
-  --color-page: oklch(0.982 0.003 255);
+  /* graphite neutrals with a faint cool cast. The page is the chrome around the screen, the
+     sidebar and footer; each screen sits on a surface panel */
+  --color-page: oklch(0.963 0.006 var(--neutral-hue));
   --color-surface: oklch(1 0 0);
-  --color-surface-muted: oklch(0.968 0.004 255);
-  --color-hover: oklch(0.95 0.006 255);
-  --color-press: oklch(0.925 0.008 255);
+  --color-surface-muted: oklch(0.972 0.005 var(--neutral-hue));
+  --color-hover: oklch(0.953 0.007 var(--neutral-hue));
+  --color-press: oklch(0.928 0.009 var(--neutral-hue));
   --color-overlay: oklch(1 0 0);
-  --color-border: oklch(0.918 0.005 255);
-  --color-input: oklch(0.875 0.007 255);
-  --color-field: oklch(0.962 0.004 255);
-  --color-fg: oklch(0.2 0.012 255);
-  --color-fg-muted: oklch(0.5 0.014 255);
-  --color-fg-subtle: oklch(0.63 0.012 255);
-  --color-accent: oklch(0.56 0.2 var(--accent-hue));
-  --color-accent-hover: oklch(0.51 0.19 var(--accent-hue));
-  --color-accent-press: oklch(0.46 0.17 var(--accent-hue));
+  --color-border: oklch(0.912 0.008 var(--neutral-hue));
+  --color-input: oklch(0.868 0.01 var(--neutral-hue));
+  --color-field: oklch(0.976 0.004 var(--neutral-hue));
+  --color-fg: oklch(0.19 0.012 var(--neutral-hue));
+  --color-fg-muted: oklch(0.5 0.016 var(--neutral-hue));
+  --color-fg-subtle: oklch(0.63 0.014 var(--neutral-hue));
+  --color-accent: oklch(0.58 0.165 var(--accent-hue));
+  --color-accent-hover: oklch(0.53 0.15 var(--accent-hue));
+  --color-accent-press: oklch(0.48 0.135 var(--accent-hue));
   --color-accent-fg: oklch(0.99 0 0);
-  --color-accent-soft: oklch(0.955 0.03 var(--accent-hue));
-  --color-accent-soft-fg: oklch(0.45 0.17 var(--accent-hue));
-  --color-danger: oklch(0.58 0.2 25);
-  --color-danger-hover: oklch(0.53 0.19 25);
-  --color-danger-press: oklch(0.48 0.18 25);
+  --color-accent-soft: oklch(0.955 0.024 var(--accent-hue));
+  --color-accent-soft-fg: oklch(0.48 0.135 var(--accent-hue));
+  --color-danger: oklch(0.55 0.2 18);
+  --color-danger-hover: oklch(0.5 0.19 18);
+  --color-danger-press: oklch(0.45 0.18 18);
   --color-danger-fg: oklch(0.99 0 0);
-  --color-danger-soft: oklch(0.955 0.028 25);
-  --color-danger-soft-fg: oklch(0.5 0.17 25);
+  --color-danger-soft: oklch(0.955 0.03 18);
+  --color-danger-soft-fg: oklch(0.48 0.17 18);
   --color-warning: oklch(0.75 0.15 75);
   --color-warning-soft: oklch(0.965 0.045 85);
   --color-warning-soft-fg: oklch(0.48 0.11 65);
@@ -63,17 +66,16 @@
   --color-info-soft: oklch(0.955 0.025 250);
   --color-info-soft-fg: oklch(0.45 0.13 250);
   --color-ring: color-mix(in oklab, var(--color-accent) 50%, transparent);
-  --color-selection: oklch(0.9 0.06 var(--accent-hue));
-  --color-scrollbar: oklch(0.82 0.008 255);
-  --color-scrim: oklch(0.15 0.006 255 / 0.45);
+  --color-selection: oklch(0.9 0.055 var(--accent-hue));
+  --color-scrollbar: oklch(0.82 0.008 var(--neutral-hue));
+  --color-scrim: oklch(0.15 0.01 var(--neutral-hue) / 0.45);
   --color-thumb: oklch(1 0 0);
 
-  --shadow-card: var(--elevation-card);
   --shadow-raised: var(--elevation-raised);
 
-  --radius-control: 0.5rem;
-  --radius-card: 0.875rem;
-  --radius-badge: 0.375rem;
+  --radius-control: 0.375rem;
+  --radius-card: 0.625rem;
+  --radius-badge: 0.25rem;
 
   --spacing-control: 2rem;
   --spacing-control-sm: 1.75rem;
@@ -172,9 +174,10 @@
     }
   }
 
-  /* the two directions of a transfer, the same on every chart, arrow and figure */
+  /* the two directions of a transfer, the same on every chart, arrow and figure: the accent, and
+     a cool blue across from it */
   --color-download: var(--color-accent);
-  --color-upload: var(--color-fg-muted);
+  --color-upload: oklch(0.56 0.115 235);
 
   /* the spectrogram's plot and the text on it, dark on both themes */
   --color-plot: #101014;
@@ -186,17 +189,19 @@
     "Liberation Mono", "Courier New", monospace;
 }
 
-/* shadows refer to these so dark mode can swap them, tailwind inlines theme shadows otherwise.
+/* the raised shadow refers to this so dark mode can swap it, tailwind inlines theme shadows otherwise.
    The color scheme is declared here as well as by the theme switcher: the build turns the
    light-dark() in the chart library's styles into variables it sets only where a stylesheet
    declares one */
 :root {
   color-scheme: light;
-  /* the accent's hue, which every accent color in both themes takes */
-  --accent-hue: 252;
-  --elevation-card: 0 1px 2px 0 oklch(0.2 0.01 255 / 0.04), 0 1px 3px 0 oklch(0.2 0.01 255 / 0.03);
+  /* the accent's hue, a burnt orange, which every accent color in both themes takes */
+  --accent-hue: 45;
+  /* the hue the greys lean toward, faintly, in both themes */
+  --neutral-hue: 255;
   --elevation-raised:
-    0 8px 24px -6px oklch(0.2 0.01 255 / 0.14), 0 2px 6px oklch(0.2 0.01 255 / 0.06);
+    0 8px 24px -6px oklch(0.2 0.01 var(--neutral-hue) / 0.14),
+    0 2px 6px oklch(0.2 0.01 var(--neutral-hue) / 0.06);
 }
 
 @media (width >= 48rem) {
@@ -233,30 +238,30 @@
 
 .dark {
   color-scheme: dark;
-  --color-page: oklch(0.135 0.006 255);
-  --color-surface: oklch(0.168 0.007 255);
-  --color-surface-muted: oklch(0.198 0.008 255);
-  --color-hover: oklch(0.225 0.009 255);
-  --color-press: oklch(0.26 0.01 255);
-  --color-overlay: oklch(0.2 0.008 255);
-  --color-border: oklch(0.25 0.009 255);
-  --color-input: oklch(0.315 0.011 255);
-  --color-field: oklch(0.135 0.006 255);
-  --color-fg: oklch(0.955 0.004 255);
-  --color-fg-muted: oklch(0.69 0.012 255);
-  --color-fg-subtle: oklch(0.54 0.012 255);
-  --color-accent: oklch(0.73 0.16 var(--accent-hue));
-  --color-accent-hover: oklch(0.78 0.14 var(--accent-hue));
-  --color-accent-press: oklch(0.82 0.12 var(--accent-hue));
-  --color-accent-fg: oklch(0.17 0.02 var(--accent-hue));
-  --color-accent-soft: oklch(0.27 0.065 var(--accent-hue));
-  --color-accent-soft-fg: oklch(0.87 0.085 var(--accent-hue));
-  --color-danger: oklch(0.68 0.17 25);
-  --color-danger-hover: oklch(0.73 0.15 25);
-  --color-danger-press: oklch(0.78 0.13 25);
-  --color-danger-fg: oklch(0.17 0.02 25);
-  --color-danger-soft: oklch(0.27 0.065 25);
-  --color-danger-soft-fg: oklch(0.84 0.09 25);
+  --color-page: oklch(0.128 0.008 var(--neutral-hue));
+  --color-surface: oklch(0.168 0.009 var(--neutral-hue));
+  --color-surface-muted: oklch(0.198 0.01 var(--neutral-hue));
+  --color-hover: oklch(0.225 0.011 var(--neutral-hue));
+  --color-press: oklch(0.26 0.012 var(--neutral-hue));
+  --color-overlay: oklch(0.2 0.01 var(--neutral-hue));
+  --color-border: oklch(0.255 0.012 var(--neutral-hue));
+  --color-input: oklch(0.32 0.014 var(--neutral-hue));
+  --color-field: oklch(0.145 0.008 var(--neutral-hue));
+  --color-fg: oklch(0.96 0.004 var(--neutral-hue));
+  --color-fg-muted: oklch(0.7 0.014 var(--neutral-hue));
+  --color-fg-subtle: oklch(0.55 0.014 var(--neutral-hue));
+  --color-accent: oklch(0.74 0.165 var(--accent-hue));
+  --color-accent-hover: oklch(0.79 0.128 var(--accent-hue));
+  --color-accent-press: oklch(0.83 0.1 var(--accent-hue));
+  --color-accent-fg: oklch(0.2 0.04 var(--accent-hue));
+  --color-accent-soft: oklch(0.29 0.07 var(--accent-hue));
+  --color-accent-soft-fg: oklch(0.88 0.068 var(--accent-hue));
+  --color-danger: oklch(0.66 0.18 15);
+  --color-danger-hover: oklch(0.71 0.16 15);
+  --color-danger-press: oklch(0.76 0.14 15);
+  --color-danger-fg: oklch(0.17 0.02 15);
+  --color-danger-soft: oklch(0.27 0.07 15);
+  --color-danger-soft-fg: oklch(0.84 0.09 15);
   --color-warning: oklch(0.8 0.14 80);
   --color-warning-soft: oklch(0.28 0.055 80);
   --color-warning-soft-fg: oklch(0.88 0.1 85);
@@ -266,11 +271,11 @@
   --color-info: oklch(0.7 0.11 250);
   --color-info-soft: oklch(0.27 0.05 250);
   --color-info-soft-fg: oklch(0.86 0.07 250);
-  --color-selection: oklch(0.38 0.09 var(--accent-hue));
-  --color-scrollbar: oklch(0.36 0.012 255);
-  --color-scrim: oklch(0.08 0.006 255 / 0.6);
-  --color-thumb: oklch(0.3 0.01 255);
-  --elevation-card: inset 0 1px 0 0 oklch(1 0 0 / 0.03), 0 1px 2px 0 oklch(0 0 0 / 0.35);
+  --color-upload: oklch(0.74 0.12 235);
+  --color-selection: oklch(0.4 0.09 var(--accent-hue));
+  --color-scrollbar: oklch(0.36 0.012 var(--neutral-hue));
+  --color-scrim: oklch(0.08 0.008 var(--neutral-hue) / 0.6);
+  --color-thumb: oklch(0.3 0.011 var(--neutral-hue));
   --elevation-raised: inset 0 1px 0 0 oklch(1 0 0 / 0.05), 0 12px 32px -8px oklch(0 0 0 / 0.6);
 }
 
@@ -467,9 +472,10 @@
   @apply bg-surface-muted text-fg inset-ring-1 inset-ring-border;
 }
 
-/* a line of the sidebar */
+/* a line of the sidebar. The current one is raised to the panel's surface, as the screen it
+   leads to is */
 @utility nav-item {
-  @apply flex h-control w-full items-center gap-2.5 rounded-control px-2 text-sm whitespace-nowrap text-fg-muted transition-colors duration-(--motion-fast) select-none not-disabled:hover:bg-hover not-disabled:hover:text-fg focus-visible:-outline-offset-2 not-disabled:active:bg-press aria-[current]:nav-current;
+  @apply flex h-control w-full items-center gap-2.5 rounded-control px-2 text-sm whitespace-nowrap text-fg-muted transition-colors duration-(--motion-fast) select-none not-disabled:hover:bg-hover not-disabled:hover:text-fg focus-visible:-outline-offset-2 not-disabled:active:bg-press aria-[current]:bg-surface aria-[current]:text-fg aria-[current]:shadow-xs aria-[current]:inset-ring-1 aria-[current]:inset-ring-border;
 }
 
 /* a tab of a screen, a link to one of its parts */
@@ -522,6 +528,15 @@
    and what happened */
 @utility log-row {
   @apply grid grid-cols-[4.5rem_1.25rem_minmax(0,1fr)] items-start gap-2 pick-row rounded-badge px-1 py-0.5;
+}
+
+/* figures side by side in one frame with a hairline between each: the tiles are drawn on the
+   border color a pixel apart, which leaves the line however many rows they wrap to */
+@utility tile-strip {
+  @apply grid gap-px overflow-hidden rounded-card border bg-border;
+  & > * {
+    @apply bg-surface;
+  }
 }
 
 /* the bar of what is selected in a list, which stays at the bottom of the content area */

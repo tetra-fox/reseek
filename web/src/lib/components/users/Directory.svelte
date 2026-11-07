@@ -288,7 +288,7 @@
 {:else}
   <div
     bind:this={grid}
-    class="overflow-x-auto rounded-card border bg-surface text-sm shadow-card outline-none focus-visible:ring-2 focus-visible:ring-accent"
+    class="overflow-x-auto rounded-card border bg-surface text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent"
     role="grid"
     aria-label="Users"
     aria-multiselectable="true"

@@ -104,6 +104,7 @@
       description="reseek keeps its databases in memory" />
   {:else}
     <div
+      data-edge
       class="-mx-5 border-y text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
       role="grid"
       aria-label="Databases"

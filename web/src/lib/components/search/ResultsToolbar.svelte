@@ -53,7 +53,7 @@
   ];
 </script>
 
-<div class="flex flex-col gap-2.5 rounded-card border bg-surface p-3 shadow-card">
+<div class="flex flex-col gap-2.5">
   <div class="flex flex-wrap items-center gap-x-5 gap-y-2">
     <LayoutToggle bind:value={searchOptions.layout} />
     {#if searchOptions.layout === "tree"}

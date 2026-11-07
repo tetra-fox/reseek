@@ -38,6 +38,7 @@
   {/if}
   <!-- the rows share the list's columns, so a row without Run now lines up with the others -->
   <ul
+    data-edge
     class="-mx-5 grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 divide-y border-y text-sm md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
     {#each jobs.schedules as s (s.name)}
       {@const off = !s.every}

@@ -122,7 +122,7 @@
 {:else if !entries.length}
   <EmptyState icon={HistoryIcon} title="No activity with this user yet" />
 {:else}
-  <ol class="flex flex-col rounded-card border bg-surface shadow-card">
+  <ol class="flex flex-col rounded-card border bg-surface">
     {#each entries as entry (entry.key)}
       <li class="flex gap-4 border-b px-4 py-2 text-sm last:border-b-0">
         <time class="w-40 shrink-0 text-xs text-fg-muted" datetime={entry.at}

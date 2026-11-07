@@ -149,7 +149,7 @@
   lineRem={LINES[view.density]}
   {slot}
   framed={false}
-  class="tabular-nums shadow-card"
+  class="tabular-nums"
   {inspect}
   onopen={(t) => ondetails(t)}
   onkey={actOnKey}

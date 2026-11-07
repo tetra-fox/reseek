@@ -215,7 +215,7 @@
   {:else}
     <!-- the rows share the list's columns, so rows with different actions line up -->
     <ul
-      class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 divide-y overflow-hidden rounded-card border bg-surface text-sm shadow-card md:grid-cols-[auto_minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
+      class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 divide-y overflow-hidden rounded-card border bg-surface text-sm md:grid-cols-[auto_minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
       {#each listed as job (job.id)}
         <li id={`job-${job.id}`} class="col-span-full grid grid-cols-subgrid list-row">
           <JobRow {job} open={opened === job.id} ontoggle={() => toggle(job.id)} />

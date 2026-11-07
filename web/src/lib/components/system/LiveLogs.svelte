@@ -210,7 +210,7 @@
 
 <div
   bind:this={grid}
-  class="max-h-[65svh] overflow-auto rounded-card border bg-surface font-mono text-xs shadow-card outline-none focus-visible:ring-2 focus-visible:ring-accent"
+  class="max-h-[65svh] overflow-auto rounded-card border bg-surface font-mono text-xs outline-none focus-visible:ring-2 focus-visible:ring-accent"
   role="grid"
   aria-label="Live log"
   aria-multiselectable="true"

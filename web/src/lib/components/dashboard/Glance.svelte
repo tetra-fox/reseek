@@ -37,7 +37,7 @@
   parts: { text: string; to: string; strong?: boolean }[],
   note?: string
 )}
-  <div class="flex min-w-0 flex-col gap-1.5 rounded-card border bg-surface p-4 shadow-card">
+  <div class="flex min-w-0 flex-col gap-1.5 p-4">
     <span class="flex items-center gap-1.5 text-xs text-fg-muted"
       ><Icon class={["size-3.5", tone]} />{title}</span>
     <span class="flex flex-wrap items-baseline gap-x-2 text-sm">
@@ -54,7 +54,10 @@
   </div>
 {/snippet}
 
-<section aria-label="Current activity" class="grid grid-cols-2 gap-section lg:grid-cols-5">
+<!-- an odd last tile takes the whole of its line, where two share each -->
+<section
+  aria-label="Current activity"
+  class="tile-strip grid-cols-2 lg:grid-cols-5 [&>:last-child:nth-child(odd)]:max-lg:col-span-2">
   {@render tile(
     ArrowDownIcon,
     "text-download",

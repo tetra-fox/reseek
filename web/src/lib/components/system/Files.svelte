@@ -450,7 +450,7 @@
     {/snippet}
   </Notice>
 {:else if !listing}
-  <div class="flex flex-col gap-px overflow-hidden rounded-card border bg-surface shadow-card">
+  <div class="flex flex-col gap-px overflow-hidden rounded-card border bg-surface">
     {#each [0, 1, 2, 3, 4] as n (n)}
       <div class="flex h-9 items-center gap-3 px-3" aria-hidden="true">
         <Skeleton class="size-4" /><Skeleton class="h-3 flex-1" /><Skeleton class="h-3 w-28" />
@@ -470,7 +470,7 @@
   {/if}
   <FileTree
     bind:this={tree}
-    class={["shadow-card", loading && "opacity-60"]}
+    class={[loading && "opacity-60"]}
     {lines}
     {expansion}
     label={`Files in /${root}/${path}`}

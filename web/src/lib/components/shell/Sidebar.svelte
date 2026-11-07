@@ -91,8 +91,8 @@
 {#snippet panel()}
   <div
     class={[
-      "flex h-full flex-col gap-2 overflow-x-hidden overflow-y-auto bg-surface p-3",
-      sidebar.phone ? "rounded-card border shadow-raised" : "border-r"
+      "flex h-full flex-col gap-2 overflow-x-hidden overflow-y-auto p-3",
+      sidebar.phone ? "rounded-card border bg-surface shadow-raised" : "bg-page"
     ]}>
     <a href={href("/dashboard")} class="flex h-control items-center gap-2.5" aria-label="reseek">
       <Logo />
@@ -153,11 +153,11 @@
     </Dialog.Portal>
   </Dialog.Root>
 {:else}
-  <!-- the icon strip is one control wide plus the panel's padding and its border -->
+  <!-- the icon strip is one control wide plus the panel's padding -->
   <div
     class={[
       "h-full shrink-0 transition-[width] duration-(--motion-fast) ease-(--ease-out-soft)",
-      sidebar.collapsed ? "w-[calc(var(--spacing-control)+1.5rem+1px)]" : "w-60"
+      sidebar.collapsed ? "w-[calc(var(--spacing-control)+1.5rem)]" : "w-60"
     ]}>
     {@render panel()}
   </div>

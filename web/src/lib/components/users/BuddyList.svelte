@@ -151,7 +151,7 @@
     description="Add a buddy to see when they are online and to share folders with buddies only" />
 {:else}
   <div
-    class="overflow-x-auto rounded-card border bg-surface text-sm shadow-card outline-none focus-visible:ring-2 focus-visible:ring-accent"
+    class="overflow-x-auto rounded-card border bg-surface text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent"
     role="grid"
     aria-label={BUDDY.plural}
     aria-activedescendant={list.activeId}

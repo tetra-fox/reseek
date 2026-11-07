@@ -55,7 +55,7 @@
      and the activity log's button and leaves out the counts and the project link. Where a large
      text size leaves no room, the speeds move to a second line together -->
 <footer
-  class="relative z-20 flex min-h-10 flex-wrap items-center gap-x-3 gap-y-1 border-t bg-surface/90 px-gutter py-1.5 text-xs backdrop-blur-md md:gap-x-4">
+  class="relative z-20 flex min-h-10 flex-wrap items-center gap-x-3 gap-y-1 bg-page px-gutter py-1.5 text-xs max-md:border-t md:gap-x-4">
   <!-- our name, and whether others see us online or away, which a click changes -->
   <Tooltip
     text={!canSet

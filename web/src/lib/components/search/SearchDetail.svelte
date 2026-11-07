@@ -330,13 +330,14 @@
     <Skeleton class="h-28" />
   {/if}
 {:else}
-  <div
-    class="flex flex-wrap items-center gap-inline rounded-card border bg-surface p-4 shadow-card">
+  <div class="flex flex-wrap items-center gap-inline">
     <StatusIcon state={search.state} />
     <!-- the buttons go under the title rather than squeeze it below a word's width -->
     <Tooltip text={search.searchText} clipped>
       {#snippet child({ props })}
-        <h2 {...props} class="min-w-0 flex-1 basis-40 truncate text-lg font-medium">
+        <h2
+          {...props}
+          class="min-w-0 flex-1 basis-40 truncate text-2xl font-semibold tracking-tight">
           {search.searchText}
         </h2>
       {/snippet}
@@ -455,9 +456,7 @@
       {search.state === "InProgress" ? "Searching..." : "Starting search..."}
     </div>
     {#each [0, 1, 2] as n (n)}
-      <div
-        class="flex flex-col gap-2 rounded-card border bg-surface p-3 shadow-card"
-        aria-hidden="true">
+      <div class="flex flex-col gap-2 rounded-card border bg-surface p-3" aria-hidden="true">
         <Skeleton class="h-4 w-48" />
         <Skeleton class="h-3 w-3/4" />
         <Skeleton class="h-3 w-2/3" />

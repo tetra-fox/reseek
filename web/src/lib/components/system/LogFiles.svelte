@@ -72,7 +72,7 @@
 {:else}
   <p class="flex items-center gap-1.5 font-mono text-sm text-fg-muted">/logs</p>
   <div
-    class="overflow-x-auto rounded-card border bg-surface text-sm shadow-card outline-none focus-visible:ring-2 focus-visible:ring-accent"
+    class="overflow-x-auto rounded-card border bg-surface text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent"
     role="grid"
     aria-label="Log files"
     aria-multiselectable="true"

@@ -164,7 +164,9 @@
     class="grid h-svh grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto]">
     <div class="flex min-h-0">
       <Sidebar />
-      <div class="flex min-w-0 flex-1 flex-col">
+      <!-- the screen's panel, inset from the chrome around it, edge to edge on a phone -->
+      <div
+        class="flex min-w-0 flex-1 flex-col overflow-hidden bg-surface md:my-2 md:mr-2 md:rounded-card md:border">
         <div>
           <Header />
           <LostBanner />

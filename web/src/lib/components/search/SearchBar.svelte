@@ -93,7 +93,7 @@
 </script>
 
 <form
-  class="@container flex flex-col gap-2 rounded-card border bg-surface p-3 shadow-card"
+  class="@container flex flex-col gap-2 rounded-card border bg-surface p-3"
   onsubmit={(e) => {
     e.preventDefault();
     run();

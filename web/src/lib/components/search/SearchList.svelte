@@ -60,9 +60,7 @@
 {#if !searches.loaded && searches.error}
   <ErrorSegment caption={searches.error} retry={() => void searches.load()} retryLabel="Retry" />
 {:else if !searches.loaded}
-  <div
-    class="flex flex-col gap-2 rounded-card border bg-surface p-4 shadow-card"
-    aria-hidden="true">
+  <div class="flex flex-col gap-2 rounded-card border bg-surface p-4" aria-hidden="true">
     {#each [0, 1, 2, 3] as n (n)}<Skeleton class="h-6" />{/each}
   </div>
 {:else if rows.length === 0}

@@ -119,7 +119,7 @@
   <Card
     title="Runtime overrides"
     description="Set from this page or the API, on top of the configuration files">
-    <ul class="-mx-5 divide-y border-y">
+    <ul data-edge class="-mx-5 divide-y border-y">
       {#each overrides as [key, override] (key)}
         <li class="flex flex-wrap items-center gap-inline px-5 py-2 text-sm">
           <code class="min-w-0 font-medium wrap-anywhere">{key}</code>

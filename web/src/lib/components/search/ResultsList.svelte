@@ -163,7 +163,7 @@
   nameOf={(line) => (line.kind === "item" ? getFileName(line.item.file.filename) : "")}
   lineRem={LINE_REM}
   framed={false}
-  class="tabular-nums shadow-card"
+  class="tabular-nums"
   onopen={canDownload ? (r) => void downloadNow(selected.size > 1 ? chosen : [r]) : undefined}
   onmiddleclick={canDownload ? (r) => void downloadNow([r]) : undefined}
   inspect={(r) => inspect(pick(r))}>

@@ -106,7 +106,7 @@
   };
 </script>
 
-<section class="flex flex-col gap-4 rounded-card border bg-surface p-5 shadow-card">
+<section class="flex flex-col gap-4">
   <div class="flex flex-wrap items-start gap-4">
     <Avatar {name} pictureUrl={pictureOf(name, p)} link={false} class="size-16 text-2xl" />
     <div class="flex min-w-0 flex-1 flex-col gap-1.5">
@@ -120,7 +120,7 @@
           {#snippet child({ props })}
             <h1
               {...props}
-              class="truncate font-mono text-lg font-medium"
+              class="truncate font-mono text-2xl font-semibold tracking-tight"
               style:color={nameColor(name)}>
               {name}
             </h1>

@@ -41,20 +41,25 @@
 )}
   <a
     href={href(to)}
-    class="group flex flex-col gap-1.5 rounded-card border bg-surface p-4 shadow-card transition-colors duration-(--motion-fast) hover:border-fg-subtle/40">
+    class="group flex flex-col gap-1.5 p-4 transition-colors duration-(--motion-fast) hover:bg-hover">
     <span class="flex items-center gap-1.5 text-xs text-fg-muted group-hover:text-fg"
       ><Icon class={["size-3.5", stat.icon]} />{stat.label}</span>
-    <span class={["flex items-baseline gap-1 text-2xl font-medium tabular-nums", stat.tone]}
+    <span
+      class={[
+        "flex items-baseline gap-1 text-3xl font-semibold tracking-tight tabular-nums",
+        stat.tone
+      ]}
       >{stat.value}{#if stat.unit}<span class="text-sm text-fg-muted">{stat.unit}</span>{/if}</span>
     {#if stat.note}<span class="truncate text-xs text-fg-subtle">{stat.note}</span>{/if}
   </a>
 {/snippet}
 
-<div class="grid grid-cols-2 gap-section lg:grid-cols-4">
+<div class="tile-strip grid-cols-2 lg:grid-cols-4">
   {@render tile(
     ArrowDownIcon,
     {
       icon: "text-download",
+      tone: "text-download",
       label: "Downloaded",
       value: down[0],
       unit: down[1],
@@ -66,6 +71,7 @@
     ArrowUpIcon,
     {
       icon: "text-upload",
+      tone: "text-upload",
       label: "Uploaded",
       value: up[0],
       unit: up[1],

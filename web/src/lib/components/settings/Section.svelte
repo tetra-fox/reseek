@@ -366,7 +366,7 @@
       <Textarea class="field-sizing-content max-h-64 font-mono text-xs" readonly value={nix} />
     </div>
   {/if}
-  <div class="-mx-5 divide-y border-y">
+  <div data-edge class="-mx-5 divide-y border-y">
     {#each fields as field, i (field.key)}
       {#if opensHeading(field, i)}
         <h4

@@ -350,7 +350,7 @@
 {#if !store.loaded && store.error}
   <ErrorSegment caption={store.error} retry={() => void store.load()} retryLabel="Retry" />
 {:else if !store.loaded}
-  <div class="flex flex-col gap-px overflow-hidden rounded-card border bg-surface shadow-card">
+  <div class="flex flex-col gap-px overflow-hidden rounded-card border bg-surface">
     {#each [0, 1, 2, 3, 4, 5] as n (n)}
       <div class="flex h-9 items-center gap-3 px-3" aria-hidden="true">
         <Skeleton class="size-4" /><Skeleton class="h-3 flex-1" /><Skeleton class="h-3 w-24" />
@@ -370,7 +370,7 @@
     total={all.length}
     {noun}
     refocus={() => table?.focus()}
-    class="rounded-card border bg-surface shadow-card" />
+    class="rounded-card border bg-surface" />
 {:else}
   <TransferTable
     bind:this={table}
