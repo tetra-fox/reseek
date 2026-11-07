@@ -87,9 +87,13 @@
   --motion-fast: 150ms;
   --motion-slow: 250ms;
   --motion-flash: 300ms;
+  /* a popover leaving, quicker than it came */
+  --motion-exit: 100ms;
   --ease-out-soft: cubic-bezier(0.2, 0, 0, 1);
+  /* a panel sliding in from the screen's edge: most of the way at the start, then slowing */
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
   --animate-popover-in: popover-in var(--motion-fast) var(--ease-out-soft);
-  --animate-popover-out: popover-out var(--motion-fast) var(--ease-out-soft) forwards;
+  --animate-popover-out: popover-out var(--motion-exit) var(--ease-out-soft) forwards;
 
   @keyframes popover-in {
     from {
@@ -140,7 +144,7 @@
 
   --animate-fade-in: fade-in var(--motion-fast) var(--ease-out-soft);
   --animate-fade-out: fade-out var(--motion-fast) var(--ease-out-soft) forwards;
-  --animate-sheet-in: sheet-in var(--motion-fast) var(--ease-out-soft);
+  --animate-sheet-in: sheet-in var(--motion-slow) var(--ease-drawer);
   --animate-sheet-out: sheet-out var(--motion-fast) var(--ease-out-soft) forwards;
 
   @keyframes fade-in {

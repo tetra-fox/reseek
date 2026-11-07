@@ -8,7 +8,9 @@
   export const tether = Tooltip.createTether<{ text: string; side: Side }>();
 </script>
 
-<!-- bits-ui's default 700ms is slow for the collapsed sidebar, where the tooltip is the only label -->
+<!-- bits-ui's default 700ms is slow for the collapsed sidebar, where the tooltip is the only label.
+     Only a tooltip that waited out the delay grows in: one opened just after another closed
+     shows at once, so moving along a toolbar reads its labels without waiting -->
 <Tooltip.Provider delayDuration={300}>
   <!-- a click or a dialog moving focus opens no tooltip, so Escape reaches the dialog; keys still do -->
   <Tooltip.Root {tether} ignoreNonKeyboardFocus>
@@ -18,7 +20,7 @@
           side={payload?.side}
           sideOffset={4}
           collisionPadding={8}
-          class="z-50 max-w-sm origin-(--bits-tooltip-content-transform-origin) animate-popover-in rounded-control border bg-overlay px-2 py-1 text-xs wrap-anywhere text-fg shadow-raised data-[state=closed]:animate-popover-out">
+          class="z-50 max-w-sm origin-(--bits-tooltip-content-transform-origin) rounded-control border bg-overlay px-2 py-1 text-xs wrap-anywhere text-fg shadow-raised data-[state=closed]:animate-popover-out data-[state=delayed-open]:animate-popover-in">
           {payload?.text}
         </Tooltip.Content>
       </Tooltip.Portal>

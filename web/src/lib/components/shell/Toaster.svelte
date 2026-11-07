@@ -1,15 +1,14 @@
 <script lang="ts">
   import XIcon from "@lucide/svelte/icons/x";
   import { flip } from "svelte/animate";
-  import { cubicOut } from "svelte/easing";
   import { fly } from "svelte/transition";
 
   import Button from "#lib/components/ui/Button.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { dismiss, hold, toasts } from "#lib/feedback/toast.svelte.js";
-  import { motionFast } from "#lib/ui/motion.js";
+  import { easeOutSoft, motionFast } from "#lib/ui/motion.js";
 
-  const motion = () => ({ duration: motionFast(), easing: cubicOut });
+  const motion = () => ({ duration: motionFast(), easing: easeOutSoft });
 </script>
 
 <!-- bottom center, newest on top, above the footer and the docked activity log -->

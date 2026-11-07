@@ -177,9 +177,10 @@
 
 <Dialog.Root bind:open={palette.open} onOpenChange={(open) => !open && (query = "")}>
   <Dialog.Portal>
-    <Scrim />
+    <!-- opened from the keys many times a day, so it shows and goes at once -->
+    <Scrim instant />
     <Dialog.Content
-      class="fixed top-[15svh] left-1/2 z-50 flex max-h-[70svh] w-[min(36rem,calc(100vw-2rem))] -translate-x-1/2 flex-col overflow-hidden rounded-card border bg-overlay shadow-raised outline-none data-[state=closed]:animate-popover-out data-[state=open]:animate-popover-in">
+      class="fixed top-[15svh] left-1/2 z-50 flex max-h-[70svh] w-[min(36rem,calc(100vw-2rem))] -translate-x-1/2 flex-col overflow-hidden rounded-card border bg-overlay shadow-raised outline-none">
       <Dialog.Title class="sr-only">Go to</Dialog.Title>
       <Command.Root loop class="flex min-h-0 flex-col" filter={paletteScore}>
         <Command.Input
