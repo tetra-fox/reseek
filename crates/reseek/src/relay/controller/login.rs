@@ -35,7 +35,7 @@ pub(super) struct Login<'a> {
 
 /// Checks `login` against the configured `agent` with its name, if any, and the `challenge` of
 /// the socket, if it still has one, at `now`, for a controller of version `ours`; `key`
-/// derives the agent's key from its secret.
+/// derives the agent's key from its secret. Returns that key when the login checks out.
 pub(super) fn check(
   agent: Option<&RelayAgent>,
   login: &Login,
@@ -44,7 +44,7 @@ pub(super) fn check(
   now: Instant,
   ours: &str,
   key: impl FnOnce(&str) -> Key,
-) -> Result<(), LoginFailure> {
+) -> Result<Key, LoginFailure> {
   let (address, credential) = (login.address, login.credential);
   let agent = agent.ok_or(LoginFailure::UnknownAgent)?;
   if !Controller::address_allowed(agent, address) {
@@ -55,13 +55,14 @@ pub(super) fn check(
     .ok_or(LoginFailure::ChallengeExpired)?;
   // a configured agent has a secret, which loading the options checked
   let secret = agent.secret.as_deref().unwrap_or_default();
-  if !key(secret).verifies(Purpose::Login, &challenge.token, credential) {
+  let key = key(secret);
+  if !key.verifies(Purpose::Login, &challenge.token, credential) {
     return Err(LoginFailure::BadCredential);
   }
   if !version::compatible(ours, login.version) {
     return Err(LoginFailure::IncompatibleVersion);
   }
-  Ok(())
+  Ok(key)
 }
 
 #[cfg(test)]
@@ -101,7 +102,7 @@ mod tests {
           credential,
           version: OURS,
         };
-        check(agent, &login, challenge, LIFETIME, now, OURS, key)
+        check(agent, &login, challenge, LIFETIME, now, OURS, key).map(drop)
       };
     assert_eq!(login(Some(&lan), Some(&challenge), issued, &right), Ok(()));
     assert_eq!(
@@ -152,6 +153,7 @@ mod tests {
         OURS,
         key,
       )
+      .map(drop)
     };
     assert_eq!(versioned("0.4.0", &right), Ok(()), "a patch apart");
     assert_eq!(

@@ -64,15 +64,19 @@ pub fn merge(listings: Vec<Vec<Directory>>) -> Vec<Directory> {
   tree.into_values().collect()
 }
 
-/// The listing of every index in `dbs`, or of the share `alias` in each, merged.
+/// The listing of every index in `dbs`, or of the share `alias` in each, merged; an agent's
+/// index that cannot be read is left out.
 pub async fn listing(dbs: &[Arc<Index>], alias: Option<String>) -> Result<Vec<Directory>, DbError> {
   let mut listings = Vec::with_capacity(dbs.len());
   for db in dbs {
     let alias = alias.clone();
-    listings.push(
-      db.read(move |conn| repository::browse(conn, alias.as_deref()))
-        .await?,
-    );
+    match db
+      .read(move |conn| repository::browse(conn, alias.as_deref()))
+      .await
+    {
+      Ok(listing) => listings.push(listing),
+      Err(e) => db.left_out(e)?,
+    }
   }
   Ok(merge(listings))
 }
@@ -165,7 +169,7 @@ mod tests {
     .unwrap();
     let dir = tempfile::tempdir().unwrap();
     let file = path(dir.path(), &View::everything());
-    rebuild(&[Index::kept(db)], &file, &View::everything())
+    rebuild(&[Index::local(db)], &file, &View::everything())
       .await
       .unwrap();
     let bytes = std::fs::read(&file).unwrap();

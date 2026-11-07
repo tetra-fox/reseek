@@ -65,6 +65,12 @@ struct Registration {
   record: RelayAgentState,
   /// frames for its socket
   outbound: mpsc::Sender<Outbound>,
+  /// the address it logged in from
+  address: IpAddr,
+  /// the secret it logged in with
+  secret: String,
+  /// the key derived from that secret, which its calls over HTTP are checked with
+  key: Key,
 }
 
 /// A token handed to an agent, with what it may be used for.
@@ -102,15 +108,11 @@ pub struct Controller {
   telemetry: Arc<Telemetry>,
   /// the downloads directory, which finished downloads are offered from
   downloads: PathBuf,
-  /// where uploaded share databases are written before they are loaded
-  temporary: PathBuf,
   shutdown: CancellationToken,
   registry: Mutex<Registry>,
   /// the tasks serving the agents' sockets, which a stop waits for
   sessions: TaskTracker,
   sockets: AtomicU64,
-  /// each configured agent's key, with the secret it was derived from
-  keys: Mutex<HashMap<String, (String, Key)>>,
 }
 
 impl Controller {
@@ -134,12 +136,10 @@ impl Controller {
       state,
       telemetry,
       downloads,
-      temporary: std::env::temp_dir().join("reseek"),
       shutdown,
       registry: Mutex::new(Registry::default()),
       sessions: TaskTracker::new(),
       sockets: AtomicU64::new(0),
-      keys: Mutex::new(HashMap::new()),
     });
     tokio::spawn(
       controller
@@ -188,28 +188,24 @@ impl Controller {
       .cloned()
   }
 
-  /// The key of the configured agent `name` with `secret`, derived once per secret.
-  fn key(&self, name: &str, secret: &str) -> Key {
-    let mut keys = lock(&self.keys);
-    if let Some((derived_from, key)) = keys.get(name)
-      && derived_from == secret
-    {
-      return key.clone();
-    }
-    let key = Key::derive(secret, name);
-    keys.insert(name.to_string(), (secret.to_string(), key.clone()));
-    key
-  }
-
   /// Whether `address` is one the configured agent may connect from.
   fn address_allowed(agent: &RelayAgent, address: IpAddr) -> bool {
     // validated when the options were loaded, so a list that does not read allows nothing
     parse_trimmed_list(&agent.cidr).is_ok_and(|ranges| ranges.iter().any(|r| r.contains(address)))
   }
 
+  /// Whether the agent `name`, logged in as `registration`, is still configured with the
+  /// secret it logged in with and may still connect from the address it logged in from.
+  fn still_configured(options: &Options, name: &str, registration: &Registration) -> bool {
+    Self::configured(options, name).is_some_and(|agent| {
+      agent.secret.as_deref() == Some(registration.secret.as_str())
+        && Self::address_allowed(&agent, registration.address)
+    })
+  }
+
   /// Checks a call an agent makes over HTTP with `token` for `purpose`: it is logged in,
-  /// configured, calling from one of its networks, and its credential is the one for the
-  /// token. Each failure is a 401, logged.
+  /// configured with the secret it logged in with, calling from one of its networks, and its
+  /// credential is the one for the token. Each failure is a 401, logged.
   fn authenticate(
     &self,
     caller: &AgentCredential,
@@ -217,15 +213,21 @@ impl Controller {
     token: Uuid,
   ) -> Result<(), ApiError> {
     let name = caller.agent.as_str();
-    if !lock(&self.registry).agents.contains_key(name) {
+    let options = self.config.current();
+    let configured = Self::configured(&options.values, name);
+    let current_secret = configured.as_ref().and_then(|a| a.secret.as_deref());
+    let logged_in = lock(&self.registry)
+      .agents
+      .get(name)
+      .map(|r| (current_secret == Some(r.secret.as_str()), r.key.clone()));
+    let Some((same_secret, key)) = logged_in else {
       warn!(
         agent = name,
         "relay call from an agent that is not logged in"
       );
       return Err(ApiError::unauthorized(format!("Agent {name} is not registered")).logged());
-    }
-    let options = self.config.current();
-    let Some(agent) = Self::configured(&options.values, name) else {
+    };
+    let Some(agent) = configured else {
       warn!(
         agent = name,
         "relay call from an agent that is not configured"
@@ -241,12 +243,14 @@ impl Controller {
       );
       return Err(ApiError::unauthorized("The agent may not call from this address").logged());
     }
-    // a configured agent has a secret, which loading the options checked
-    let secret = agent.secret.as_deref().unwrap_or_default();
-    if !self
-      .key(name, secret)
-      .verifies(purpose, &token.to_string(), &caller.credential)
-    {
+    if !same_secret {
+      warn!(
+        agent = name,
+        "relay call from an agent whose secret changed since it logged in"
+      );
+      return Err(ApiError::unauthorized("The agent's secret changed since it logged in").logged());
+    }
+    if !key.verifies(purpose, &token.to_string(), &caller.credential) {
       warn!(agent = name, %token, "relay call with a credential mismatch");
       return Err(ApiError::unauthorized("The credential does not match").logged());
     }
@@ -254,23 +258,18 @@ impl Controller {
     Ok(())
   }
 
-  /// Registers the agent `record` on `socket` in place of any earlier socket of the same name,
+  /// Registers the agent of `registration` in place of any earlier socket of the same name,
   /// which is closed, and raises `RelayAgentConnected`.
-  fn register(&self, socket: u64, record: RelayAgentState, outbound: mpsc::Sender<Outbound>) {
-    let name = record.name.clone();
+  fn register(&self, registration: Registration) {
+    let name = registration.record.name.clone();
     let earlier = lock(&self.registry).agents.get(&name).map(|r| r.socket);
     if let Some(earlier) = earlier {
       self.leave(&name, earlier, close::SUPERSEDED, "superseded");
     }
-    let ip_address = record.ip_address.clone();
-    lock(&self.registry).agents.insert(
-      name.clone(),
-      Registration {
-        socket,
-        record,
-        outbound,
-      },
-    );
+    let ip_address = registration.record.ip_address.clone();
+    lock(&self.registry)
+      .agents
+      .insert(name.clone(), registration);
     self.publish();
     self
       .events
@@ -390,8 +389,9 @@ impl Controller {
     }
   }
 
-  /// Disconnects the agents whose configuration was removed or whose instance name or secret
-  /// changed, until the daemon stops.
+  /// Disconnects the agents whose configuration was removed, whose instance name or secret
+  /// changed, or whose networks no longer hold the address they logged in from, until the
+  /// daemon stops.
   async fn follow_configuration(self: Arc<Self>) {
     let mut changes = self.config.changes();
     loop {
@@ -422,27 +422,21 @@ impl Controller {
     }
   }
 
-  /// Disconnects each logged-in agent no longer configured with the secret it logged in with.
+  /// Disconnects each logged-in agent that is not [`Controller::still_configured`].
   fn drop_unconfigured(&self) {
     let options = self.config.current();
-    let registered: Vec<(String, u64)> = lock(&self.registry)
+    let unconfigured: Vec<(String, u64)> = lock(&self.registry)
       .agents
       .iter()
+      .filter(|(name, r)| !Self::still_configured(&options.values, name, r))
       .map(|(name, r)| (name.clone(), r.socket))
       .collect();
-    for (name, socket) in registered {
-      let secret = Self::configured(&options.values, &name).and_then(|agent| agent.secret);
-      let kept = match (secret, lock(&self.keys).get(&name)) {
-        (Some(secret), Some((derived_from, _))) => secret == *derived_from,
-        _ => false,
-      };
-      if !kept {
-        info!(
-          agent = name,
-          "agent's configuration changed; disconnecting it"
-        );
-        self.leave(&name, socket, close::KICKED, "configuration changed");
-      }
+    for (name, socket) in unconfigured {
+      info!(
+        agent = name,
+        "agent's configuration changed; disconnecting it"
+      );
+      self.leave(&name, socket, close::KICKED, "configuration changed");
     }
   }
 

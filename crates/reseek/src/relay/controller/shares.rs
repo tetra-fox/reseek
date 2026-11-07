@@ -2,8 +2,8 @@
 //! token, refused when its index's schema is not this one's, when its last upload is still
 //! loading or when its database is too large. It then uploads its share list and database
 //! with the token; the call is checked before its body is read, the database is written to a
-//! file as it arrives, at most the configured size, and checked and loaded as the agent's
-//! host. Only then is the agent ready, and the agent's socket told so.
+//! file in the cache directory as it arrives, at most the configured size, and checked and
+//! loaded as the agent's host. Only then is the agent ready, and the agent's socket told so.
 
 use std::path::Path;
 use std::time::Instant as Clock;
@@ -145,18 +145,14 @@ impl Controller {
       controller: self,
       agent: name.clone(),
     };
-    tokio::fs::create_dir_all(&self.temporary)
-      .await
-      .map_err(|e| ApiError::internal(format!("{}: {e}", self.temporary.display())))?;
-    let file = self
-      .temporary
-      .join(format!("share_{name}_{:016x}.db", rand::random::<u64>()));
+    let file = self.shares.upload_file(&name);
     let received = self.read_upload(&name, &mut form, &file).await;
     let loaded = match received {
       Ok(shares) => self.load(&name, socket, shares, &file).await,
       Err(e) => Err(e),
     };
     self.count("shares", if loaded.is_ok() { "loaded" } else { "refused" });
+    // the upload, unless it was renamed into place as the host's index
     let removed = file.clone();
     if let Err(e) = tokio::task::spawn_blocking(move || remove_database(&removed)).await {
       warn!(file = %file.display(), error = %e, "uploaded share database not deleted");

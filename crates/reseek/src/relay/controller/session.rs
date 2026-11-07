@@ -19,8 +19,9 @@ use tokio::time::{Instant, sleep_until};
 use tracing::{Instrument, debug, info, info_span, trace, warn};
 
 use super::login::{self, Challenge};
-use super::{Controller, OUTBOUND, Outbound};
+use super::{Controller, OUTBOUND, Outbound, Registration};
 use crate::crypto::{base62, random_bytes};
+use reseek_relay_proto::credential::Key;
 use reseek_relay_proto::frames::{
   self, LOGIN_WITHIN, MAX_FRAME, PING_EVERY, SILENCE, SYNC_WITHIN, close, millis,
 };
@@ -293,10 +294,10 @@ impl Session {
       LOGIN_WITHIN,
       Instant::now(),
       &ours,
-      |secret| self.controller.key(&name, secret),
+      |secret| Key::derive(secret, &name),
     );
     let counted = match checked {
-      Ok(()) => "accepted",
+      Ok(_) => "accepted",
       Err(LoginFailure::UnknownAgent) => "unknown_agent",
       Err(LoginFailure::AddressNotAllowed) => "address_not_allowed",
       Err(LoginFailure::ChallengeExpired) => "challenge_expired",
@@ -304,17 +305,23 @@ impl Session {
       Err(LoginFailure::IncompatibleVersion) => "incompatible_version",
     };
     self.controller.count("login", counted);
-    if let Err(reason) = checked {
-      log_refusal(&name, &login, reason, configured.map(|a| a.cidr), &ours);
-      let refusal = frames::encode(None, RelayMessage::LoginFailed { reason });
-      if socket.send(Message::Text(refusal.into())).await.is_err() {
-        return Some(Ended {
-          code: None,
-          reason: "closed",
-        });
+    let key = match checked {
+      Ok(key) => key,
+      Err(reason) => {
+        log_refusal(&name, &login, reason, configured.map(|a| a.cidr), &ours);
+        let refusal = frames::encode(None, RelayMessage::LoginFailed { reason });
+        if socket.send(Message::Text(refusal.into())).await.is_err() {
+          return Some(Ended {
+            code: None,
+            reason: "closed",
+          });
+        }
+        return Some(closing(socket, close::UNAUTHORIZED, "unauthorized").await);
       }
-      return Some(closing(socket, close::UNAUTHORIZED, "unauthorized").await);
-    }
+    };
+    // the login checked out, so the agent is configured, with a secret loading the options
+    // checked
+    let secret = configured.and_then(|a| a.secret).unwrap_or_default();
     let timeouts = &options.values.relay.controller_timeouts;
     let accepted = frames::encode(
       None,
@@ -343,9 +350,14 @@ impl Session {
       shares_updated_at: None,
       version,
     };
-    self
-      .controller
-      .register(self.id, record, self.outbound.clone());
+    self.controller.register(Registration {
+      socket: self.id,
+      record,
+      outbound: self.outbound.clone(),
+      address: self.address,
+      secret,
+      key,
+    });
     info!(agent = name, "Agent connection authenticated");
     let now = Instant::now();
     self.phase = Phase::LoggedIn {

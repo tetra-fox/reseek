@@ -5,7 +5,7 @@
 //! at once and is warned about once per reason. A change to the controller's settings closes the
 //! socket and dials again with the new ones.
 
-mod dial;
+pub(crate) mod dial;
 mod downloads;
 mod files;
 mod session;

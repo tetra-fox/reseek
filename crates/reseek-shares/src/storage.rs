@@ -158,7 +158,8 @@ async fn expected_objects() -> Result<&'static Objects, DbError> {
 }
 
 /// Whether the file at `path`, another instance's index, has exactly the migrations and the
-/// tables, indexes and triggers this program writes. Says each difference when it does not.
+/// tables, indexes and triggers this program writes, and every page of it reads as SQLite's
+/// quick check expects. Says what is wrong when it does not.
 pub async fn check_foreign(path: &Path) -> Result<(), String> {
   let expected = expected_objects().await.map_err(|e| e.to_string())?;
   let path = path.to_path_buf();
@@ -180,10 +181,15 @@ pub async fn check_foreign(path: &Path) -> Result<(), String> {
         problems.push(format!("{kind} {name} is unexpected"));
       }
     }
-    if problems.is_empty() {
-      Ok(())
-    } else {
-      Err(problems.join(", "))
+    if !problems.is_empty() {
+      return Err(problems.join(", "));
+    }
+    // the first line of the check is "ok" or its first finding
+    let checked = conn.query_row("PRAGMA quick_check", [], |row| row.get::<_, String>(0));
+    match checked {
+      Ok(line) if line == "ok" => Ok(()),
+      Ok(finding) => Err(format!("it is corrupt: {finding}")),
+      Err(e) => Err(format!("it could not be checked: {e}")),
     }
   })
   .await
@@ -239,16 +245,13 @@ pub async fn back_up(db: &Database, backup: &Path) -> Result<(), DbError> {
   Ok(())
 }
 
-/// Copies the checked index `from` to the new host index file `to`, without a write-ahead log,
-/// so it can be read with no journal files beside it.
-pub fn copy_host_file(from: &Path, to: &Path) -> Result<(), String> {
-  std::fs::copy(from, to).map_err(|e| format!("{}: {e}", to.display()))?;
-  let rolled_back =
-    Connection::open(to).and_then(|conn| conn.pragma_update(None, "journal_mode", "DELETE"));
-  rolled_back.map_err(|e| {
-    remove_database(to);
-    format!("{}: {e}", to.display())
-  })
+/// Takes the checked index `from` off the write-ahead log, so it can be read with no journal
+/// files beside it, and renames it to the new host index file `to`, in the same directory.
+pub fn move_host_file(from: &Path, to: &Path) -> Result<(), String> {
+  Connection::open(from)
+    .and_then(|conn| conn.pragma_update(None, "journal_mode", "DELETE"))
+    .map_err(|e| format!("{}: {e}", from.display()))?;
+  std::fs::rename(from, to).map_err(|e| format!("{}: {e}", to.display()))
 }
 
 /// Replaces what `db` holds with the backup at `backup`.
@@ -312,6 +315,48 @@ mod tests {
       std::fs::read_dir(&uploads).unwrap().count(),
       1,
       "replaced, not added beside"
+    );
+  }
+
+  #[tokio::test]
+  async fn a_foreign_index_with_a_corrupt_page_is_refused() {
+    use std::io::{Seek, SeekFrom, Write};
+    let dir = tempfile::tempdir().unwrap();
+    let storage = open(StorageMode::Memory, dir.path(), dir.path(), false)
+      .await
+      .unwrap();
+    let upload = dir.path().join("upload.db");
+    dump(&storage.db, &upload).await.unwrap();
+    assert_eq!(check_foreign(&upload).await, Ok(()));
+    // a table the schema checks do not read, so only the quick check can find the damage
+    let (page, page_size): (u32, u32) = {
+      let conn = Connection::open(&upload).unwrap();
+      let page = conn
+        .query_row(
+          "SELECT rootpage FROM sqlite_master WHERE type = 'table' AND rootpage > 1 \
+           AND name != 'schema_migrations' ORDER BY rootpage DESC LIMIT 1",
+          [],
+          |row| row.get(0),
+        )
+        .unwrap();
+      let size = conn
+        .query_row("PRAGMA page_size", [], |row| row.get(0))
+        .unwrap();
+      (page, size)
+    };
+    let mut file = std::fs::OpenOptions::new()
+      .write(true)
+      .open(&upload)
+      .unwrap();
+    file
+      .seek(SeekFrom::Start(u64::from(page - 1) * u64::from(page_size)))
+      .unwrap();
+    file.write_all(&vec![0xff; page_size as usize]).unwrap();
+    drop(file);
+    let refused = check_foreign(&upload).await.unwrap_err();
+    assert!(
+      refused.starts_with("it is corrupt") || refused.starts_with("it could not be checked"),
+      "refused by the quick check: {refused}"
     );
   }
 

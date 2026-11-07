@@ -1,15 +1,24 @@
 //! An agent's socket served without a network, on a clock the test moves: an agent whose
-//! shares are being scanned is waited for past the two minutes, but not past its deferral.
+//! shares are being scanned is waited for past the two minutes, but not past its deferral, and
+//! an agent whose configuration no longer admits it is disconnected.
 
+use std::collections::BTreeMap;
+use std::net::IpAddr;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
 use api_types::relay::{RELAY_PROTOCOL, RelayEnvelope, RelayMessage};
 use axum::extract::ws::Message;
+use cascade::Lasts;
 use futures_util::{Sink, Stream};
 use tokio::sync::mpsc;
+use tokio::task::JoinHandle;
+use uuid::Uuid;
 
+use super::Controller;
+use crate::services::AgentCredential;
 use crate::testing::app;
 use reseek_relay_proto::credential::{Key, Purpose};
 use reseek_relay_proto::frames;
@@ -82,28 +91,28 @@ fn read(message: &Message) -> RelayMessage {
   frames::decode(text.as_str()).unwrap().message
 }
 
-#[tokio::test]
-async fn a_scanning_agent_is_waited_for_until_its_deferral_runs_out() {
-  let config = format!(
-    "[relay]\nenabled = true\nmode = \"controller\"\n\
-     [relay.controller_timeouts]\nsync_deferral = \"3m\"\n\
-     [relay.agents.nas]\ninstance_name = \"nas\"\nsecret = \"{SECRET}\"\n"
-  );
-  let app = app(&config, &[]).await;
-  let controller = app.state.relay.controller.clone().unwrap();
-  tokio::time::pause();
+/// The frames sent to a socket, what it wrote, and the task serving it.
+type Served = (
+  mpsc::Sender<Result<Message, axum::Error>>,
+  mpsc::Receiver<Message>,
+  JoinHandle<()>,
+);
+
+/// A socket of `controller`'s from `address`, served on a task of its own and logged in as
+/// `nas` with `secret`.
+async fn log_in(controller: &Arc<Controller>, address: IpAddr, secret: &str) -> Served {
   let (to_socket, frames) = mpsc::channel(64);
   let (sent, mut from_socket) = mpsc::channel(1024);
   let served = tokio::spawn(
     controller
       .clone()
-      .serve_socket(Fake { frames, sent }, [127, 0, 0, 1].into()),
+      .serve_socket(Fake { frames, sent }, address),
   );
   settle().await;
   let RelayMessage::Challenge { token, .. } = read(&written(&mut from_socket)[0]) else {
     panic!("no challenge");
   };
-  let credential = Key::derive(SECRET, "nas").credential(Purpose::Login, &token);
+  let credential = Key::derive(secret, "nas").credential(Purpose::Login, &token);
   let login = RelayMessage::Login {
     agent: "nas".into(),
     credential,
@@ -116,6 +125,29 @@ async fn a_scanning_agent_is_waited_for_until_its_deferral_runs_out() {
     read(&written(&mut from_socket)[0]),
     RelayMessage::LoginOk { .. }
   ));
+  (to_socket, from_socket, served)
+}
+
+/// The code of the close frame among what the socket wrote since the last look.
+fn closed(from: &mut mpsc::Receiver<Message>) -> Option<Option<u16>> {
+  written(from).into_iter().find_map(|m| match m {
+    Message::Close(frame) => Some(frame.map(|f| f.code)),
+    _ => None,
+  })
+}
+
+#[tokio::test]
+async fn a_scanning_agent_is_waited_for_until_its_deferral_runs_out() {
+  let config = format!(
+    "[relay]\nenabled = true\nmode = \"controller\"\n\
+     [relay.controller_timeouts]\nsync_deferral = \"3m\"\n\
+     [relay.agents.nas]\ninstance_name = \"nas\"\nsecret = \"{SECRET}\"\n"
+  );
+  let app = app(&config, &[]).await;
+  let controller = app.state.relay.controller.clone().unwrap();
+  tokio::time::pause();
+  let (to_socket, mut from_socket, served) =
+    log_in(&controller, [127, 0, 0, 1].into(), SECRET).await;
 
   // a pong every 15 seconds keeps the socket from going silent, a deferral every minute
   let deferral = RelayMessage::SyncDeferred {
@@ -124,10 +156,7 @@ async fn a_scanning_agent_is_waited_for_until_its_deferral_runs_out() {
   for quarter in 1..=24u32 {
     tokio::time::advance(Duration::from_secs(15)).await;
     settle().await;
-    let closed = written(&mut from_socket).into_iter().find_map(|m| match m {
-      Message::Close(frame) => Some(frame.map(|f| f.code)),
-      _ => None,
-    });
+    let closed = closed(&mut from_socket);
     // the deferral ends 5 minutes after the login, which the timer may round up past
     let elapsed = quarter * 15;
     if elapsed < 300 {
@@ -151,4 +180,57 @@ async fn a_scanning_agent_is_waited_for_until_its_deferral_runs_out() {
   }
   served.await.unwrap();
   assert!(controller.agents().is_empty());
+}
+
+#[tokio::test]
+async fn an_agent_is_disconnected_once_its_networks_or_secret_no_longer_admit_it() {
+  let config = format!(
+    "[relay]\nenabled = true\nmode = \"controller\"\n\
+     [relay.agents.nas]\ninstance_name = \"nas\"\nsecret = \"{SECRET}\"\n"
+  );
+  let app = app(&config, &[]).await;
+  let controller = app.state.relay.controller.clone().unwrap();
+  let home: IpAddr = [127, 0, 0, 1].into();
+  // a user-keyed map is one value to the configuration, so each change sets the whole entry
+  let set = |cidr: &str, secret: &str| {
+    let agents = serde_json::json!({
+      "nas": { "instance_name": "nas", "secret": secret, "cidr": cidr }
+    });
+    let set = BTreeMap::from([("relay.agents".to_string(), agents)]);
+    app
+      .state
+      .config
+      .set_overrides(set, Vec::new(), "test", Lasts::UntilRestart)
+  };
+
+  let (_to_socket, mut from_socket, _served) = log_in(&controller, home, SECRET).await;
+  set("10.0.0.0/8", SECRET).await.unwrap();
+  settle().await;
+  assert_eq!(closed(&mut from_socket), Some(Some(frames::close::KICKED)));
+  assert!(
+    controller.agents().is_empty(),
+    "narrowed out of its networks"
+  );
+
+  set("127.0.0.0/8", SECRET).await.unwrap();
+  settle().await;
+  let (_to_socket, mut from_socket, _served) = log_in(&controller, home, SECRET).await;
+  let rotated = "nas-secret-rotated-0123";
+  set("127.0.0.0/8", rotated).await.unwrap();
+  // a call made with the new secret before the change is followed is still refused, since the
+  // socket logged in with the old one
+  let token = Uuid::new_v4();
+  let caller = AgentCredential {
+    agent: "nas".into(),
+    credential: Key::derive(rotated, "nas").credential(Purpose::Shares, &token.to_string()),
+    address: home,
+  };
+  assert!(
+    controller
+      .authenticate(&caller, Purpose::Shares, token)
+      .is_err()
+  );
+  settle().await;
+  assert_eq!(closed(&mut from_socket), Some(Some(frames::close::KICKED)));
+  assert!(controller.agents().is_empty(), "its secret rotated");
 }

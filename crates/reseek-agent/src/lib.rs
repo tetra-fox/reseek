@@ -5,7 +5,8 @@
 //! login.
 //!
 //! [`main`] is the program; its options are the few of the daemon's it needs, under the same
-//! names.
+//! names. [`open_socket`] dials a controller's relay socket, for anything else that speaks to it
+//! as an agent.
 
 #![warn(missing_docs)]
 
@@ -14,6 +15,7 @@ mod client;
 mod options;
 mod start;
 
+pub use client::dial::{Socket, open_socket};
 pub use start::main;
 
 /// The version this agent tells its controller.

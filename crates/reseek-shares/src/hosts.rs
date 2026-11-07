@@ -13,6 +13,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use api_types::shares::Share as ApiShare;
+use soulseek_client::LogLimiter;
 use tracing::{debug, info, warn};
 
 use super::{LOCAL_HOST, SharedCounts, Shares, View, repository, storage, visibility};
@@ -26,21 +27,40 @@ const HOST_SETTLE: Duration = Duration::from_secs(2);
 /// Numbers each agent index file this process writes, so none is written over another.
 static HOST_FILES: AtomicU64 = AtomicU64::new(0);
 
+/// Agents' indexes that failed a query of every host, which peers make at their own rate.
+static HOST_UNREAD: LogLimiter = LogLimiter::new();
+
 /// An index the queries read: the local one, or an agent's, whose file, when it has one of its
 /// own, is deleted when the last reader lets go of it.
 pub(super) struct Index {
   /// `None` only while it is dropped
   db: Option<Database>,
   file: Option<PathBuf>,
+  /// the agent whose index it is, `None` for the local one
+  agent: Option<String>,
 }
 
 impl Index {
-  /// An index whose file, if any, stays.
-  pub(super) fn kept(db: Database) -> Arc<Self> {
+  /// The local index, whose file stays.
+  pub(super) fn local(db: Database) -> Arc<Self> {
     Arc::new(Self {
       db: Some(db),
       file: None,
+      agent: None,
     })
+  }
+
+  /// What a query of every host does when this index failed it with `e`: an agent's index is
+  /// logged and left out, so it never takes the other hosts down, the local one's failure is
+  /// returned.
+  pub(super) fn left_out(&self, e: DbError) -> Result<(), DbError> {
+    let Some(agent) = &self.agent else {
+      return Err(e);
+    };
+    if let Some(suppressed) = HOST_UNREAD.allow() {
+      warn!(agent, error = %e, suppressed, "agent's share index not read, its shares left out");
+    }
+    Ok(())
   }
 }
 
@@ -90,7 +110,7 @@ pub enum HostError {
   /// the uploaded file is not an index this program writes
   #[error("Invalid database: {0}")]
   Invalid(String),
-  /// it could not be copied or opened
+  /// it could not be moved into place or opened
   #[error("the agent's share database could not be loaded: {0}")]
   Failed(String),
 }
@@ -152,9 +172,19 @@ impl Shares {
     self.changed.subscribe()
   }
 
-  /// Loads the index an agent uploaded to `upload` as the host `name` with its `shares`, in
-  /// place of the one it had. The file is checked first; the host is replaced only once the new
-  /// index is ready. Returns the totals the agent counted.
+  /// A new file in the cache directory for the index the agent `name` uploads, which
+  /// [`Shares::load_host`] renames into place; one a run left behind is deleted at the next
+  /// start.
+  pub fn upload_file(&self, name: &str) -> PathBuf {
+    let number = HOST_FILES.fetch_add(1, Ordering::Relaxed);
+    self.cache.join(format!("shares.{name}.{number}.db.tmp"))
+  }
+
+  /// Loads the index an agent uploaded to `upload`, a [`Shares::upload_file`], as the host
+  /// `name` with its `shares`, in place of the one it had. The file is checked first; on disk
+  /// it then becomes the host's index file, in memory it is copied and stays for the caller to
+  /// delete. The host is replaced only once the new index is ready. Returns the totals the
+  /// agent counted.
   pub async fn load_host(
     self: &Arc<Self>,
     name: &str,
@@ -175,11 +205,15 @@ impl Shares {
       };
       let db = Database::open_as(&repository::SCHEMA, &location, &format!("shares.{name}")).await?;
       storage::restore(&db, upload).await?;
-      Index::kept(db)
+      Arc::new(Index {
+        db: Some(db),
+        file: None,
+        agent: Some(name.to_string()),
+      })
     } else {
       let target = host_file(&self.cache, name);
       let (from, to) = (upload.to_path_buf(), target.clone());
-      tokio::task::spawn_blocking(move || storage::copy_host_file(&from, &to))
+      tokio::task::spawn_blocking(move || storage::move_host_file(&from, &to))
         .await
         .map_err(|e| HostError::Failed(e.to_string()))?
         .map_err(HostError::Failed)?;
@@ -197,6 +231,7 @@ impl Shares {
       Arc::new(Index {
         db: Some(db),
         file: Some(target),
+        agent: Some(name.to_string()),
       })
     };
     let counted = totals(&shares);
@@ -255,7 +290,7 @@ impl Shares {
 
   /// The local index then each agent's, in the order the agents were loaded.
   pub(super) fn databases(&self) -> Vec<Arc<Index>> {
-    std::iter::once(Index::kept(self.db.clone()))
+    std::iter::once(Index::local(self.db.clone()))
       .chain(lock(&self.hosts).iter().map(|h| h.index.clone()))
       .collect()
   }
@@ -331,8 +366,9 @@ impl Shares {
   }
 }
 
-/// Deletes every agent's index file in `cache`, with its journal files: an earlier run's agents'
-/// indexes are never served again, since each agent uploads its shares anew when it logs in.
+/// Deletes every agent's index file in `cache`, with its journal files and any upload left
+/// there: an earlier run's agents' indexes are never served again, since each agent uploads its
+/// shares anew when it logs in.
 pub async fn remove_agent_hosts(cache: &Path) {
   let mut entries = match tokio::fs::read_dir(cache).await {
     Ok(entries) => entries,
@@ -396,6 +432,8 @@ mod tests {
       "shares.local.bak.db.tmp",
       "shares.nas.db",
       "shares.nas.3.db",
+      "shares.nas.4.db.tmp",
+      "shares.nas.4.db.tmp-wal",
       "shares.gone.db",
       "shares.gone.db-shm",
       "browse.cache",

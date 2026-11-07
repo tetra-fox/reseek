@@ -539,15 +539,18 @@ impl Shares {
     let mut listings = Vec::new();
     for db in self.databases() {
       let name = name.to_string();
-      listings.push(db.read(move |conn| repository::folder(conn, &name)).await?);
+      match db.read(move |conn| repository::folder(conn, &name)).await {
+        Ok(listing) => listings.push(listing),
+        Err(e) => db.left_out(e)?,
+      }
     }
     // a host without the directory lists it empty, which another host's entry fills
     Ok(browse::merge(listings))
   }
 
   /// Where the file a peer asked for by its exact remote name `masked` is: the local shares
-  /// first, then each relay agent's in the order they were loaded; `None` when no host has it
-  /// or `view` hides it.
+  /// first, then each relay agent's in the order they were loaded, leaving out an agent's index
+  /// that cannot be read; `None` when no host has it or `view` hides it.
   pub async fn resolve_file(&self, masked: &str, view: &View) -> Result<Option<Resolved>, DbError> {
     if view.hides(masked) {
       return Ok(None);
@@ -557,11 +560,13 @@ impl Shares {
     }
     for (host, db) in self.agent_databases() {
       let wanted = masked.to_string();
-      if let Some((path, size)) = db
+      match db
         .read(move |conn| repository::find_file(conn, &wanted))
-        .await?
+        .await
       {
-        return Ok(Some(Resolved { host, path, size }));
+        Ok(Some((path, size))) => return Ok(Some(Resolved { host, path, size })),
+        Ok(None) => {}
+        Err(e) => db.left_out(e)?,
       }
     }
     Ok(None)

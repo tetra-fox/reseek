@@ -13,7 +13,7 @@ use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpStream;
 use tokio_tungstenite::WebSocketStream;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
-use tokio_tungstenite::tungstenite::http::HeaderValue;
+use tokio_tungstenite::tungstenite::http::{HeaderMap, HeaderValue};
 use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 use url::Url;
 
@@ -30,7 +30,7 @@ pub trait Io: AsyncRead + AsyncWrite + Unpin + Send {}
 
 impl<T: AsyncRead + AsyncWrite + Unpin + Send> Io for T {}
 
-/// The agent's socket to its controller.
+/// A relay socket to a controller.
 pub type Socket = WebSocketStream<Box<dyn Io>>;
 
 /// What the agent connects to its controller with, read from the options when it dials.
@@ -93,62 +93,76 @@ impl Settings {
   }
 
   async fn open(&self) -> Result<Socket, String> {
-    let host = self
-      .address
-      .host_str()
-      .ok_or("the controller address has no host")?
-      .trim_start_matches('[')
-      .trim_end_matches(']')
-      .to_string();
-    let port = self
-      .address
-      .port_or_known_default()
-      .ok_or("the controller address has no port")?;
-    let tcp = TcpStream::connect((host.as_str(), port))
-      .await
-      .map_err(|e| format!("{host}:{port}: {e}"))?;
-    let secure = self.address.scheme() == "https";
-    let stream: Box<dyn Io> = if secure {
-      let name = ServerName::try_from(host.clone()).map_err(|e| e.to_string())?;
-      let tls = tokio_rustls::TlsConnector::from(self.tls.clone())
-        .connect(name, tcp)
-        .await
-        .map_err(|e| format!("TLS: {e}"))?;
-      Box::new(tls)
-    } else {
-      Box::new(tcp)
-    };
-    let mut socket = self.url("relay/ws");
-    socket.replace_range(
-      ..if secure { 5 } else { 4 },
-      if secure { "wss" } else { "ws" },
-    );
-    let mut request = socket.into_client_request().map_err(|e| e.to_string())?;
-    let headers = request.headers_mut();
+    let url = Url::parse(&self.url("relay/ws")).map_err(|e| e.to_string())?;
+    let mut headers = HeaderMap::new();
     headers.insert(
       "x-api-key",
       HeaderValue::from_str(&self.api_key).map_err(|e| e.to_string())?,
     );
-    headers.insert(
-      "sec-websocket-protocol",
-      HeaderValue::from_static(RELAY_SUBPROTOCOL),
-    );
-    let config = WebSocketConfig::default()
-      .max_message_size(Some(2 * MAX_FRAME))
-      .max_frame_size(Some(2 * MAX_FRAME));
-    let (socket, response) =
-      tokio_tungstenite::client_async_with_config(request, stream, Some(config))
-        .await
-        .map_err(|e| e.to_string())?;
-    let chosen = response
-      .headers()
-      .get("sec-websocket-protocol")
-      .and_then(|value| value.to_str().ok());
-    if chosen != Some(RELAY_SUBPROTOCOL) {
-      return Err(format!("the controller chose the protocol {chosen:?}"));
-    }
-    Ok(socket)
+    open_socket(&url, &self.tls, headers).await
   }
+}
+
+/// Opens a relay socket to `url`, the `http` or `https` URL of the controller's relay route,
+/// over TLS with `tls` for `https`, sending `headers` with the upgrade. The controller must
+/// choose the relay protocol.
+pub async fn open_socket(
+  url: &Url,
+  tls: &Arc<rustls::ClientConfig>,
+  headers: HeaderMap,
+) -> Result<Socket, String> {
+  let host = url
+    .host_str()
+    .ok_or("the controller address has no host")?
+    .trim_start_matches('[')
+    .trim_end_matches(']')
+    .to_string();
+  let port = url
+    .port_or_known_default()
+    .ok_or("the controller address has no port")?;
+  let tcp = TcpStream::connect((host.as_str(), port))
+    .await
+    .map_err(|e| format!("{host}:{port}: {e}"))?;
+  let secure = url.scheme() == "https";
+  let stream: Box<dyn Io> = if secure {
+    let name = ServerName::try_from(host).map_err(|e| e.to_string())?;
+    let tls = tokio_rustls::TlsConnector::from(tls.clone())
+      .connect(name, tcp)
+      .await
+      .map_err(|e| format!("TLS: {e}"))?;
+    Box::new(tls)
+  } else {
+    Box::new(tcp)
+  };
+  let mut socket = url.clone();
+  socket
+    .set_scheme(if secure { "wss" } else { "ws" })
+    .map_err(|()| format!("{url} is not an http or https address"))?;
+  let mut request = socket
+    .as_str()
+    .into_client_request()
+    .map_err(|e| e.to_string())?;
+  let sent = request.headers_mut();
+  sent.extend(headers);
+  sent.insert(
+    "sec-websocket-protocol",
+    HeaderValue::from_static(RELAY_SUBPROTOCOL),
+  );
+  let config = WebSocketConfig::default()
+    .max_message_size(Some(2 * MAX_FRAME))
+    .max_frame_size(Some(2 * MAX_FRAME));
+  let (socket, response) =
+    tokio_tungstenite::client_async_with_config(request, stream, Some(config))
+      .await
+      .map_err(|e| e.to_string())?;
+  let chosen = response
+    .headers()
+    .get("sec-websocket-protocol")
+    .and_then(|value| value.to_str().ok());
+  if chosen != Some(RELAY_SUBPROTOCOL) {
+    return Err(format!("the controller chose the protocol {chosen:?}"));
+  }
+  Ok(socket)
 }
 
 /// The TLS settings: the usual authorities, or any certificate with `ignore_certificates`.
