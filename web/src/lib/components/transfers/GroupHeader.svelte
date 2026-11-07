@@ -1,23 +1,8 @@
 <script lang="ts">
-  import { goto } from "$app/navigation";
-  import BanIcon from "@lucide/svelte/icons/ban";
   import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
-  import FileArchiveIcon from "@lucide/svelte/icons/file-archive";
   import FolderIcon from "@lucide/svelte/icons/folder";
   import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
-  import FolderSearchIcon from "@lucide/svelte/icons/folder-search";
-  import ListChecksIcon from "@lucide/svelte/icons/list-checks";
-  import PauseIcon from "@lucide/svelte/icons/pause";
-  import PlayIcon from "@lucide/svelte/icons/play";
-  import RotateCwIcon from "@lucide/svelte/icons/rotate-cw";
-  import Trash2Icon from "@lucide/svelte/icons/trash-2";
-  import UserXIcon from "@lucide/svelte/icons/user-x";
-  import XIcon from "@lucide/svelte/icons/x";
-  import type { Component } from "svelte";
 
-  import { analyzableDownload, analyzeBatch, downloadCandidate } from "#lib/analysis/batch.js";
-  import { analyzerOffered } from "#lib/analysis/marks.svelte.js";
-  import { root } from "#lib/api/client.js";
   import TreeToggle from "#lib/components/files/TreeToggle.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
@@ -25,26 +10,20 @@
   import Progress from "#lib/components/ui/Progress.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import Username from "#lib/components/users/Username.svelte";
-  import { confirmation } from "#lib/feedback/confirm.svelte.js";
-  import { toast } from "#lib/feedback/toast.svelte.js";
-  import { FILE_ACTIONS as A } from "#lib/files/actions.js";
-  import { folderLinks, remoteFolder } from "#lib/files/links.js";
-  import { formatBytes, formatDuration, plural, saveUrl } from "#lib/format.js";
-  import { href } from "#lib/nav.js";
-  import { session } from "#lib/session.svelte.js";
-  import { act, folderOf, openFolder } from "#lib/transfers/actions.js";
-  import { PAUSE_WARNING } from "#lib/transfers/bulk.js";
-  import { encodePath } from "#lib/transfers/content.js";
+  import { formatBytes, formatDuration, plural } from "#lib/format.js";
   import { groupProgress } from "#lib/transfers/grid/progress.js";
   import type { Group } from "#lib/transfers/grid/view.js";
-  import { isCancelable, isRetryable, isSucceeded, type Direction } from "#lib/transfers/states.js";
+  import { type GroupHandlers, groupActions } from "#lib/transfers/groupActions.js";
+  import { isRetryable, type Direction } from "#lib/transfers/states.js";
   import type { Transfers } from "#lib/transfers/transfers.svelte.js";
   import { quota, waits } from "#lib/transfers/why.svelte.js";
   import type { Expansion } from "#lib/tree/expansion.svelte.js";
   import { GAP_REM, lineStart } from "#lib/tree/indent.js";
   import { viewport } from "#lib/ui/viewport.svelte.js";
 
-  type Props = {
+  import GroupItems from "./GroupItems.svelte";
+
+  type Props = GroupHandlers & {
     group: Group;
     store: Transfers;
     direction: Direction;
@@ -52,25 +31,17 @@
     expansion: Expansion;
     ticked: number;
     onselect: (on: boolean) => void;
-    /** removes the group's transfers, asking first for many or running ones */
-    onremove: () => void;
-    /** cancels the group's transfers, asking first when any is moving bytes */
-    oncancel: () => void;
-    /** blocks the user, asking first; with `deny` their unfinished uploads are canceled first */
-    onblock: (deny: boolean) => void;
   };
 
   let { group, store, direction, expansion, ticked, onselect, onremove, oncancel, onblock }: Props =
     $props();
 
-  const write = $derived(session.can("ReadWrite"));
   const list = $derived(group.transfers);
   const bytes = $derived(list.reduce((n, t) => n + t.size, 0));
   const done = $derived(list.filter((t) => t.state.includes("Completed")).length);
   const failed = $derived(list.filter((t) => isRetryable(t.state)).length);
   const progress = $derived(groupProgress(list));
   const folded = $derived(!expansion.isOpen(group.key));
-  const local = $derived(direction === "download" ? folderOf(list) : null);
   // a user's quota, from why the first of their queued uploads waits
   const waiting = $derived(
     direction === "upload" && group.kind === "user"
@@ -82,145 +53,7 @@
   });
   const usage = $derived(waiting && waits.get(waiting.id) ? quota(waits.get(waiting.id)!) : null);
 
-  /** Saves the group's local folder as a zip; only finished files are in it */
-  const zip = () => {
-    if (!local) return;
-    if (list.some((t) => !isSucceeded(t.state)))
-      toast("Only finished files are included in the zip");
-    const name = local.split("/").pop() || "downloads";
-    saveUrl(
-      `${root()}/api/v0/files/downloads/directories/${encodePath(local)}/archive?name=${encodeURIComponent(name)}`
-    );
-  };
-
-  const folderActions = () => direction === "download" && group.kind === "folder";
-  const userUploads = () => write && direction === "upload" && group.kind === "user";
-
-  /**
-   * One of the group's actions: `shown` says whether it applies now, and `run` reads the group
-   * when it is chosen. `text` shows its label beside the icon on a wide screen
-   */
-  type Action = {
-    label: string;
-    icon: Component;
-    shown: () => boolean;
-    run: () => void;
-    text?: boolean;
-  };
-
-  /** the job a group of what was queued together is, none for the downloads of no job */
-  const jobId = $derived(group.kind === "job" ? group.key.replace(/^job:/, "") : null);
-  const job = $derived(jobId && jobId !== "none" ? jobId : null);
-  const pausable = $derived(list.filter((t) => isCancelable(t.state) && !t.paused));
-  const paused = $derived(list.filter((t) => t.paused && !t.state.includes("Completed")));
-
-  const ACTIONS: Action[] = [
-    {
-      label: "Show the job",
-      icon: ListChecksIcon,
-      shown: () => job !== null,
-      run: () => void goto(href(`/jobs?job=${job}`)),
-      text: true
-    },
-    {
-      label: "Pause the group",
-      icon: PauseIcon,
-      shown: () => write && direction === "download" && pausable.length > 0,
-      run: () =>
-        confirmation.ask({
-          title: `Pause ${plural(pausable.length, "download", "downloads")}?`,
-          body: PAUSE_WARNING,
-          confirm: "Pause",
-          run: () =>
-            void act(
-              store,
-              "pause",
-              pausable.map((t) => t.id)
-            )
-        })
-    },
-    {
-      label: "Resume the group",
-      icon: PlayIcon,
-      shown: () => write && direction === "download" && paused.length > 0,
-      run: () =>
-        void act(
-          store,
-          "resume",
-          paused.map((t) => t.id)
-        )
-    },
-    {
-      label: "Retry the group",
-      icon: RotateCwIcon,
-      shown: () => write && direction === "download" && list.some((t) => isRetryable(t.state)),
-      run: () =>
-        void act(
-          store,
-          "retry",
-          list.filter((t) => isRetryable(t.state)).map((t) => t.id)
-        )
-    },
-    {
-      label: "Cancel the group",
-      icon: XIcon,
-      shown: () => write && list.some((t) => isCancelable(t.state)),
-      run: () => oncancel()
-    },
-    { label: "Remove the group", icon: Trash2Icon, shown: () => write, run: () => onremove() },
-    {
-      label: "Download more from this folder",
-      icon: FolderSearchIcon,
-      shown: folderActions,
-      run: () =>
-        void goto(
-          group.folder
-            ? folderLinks(group.username, group.folder).browse
-            : remoteFolder(group.username, list[0].filename).browse
-        )
-    },
-    {
-      label: "Open folder",
-      icon: FolderOpenIcon,
-      shown: () => folderActions() && local !== null,
-      run: () => openFolder(list)
-    },
-    // files directly in the downloads directory have no folder to zip
-    {
-      label: "Download folder",
-      icon: FileArchiveIcon,
-      shown: () => folderActions() && !!local,
-      run: zip
-    },
-    {
-      label: A.analyze.label,
-      icon: A.analyze.icon,
-      shown: () =>
-        write && direction === "download" && analyzerOffered() && list.some(analyzableDownload),
-      run: () => void analyzeBatch(list.map(downloadCandidate), `${group.label} has no downloads`)
-    },
-    {
-      label: "Deny queued uploads",
-      icon: UserXIcon,
-      shown: userUploads,
-      run: () =>
-        void act(
-          store,
-          "cancel",
-          list.filter((t) => t.state.includes("Queued")).map((t) => t.id)
-        ),
-      text: true
-    },
-    {
-      get label() {
-        return `Block ${group.username}`;
-      },
-      icon: BanIcon,
-      shown: userUploads,
-      run: () => onblock(false)
-    }
-  ];
-  const actions = $derived(ACTIONS.filter((a) => a.shown()));
+  const actions = $derived(groupActions(group, store, direction, { onremove, oncancel, onblock }));
 </script>
 
 <div
@@ -294,9 +127,7 @@
             </Button>
           {/snippet}
           <Menu.Content align="end" class="min-w-56">
-            {#each actions as a (a.label)}
-              <Menu.Item onSelect={a.run}><a.icon />{a.label}</Menu.Item>
-            {/each}
+            <GroupItems {actions} />
           </Menu.Content>
         </Menu.LazyRoot>
       {/if}

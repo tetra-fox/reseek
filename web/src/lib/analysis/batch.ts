@@ -2,7 +2,7 @@ import { api, type Schemas } from "#lib/api/client.js";
 import { toast } from "#lib/feedback/toast.svelte.js";
 import { getFileName, listText, plural } from "#lib/format.js";
 import { call } from "#lib/request.js";
-import { isSucceeded, type Transfer } from "#lib/transfers/states.js";
+import { type Direction, isSucceeded, rowActions, type Transfer } from "#lib/transfers/states.js";
 
 import type { Target } from "./analysis";
 import { jobs } from "./jobs.svelte";
@@ -21,6 +21,12 @@ export const downloadCandidate = (t: Transfer): Candidate => ({
 /** Whether a download has succeeded with a file the analyzer is offered for */
 export const analyzableDownload = (t: Transfer) =>
   isSucceeded(t.state) && analyzable(getFileName(t.filename));
+
+/** What a transfer's row menu offers the analyzer: its file, once it can be opened here */
+export const rowAnalysis = (t: Transfer, direction: Direction) =>
+  rowActions(t, direction).open && analyzableDownload(t)
+    ? { target: downloadCandidate(t).target, name: getFileName(t.filename) }
+    : null;
 
 /** What queuing a batch came to: how many were queued and why the rest were not */
 type BatchResult = {

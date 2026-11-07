@@ -60,73 +60,71 @@
     [...downloads.places.entries()].find(([, place]) => place === 1)?.[0] ?? null;
 </script>
 
-<!-- the whole row's actions; placed in a Menu.Root or Menu.LazyRoot by the caller -->
-<Menu.Content align="end" class="min-w-56">
-  {#if can.open}
-    <LocalFileItems
-      onopen={() => void open(t)}
-      onsave={() => void saveToDevice(t)}
-      path={t.localPath}
-      local />
-    <Menu.Item onSelect={() => openFolder([t])}><FolderOpenIcon />Open containing folder</Menu.Item>
-  {:else if t.localPath}
-    <Menu.Item onSelect={() => copyPath(t.localPath!)}
-      ><A.copyLocalPath.icon />{A.copyLocalPath.label}</Menu.Item>
-  {/if}
+<!-- everything a transfer's row offers, as menu items: its ... button, a right-click on the row and
+     the inspector all show these -->
+{#if can.open}
+  <LocalFileItems
+    onopen={() => void open(t)}
+    onsave={() => void saveToDevice(t)}
+    path={t.localPath}
+    local />
+  <Menu.Item onSelect={() => openFolder([t])}><FolderOpenIcon />Open containing folder</Menu.Item>
+{:else if t.localPath}
+  <Menu.Item onSelect={() => copyPath(t.localPath!)}
+    ><A.copyLocalPath.icon />{A.copyLocalPath.label}</Menu.Item>
+{/if}
+<Menu.Separator />
+<RemoteFileItems path={t.filename} username={t.username} />
+{#if write}
   <Menu.Separator />
-  <RemoteFileItems path={t.filename} username={t.username} />
-  {#if write}
-    <Menu.Separator />
-    <!-- both go through the daemon's retry, which keeps the download's folder and search -->
-    {#if can.retry}
-      <Menu.Item onSelect={() => void act(storeOf(t), "retry", [t.id])}>
-        <RotateCwIcon />Retry
-      </Menu.Item>
-    {:else if can.downloadAgain}
-      <Menu.Item onSelect={() => void act(storeOf(t), "retry", [t.id])}>
-        <RefreshCwIcon />Download again
-      </Menu.Item>
-    {/if}
-    {#if can.pause}
-      <Menu.Item onSelect={() => void act(storeOf(t), "pause", [t.id])}
-        ><PauseIcon />Pause</Menu.Item>
-    {:else if can.resume}
-      <Menu.Item onSelect={() => void act(storeOf(t), "resume", [t.id])}
-        ><PlayIcon />Resume</Menu.Item>
-    {/if}
-    {#if can.reorder}
-      <Menu.Item onSelect={() => void downloads.move([t.id], firstWaiting())}
-        ><ArrowUpToLineIcon />Start next</Menu.Item>
-      <Menu.Item onSelect={() => void downloads.move([t.id], null)}
-        ><ArrowDownToLineIcon />Start last</Menu.Item>
-    {/if}
-    {#if can.cancel}
-      <Menu.Item onSelect={() => void act(storeOf(t), "cancel", [t.id])}><XIcon />Cancel</Menu.Item>
-    {/if}
-    <Menu.Item onSelect={onremove}><Trash2Icon />Remove</Menu.Item>
+  <!-- both go through the daemon's retry, which keeps the download's folder and search -->
+  {#if can.retry}
+    <Menu.Item onSelect={() => void act(storeOf(t), "retry", [t.id])}>
+      <RotateCwIcon />Retry
+    </Menu.Item>
+  {:else if can.downloadAgain}
+    <Menu.Item onSelect={() => void act(storeOf(t), "retry", [t.id])}>
+      <RefreshCwIcon />Download again
+    </Menu.Item>
   {/if}
-  {#if can.queuePosition}
-    <Menu.Item onSelect={() => void queuePosition(t)}
-      ><ListOrderedIcon />Check queue position</Menu.Item>
+  {#if can.pause}
+    <Menu.Item onSelect={() => void act(storeOf(t), "pause", [t.id])}><PauseIcon />Pause</Menu.Item>
+  {:else if can.resume}
+    <Menu.Item onSelect={() => void act(storeOf(t), "resume", [t.id])}
+      ><PlayIcon />Resume</Menu.Item>
   {/if}
-  {#if can.bump && admin}
-    <Menu.Item onSelect={() => void bumpUpload(t)}
-      ><ChevronsUpIcon />Move to front of queue</Menu.Item>
+  {#if can.reorder}
+    <Menu.Item onSelect={() => void downloads.move([t.id], firstWaiting())}
+      ><ArrowUpToLineIcon />Start next</Menu.Item>
+    <Menu.Item onSelect={() => void downloads.move([t.id], null)}
+      ><ArrowDownToLineIcon />Start last</Menu.Item>
   {/if}
+  {#if can.cancel}
+    <Menu.Item onSelect={() => void act(storeOf(t), "cancel", [t.id])}><XIcon />Cancel</Menu.Item>
+  {/if}
+  <Menu.Item onSelect={onremove}><Trash2Icon />Remove</Menu.Item>
+{/if}
+{#if can.queuePosition}
+  <Menu.Item onSelect={() => void queuePosition(t)}
+    ><ListOrderedIcon />Check queue position</Menu.Item>
+{/if}
+{#if can.bump && admin}
+  <Menu.Item onSelect={() => void bumpUpload(t)}
+    ><ChevronsUpIcon />Move to front of queue</Menu.Item>
+{/if}
+<Menu.Separator />
+<UserMenuItems name={t.username} folder={getFileName(folder.folder)} named />
+{#if write}
+  <Menu.Item onSelect={() => onblock(false)}><BanIcon />Block {t.username}</Menu.Item>
+  {#if can.deny}
+    <Menu.Item onSelect={() => onblock(true)}><BanIcon />Deny and block</Menu.Item>
+  {/if}
+{/if}
+{#if ondetails}
   <Menu.Separator />
-  <UserMenuItems name={t.username} folder={getFileName(folder.folder)} named />
-  {#if write}
-    <Menu.Item onSelect={() => onblock(false)}><BanIcon />Block {t.username}</Menu.Item>
-    {#if can.deny}
-      <Menu.Item onSelect={() => onblock(true)}><BanIcon />Deny and block</Menu.Item>
-    {/if}
-  {/if}
-  {#if ondetails}
-    <Menu.Separator />
-    <Menu.Item onSelect={ondetails}><InfoIcon />Details</Menu.Item>
-  {/if}
-  {#if analysis}
-    {#if !ondetails}<Menu.Separator />{/if}
-    <AnalysisItems {...analysis} />
-  {/if}
-</Menu.Content>
+  <Menu.Item onSelect={ondetails}><InfoIcon />Details</Menu.Item>
+{/if}
+{#if analysis}
+  {#if !ondetails}<Menu.Separator />{/if}
+  <AnalysisItems {...analysis} />
+{/if}

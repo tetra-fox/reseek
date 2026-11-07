@@ -11,7 +11,7 @@
   import Trash2Icon from "@lucide/svelte/icons/trash-2";
   import XIcon from "@lucide/svelte/icons/x";
 
-  import { analyzableDownload } from "#lib/analysis/batch.js";
+  import { rowAnalysis } from "#lib/analysis/batch.js";
   import { marks } from "#lib/analysis/marks.svelte.js";
   import AnalysisMark from "#lib/components/analysis/AnalysisMark.svelte";
   import DownloadFill from "#lib/components/files/DownloadFill.svelte";
@@ -52,8 +52,8 @@
   import { viewport } from "#lib/ui/viewport.svelte.js";
   import { users } from "#lib/users/users.svelte.js";
 
-  import RowMenu from "./RowMenu.svelte";
   import Sparkline from "./Sparkline.svelte";
+  import TransferItems from "./TransferItems.svelte";
 
   type Props = {
     transfer: Transfer;
@@ -403,18 +403,15 @@
               <EllipsisIcon />
             </Button>
           {/snippet}
-          <RowMenu
-            transfer={t}
-            {direction}
-            {onremove}
-            {onblock}
-            ondetails={ondetails ? () => ondetails() : undefined}
-            analysis={ondetails && can.open && analyzableDownload(t)
-              ? {
-                  target: { kind: "download", username: t.username, id: t.id },
-                  name: getFileName(t.filename)
-                }
-              : null} />
+          <Menu.Content align="end" class="min-w-56">
+            <TransferItems
+              transfer={t}
+              {direction}
+              {onremove}
+              {onblock}
+              ondetails={ondetails ? () => ondetails() : undefined}
+              analysis={ondetails ? rowAnalysis(t, direction) : null} />
+          </Menu.Content>
         </Menu.LazyRoot>
       </div>
     {/if}

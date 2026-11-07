@@ -3,13 +3,13 @@
   import RotateCwIcon from "@lucide/svelte/icons/rotate-cw";
   import XIcon from "@lucide/svelte/icons/x";
 
-  import type { Target } from "#lib/analysis/analysis.js";
-  import { analyzableDownload } from "#lib/analysis/batch.js";
+  import { rowAnalysis } from "#lib/analysis/batch.js";
   import { marks } from "#lib/analysis/marks.svelte.js";
   import AnalysisMark from "#lib/components/analysis/AnalysisMark.svelte";
-  import RowMenu from "#lib/components/transfers/RowMenu.svelte";
+  import TransferItems from "#lib/components/transfers/TransferItems.svelte";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
+  import * as Menu from "#lib/components/ui/menu/menu.js";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import {
     ago,
@@ -58,8 +58,8 @@
   const write = $derived(session.can("ReadWrite"));
   const chip = $derived(stateChip(t));
   const moving = $derived(t.state === "InProgress");
-  const target = $derived<Target>({ kind: "download", username: t.username, id: t.id });
-  const analysis = $derived(can.open && analyzableDownload(t) ? target : null);
+  const offered = $derived(rowAnalysis(t, direction));
+  const analysis = $derived(offered?.target ?? null);
 
   /** where the peer can be reached, asked for only while the section that shows it is open */
   let address = $state<string | null>(null);
@@ -134,12 +134,14 @@
 {/snippet}
 
 {#snippet menu()}
-  <RowMenu
-    transfer={t}
-    {direction}
-    onremove={onremove ?? (() => store.removeLater([t.id]))}
-    onblock={(deny) => (deny ? void denyAndBlock(t.username) : blocking.ask(t.username))}
-    analysis={analysis && { target: analysis, name: getFileName(t.filename) }} />
+  <Menu.Content align="end" class="min-w-56">
+    <TransferItems
+      transfer={t}
+      {direction}
+      onremove={onremove ?? (() => store.removeLater([t.id]))}
+      onblock={(deny) => (deny ? void denyAndBlock(t.username) : blocking.ask(t.username))}
+      analysis={offered} />
+  </Menu.Content>
 {/snippet}
 
 {#snippet history()}
