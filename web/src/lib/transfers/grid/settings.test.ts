@@ -23,4 +23,11 @@ describe("a saved transfers view", () => {
     });
     expect(view.columns.find((c) => c.id === "size")).toEqual({ id: "size", visible: true });
   });
+
+  it("reads the grouping once saved as flat as the list layout", async () => {
+    const view = await load({ groupBy: "flat" });
+    expect([view.layout, view.groupBy]).toEqual(["list", "user"]);
+    const kept = await load({ layout: "tree", groupBy: "folder" });
+    expect([kept.layout, kept.groupBy]).toEqual(["tree", "folder"]);
+  });
 });

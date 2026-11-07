@@ -86,6 +86,14 @@ export const folderNode = <T>(
   };
 };
 
+/** The folder a flat list's items are under: none, so their group is the whole list */
+export const NO_FOLDER: FolderNode<never> = folderNode(
+  { key: "", path: "", label: "" },
+  [],
+  [],
+  () => 0
+);
+
 /** A path's key in a list that holds several trees, unique to the tree `scope` names */
 export const scopedKey = (scope: string, path: string) => `${scope}\u0000${path}`;
 

@@ -6,6 +6,7 @@
   import XIcon from "@lucide/svelte/icons/x";
 
   import { browsed, forgetBrowsed, restoreBrowsed } from "#lib/browse/recent.svelte.js";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { undoable } from "#lib/feedback/undo.js";
   import { sharesHref } from "#lib/nav.js";
@@ -41,14 +42,18 @@
   <ul class="flex flex-wrap items-center gap-1.5" aria-label="Pinned and recent searches">
     {#each recent.pinned as search (`pin:${search}`)}
       <li class="group flex items-center rounded-full border bg-accent-soft text-accent-soft-fg">
-        <button
-          type="button"
-          class="flex items-center gap-1 py-0.5 pl-2.5 text-xs disabled:opacity-50"
-          title={`Search for ${search} again`}
-          disabled={!connected}
-          onclick={() => onsearch(search)}>
-          <PinIcon class="size-3" />{search}
-        </button>
+        <Tooltip text={`Search for ${search} again`}>
+          {#snippet child({ props })}
+            <button
+              {...props}
+              type="button"
+              class="flex items-center gap-1 py-0.5 pl-2.5 text-xs disabled:opacity-50"
+              disabled={!connected}
+              onclick={() => onsearch(search)}>
+              <PinIcon class="size-3" />{search}
+            </button>
+          {/snippet}
+        </Tooltip>
         <button
           type="button"
           class="rounded-full p-1 opacity-60 hover:opacity-100"
@@ -60,14 +65,18 @@
     {/each}
     {#each recent.texts as search (`recent:${search}`)}
       <li class="group flex items-center rounded-full border text-fg-muted">
-        <button
-          type="button"
-          class="flex items-center gap-1 py-0.5 pl-2.5 text-xs hover:text-fg disabled:opacity-50"
-          title={`Search for ${search} again`}
-          disabled={!connected}
-          onclick={() => onsearch(search)}>
-          <HistoryIcon class="size-3" />{search}
-        </button>
+        <Tooltip text={`Search for ${search} again`}>
+          {#snippet child({ props })}
+            <button
+              {...props}
+              type="button"
+              class="flex items-center gap-1 py-0.5 pl-2.5 text-xs hover:text-fg disabled:opacity-50"
+              disabled={!connected}
+              onclick={() => onsearch(search)}>
+              <HistoryIcon class="size-3" />{search}
+            </button>
+          {/snippet}
+        </Tooltip>
         <button
           type="button"
           class="rounded-full p-1 row-action"
@@ -90,12 +99,16 @@
   <ul class="flex flex-wrap items-center gap-1.5" aria-label="Recently browsed">
     {#each browsed.users as name (name)}
       <li class="group flex items-center rounded-full border text-fg-muted">
-        <a
-          href={sharesHref(name)}
-          class="flex items-center gap-1 py-0.5 pl-2.5 text-xs hover:text-fg"
-          title={`Browse ${name}'s shares`}>
-          <FolderOpenIcon class="size-3" />{name}
-        </a>
+        <Tooltip text={`Browse ${name}'s shares`}>
+          {#snippet child({ props })}
+            <a
+              {...props}
+              href={sharesHref(name)}
+              class="flex items-center gap-1 py-0.5 pl-2.5 text-xs hover:text-fg">
+              <FolderOpenIcon class="size-3" />{name}
+            </a>
+          {/snippet}
+        </Tooltip>
         <button
           type="button"
           class="rounded-full p-1 pr-1.5 row-action"

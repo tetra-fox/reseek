@@ -19,6 +19,7 @@
   import Button from "#lib/components/ui/Button.svelte";
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
+  import Progress from "#lib/components/ui/Progress.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import Username from "#lib/components/users/Username.svelte";
   import { kindOf } from "#lib/files/kinds.js";
@@ -134,52 +135,56 @@
 
 {#snippet name()}
   <Icon class="size-4 shrink-0 text-fg-muted" />
-  {#if ondetails}
-    <button
-      type="button"
-      class="min-w-0 truncate text-left hover:underline"
-      title={t.filename}
-      onclick={() => ondetails()}>
-      {@render label()}
-    </button>
-  {:else}
-    <span class="min-w-0 truncate" title={t.filename}>{@render label()}</span>
-  {/if}
+  <Tooltip text={t.filename} dense>
+    {#snippet child({ props })}
+      {#if ondetails}
+        <button
+          {...props}
+          type="button"
+          class="min-w-0 truncate text-left hover:underline"
+          onclick={() => ondetails()}>
+          {@render label()}
+        </button>
+      {:else}
+        <span {...props} class="min-w-0 truncate">{@render label()}</span>
+      {/if}
+    {/snippet}
+  </Tooltip>
   {#if direction === "download"}<AnalysisMark mark={marks.download(t.id)} />{/if}
 {/snippet}
 
 {#snippet progress()}
   {#if t.state === "InProgress"}
-    <div
-      class="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-surface-muted"
-      role="progressbar"
-      aria-valuenow={Math.round(t.percentComplete)}
-      aria-valuemin={0}
-      aria-valuemax={100}>
-      <div class="h-full bg-accent transition-[width]" style:width={`${t.percentComplete}%`}></div>
-    </div>
+    <Progress
+      value={t.percentComplete}
+      label={`Progress of ${getFileName(t.filename)}`}
+      class="h-2 min-w-0 flex-1" />
     <span class="text-xs tabular-nums">{chip.text}</span>
   {:else}
     {#if write && can.reorder}
       <!-- a download waiting here is dragged onto another to start before it; the keyboard has
            the row menu's Start next and Start last -->
-      <span
-        role="presentation"
-        draggable="true"
-        class={[
-          "flex shrink-0 cursor-grab items-center gap-1 rounded-badge text-fg-muted",
-          dropping && "ring-2 ring-accent"
-        ]}
-        title="Drag onto another waiting download to start before it"
-        ondragstart={dragStart}
-        ondragover={dragOver}
-        ondragleave={() => (dropping = false)}
-        ondrop={drop}>
-        <GripVerticalIcon class="size-3.5" />
-        {#if localPlace}<span class="text-xs tabular-nums">#{localPlace} here</span>{/if}
-      </span>
+      <Tooltip text="Drag onto another waiting download to start before it" dense>
+        {#snippet child({ props })}
+          <span
+            {...props}
+            role="presentation"
+            draggable="true"
+            class={[
+              "flex shrink-0 cursor-grab items-center gap-1 rounded-badge text-fg-muted",
+              dropping && "ring-2 ring-accent"
+            ]}
+            ondragstart={dragStart}
+            ondragover={dragOver}
+            ondragleave={() => (dropping = false)}
+            ondrop={drop}>
+            <GripVerticalIcon class="size-3.5" />
+            {#if localPlace}<span class="text-xs tabular-nums">#{localPlace} here</span>{/if}
+          </span>
+        {/snippet}
+      </Tooltip>
     {/if}
-    <Tooltip text={chip.title ?? (retryIn ? `next attempt ${retryIn}` : undefined)}>
+    <Tooltip text={chip.title ?? (retryIn ? `next attempt ${retryIn}` : undefined)} dense spoken>
       {#snippet child({ props })}
         <span {...props} class="min-w-0">
           <Badge tone={chip.tone} class="max-w-full truncate">{chip.text}</Badge>
@@ -219,9 +224,12 @@
         <div class="flex min-w-0 flex-1 flex-col gap-0.5">
           <div class="flex min-w-0 items-center gap-1.5">{@render name()}</div>
           <div class="flex min-w-0 items-center gap-1.5 text-xs text-fg-muted">
-            <span
-              class="shrink-0 whitespace-nowrap tabular-nums"
-              title={plural(t.size, "byte", "bytes")}>{formatBytes(t.size)}</span>
+            <Tooltip text={plural(t.size, "byte", "bytes")} dense>
+              {#snippet child({ props })}
+                <span {...props} class="shrink-0 whitespace-nowrap tabular-nums"
+                  >{formatBytes(t.size)}</span>
+              {/snippet}
+            </Tooltip>
             {@render progress()}
           </div>
         </div>
@@ -230,15 +238,21 @@
       {/if}
     {:else if column === "user"}
       {#if direction === "upload" && user?.group.color}
-        <span
-          class="size-2 shrink-0 rounded-full"
-          style:background-color={user.group.color}
-          title={`Group ${user.group.name}`}></span>
+        <Tooltip text={`Group ${user.group.name}`} dense spoken>
+          {#snippet child({ props })}
+            <span
+              {...props}
+              class="size-2 shrink-0 rounded-full"
+              style:background-color={user.group.color}></span>
+          {/snippet}
+        </Tooltip>
       {/if}
       <Username name={t.username} folder={getFileName(getDirectoryName(t.filename))} />
       {#if user?.block}<Badge tone="danger">blocked</Badge>{/if}
     {:else if column === "size"}
-      <span title={plural(t.size, "byte", "bytes")}>{formatBytes(t.size)}</span>
+      <Tooltip text={plural(t.size, "byte", "bytes")} dense>
+        {#snippet child({ props })}<span {...props}>{formatBytes(t.size)}</span>{/snippet}
+      </Tooltip>
     {:else if column === "progress"}
       {@render progress()}
     {:else if column === "speed"}
@@ -257,7 +271,7 @@
         {#if t.placeInQueue}<span class="tabular-nums">#{t.placeInQueue}</span>{/if}
         {#if can.queuePosition}
           {@const failed = storeOf(t).queueErrors.get(t.id)}
-          <Tooltip text={failed === undefined ? undefined : queueFailure(failed)}>
+          <Tooltip text={failed === undefined ? "Check queue position" : queueFailure(failed)}>
             {#snippet child({ props })}
               <Button
                 {...props}
@@ -282,7 +296,11 @@
     {:else if column === "requested" || column === "started" || column === "ended"}
       {@const at =
         column === "requested" ? t.requestedAt : column === "started" ? t.startedAt : t.endedAt}
-      {#if at}<span title={ago(at)}>{dateTime(at)}</span>{/if}
+      {#if at}
+        <Tooltip text={ago(at)} dense>
+          {#snippet child({ props })}<span {...props}>{dateTime(at)}</span>{/snippet}
+        </Tooltip>
+      {/if}
     {:else if column === "elapsed"}
       {t.elapsedTime !== null && t.elapsedTime !== undefined
         ? formatDuration(t.elapsedTime / 1000)
@@ -290,7 +308,14 @@
     {:else if column === "attempts"}
       {t.attempts}
     {:else if column === "job"}
-      {#if t.jobId}<span class="font-mono text-xs" title={t.jobId}>{t.jobId.slice(0, 8)}</span>{/if}
+      {#if t.jobId}
+        {@const job = t.jobId}
+        <Tooltip text={job} dense>
+          {#snippet child({ props })}
+            <span {...props} class="font-mono text-xs">{job.slice(0, 8)}</span>
+          {/snippet}
+        </Tooltip>
+      {/if}
     {:else if column === "group"}
       {user?.group.name ?? ""}
     {:else if column === "actions"}
@@ -298,42 +323,74 @@
         <!-- a phone shows only the menu, which holds every one of these too -->
         <span class="contents max-md:hidden">
           {#if write && can.retry}
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Retry"
-              onclick={() => void act(storeOf(t), "retry", [t.id])}>
-              <RotateCwIcon />
-            </Button>
+            <Tooltip text="Retry">
+              {#snippet child({ props })}
+                <Button
+                  {...props}
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Retry"
+                  onclick={() => void act(storeOf(t), "retry", [t.id])}>
+                  <RotateCwIcon />
+                </Button>
+              {/snippet}
+            </Tooltip>
           {/if}
           {#if write && can.cancel}
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Cancel"
-              onclick={() => void act(storeOf(t), "cancel", [t.id])}>
-              <XIcon />
-            </Button>
+            <Tooltip text="Cancel">
+              {#snippet child({ props })}
+                <Button
+                  {...props}
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Cancel"
+                  onclick={() => void act(storeOf(t), "cancel", [t.id])}>
+                  <XIcon />
+                </Button>
+              {/snippet}
+            </Tooltip>
           {/if}
           {#if write}
-            <Button variant="ghost" size="icon-sm" aria-label="Remove" onclick={onremove}>
-              <Trash2Icon />
-            </Button>
+            <Tooltip text="Remove">
+              {#snippet child({ props })}
+                <Button
+                  {...props}
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Remove"
+                  onclick={onremove}>
+                  <Trash2Icon />
+                </Button>
+              {/snippet}
+            </Tooltip>
           {/if}
           {#if can.open}
-            <Button variant="ghost" size="icon-sm" aria-label="Open" onclick={() => void open(t)}>
-              <ExternalLinkIcon />
-            </Button>
+            <Tooltip text="Open">
+              {#snippet child({ props })}
+                <Button
+                  {...props}
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Open"
+                  onclick={() => void open(t)}>
+                  <ExternalLinkIcon />
+                </Button>
+              {/snippet}
+            </Tooltip>
           {/if}
           {#if can.openFolder}
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Open folder"
-              title="Open folder"
-              onclick={() => openFolder([t])}>
-              <FolderOpenIcon />
-            </Button>
+            <Tooltip text="Open folder">
+              {#snippet child({ props })}
+                <Button
+                  {...props}
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Open folder"
+                  onclick={() => openFolder([t])}>
+                  <FolderOpenIcon />
+                </Button>
+              {/snippet}
+            </Tooltip>
           {/if}
         </span>
         <Menu.LazyRoot>

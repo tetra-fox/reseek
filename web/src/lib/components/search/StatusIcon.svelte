@@ -26,7 +26,7 @@
   );
 </script>
 
-<Tooltip text={state} hint>
+<Tooltip text={state} dense spoken>
   {#snippet child({ props })}
     <span {...props} class="inline-flex">
       <icon.Icon

@@ -10,7 +10,7 @@
   import { fields } from "#lib/stored.svelte.js";
   import type { ColumnId } from "#lib/transfers/grid/columns.js";
   import type { ViewSettings } from "#lib/transfers/grid/settings.svelte.js";
-  import { type Group, type Item, treeOf } from "#lib/transfers/grid/view.js";
+  import { type Group, groupingOf, type Item, treeOf } from "#lib/transfers/grid/view.js";
   import type { Direction, Transfer } from "#lib/transfers/states.js";
   import type { Transfers } from "#lib/transfers/transfers.svelte.js";
   import type { Expansion } from "#lib/tree/expansion.svelte.js";
@@ -75,7 +75,8 @@
    */
   const slot = (depth: number) => (viewport.phone ? Math.min(depth, 1) : depth);
   const tree = $derived(treeOf(items));
-  const flat = $derived(view.groupBy === "flat" || view.groupBy === "job");
+  /** rows that no folder line is over show their folder */
+  const flat = $derived(groupingOf(view) === null || groupingOf(view) === "job");
   const ids = (group: Group) => group.transfers.map((t) => t.id);
   const ticked = (group: Group) => group.transfers.filter((t) => selected.has(t.id)).length;
 
@@ -154,8 +155,11 @@
   onkey={actOnKey}
   lineClass={(line) =>
     line.kind === "item" && store.list.removed.has(line.item.id) ? "opacity-40" : []}>
-  {#snippet header()}
-    <GridHeader {grid} class="h-9 border-b bg-surface-muted text-sm font-medium text-fg-muted" />
+  {#snippet header(all)}
+    <GridHeader
+      {grid}
+      {all}
+      class="h-9 border-b bg-surface-muted text-sm font-medium text-fg-muted" />
   {/snippet}
   {#snippet folder(node)}
     {@const group = tree.groups.get(node.key)}

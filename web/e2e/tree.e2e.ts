@@ -75,9 +75,7 @@ for (const [width, height] of [
 
       await page.goto(`./#/searches/${SEARCH_ID}`);
       const results = page.getByRole("treegrid", { name: "Search results" });
-      const bonus = results
-        .locator("[role=rowgroup]")
-        .getByTitle("@@a\\Music\\Album\\Bonus", { exact: true });
+      const bonus = results.locator("[role=rowgroup]").getByText("Bonus", { exact: true });
       const track = results.getByText("01 One.flac", { exact: true });
       await expect(track).toBeVisible();
       expect(await apart(bonus, track), "search results").toBeLessThan(0.5);
@@ -109,14 +107,14 @@ for (const [width, height] of [
       // its own, so its icon starts under the tick of a header at its depth
       await page.goto("./#/downloads");
       const grid = page.getByRole("treegrid", { name: "Downloads" });
-      const download = grid.getByTitle("@@a\\Music\\Album\\01 One.flac", { exact: true });
+      const download = grid.getByText("01 One.flac", { exact: true });
       await expect(download).toBeVisible();
       if (width < 768) {
         const tick = grid.getByRole("checkbox", { name: "Select every transfer in Bonus" });
         const icon = download.locator("xpath=preceding-sibling::*[1]");
         expect(await apart(tick, icon), "downloads").toBeLessThan(0.5);
       } else {
-        const subfolder = grid.getByTitle("Bonus", { exact: true });
+        const subfolder = grid.getByText("Bonus", { exact: true });
         expect(await apart(subfolder, download), "downloads").toBeLessThan(0.5);
       }
     });

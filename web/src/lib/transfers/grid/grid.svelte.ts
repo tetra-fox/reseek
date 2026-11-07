@@ -4,7 +4,7 @@ import { viewport } from "#lib/ui/viewport.svelte.js";
 
 import { type ColumnId, columnsFor, PHONE_COLUMNS } from "./columns";
 import type { ViewSettings } from "./settings.svelte";
-import type { SortKey } from "./view";
+import { groupingOf, type SortKey } from "./view";
 
 /**
  * A transfers screen's grid: `transfers` in the screen's sort, ties by file name, with the
@@ -38,7 +38,7 @@ export const transferGrid = (
     },
     shown: () =>
       view.columns
-        .filter((c) => c.visible && !(c.id === "user" && view.groupBy === "user"))
+        .filter((c) => c.visible && !(c.id === "user" && groupingOf(view) === "user"))
         .filter((c) => !viewport.phone || c.id in PHONE_COLUMNS)
         .map((c) => c.id),
     ties: "file" satisfies ColumnId & SortKey

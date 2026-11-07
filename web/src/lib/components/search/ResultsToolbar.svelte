@@ -1,16 +1,15 @@
 <script lang="ts">
   import ArrowUpDownIcon from "@lucide/svelte/icons/arrow-up-down";
   import FilterIcon from "@lucide/svelte/icons/filter";
-  import FolderTreeIcon from "@lucide/svelte/icons/folder-tree";
-  import Rows3Icon from "@lucide/svelte/icons/rows-3";
 
+  import LayoutToggle from "#lib/components/files/LayoutToggle.svelte";
   import InspectorToggle from "#lib/components/inspector/InspectorToggle.svelte";
   import * as Filter from "#lib/components/ui/filter/filter.js";
   import Input from "#lib/components/ui/Input.svelte";
-  import Segmented from "#lib/components/ui/Segmented.svelte";
   import Select from "#lib/components/ui/Select.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import Switch from "#lib/components/ui/Switch.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { FILTER_PLACEHOLDER } from "#lib/files/filters.js";
   import { plural } from "#lib/format.js";
   import type { ActiveFilter } from "#lib/lists/filtered.js";
@@ -52,17 +51,12 @@
     { value: "uploadSpeed", label: "Fastest upload speed" },
     { value: "queueLength", label: "Shortest queue" }
   ];
-
-  const VIEWS = [
-    { id: "cards", label: "Tree", icon: FolderTreeIcon },
-    { id: "dense", label: "Dense", icon: Rows3Icon }
-  ] as const;
 </script>
 
 <div class="flex flex-col gap-2.5 rounded-card border bg-surface p-3 shadow-card">
   <div class="flex flex-wrap items-center gap-x-5 gap-y-2">
-    <Segmented options={VIEWS} bind:value={searchOptions.view} label="View" size="sm" />
-    {#if searchOptions.view === "cards"}
+    <LayoutToggle bind:value={searchOptions.layout} />
+    {#if searchOptions.layout === "tree"}
       <div class="flex max-w-full min-w-0 items-center gap-2">
         <ArrowUpDownIcon class="size-4 shrink-0 text-fg-muted" />
         <Select
@@ -91,14 +85,19 @@
     <Filter.Panel {filters}>
       <Filter.Group label="Hide">
         {#each HIDING as h (h.key)}
-          <Filter.Chip
-            pressed={searchOptions[h.key]}
-            title={h.hint}
-            onclick={() => (searchOptions[h.key] = !searchOptions[h.key])}>{h.chip}</Filter.Chip>
+          <Tooltip text={h.hint}>
+            {#snippet child({ props })}
+              <Filter.Chip
+                {...props}
+                pressed={searchOptions[h.key]}
+                onclick={() => (searchOptions[h.key] = !searchOptions[h.key])}
+                >{h.chip}</Filter.Chip>
+            {/snippet}
+          </Tooltip>
         {/each}
       </Filter.Group>
     </Filter.Panel>
-    {#if searchOptions.view === "cards"}
+    {#if searchOptions.layout === "tree"}
       <label class="flex items-center gap-2">
         <Switch bind:checked={searchOptions.fold} onCheckedChange={(fold) => onfold(fold)} />Fold
         results

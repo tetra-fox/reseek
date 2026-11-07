@@ -22,6 +22,8 @@
   import Button from "#lib/components/ui/Button.svelte";
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
+  import Progress from "#lib/components/ui/Progress.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import Username from "#lib/components/users/Username.svelte";
   import { confirmation } from "#lib/feedback/confirm.svelte.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
@@ -240,7 +242,11 @@
     {#if group.kind === "user"}
       <Username name={group.username} />
     {:else if group.kind === "folder"}
-      <span class="truncate font-mono text-xs" title={group.label}>{group.label}</span>
+      <Tooltip text={group.label} clipped>
+        {#snippet child({ props })}
+          <span {...props} class="truncate font-mono text-xs">{group.label}</span>
+        {/snippet}
+      </Tooltip>
     {:else}
       <span class="truncate font-medium">{group.label}</span>
     {/if}
@@ -253,16 +259,21 @@
   </div>
   <!-- a phone leaves the progress to the file rows, which show it too -->
   {#if !viewport.phone && (progress.running || (progress.moved > 0 && progress.moved < progress.size))}
-    <span
-      class="flex shrink-0 items-center gap-1.5 text-xs text-fg-muted tabular-nums"
-      title={`${formatBytes(progress.moved)} of ${formatBytes(progress.size)}`}>
-      <span class="h-1.5 w-16 overflow-hidden rounded-full bg-surface-muted ring-1 ring-border">
-        <span class="block h-full bg-accent" style:width={`${progress.percent}%`}></span>
-      </span>
-      {Math.floor(progress.percent)}%{progress.eta !== null
-        ? ` · ${formatDuration(progress.eta)} left`
-        : ""}
-    </span>
+    <Tooltip text={`${formatBytes(progress.moved)} of ${formatBytes(progress.size)}`} dense>
+      {#snippet child({ props })}
+        <span
+          {...props}
+          class="flex shrink-0 items-center gap-1.5 text-xs text-fg-muted tabular-nums">
+          <Progress
+            value={progress.percent}
+            label={`Progress of ${group.label}`}
+            class="w-16 ring-1 ring-border" />
+          {Math.floor(progress.percent)}%{progress.eta !== null
+            ? ` · ${formatDuration(progress.eta)} left`
+            : ""}
+        </span>
+      {/snippet}
+    </Tooltip>
   {/if}
   {#if usage}
     <span class={["shrink-0 text-xs", usage.exhausted ? "text-danger" : "text-fg-muted"]}
@@ -294,14 +305,18 @@
         {#if a.text}
           <Button variant="ghost" size="sm" onclick={a.run}><a.icon />{a.label}</Button>
         {:else}
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={a.label}
-            title={a.label}
-            onclick={a.run}>
-            <a.icon />
-          </Button>
+          <Tooltip text={a.label}>
+            {#snippet child({ props })}
+              <Button
+                {...props}
+                variant="ghost"
+                size="icon-sm"
+                aria-label={a.label}
+                onclick={a.run}>
+                <a.icon />
+              </Button>
+            {/snippet}
+          </Tooltip>
         {/if}
       {/each}
     {/if}

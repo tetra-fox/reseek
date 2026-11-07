@@ -14,7 +14,7 @@ import SearchBar from "./SearchBar.svelte";
 vi.mock("$app/navigation", () => ({ goto: vi.fn() }));
 
 const connected = (isConnected: boolean) => {
-  app.state = { server: { isConnected } } as never;
+  app.state = { server: { isConnected }, user: { username: "me" } } as never;
 };
 
 const summary = (username: string) => ({

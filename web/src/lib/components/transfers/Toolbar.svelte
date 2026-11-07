@@ -12,6 +12,7 @@
   import { MARK_FILTERS, type MarkFilter } from "#lib/analysis/marks.js";
   import { analyzerOffered } from "#lib/analysis/marks.svelte.js";
   import { app } from "#lib/app.svelte.js";
+  import LayoutToggle from "#lib/components/files/LayoutToggle.svelte";
   import InspectorToggle from "#lib/components/inspector/InspectorToggle.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import * as Filter from "#lib/components/ui/filter/filter.js";
@@ -25,7 +26,12 @@
   import { type BulkAction, SCOPES } from "#lib/transfers/bulk.js";
   import { COLUMNS, columnsFor } from "#lib/transfers/grid/columns.js";
   import { defaults, type ViewSettings } from "#lib/transfers/grid/settings.svelte.js";
-  import { type GroupBy, type SortKey, TRANSFER_PLACEHOLDER } from "#lib/transfers/grid/view.js";
+  import {
+    type GroupBy,
+    groupingOf,
+    type SortKey,
+    TRANSFER_PLACEHOLDER
+  } from "#lib/transfers/grid/view.js";
   import { type ChipId, type Direction, isSucceeded, STATE_CHIPS } from "#lib/transfers/states.js";
   import { viewport } from "#lib/ui/viewport.svelte.js";
 
@@ -73,8 +79,7 @@
   const GROUPINGS: { id: GroupBy; label: string }[] = $derived([
     { id: "user", label: "User › folder" },
     { id: "folder", label: "Folder" },
-    ...(direction === "download" ? [{ id: "job" as const, label: "Queued together" }] : []),
-    { id: "flat", label: "Flat" }
+    ...(direction === "download" ? [{ id: "job" as const, label: "Queued together" }] : [])
   ]);
 
   // every order a column header can sort by, named after the first column that sorts by it; not
@@ -84,7 +89,7 @@
     columnsFor(direction)
       .flatMap((c) => (c.sort ? [{ id: c.sort, label: c.label }] : []))
       .filter((s, i, all) => all.findIndex((o) => o.id === s.id) === i)
-      .filter((s) => !(s.id === "user" && view.groupBy === "user"))
+      .filter((s) => !(s.id === "user" && groupingOf(view) === "user"))
   );
   const sortLabel = $derived(SORTS.find((s) => s.id === view.sort.id)?.label ?? view.sort.id);
 
@@ -142,7 +147,10 @@
     {/if}
   </div>
   <div class="flex flex-wrap items-center gap-inline">
-    <Segmented options={GROUPINGS} bind:value={view.groupBy} label="Group by" size="sm" />
+    <LayoutToggle bind:value={view.layout} />
+    {#if view.layout === "tree"}
+      <Segmented options={GROUPINGS} bind:value={view.groupBy} label="Group by" size="sm" />
+    {/if}
     <Segmented options={DENSITIES} bind:value={view.density} label="Density" size="sm" />
     <Menu.Root>
       <Menu.Trigger>

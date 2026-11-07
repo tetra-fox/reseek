@@ -1,5 +1,4 @@
 <script lang="ts">
-  import InfoIcon from "@lucide/svelte/icons/info";
   import type { Snippet } from "svelte";
 
   import * as Menu from "#lib/components/ui/menu/menu.js";
@@ -24,10 +23,6 @@
 <!-- the actions every remote file's row offers, wherever the file is listed -->
 <Menu.LazyRoot {trigger}>
   <Menu.Content align="end" class="min-w-48">
-    <RemoteFileItems {path} {username} {ondownload} />
-    {#if ondetails}
-      <Menu.Separator />
-      <Menu.Item onSelect={ondetails}><InfoIcon />Details</Menu.Item>
-    {/if}
+    <RemoteFileItems {path} {username} {ondownload} {ondetails} />
   </Menu.Content>
 </Menu.LazyRoot>

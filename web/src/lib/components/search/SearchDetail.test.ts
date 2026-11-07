@@ -77,7 +77,7 @@ describe("search results", () => {
   afterEach(() => {
     if (component) unmount(component);
     inspectorPrefs.open = false;
-    searchOptions.view = "cards";
+    searchOptions.layout = "tree";
     app.options = null;
     session.principal = null;
     toasts.splice(0);
@@ -173,14 +173,14 @@ describe("search results", () => {
     return net;
   };
 
-  it("keep the dense rows' nodes and the selection across them as results stream in", async () => {
-    searchOptions.view = "dense";
+  it("keep the list rows' nodes and the selection across them as results stream in", async () => {
+    searchOptions.layout = "list";
     const stored = [response("alice", 300), response("bob", 200), response("carol", 100)];
     const net = await open(stored);
     net.frame("search.response", { searchId: ID, response: stored[0] });
     net.frame("search.response", { searchId: ID, response: stored[1] });
     await streamed();
-    const grid = document.querySelector('[role=grid][aria-label^="Search results"]')!;
+    const grid = document.querySelector('[role=treegrid][aria-label^="Search results"]')!;
     const rows = () => [...grid.querySelectorAll("[role=row][data-line]")];
     expect(rows()).toHaveLength(4);
     expect(rows()[0].querySelectorAll(":scope > [role=gridcell]")).toHaveLength(11);
@@ -214,13 +214,13 @@ describe("search results", () => {
   });
 
   it("show no file in the inspector once the filter takes it out of the results", async () => {
-    searchOptions.view = "dense";
+    searchOptions.layout = "list";
     const stored = [response("alice", 300)];
     const net = await open(stored);
     const pane = mount(InspectorPane, { target: document.body });
     net.frame("search.response", { searchId: ID, response: stored[0] });
     await streamed();
-    const grid = document.querySelector('[role=grid][aria-label^="Search results"]')!;
+    const grid = document.querySelector('[role=treegrid][aria-label^="Search results"]')!;
     const details = () => document.querySelector('aside[aria-label="Details"]');
     press(grid, "ArrowDown");
     press(grid, "i");
@@ -231,10 +231,51 @@ describe("search results", () => {
     filter.dispatchEvent(new Event("input", { bubbles: true }));
     await vi.advanceTimersByTimeAsync(200);
     flushSync();
-    expect(document.querySelector("[role=grid] [role=row][data-line]")).toBeNull();
+    expect(document.querySelector("[role=treegrid] [role=row][data-line]")).toBeNull();
     expect(details()?.querySelector("h2")).toBeNull();
     expect(details()?.textContent).toContain("No file selected");
     unmount(pane);
+  });
+
+  it("keep the same files ticked from the list to the tree and back", async () => {
+    searchOptions.layout = "list";
+    const stored = [response("alice", 300), response("bob", 200)];
+    const net = await open(stored);
+    for (const r of stored) net.frame("search.response", { searchId: ID, response: r });
+    await streamed();
+    const rows = () => [...document.querySelectorAll("[role=treegrid] [role=row][data-line]")];
+    // a row's key is its result's and its file's path, in both layouts
+    const ticked = () =>
+      rows()
+        .filter((r) => r.getAttribute("aria-selected") === "true")
+        .map((r) => r.getAttribute("data-line")?.split("\u0000")[1])
+        .toSorted();
+    const all = () =>
+      document.querySelector('[aria-label="Select all"]')!.getAttribute("data-state");
+    const tick = (row: Element) =>
+      row.querySelector<HTMLButtonElement>('button[aria-label^="Select "]')!.click();
+
+    tick(rows()[0]);
+    tick(rows()[3]);
+    flushSync();
+    const picked = ["@@alice\\Album\\01 One.flac", "@@bob\\Album\\02 Two.flac"];
+    expect(ticked()).toEqual(picked);
+    expect(all()).toBe("indeterminate");
+
+    searchOptions.layout = "tree";
+    flushSync();
+    await flushFaked();
+    expect(ticked()).toEqual(picked);
+    expect(all()).toBe("indeterminate");
+
+    document.querySelector<HTMLButtonElement>('[aria-label="Select all"]')!.click();
+    flushSync();
+    expect(ticked()).toHaveLength(4);
+    searchOptions.layout = "list";
+    flushSync();
+    await flushFaked();
+    expect(ticked()).toHaveLength(4);
+    expect(all()).toBe("checked");
   });
 
   it("open and close a folder, and with Alt every folder beside it", async () => {

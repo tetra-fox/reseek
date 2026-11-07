@@ -2,6 +2,7 @@ import { type Mark, MARK_FILTERS, markToken, passes } from "#lib/analysis/marks.
 import { fileMatches, filterPlaceholder, parseFilters } from "#lib/files/filters.js";
 import { fromWhom, getDirectoryName, getFileName } from "#lib/format.js";
 import { type ActiveFilter, typedFilter } from "#lib/lists/filtered.js";
+import type { Layout } from "#lib/lists/layout.js";
 import { type ChipId, STATE_CHIPS, type Transfer } from "#lib/transfers/states.js";
 import {
   commonFolder,
@@ -9,13 +10,19 @@ import {
   folderNode,
   folderTree,
   itemsUnder,
+  NO_FOLDER,
   separatorOf,
   type TreeLine
 } from "#lib/tree/folders.js";
 
 import type { ViewSettings } from "./settings.svelte";
 
-export type GroupBy = "user" | "folder" | "job" | "flat";
+/** What the tree layout groups transfers by */
+export type GroupBy = "user" | "folder" | "job";
+
+/** The grouping a view's lines take: its own in the tree layout, none in the list */
+export const groupingOf = (view: { layout: Layout; groupBy: GroupBy }): GroupBy | null =>
+  view.layout === "tree" ? view.groupBy : null;
 
 /** A transfer's analysis as filters read it: its mark, and whether it could be analyzed */
 export type MarkLookup = (t: Transfer) => { mark: Mark | undefined; analyzable: boolean };
@@ -153,21 +160,21 @@ const bucket = <K>(rows: Transfer[], key: (t: Transfer) => K) => {
 };
 
 /**
- * The table's lines: group headers each followed by their rows, or the rows alone when flat. A
- * user's folders are a tree, a folder nested under the folder it is in. Groups keep the order
- * their first transfer has in `sorted`, and the rows inside a group keep the sort. A closed
- * group shows its header only
+ * The table's lines: group headers each followed by their rows, or the rows alone with no
+ * grouping. A user's folders are a tree, a folder nested under the folder it is in. Groups keep
+ * the order their first transfer has in `sorted`, and the rows inside a group keep the sort. A
+ * closed group shows its header only
  */
 export const layout = (
   sorted: Transfer[],
-  groupBy: GroupBy,
+  groupBy: GroupBy | null,
   isOpen: (key: string) => boolean
 ): Item[] => {
   const items: Item[] = [];
   const rows = (group: Group | null, list: Transfer[]) => {
     for (const t of list) items.push({ type: "row", key: t.id, transfer: t, group });
   };
-  if (groupBy === "flat") {
+  if (groupBy === null) {
     rows(null, sorted);
     return items;
   }
@@ -245,9 +252,6 @@ export const layout = (
 
 const size = (t: Transfer) => t.size;
 
-/** The node rows of a list grouped by nothing are under */
-const FLAT: FolderNode<Transfer> = folderNode({ key: "", path: "", label: "" }, [], [], size);
-
 /**
  * The table's lines as a tree's: a group header as a folder line holding every transfer under
  * the group, a row as an item line, each keyed as its line is; and each group by its key
@@ -279,7 +283,7 @@ export const treeOf = (items: Item[]) => {
           key: item.key,
           item: item.transfer,
           depth: depthOf(item),
-          folder: item.group ? nodeOf(item.group) : FLAT
+          folder: item.group ? nodeOf(item.group) : NO_FOLDER
         }
   );
   return { lines, groups };

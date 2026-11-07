@@ -1,3 +1,4 @@
+import { readLayout } from "./lists/layout";
 import { fields, stored } from "./stored.svelte";
 
 /** The UI's own preferences in this browser */
@@ -19,13 +20,16 @@ export const HIDE_DEFAULTS = {
   hideLongQueues: false
 };
 
-/** The search results' view, sort and toggles, kept between searches; the filter text is not */
+/**
+ * The search results' layout, sort and toggles, kept between searches; the filter text is not. A
+ * layout saved as `view`, "cards" or "dense", reads as the tree or the list
+ */
 export const searchOptions = stored("reseek.search.options", (saved) => {
   const s = fields(saved);
   const flag = (value: unknown, otherwise: boolean) =>
     typeof value === "boolean" ? value : otherwise;
   return {
-    view: (s.view === "dense" ? "dense" : "cards") as "cards" | "dense",
+    layout: readLayout(s.layout, s.view === "dense" ? "list" : "tree"),
     sort: (s.sort === "queueLength" ? "queueLength" : "uploadSpeed") as ResultSort,
     hideLocked: flag(s.hideLocked, HIDE_DEFAULTS.hideLocked),
     hideNoFreeSlots: flag(s.hideNoFreeSlots, HIDE_DEFAULTS.hideNoFreeSlots),

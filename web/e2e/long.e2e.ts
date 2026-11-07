@@ -59,13 +59,11 @@ test("focus and a range of rows go past the window's edge", async ({ page }) => 
   await expect(page.getByText("81 selected")).toBeVisible();
 });
 
-test("1000 search results in the dense view draw a window and scroll to the last", async ({
-  page
-}) => {
+test("1000 search results in the list draw a window and scroll to the last", async ({ page }) => {
   await manyResults(page, 1000);
   await login(page, `/searches/${SEARCH_ID}`);
-  await page.getByRole("radio", { name: "Dense" }).click();
-  const grid = page.getByRole("grid", { name: "Search results" });
+  await page.getByRole("radio", { name: "List" }).click();
+  const grid = page.getByRole("treegrid", { name: "Search results" });
   // the results are ranked fastest user first, so the slowest user's last file ends the list
   await windowed(page, grid, "[role=rowgroup] [role=row]", "00009 Song.flac");
 });

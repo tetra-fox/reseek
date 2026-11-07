@@ -4,9 +4,10 @@
   import type { ClassValue } from "svelte/elements";
   import { SvelteSet } from "svelte/reactivity";
 
+  import * as Menu from "#lib/components/ui/menu/menu.js";
   import { Arrivals } from "#lib/lists/arrivals.svelte.js";
-  import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
-  import { ListControl } from "#lib/lists/list.svelte.js";
+  import { freezesWhileUsed, interaction } from "#lib/lists/interaction.svelte.js";
+  import { type AllTick, ListControl } from "#lib/lists/list.svelte.js";
   import { ListWindow } from "#lib/lists/virtual.svelte.js";
   import { type Expansion, withSiblings } from "#lib/tree/expansion.svelte.js";
   import { type FolderNode, itemsUnder, type TreeLine } from "#lib/tree/folders.js";
@@ -14,6 +15,7 @@
   import { nesting, pins } from "#lib/tree/pins.js";
   import { inControl } from "#lib/ui/keys.js";
   import { rem, viewport } from "#lib/ui/viewport.svelte.js";
+  import { LONG_PRESS_MS } from "#lib/users/hover.svelte.js";
 
   import TreeToggle from "./TreeToggle.svelte";
 
@@ -56,8 +58,16 @@
      * does, with Shift for a range
      */
     item: Snippet<[T, number, (range: boolean) => void]>;
-    /** the column headers over the item rows, each a `columnheader`, set in as a top item is */
-    header?: Snippet;
+    /**
+     * The column headers over the item rows, each a `columnheader`, set in as a top item is. A
+     * tree with a selection hands it the Select all tick for its tick column
+     */
+    header?: Snippet<[AllTick | undefined]>;
+    /**
+     * A line's menu items, opened from the line by a right-click, a long press, the menu key or
+     * Shift+F10
+     */
+    menu?: Snippet<[TreeLine<T>]>;
     /** a line's height in rem, on a wider screen and on a phone; every line has the same */
     lineRem?: { wide: number; phone: number };
     /**
@@ -102,6 +112,7 @@
     folder,
     item,
     header,
+    menu,
     lineRem = { wide: 2.25, phone: 3 },
     slot = (depth) => (viewport.phone ? 0 : depth),
     height = "max(20rem, calc(var(--content-h) - 14rem))",
@@ -151,8 +162,29 @@
     ontoggle?.(open, [node.key]);
   };
 
+  /**
+   * What Select all ticks: the items on the lines that can be ticked, and those inside a folder
+   * whose line is closed, as its tick takes them; in a tree whose folders are picked like items,
+   * the folders on the lines in place of what they hold
+   */
+  const everything = $derived.by(() => {
+    if (!selected) return [];
+    const ids: string[] = [];
+    for (const [at, line] of lines.entries()) {
+      if (line.kind === "item") {
+        if (tickable(line.item)) ids.push(idOf(line.item));
+      } else if (folderId) {
+        ids.push(folderId(line.node));
+      } else if ((lines[at + 1]?.depth ?? -1) <= line.depth) {
+        for (const item of itemsUnder(line.node)) if (tickable(item)) ids.push(idOf(item));
+      }
+    }
+    return ids;
+  });
+
   const list = new ListControl<TreeLine<T>>({
     lines: () => lines,
+    all: () => everything,
     key: (line) => line.key,
     id: (line) => {
       if (!selected) return null;
@@ -175,6 +207,10 @@
     onkey: (e, line) => {
       if (line.kind === "folder" && (e.key === "ArrowRight" || e.key === "ArrowLeft")) {
         show(line.node, e.key === "ArrowRight");
+        return true;
+      }
+      if (menu && (e.key === "ContextMenu" || (e.key === "F10" && e.shiftKey))) {
+        openMenu(line);
         return true;
       }
       return !!onkey?.(e, line);
@@ -238,6 +274,67 @@
     const open = !expansion.isOpen(key);
     expansion.toggle(key, line.siblings, all);
     ontoggle?.(open, all ? line.siblings : [key]);
+  };
+
+  /** the line whose menu is open, and where the menu hangs: the pointer, or the line for the keys */
+  let menuAt = $state.raw<{
+    key: string;
+    anchor: HTMLElement | { getBoundingClientRect: () => DOMRect } | null;
+  } | null>(null);
+  const menuLine = $derived.by(() => {
+    const at = menuAt;
+    return at ? (lines.find((line) => line.key === at.key) ?? null) : null;
+  });
+  // the lines hold still while a line's menu is open
+  $effect(() => (menuLine ? interaction.hold() : undefined));
+
+  /** Opens a line's menu at the point `at`, or under the line */
+  const openMenu = (line: TreeLine<T>, at?: { x: number; y: number }) => {
+    list.focusedKey = line.key;
+    const anchor = at
+      ? { getBoundingClientRect: () => new DOMRect(at.x, at.y, 0, 0) }
+      : activeId === undefined
+        ? null
+        : document.getElementById(activeId);
+    menuAt = { key: line.key, anchor };
+  };
+  const lineOf = (target: EventTarget | null) => {
+    const key =
+      target instanceof Element ? target.closest<HTMLElement>("[data-line]")?.dataset.line : null;
+    return key ? lines.find((line) => line.key === key) : undefined;
+  };
+
+  let press: ReturnType<typeof setTimeout> | undefined;
+  /** the press that ends in a click opened the menu, so the click selects nothing */
+  let pressed = false;
+  const released = () => clearTimeout(press);
+  $effect(() => released);
+  /** A touch held on a line opens its menu, a touch having no right-click */
+  const pointerdown = (e: PointerEvent) => {
+    pressed = false;
+    const line = lineOf(e.target);
+    if (!menu || e.pointerType !== "touch" || inControl(e) || !line) return;
+    const at = { x: e.clientX, y: e.clientY };
+    press = setTimeout(() => {
+      pressed = true;
+      if (menuAt?.key !== line.key) openMenu(line, at);
+    }, LONG_PRESS_MS);
+  };
+  /**
+   * A right-click on a line opens its menu at the pointer, but a link and selected text keep the
+   * browser's own. The menu key's event, which comes to the tree itself, opens the focused line's
+   */
+  const contextmenu = (e: MouseEvent) => {
+    released();
+    if (!menu || e.defaultPrevented || !document.getSelection()?.isCollapsed) return;
+    if (e.target instanceof Element && e.target.closest("a[href]")) return;
+    const hit = lineOf(e.target);
+    const line = hit ?? list.focused;
+    if (!line) return;
+    e.preventDefault();
+    // the keys opened it already, before their own event came
+    if (menuAt?.key === line.key) return;
+    openMenu(line, hit ? { x: e.clientX, y: e.clientY } : undefined);
   };
 
   /** Gives the tree DOM focus, without scrolling */
@@ -322,6 +419,14 @@
   aria-activedescendant={activeId}
   tabindex="0"
   onscroll={(e) => (scrollTop = e.currentTarget.scrollTop)}
+  oncontextmenu={contextmenu}
+  onpointerdown={pointerdown}
+  onpointerup={released}
+  onpointercancel={released}
+  onclickcapture={(e) => {
+    if (pressed) e.preventDefault();
+    pressed = false;
+  }}
   bind:clientHeight={boxHeight}
   bind:clientWidth={boxWidth}
   {@attach view.attach}
@@ -330,14 +435,14 @@
        and over the lines -->
   <div class="sticky top-0 z-10" style:min-width={least} bind:offsetHeight={rowsTop}>
     {#if header && !framed}
-      {@render header()}
+      {@render header(selected ? list.allTick : undefined)}
     {:else if header}
       <div
         role="row"
         class="grid items-center border-b bg-surface-muted py-1.5 text-xs font-medium text-fg-muted"
         style:grid-template-columns={columns}
         style:padding-left={inset(0, "item")}>
-        {@render header()}
+        {@render header(selected ? list.allTick : undefined)}
       </div>
     {/if}
     {#each pinned as pin, n (pin.line.key)}
@@ -416,3 +521,18 @@
     {/each}
   </div>
 </div>
+
+{#if menu && menuAt && menuLine}
+  <Menu.Root open onOpenChange={(open) => !open && (menuAt = null)}>
+    <Menu.Content
+      customAnchor={menuAt.anchor}
+      align="start"
+      class="min-w-52"
+      onCloseAutoFocus={(e) => {
+        e.preventDefault();
+        list.focus();
+      }}>
+      {@render menu(menuLine)}
+    </Menu.Content>
+  </Menu.Root>
+{/if}

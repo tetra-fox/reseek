@@ -1,9 +1,7 @@
 <script lang="ts">
   import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
   import ChevronUpIcon from "@lucide/svelte/icons/chevron-up";
-  import CopyIcon from "@lucide/svelte/icons/copy";
   import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
-  import LinkIcon from "@lucide/svelte/icons/link";
   import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
   import { untrack } from "svelte";
 
@@ -14,16 +12,17 @@
   import FileHeader from "#lib/components/files/FileHeader.svelte";
   import FileTree from "#lib/components/files/FileTree.svelte";
   import FolderLine from "#lib/components/files/FolderLine.svelte";
+  import RemoteFileItems from "#lib/components/files/RemoteFileItems.svelte";
+  import RemoteFolderItems from "#lib/components/files/RemoteFolderItems.svelte";
   import SelectionBar from "#lib/components/files/SelectionBar.svelte";
   import InspectorToggle from "#lib/components/inspector/InspectorToggle.svelte";
   import RemoteFileInspector from "#lib/components/inspector/RemoteFileInspector.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
   import Input from "#lib/components/ui/Input.svelte";
-  import * as Menu from "#lib/components/ui/menu/menu.js";
+  import Progress from "#lib/components/ui/Progress.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
-  import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { fileColumns, fileTemplate, fileWidth } from "#lib/files/columns.js";
   import {
@@ -35,7 +34,6 @@
     followDownloads
   } from "#lib/files/downloads.js";
   import { FILTER_PLACEHOLDER } from "#lib/files/filters.js";
-  import { slskLink } from "#lib/files/slsk.js";
   import { formatBytes, getFileName, plural } from "#lib/format.js";
   import { inspector, useInspector } from "#lib/inspector/inspector.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
@@ -253,7 +251,20 @@
     });
     toast(outcome.text, outcome.kind === "done" ? "info" : "error");
   };
+
+  const details = (file: RemoteFile) => {
+    inspect(file);
+    inspector.show();
+  };
 </script>
+
+{#snippet folderItems(node: FolderNode<RemoteFile>)}
+  <RemoteFolderItems
+    folder={node.path}
+    username={browser.username}
+    ondownload={write && node.unlocked ? () => void downloadFolder(node) : undefined}
+    browse={false} />
+{/snippet}
 
 {#snippet inspected()}
   {#if shown}
@@ -270,18 +281,7 @@
     {@const percent = Math.round(browser.progress?.percentComplete ?? 0)}
     <div class="flex flex-col items-center gap-3 py-10" role="status">
       <p class="text-lg">Loading shares... {percent}%</p>
-      <div
-        class="h-1.5 w-64 overflow-hidden rounded-full bg-surface-muted ring-1 ring-border"
-        role="progressbar"
-        aria-label="Browse progress"
-        aria-valuenow={percent}
-        aria-valuemin={0}
-        aria-valuemax={100}>
-        <div
-          class="h-full bg-accent transition-[width] duration-(--motion-slow)"
-          style:width={`${percent}%`}>
-        </div>
-      </div>
+      <Progress value={percent} label="Browse progress" class="w-64 ring-1 ring-border" />
       <div class="mt-4 flex w-full max-w-xl flex-col gap-2" aria-hidden="true">
         {#each [0, 1, 2, 3, 4] as n (n)}
           <Skeleton class={`h-5 ${["", "ml-6", "ml-12"][n % 3]}`} />
@@ -356,8 +356,19 @@
       onopen={write ? (f) => void download([f]) : undefined}
       onmiddleclick={write ? (f) => void download([f]) : undefined}
       {inspect}>
-      {#snippet header()}
-        <FileHeader {columns} />
+      {#snippet header(all)}
+        <FileHeader {columns} {all} />
+      {/snippet}
+      {#snippet menu(line)}
+        {#if line.kind === "folder"}
+          {@render folderItems(line.node)}
+        {:else}
+          <RemoteFileItems
+            path={line.item.filename}
+            username={browser.username}
+            ondownload={write && !line.item.locked ? () => void download([line.item]) : undefined}
+            ondetails={() => details(line.item)} />
+        {/if}
       {/snippet}
       {#snippet folder(node, depth)}
         {@const state = tickOf(node)}
@@ -378,9 +389,7 @@
             : undefined}
           ondownload={write && node.unlocked ? () => void downloadFolder(node) : undefined}>
           {#snippet menu()}
-            <Menu.Item onSelect={() => void copyText(node.path)}><CopyIcon />Copy path</Menu.Item>
-            <Menu.Item onSelect={() => void copyText(slskLink(browser.username, node.path, true))}
-              ><LinkIcon />Copy slsk:// link</Menu.Item>
+            {@render folderItems(node)}
           {/snippet}
         </FolderLine>
       {/snippet}
@@ -392,10 +401,7 @@
           selected={browser.selected.has(file.filename)}
           ontick={tick}
           ondownload={write && !file.locked ? () => void download([file]) : undefined}
-          ondetails={() => {
-            inspect(file);
-            inspector.show();
-          }} />
+          ondetails={() => details(file)} />
       {/snippet}
     </FileTree>
     {#if chosen.length}

@@ -65,7 +65,7 @@ describe("the transfers view", () => {
       "1:y",
       c.id
     ]);
-    expect(layout([a, c], "flat", () => true).map((i) => i.key)).toEqual([a.id, c.id]);
+    expect(layout([a, c], null, () => true).map((i) => i.key)).toEqual([a.id, c.id]);
   });
 
   it("groups by what was queued together, named by its file, its folder or its users", () => {

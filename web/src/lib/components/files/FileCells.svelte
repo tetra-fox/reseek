@@ -10,6 +10,7 @@
   import type { Schemas } from "#lib/api/client.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import type { FileColumn } from "#lib/files/columns.js";
   import { downloadOf, starting } from "#lib/files/downloads.js";
   import { kindOf } from "#lib/files/kinds.js";
@@ -68,31 +69,41 @@
     {/if}
   </span>
 {/if}
-<span role="gridcell" class="flex min-w-0 items-center gap-1.5 pr-2" title={file.filename}>
+{#snippet nameText()}
+  <Tooltip text={file.filename} dense>
+    {#snippet child({ props })}<span {...props} class="truncate">{name}</span>{/snippet}
+  </Tooltip>
+{/snippet}
+
+<span role="gridcell" class="flex min-w-0 items-center gap-1.5 pr-2">
   <Icon class="size-4 shrink-0 text-fg-muted" />
   {#if !shows("size")}
     <!-- a phone gives the name the row's width, with the size under it -->
     <span class="flex min-w-0 flex-col">
-      <span class="truncate">{name}</span>
+      {@render nameText()}
       <span class="text-xs whitespace-nowrap text-fg-muted tabular-nums"
         >{formatBytes(file.size)}</span>
     </span>
   {:else}
-    <span class="truncate">{name}</span>
+    {@render nameText()}
   {/if}
   {#if fill === "waiting"}
     <span class="shrink-0 text-xs text-fg-subtle">Queued</span>
   {:else if fill === "done"}
     <CheckIcon class="size-4 shrink-0 text-success" aria-label="Downloaded" />
   {:else if fill === "failed" && download && session.can("ReadWrite")}
-    <Button
-      variant="ghost"
-      size="sm"
-      class="h-6 shrink-0 text-danger"
-      title={download.exception ?? undefined}
-      onclick={() => void act(downloads, "retry", [download.id])}>
-      <RotateCwIcon />Retry
-    </Button>
+    <Tooltip text={download.exception ?? undefined}>
+      {#snippet child({ props })}
+        <Button
+          {...props}
+          variant="ghost"
+          size="sm"
+          class="h-6 shrink-0 text-danger"
+          onclick={() => void act(downloads, "retry", [download.id])}>
+          <RotateCwIcon />Retry
+        </Button>
+      {/snippet}
+    </Tooltip>
   {/if}
 </span>
 {#if shows("size")}

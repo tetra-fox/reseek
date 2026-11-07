@@ -11,6 +11,7 @@
 
   import { app } from "#lib/app.svelte.js";
   import ErrorSegment from "#lib/components/ErrorSegment.svelte";
+  import FolderFiles from "#lib/components/files/FolderFiles.svelte";
   import RemoteFileInspector from "#lib/components/inspector/RemoteFileInspector.svelte";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
@@ -18,8 +19,10 @@
   import * as Filter from "#lib/components/ui/filter/filter.js";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { undoable } from "#lib/feedback/undo.js";
+  import { AllFiles } from "#lib/files/allfiles.svelte.js";
   import { asItem, enqueue } from "#lib/files/downloads.js";
   import { parseFilters } from "#lib/files/filters.js";
   import { listText, plural } from "#lib/format.js";
@@ -28,8 +31,8 @@
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
   import { href } from "#lib/nav.js";
-  import { denseRows } from "#lib/search/dense.js";
   import type { Picked } from "#lib/search/facts.js";
+  import { resultRows } from "#lib/search/list.js";
   import { recent, togglePin } from "#lib/search/recent.svelte.js";
   import { HIDING, type HideKey, pipeline, type Result } from "#lib/search/results.js";
   import { Results } from "#lib/search/results.svelte.js";
@@ -43,9 +46,10 @@
   } from "#lib/settings.svelte.js";
   import { useCrumbs } from "#lib/shell/crumbs.svelte.js";
   import { Expansion } from "#lib/tree/expansion.svelte.js";
+  import { viewport } from "#lib/ui/viewport.svelte.js";
   import { users } from "#lib/users/users.svelte.js";
 
-  import DenseResults from "./DenseResults.svelte";
+  import ResultsList from "./ResultsList.svelte";
   import ResultsToolbar from "./ResultsToolbar.svelte";
   import ResultsTree from "./ResultsTree.svelte";
   import StatusIcon from "./StatusIcon.svelte";
@@ -69,13 +73,15 @@
 
   /** the file focus last came to in the results, which the inspector shows */
   let picked = $state.raw<Picked | null>(null);
-  let dense = $state<DenseResults | null>(null);
+  let list = $state<ResultsList | null>(null);
   let tree = $state<ResultsTree | null>(null);
   useInspector(
     inspected,
     () => !!shown,
-    () => (dense ?? tree)?.focus()
+    () => (list ?? tree)?.focus()
   );
+  /** the dialog both layouts open on every file under a folder */
+  const allFiles = new AllFiles();
 
   const search = $derived(searches.list.get(id));
   const refused = $derived(searches.refused.get(id));
@@ -86,6 +92,8 @@
   let showBlocked = $state(false);
   let blocked = $state.raw<Set<string>>(new Set());
   const dismissed = new SvelteSet<string>();
+  /** the ticked files, kept across the layouts, each by its result's key and its path */
+  const selected = new SvelteSet<string>();
   /** whether a user's line is open unless toggled, which folding every result sets */
   let usersOpen = $state(!searchOptions.fold);
   const expansion = new Expansion(true, (key) => (key.startsWith("user:") ? usersOpen : undefined));
@@ -215,8 +223,8 @@
   const filteredCount = $derived(unnamed.length - view.length);
 
   /** gives focus to the results once the filters are off */
-  const refocus = () => (dense ?? tree)?.focus();
-  const rows = $derived(searchOptions.view === "dense" ? denseRows(view) : []);
+  const refocus = () => (list ?? tree)?.focus();
+  const rows = $derived(searchOptions.layout === "list" ? resultRows(view) : []);
   const fileCount = (list: Result[]) =>
     list.reduce((n, r) => n + r.response.fileCount + r.response.lockedFileCount, 0);
   const counts = $derived({
@@ -326,33 +334,55 @@
     class="flex flex-wrap items-center gap-inline rounded-card border bg-surface p-4 shadow-card">
     <StatusIcon state={search.state} />
     <!-- the buttons go under the title rather than squeeze it below a word's width -->
-    <h2 class="min-w-0 flex-1 basis-40 truncate text-lg font-medium" title={search.searchText}>
-      {search.searchText}
-    </h2>
+    <Tooltip text={search.searchText} clipped>
+      {#snippet child({ props })}
+        <h2 {...props} class="min-w-0 flex-1 basis-40 truncate text-lg font-medium">
+          {search.searchText}
+        </h2>
+      {/snippet}
+    </Tooltip>
     {#if scopeLabel(search.scope)}<Badge tone="accent">{scopeLabel(search.scope)}</Badge>{/if}
     <div class="flex flex-wrap gap-inline">
-      <Button
-        variant="ghost"
-        size="icon"
-        aria-label={pinned ? "Unpin this search" : "Pin this search under the search box"}
-        title={pinned ? "Unpin this search" : "Pin this search under the search box"}
-        aria-pressed={pinned}
-        onclick={() => togglePin(search.searchText)}>
-        {#if pinned}<PinOffIcon />{:else}<PinIcon />{/if}
-      </Button>
+      <Tooltip text={pinned ? "Unpin this search" : "Pin this search under the search box"}>
+        {#snippet child({ props })}
+          <Button
+            {...props}
+            variant="ghost"
+            size="icon"
+            aria-label={pinned ? "Unpin this search" : "Pin this search under the search box"}
+            aria-pressed={pinned}
+            onclick={() => togglePin(search.searchText)}>
+            {#if pinned}<PinOffIcon />{:else}<PinIcon />{/if}
+          </Button>
+        {/snippet}
+      </Tooltip>
       {#if canWrite}
-        <Button variant="outline" disabled={!connected || working} onclick={again}>
-          <RefreshCwIcon />
-          <span class="sm:max-lg:sr-only">Search again</span>
-        </Button>
+        <!-- between sm and lg these show only their icons, with the words in a tooltip -->
+        {@const iconsOnly = viewport.sm && !viewport.lg}
+        <Tooltip text={iconsOnly ? "Search again" : undefined}>
+          {#snippet child({ props })}
+            <Button {...props} variant="outline" disabled={!connected || working} onclick={again}>
+              <RefreshCwIcon />
+              <span class="sm:max-lg:sr-only">Search again</span>
+            </Button>
+          {/snippet}
+        </Tooltip>
         {#if search.isComplete}
-          <Button variant="danger" disabled={working} onclick={remove}>
-            <Trash2Icon /><span class="sm:max-lg:sr-only">Delete</span>
-          </Button>
+          <Tooltip text={iconsOnly ? "Delete" : undefined}>
+            {#snippet child({ props })}
+              <Button {...props} variant="danger" disabled={working} onclick={remove}>
+                <Trash2Icon /><span class="sm:max-lg:sr-only">Delete</span>
+              </Button>
+            {/snippet}
+          </Tooltip>
         {:else}
-          <Button variant="danger" disabled={working} onclick={() => void stop()}>
-            <CircleStopIcon /><span class="sm:max-lg:sr-only">Stop</span>
-          </Button>
+          <Tooltip text={iconsOnly ? "Stop" : undefined}>
+            {#snippet child({ props })}
+              <Button {...props} variant="danger" disabled={working} onclick={() => void stop()}>
+                <CircleStopIcon /><span class="sm:max-lg:sr-only">Stop</span>
+              </Button>
+            {/snippet}
+          </Tooltip>
         {/if}
       {/if}
     </div>
@@ -387,14 +417,17 @@
       noun={["file", "files"]}
       {refocus} />
 
-    {#if searchOptions.view === "dense"}
+    {#if searchOptions.layout === "list"}
       {#if rows.length}
-        <DenseResults
-          bind:this={dense}
+        <ResultsList
+          bind:this={list}
           {rows}
           searchId={id}
           canDownload={canWrite && connected}
-          inspect={(file) => (picked = file)} />
+          inspect={(file) => (picked = file)}
+          ondismiss={dismiss}
+          {allFiles}
+          {selected} />
       {/if}
     {:else if view.length}
       <ResultsTree
@@ -405,7 +438,9 @@
         {connected}
         {canWrite}
         ondismiss={dismiss}
-        inspect={(file) => (picked = file)} />
+        inspect={(file) => (picked = file)}
+        {allFiles}
+        {selected} />
     {/if}
     {#if !view.length}
       <EmptyState icon={SearchXIcon} title="All results are hidden">
@@ -436,4 +471,13 @@
       title="No results"
       description="Try fewer or different words, or search again later" />
   {/if}
+{/if}
+
+{#if allFiles.shown}
+  <FolderFiles
+    bind:open={allFiles.open}
+    username={allFiles.shown.username}
+    folder={allFiles.shown.folder}
+    files={allFiles.shown.files}
+    {connected} />
 {/if}

@@ -45,7 +45,7 @@ describe("the transfers table", () => {
         disconnect() {}
       }
     );
-    Object.assign(views.download, defaults("download"), { groupBy: "flat" });
+    Object.assign(views.download, defaults("download"), { layout: "list" });
   });
   afterEach(() => {
     session.principal = null;
@@ -226,7 +226,7 @@ describe("the transfers table", () => {
 
     it("select a group from its header with Ctrl+A and Space, and close it with Enter", async () => {
       signIn();
-      Object.assign(views.download, { groupBy: "user" });
+      Object.assign(views.download, { layout: "tree", groupBy: "user" });
       const a = transfer({ username: "alice" });
       const b = transfer({ username: "bob" });
       listing = [a, b];
@@ -254,7 +254,7 @@ describe("the transfers table", () => {
       const a = transfer({ filename: "x\\a.flac" });
       const b = transfer({ filename: "x\\b.mp3" });
       listing = [a, b];
-      Object.assign(views.download, { groupBy: "user" });
+      Object.assign(views.download, { layout: "tree", groupBy: "user" });
       await start();
       row(a.id)!.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
       const filter = document.querySelector<HTMLInputElement>('input[aria-label="Filter"]')!;
@@ -282,7 +282,7 @@ describe("the transfers table", () => {
     });
 
     it("move past a folded group to the next row", async () => {
-      Object.assign(views.download, { groupBy: "user" });
+      Object.assign(views.download, { layout: "tree", groupBy: "user" });
       const a = transfer({ username: "alice" });
       const b = transfer({ username: "bob" });
       const c = transfer({ username: "carol" });
@@ -346,7 +346,7 @@ describe("the transfers table", () => {
 
     it("give focus to the table when a confirm closes onto a control that left", async () => {
       signIn();
-      Object.assign(views.download, { groupBy: "user" });
+      Object.assign(views.download, { layout: "tree", groupBy: "user" });
       const a = transfer({ filename: "x\\a.flac", state: "InProgress", percentComplete: 5 });
       const b = transfer({ filename: "x\\b.flac", state: "InProgress", percentComplete: 5 });
       const other = transfer({ username: "bob", filename: "y\\c.flac" });
@@ -388,7 +388,7 @@ describe("the transfers table", () => {
     });
 
     it("select a group from the pinned header after scrolling", async () => {
-      Object.assign(views.download, { groupBy: "user" });
+      Object.assign(views.download, { layout: "tree", groupBy: "user" });
       listing = Array.from({ length: 30 }, (_, n) =>
         transfer({
           username: n < 25 ? "alice" : "bob",

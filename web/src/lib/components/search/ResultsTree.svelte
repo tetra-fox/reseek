@@ -1,20 +1,15 @@
 <script lang="ts">
-  import { goto } from "$app/navigation";
-  import CopyIcon from "@lucide/svelte/icons/copy";
   import DownloadIcon from "@lucide/svelte/icons/download";
   import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
   import EyeOffIcon from "@lucide/svelte/icons/eye-off";
-  import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
-  import LinkIcon from "@lucide/svelte/icons/link";
-  import ListIcon from "@lucide/svelte/icons/list";
-  import { SvelteSet } from "svelte/reactivity";
+  import type { SvelteSet } from "svelte/reactivity";
 
-  import type { Schemas } from "#lib/api/client.js";
   import FileCells from "#lib/components/files/FileCells.svelte";
   import FileHeader from "#lib/components/files/FileHeader.svelte";
   import FileTree from "#lib/components/files/FileTree.svelte";
-  import FolderFiles from "#lib/components/files/FolderFiles.svelte";
   import FolderLine from "#lib/components/files/FolderLine.svelte";
+  import RemoteFileItems from "#lib/components/files/RemoteFileItems.svelte";
+  import RemoteFolderItems from "#lib/components/files/RemoteFolderItems.svelte";
   import SelectionBar from "#lib/components/files/SelectionBar.svelte";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
@@ -22,17 +17,15 @@
   import Flag from "#lib/components/ui/Flag.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Spinner from "#lib/components/ui/Spinner.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import GroupBadge from "#lib/components/users/GroupBadge.svelte";
   import Presence from "#lib/components/users/Presence.svelte";
-  import UserMenuItems from "#lib/components/users/UserMenuItems.svelte";
   import Username from "#lib/components/users/Username.svelte";
-  import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
+  import { FILE_ACTIONS as A } from "#lib/files/actions.js";
+  import type { AllFiles } from "#lib/files/allfiles.svelte.js";
   import { fileColumns, fileTemplate, fileWidth } from "#lib/files/columns.js";
   import { asItem, type Enqueued, enqueueJob, followDownloads } from "#lib/files/downloads.js";
-  import { folderLinks } from "#lib/files/links.js";
-  import { fetchFolder } from "#lib/files/remote.js";
-  import { slskLink } from "#lib/files/slsk.js";
   import { formatAttributes, getFileName, plural } from "#lib/format.js";
   import { inspector } from "#lib/inspector/inspector.svelte.js";
   import { offerFields, type Picked, userFacts } from "#lib/search/facts.js";
@@ -51,6 +44,8 @@
   import { reach } from "#lib/users/actions.js";
   import { users } from "#lib/users/users.svelte.js";
 
+  import ResultUserItems from "./ResultUserItems.svelte";
+
   /** A file of a response, with whose it is and the response it came in */
   type Item = ResultFile & { owner: string; result: string };
 
@@ -66,15 +61,25 @@
     ondismiss: (username: string) => void;
     /** focus came to a file, which the inspector shows */
     inspect: (file: Picked) => void;
+    /** the dialog that lists every file under a folder */
+    allFiles: AllFiles;
+    /** the ticked files, by their result's key and path, which the list layout shares */
+    selected: SvelteSet<string>;
   };
 
-  let { view, searchId, expansion, connected, canWrite, ondismiss, inspect }: Props = $props();
+  let {
+    view,
+    searchId,
+    expansion,
+    connected,
+    canWrite,
+    ondismiss,
+    inspect,
+    allFiles,
+    selected
+  }: Props = $props();
 
   const write = $derived(canWrite && connected);
-  const selected = new SvelteSet<string>();
-  let asking = $state<string | null>(null);
-  let flat = $state<{ username: string; folder: string; files: Schemas["File"][] } | null>(null);
-  let flatOpen = $state(false);
   let tree = $state<ReturnType<typeof FileTree<Item>> | null>(null);
 
   followDownloads();
@@ -165,22 +170,30 @@
     toast(outcome.text, outcome.kind === "done" ? "info" : "error");
   };
 
-  /** Lists every file under a folder, asked of the user so files the search missed are in */
-  const showFolder = async (username: string, folder: string) => {
-    asking = `${username}\u0000${folder}`;
-    const outcome = await fetchFolder(username, folder);
-    asking = null;
-    if (!outcome.ok) {
-      toast(`Could not load the folder: ${outcome.error}`, "error");
-      return;
-    }
-    flat = { username, folder, files: outcome.data.flatMap((d) => d.files) };
-    flatOpen = true;
+  const details = (file: Item) => {
+    inspect(pick(file));
+    inspector.show();
   };
 
   /** Gives the tree DOM focus, without scrolling */
   export const focus = () => tree?.focus();
 </script>
+
+{#snippet userItems(node: FolderNode<Item>, name: string)}
+  <ResultUserItems
+    {name}
+    ondownload={write ? () => void downloadNow(itemsUnder(node)) : undefined}
+    ondismiss={() => ondismiss(name)} />
+{/snippet}
+
+{#snippet folderItems(node: FolderNode<Item>)}
+  {@const owner = ownerOf(node)}
+  <RemoteFolderItems
+    folder={node.path}
+    username={owner}
+    ondownload={write && node.unlocked ? () => void downloadNow(itemsUnder(node)) : undefined}
+    onallfiles={() => void allFiles.show(owner, node.path)} />
+{/snippet}
 
 {#snippet userLine(node: FolderNode<Item>, result: Result)}
   {@const response = result.response}
@@ -195,12 +208,19 @@
       indeterminate={state.indeterminate}
       onCheckedChange={state.ontick} />
   {/if}
-  <span
-    class={[
-      "size-2.5 shrink-0 rounded-full",
-      response.hasFreeUploadSlot ? "bg-success" : "bg-warning"
-    ]}
-    title={response.hasFreeUploadSlot ? "Has a free upload slot" : "No free upload slot"}></span>
+  <Tooltip
+    text={response.hasFreeUploadSlot ? "Has a free upload slot" : "No free upload slot"}
+    dense
+    spoken>
+    {#snippet child({ props })}
+      <span
+        {...props}
+        class={[
+          "size-2.5 shrink-0 rounded-full",
+          response.hasFreeUploadSlot ? "bg-success" : "bg-warning"
+        ]}></span>
+    {/snippet}
+  </Tooltip>
   <span class="flex min-w-0 flex-1 items-center gap-2">
     <Username {name} />
     {#if user}<Presence presence={user.presence} />{/if}
@@ -220,12 +240,7 @@
           </Button>
         {/snippet}
         <Menu.Content align="end" class="min-w-56">
-          <UserMenuItems {name} only={["shares", "search"]} />
-          {#if write}
-            <Menu.Item onSelect={() => void downloadNow(itemsUnder(node))}
-              ><DownloadIcon />Download all</Menu.Item>
-          {/if}
-          <Menu.Item onSelect={() => ondismiss(name)}><EyeOffIcon />Hide this result</Menu.Item>
+          {@render userItems(node, name)}
         </Menu.Content>
       </Menu.LazyRoot>
     {:else}
@@ -237,14 +252,18 @@
           <DownloadIcon />Download all
         </Button>
       {/if}
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        aria-label="Hide this result"
-        title="Hide this result"
-        onclick={() => ondismiss(name)}>
-        <EyeOffIcon />
-      </Button>
+      <Tooltip text="Hide this result">
+        {#snippet child({ props })}
+          <Button
+            {...props}
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Hide this result"
+            onclick={() => ondismiss(name)}>
+            <EyeOffIcon />
+          </Button>
+        {/snippet}
+      </Tooltip>
     {/if}
   </span>
 {/snippet}
@@ -264,8 +283,21 @@
   onopen={write ? (f) => void downloadNow([f]) : undefined}
   onmiddleclick={write ? (f) => void downloadNow([f]) : undefined}
   inspect={(f) => inspect(pick(f))}>
-  {#snippet header()}
-    <FileHeader {columns} />
+  {#snippet header(all)}
+    <FileHeader {columns} {all} />
+  {/snippet}
+  {#snippet menu(line)}
+    {#if line.kind === "item"}
+      <RemoteFileItems
+        path={line.item.filename}
+        username={line.item.owner}
+        ondownload={write && !line.item.locked ? () => void downloadNow([line.item]) : undefined}
+        ondetails={() => details(line.item)} />
+    {:else if line.depth === 0}
+      {@render userItems(line.node, results.get(line.node.key)?.response.username ?? "")}
+    {:else}
+      {@render folderItems(line.node)}
+    {/if}
   {/snippet}
   {#snippet folder(node, depth)}
     {@const result = depth === 0 ? results.get(node.key) : undefined}
@@ -280,23 +312,23 @@
         tick={tickState(node, ticked.get(node.key) ?? 0)}
         ondownload={write && node.unlocked ? () => void downloadNow(itemsUnder(node)) : undefined}>
         {#snippet actions()}
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="View all files in this folder"
-            title="View all files in this folder"
-            disabled={asking !== null}
-            onclick={() => void showFolder(owner, node.path)}>
-            {#if asking === `${owner}\u0000${node.path}`}<Spinner
-                class="size-4" />{:else}<ListIcon />{/if}
-          </Button>
+          <Tooltip text={A.allFiles.label}>
+            {#snippet child({ props })}
+              <Button
+                {...props}
+                variant="ghost"
+                size="icon-sm"
+                aria-label={A.allFiles.label}
+                disabled={allFiles.asking !== null}
+                onclick={() => void allFiles.show(owner, node.path)}>
+                {#if allFiles.isAsking(owner, node.path)}<Spinner
+                    class="size-4" />{:else}<A.allFiles.icon />{/if}
+              </Button>
+            {/snippet}
+          </Tooltip>
         {/snippet}
         {#snippet menu()}
-          <Menu.Item onSelect={() => goto(folderLinks(owner, node.path).browse)}
-            ><FolderOpenIcon />Browse this folder</Menu.Item>
-          <Menu.Item onSelect={() => void copyText(node.path)}><CopyIcon />Copy path</Menu.Item>
-          <Menu.Item onSelect={() => void copyText(slskLink(owner, node.path, true))}
-            ><LinkIcon />Copy slsk:// link</Menu.Item>
+          {@render folderItems(node)}
         {/snippet}
       </FolderLine>
     {/if}
@@ -309,10 +341,7 @@
       selected={selected.has(idOf(file))}
       ontick={tickRow}
       ondownload={write && !file.locked ? () => void downloadNow([file]) : undefined}
-      ondetails={() => {
-        inspect(pick(file));
-        inspector.show();
-      }} />
+      ondetails={() => details(file)} />
   {/snippet}
 </FileTree>
 {#if canWrite && chosen.length}
@@ -320,13 +349,4 @@
     files={chosen}
     ondownload={connected ? () => download(chosen) : undefined}
     onclear={() => selected.clear()} />
-{/if}
-
-{#if flat}
-  <FolderFiles
-    bind:open={flatOpen}
-    username={flat.username}
-    folder={flat.folder}
-    files={flat.files}
-    {connected} />
 {/if}

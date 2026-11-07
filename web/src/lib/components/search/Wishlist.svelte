@@ -9,6 +9,7 @@
   import Card from "#lib/components/ui/Card.svelte";
   import Input from "#lib/components/ui/Input.svelte";
   import Time from "#lib/components/ui/Time.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { Busy } from "#lib/feedback/busy.svelte.js";
   import { plural } from "#lib/format.js";
   import { jobs } from "#lib/jobs/jobs.svelte.js";
@@ -68,8 +69,11 @@
     <ul class="divide-y border-t text-sm">
       {#each items as w (w.id)}
         <li class="flex min-w-0 items-center gap-3 px-5 py-2">
-          <span class="min-w-0 flex-1 truncate font-medium" title={w.searchText}
-            >{w.searchText}</span>
+          <Tooltip text={w.searchText} clipped>
+            {#snippet child({ props })}
+              <span {...props} class="min-w-0 flex-1 truncate font-medium">{w.searchText}</span>
+            {/snippet}
+          </Tooltip>
           {#if w.lastSearchedAt}
             <span class="flex shrink-0 items-center gap-1.5 text-xs text-fg-muted">
               {#if w.lastNewFiles}
@@ -86,13 +90,17 @@
             <span class="shrink-0 text-xs text-fg-muted">Not searched yet</span>
           {/if}
           {#if write}
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label={`Remove ${w.searchText} from the wishlist`}
-              title="Remove from the wishlist"
-              disabled={busy.running}
-              onclick={() => void busy.run(() => wishlist.remove(w.id))}><Trash2Icon /></Button>
+            <Tooltip text="Remove from the wishlist">
+              {#snippet child({ props })}
+                <Button
+                  {...props}
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`Remove ${w.searchText} from the wishlist`}
+                  disabled={busy.running}
+                  onclick={() => void busy.run(() => wishlist.remove(w.id))}><Trash2Icon /></Button>
+              {/snippet}
+            </Tooltip>
           {/if}
         </li>
       {/each}

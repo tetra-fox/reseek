@@ -1,5 +1,4 @@
 <script lang="ts" generics="T">
-  import DownloadIcon from "@lucide/svelte/icons/download";
   import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
   import FolderIcon from "@lucide/svelte/icons/folder";
   import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
@@ -9,6 +8,8 @@
   import Button from "#lib/components/ui/Button.svelte";
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
+  import { FILE_ACTIONS as A } from "#lib/files/actions.js";
   import { folderCaption } from "#lib/files/summary.js";
   import type { FolderNode } from "#lib/tree/folders.js";
 
@@ -40,20 +41,25 @@
     indeterminate={tick.indeterminate}
     onCheckedChange={tick.ontick} />
 {/if}
-<span
-  class={["flex min-w-0 flex-1 items-center gap-1.5", node.locked && "opacity-50"]}
-  title={node.locked ? LOCKED_HINT : undefined}>
+<span class={["flex min-w-0 flex-1 items-center gap-1.5", node.locked && "opacity-50"]}>
   {#if node.locked}
-    <LockIcon class="size-4 shrink-0 text-fg-muted" />
+    <Tooltip text={LOCKED_HINT} dense spoken>
+      {#snippet child({ props })}
+        <LockIcon {...props} class="size-4 shrink-0 text-fg-muted" />
+      {/snippet}
+    </Tooltip>
   {:else if open}
     <FolderOpenIcon class="size-4 shrink-0 text-fg-muted" />
   {:else}
     <FolderIcon class="size-4 shrink-0 text-fg-muted" />
   {/if}
   <span class="name-count gap-1.5">
-    <span
-      class={["truncate", depth === 0 ? "text-fg" : "text-fg-muted"]}
-      title={node.locked ? undefined : node.path}>{node.label}</span>
+    <Tooltip text={node.locked ? undefined : node.path} dense>
+      {#snippet child({ props })}
+        <span {...props} class={["truncate", depth === 0 ? "text-fg" : "text-fg-muted"]}
+          >{node.label}</span>
+      {/snippet}
+    </Tooltip>
     <span class="text-xs text-fg-subtle"><span>{folderCaption(node)}</span></span>
   </span>
 </span>
@@ -63,10 +69,10 @@
       variant="ghost"
       size="sm"
       class="h-7"
-      aria-label={`Download this folder, ${folderCaption(node)}`}
+      aria-label={`${A.downloadFolder.label}, ${folderCaption(node)}`}
       onclick={ondownload}>
       <!-- a phone shows the icon alone, the line having no room for the words -->
-      <DownloadIcon /><span class="max-md:hidden">Download this folder</span>
+      <A.downloadFolder.icon /><span class="max-md:hidden">{A.downloadFolder.label}</span>
     </Button>
   {/if}
   {@render actions?.()}

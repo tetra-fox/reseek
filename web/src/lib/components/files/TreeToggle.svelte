@@ -1,6 +1,7 @@
 <script lang="ts">
   import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
 
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { type Expansion, withSiblings } from "#lib/tree/expansion.svelte.js";
   import { TOGGLE_REM } from "#lib/tree/indent.js";
   import { cn } from "#lib/ui/cn.js";
@@ -23,22 +24,26 @@
   const open = $derived(expansion.isOpen(key));
 </script>
 
-<button
-  type="button"
-  class={cn(
-    "flex shrink-0 items-center justify-center rounded-badge text-fg-muted hover:bg-hover hover:text-fg",
-    className
-  )}
-  style:width={`${TOGGLE_REM}rem`}
-  style:height={`${TOGGLE_REM}rem`}
-  aria-expanded={open}
-  aria-label={`${open ? "Close" : "Open"} ${name}`}
-  title="Alt-click to open or close the sibling folders as well"
-  onclick={(e) => {
-    const all = withSiblings(e);
-    expansion.toggle(key, siblings, all);
-    ontoggle?.(!open, all ? [key, ...siblings.filter((s) => s !== key)] : [key]);
-  }}>
-  <ChevronRightIcon
-    class={["size-4 transition-transform duration-(--motion-fast)", open && "rotate-90"]} />
-</button>
+<Tooltip text="Alt-click to open or close the sibling folders as well">
+  {#snippet child({ props })}
+    <button
+      {...props}
+      type="button"
+      class={cn(
+        "flex shrink-0 items-center justify-center rounded-badge text-fg-muted hover:bg-hover hover:text-fg",
+        className
+      )}
+      style:width={`${TOGGLE_REM}rem`}
+      style:height={`${TOGGLE_REM}rem`}
+      aria-expanded={open}
+      aria-label={`${open ? "Close" : "Open"} ${name}`}
+      onclick={(e) => {
+        const all = withSiblings(e);
+        expansion.toggle(key, siblings, all);
+        ontoggle?.(!open, all ? [key, ...siblings.filter((s) => s !== key)] : [key]);
+      }}>
+      <ChevronRightIcon
+        class={["size-4 transition-transform duration-(--motion-fast)", open && "rotate-90"]} />
+    </button>
+  {/snippet}
+</Tooltip>

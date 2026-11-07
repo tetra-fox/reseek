@@ -7,6 +7,14 @@ import { inControl, keepsKey, layerOpen, withModifier } from "#lib/ui/keys.js";
 
 import { TYPE_AHEAD_MS, typeAhead } from "./typeahead";
 
+/** The header's Select all: whether every row it stands for is ticked, or some are */
+export type AllTick = {
+  checked: boolean;
+  indeterminate: boolean;
+  empty: boolean;
+  toggle: () => void;
+};
+
 /** What a list tells the controller about its lines */
 export type ListSpec<L> = {
   /** the lines in the order they are shown, rows and group headers */
@@ -20,6 +28,11 @@ export type ListSpec<L> = {
    * the group it belongs to or heads. Null, or no function, for every row of the list
    */
   group?: (line: L) => string[] | null;
+  /**
+   * The ids the header's Select all ticks, and Ctrl/Cmd+A outside a group: every row the list
+   * shows by default, more for a tree whose closed folders hold rows too
+   */
+  all?: () => string[];
   /** Enter on a row */
   onopen?: (line: L) => void;
   /** a plain click on a row opens it too, for lists whose rows are what a pane shows */
@@ -85,7 +98,7 @@ let lists = 0;
  * `:focus-visible` would: a press anywhere in the list hides it until the next key.
  *
  * Keys: a focused control keeps the keys it handles (`keepsKey`); the rest act on the line the
- * control is in. Ctrl/Cmd+A selects the focused line's group, or every row; any other key with
+ * control is in. Ctrl/Cmd+A selects the focused line's group, or what Select all stands for; any other key with
  * Ctrl, Cmd or Alt is the browser's, unless the list takes it as its own. Home, End, Page Up and
  * Page Down move as Up and Down do, further. On a row Space toggles it, Enter opens it and the list's own keys act; on a group
  * header only Ctrl/Cmd+A and Space act, unless headers take focus. In a list with an inspector,
@@ -124,6 +137,19 @@ export class ListControl<L> {
       return id === null ? [] : [id];
     })
   );
+  /** the ids Select all stands for */
+  readonly everything = $derived.by(() => this.#spec.all?.() ?? this.rows);
+  /** the header's Select all, which ticks every row it stands for or, once all are, clears them */
+  readonly allTick: AllTick = $derived.by(() => {
+    const ids = this.everything;
+    const on = ids.filter((id) => this.selected.has(id)).length;
+    return {
+      checked: on > 0 && on === ids.length,
+      indeterminate: on > 0 && on < ids.length,
+      empty: !ids.length,
+      toggle: () => this.setAll(ids, on < ids.length)
+    };
+  });
   #found = $derived(
     this.focusedKey === null
       ? -1
@@ -378,7 +404,7 @@ export class ListControl<L> {
     const line = this.focused;
     const id = line === null ? null : this.#spec.id(line);
     if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "a") {
-      this.setAll((line && this.#spec.group?.(line)) ?? this.rows, true);
+      this.setAll((line && this.#spec.group?.(line)) ?? this.everything, true);
     } else if (withModifier(e)) {
       if (line === null || !this.#spec.onchord?.(e, line)) return;
       this.#ringed = true;

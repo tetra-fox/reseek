@@ -15,6 +15,7 @@
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import Time from "#lib/components/ui/Time.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { NONE } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
@@ -121,24 +122,33 @@
                     <Spinner class="size-4" />
                   {:else if canWrite}
                     <span class="inline-flex row-action">
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label="Search again"
-                        title="Search again"
-                        disabled={!app.isServerConnected}
-                        onclick={() => openSearch(search.searchText, search.scope)}>
-                        <RefreshCwIcon />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        class="text-danger"
-                        aria-label={done ? "Delete" : "Stop"}
-                        onclick={() =>
-                          done ? searches.removeLater([search.id]) : void stop(search.id)}>
-                        {#if done}<Trash2Icon />{:else}<CircleStopIcon />{/if}
-                      </Button>
+                      <Tooltip text="Search again">
+                        {#snippet child({ props })}
+                          <Button
+                            {...props}
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label="Search again"
+                            disabled={!app.isServerConnected}
+                            onclick={() => openSearch(search.searchText, search.scope)}>
+                            <RefreshCwIcon />
+                          </Button>
+                        {/snippet}
+                      </Tooltip>
+                      <Tooltip text={done ? "Delete" : "Stop"}>
+                        {#snippet child({ props })}
+                          <Button
+                            {...props}
+                            variant="ghost"
+                            size="icon-sm"
+                            class="text-danger"
+                            aria-label={done ? "Delete" : "Stop"}
+                            onclick={() =>
+                              done ? searches.removeLater([search.id]) : void stop(search.id)}>
+                            {#if done}<Trash2Icon />{:else}<CircleStopIcon />{/if}
+                          </Button>
+                        {/snippet}
+                      </Tooltip>
                     </span>
                   {/if}
                 </td>

@@ -9,6 +9,7 @@
   import { FILTERING } from "#lib/components/ui/filter/filter.js";
   import Input from "#lib/components/ui/Input.svelte";
   import Notice from "#lib/components/ui/Notice.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { undoable } from "#lib/feedback/undo.js";
   import {
@@ -94,12 +95,16 @@
         "group flex items-center rounded-full border text-xs",
         on ? FILTERING : "text-fg-muted"
       ]}>
-      <button
-        type="button"
-        class="py-0.5 pl-2.5 hover:text-fg"
-        aria-pressed={on}
-        title={preset.filter}
-        onclick={() => (filter = on ? "" : preset.filter)}>{preset.name}</button>
+      <Tooltip text={preset.filter}>
+        {#snippet child({ props })}
+          <button
+            {...props}
+            type="button"
+            class="py-0.5 pl-2.5 hover:text-fg"
+            aria-pressed={on}
+            onclick={() => (filter = on ? "" : preset.filter)}>{preset.name}</button>
+        {/snippet}
+      </Tooltip>
       {#if !why}
         <button
           type="button"
@@ -113,15 +118,22 @@
       {/if}
     </span>
   {/each}
-  <Button
-    variant="ghost"
-    size="sm"
-    class="h-6 text-xs"
-    disabled={!!why || !filter.trim()}
-    title={why ?? (filter.trim() ? "Save the current filter as a preset" : "Type a filter first")}
-    onclick={ask}>
-    <PlusIcon />Save as preset
-  </Button>
+  <!-- a disabled button takes no focus and, in some browsers, no pointer events, so the reason it
+       is disabled is on a span around it -->
+  <Tooltip text={why ?? (filter.trim() ? undefined : "Type a filter first")}>
+    {#snippet child({ props })}
+      <span {...props} class="inline-flex">
+        <Button
+          variant="ghost"
+          size="sm"
+          class="h-6 text-xs"
+          disabled={!!why || !filter.trim()}
+          onclick={ask}>
+          <PlusIcon />Save as preset
+        </Button>
+      </span>
+    {/snippet}
+  </Tooltip>
 </div>
 
 <Dialog bind:open={saving} title="Save a filter preset" {busy}>

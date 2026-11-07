@@ -3,7 +3,7 @@ import { expect, type Locator, test } from "@playwright/test";
 import { fakeBrowse, fakeChat, fakeSearch, manyDownloads, SEARCH_ID } from "./support/fakes";
 import { login } from "./support/login";
 
-test("shows search results as cards and as dense rows walked by key", async ({ page }) => {
+test("shows search results as a tree and as a list walked by key", async ({ page }) => {
   await fakeSearch(page);
   await login(page, "/dashboard");
   await page.goto(`./#/searches/${SEARCH_ID}`);
@@ -33,9 +33,9 @@ test("shows search results as cards and as dense rows walked by key", async ({ p
   await expect(filter).toHaveValue("");
   await expect(user("bob")).toBeVisible();
 
-  // the dense view: one row per file, walked with the keys
-  await page.getByRole("radio", { name: "Dense" }).click();
-  const grid = page.getByRole("grid", { name: "Search results" });
+  // the list: one row per file, walked with the keys
+  await page.getByRole("radio", { name: "List" }).click();
+  const grid = page.getByRole("treegrid", { name: "Search results" });
   await expect(grid.locator("[role=row][data-line]")).toHaveCount(5);
   await expect(grid.locator("[role=row][data-line]").first()).toHaveCSS("cursor", "pointer");
   await grid.focus();
@@ -51,7 +51,7 @@ test("shows search results as cards and as dense rows walked by key", async ({ p
 
   // the choice of view is remembered
   await page.reload();
-  await expect(page.getByRole("radio", { name: "Dense" })).toBeChecked();
+  await expect(page.getByRole("radio", { name: "List" })).toBeChecked();
 });
 
 test("cross-fades between screens", async ({ page }) => {

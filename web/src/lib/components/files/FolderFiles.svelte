@@ -91,8 +91,8 @@
     {selected}
     idOf={(f) => f.filename}
     onopen={write ? (f) => void downloadNow([f]) : undefined}>
-    {#snippet header()}
-      <FileHeader {columns} />
+    {#snippet header(all)}
+      <FileHeader {columns} {all} />
     {/snippet}
     {#snippet folder(node, depth)}
       <FolderLine

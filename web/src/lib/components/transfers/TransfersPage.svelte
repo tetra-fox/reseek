@@ -22,6 +22,7 @@
   import type { Noun } from "#lib/lists/filtered.js";
   import { heldOrder } from "#lib/lists/interaction.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
+  import { live } from "#lib/live/live.svelte.js";
   import { href } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
   import { useCrumbs } from "#lib/shell/crumbs.svelte.js";
@@ -31,6 +32,7 @@
   import { views } from "#lib/transfers/grid/settings.svelte.js";
   import {
     activeFilters,
+    groupingOf,
     inStates,
     type Item,
     layout,
@@ -189,7 +191,7 @@
   const hold = heldOrder<Item>((item) => item.key);
   // svelte-ignore state_referenced_locally
   const grid = transferGrid(direction, view, () => filtered);
-  const items = $derived(hold(layout(grid.rows, view.groupBy, folds.isOpen)));
+  const items = $derived(hold(layout(grid.rows, groupingOf(view), folds.isOpen)));
   const rows = $derived(items.flatMap((i) => (i.type === "row" ? [i.transfer] : [])));
   const chosen = $derived(all.filter((t) => selected.has(t.id)));
   /** the transfer the inspector shows while it is in the table */
@@ -203,9 +205,19 @@
     () => table?.focus()
   );
 
-  // the users on screen are looked up for their group, color and block
+  /** the users of the first rows, sorted, as one value that changes only when they do */
+  const onScreen = $derived(
+    JSON.stringify([...new Set(rows.slice(0, 200).map((t) => t.username))].toSorted())
+  );
+  /** the users looked up for the rows before, which are not looked up again */
+  let looked = new Set<string>();
+  // the users on screen are looked up for their group, color and block as they come on screen;
+  // the users topic's frames keep what is held current after that
+  $effect(() => live.retain("users"));
   $effect(() => {
-    for (const name of new Set(rows.slice(0, 200).map((t) => t.username))) void users.load(name);
+    const names = new Set<string>(JSON.parse(onScreen));
+    for (const name of names) if (!looked.has(name)) void users.load(name);
+    looked = names;
   });
 
   /** the control in the table a confirm was opened from, which its close returns focus to */

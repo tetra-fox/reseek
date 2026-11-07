@@ -194,8 +194,8 @@ const everyScreen = async (page: Page) => {
     expect(box.x + box.width, "a dialog button ends off the screen").toBeLessThanOrEqual(390);
   }
   await page.keyboard.press("Escape");
-  await page.getByRole("radio", { name: "Dense" }).click();
-  await holds(page, "the dense results", shows("02 Two.flac"));
+  await page.getByRole("radio", { name: "List" }).click();
+  await holds(page, "the results list", shows("02 Two.flac"));
   await page.getByRole("radio", { name: "Tree" }).click();
   await fits(page, "/downloads", shows("3.flac"));
   // a phone shows no Columns menu, and sorts by any column from the Sort menu
@@ -286,8 +286,8 @@ test.describe("on a wide screen", () => {
       await login(page, "/dashboard");
       await fits(page, "/dashboard", shows("a_rather_long_username_from_somewhere"));
       await fits(page, `/searches/${SEARCH_ID}`, shows("01 One.flac"));
-      await page.getByRole("radio", { name: "Dense" }).click();
-      await holds(page, `the dense results at ${root} px`, shows("02 Two.flac"));
+      await page.getByRole("radio", { name: "List" }).click();
+      await holds(page, `the results list at ${root} px`, shows("02 Two.flac"));
       await page.getByRole("radio", { name: "Tree" }).click();
       await fits(page, "/downloads", shows("3.flac"));
       await analysisHolds(page);
