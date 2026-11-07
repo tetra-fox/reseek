@@ -66,7 +66,12 @@
     checked={ticked > 0 && ticked === list.length}
     indeterminate={ticked > 0 && ticked < list.length}
     onCheckedChange={onselect} />
-  <TreeToggle {expansion} key={group.key} siblings={group.siblings} name={group.label} />
+  <TreeToggle
+    {expansion}
+    key={group.key}
+    siblings={group.siblings}
+    inside={group.inside}
+    name={group.label} />
   {#if group.kind === "folder"}
     {#if folded}<FolderIcon class="size-4 shrink-0 text-fg-muted" />{:else}<FolderOpenIcon
         class="size-4 shrink-0 text-fg-muted" />{/if}

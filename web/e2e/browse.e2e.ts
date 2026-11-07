@@ -194,3 +194,18 @@ test("a file's row fills as it downloads, then flashes and shows it done", async
   await expect(row.locator("[data-fill]")).toHaveCount(0);
   await expect(row.getByLabel("Downloaded")).toBeVisible();
 });
+
+test("Ctrl-click on a folder's arrow opens or closes every folder inside it too", async ({
+  page
+}) => {
+  const tree = await browseCarol(page);
+  const track = fileLine(tree, "\\Deep\\CD1\\D01.flac");
+  await tree.getByRole("button", { name: "Open Deep" }).click({ modifiers: ["Control"] });
+  await expect(track).toBeVisible();
+  await tree.getByRole("button", { name: "Close Deep" }).click({ modifiers: ["Control"] });
+  await expect(folder(tree, "\\Deep\\CD1")).toHaveCount(0);
+  // a plain click opens Deep alone, its CD1 closed with it
+  await tree.getByRole("button", { name: "Open Deep" }).click();
+  await expect(folder(tree, "\\Deep\\CD1")).toBeVisible();
+  await expect(track).toHaveCount(0);
+});

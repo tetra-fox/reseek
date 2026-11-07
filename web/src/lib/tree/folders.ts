@@ -250,6 +250,12 @@ export const tickedCounts = (selected: Iterable<string>) => {
   return counts;
 };
 
+/** The keys of every folder below `node`, at every depth, each its own key or what `keyOf` gives */
+export const foldersUnder = <T>(
+  node: FolderNode<T>,
+  keyOf: (node: FolderNode<T>) => string = (n) => n.key
+): string[] => node.children.flatMap((child) => [keyOf(child), ...foldersUnder(child, keyOf)]);
+
 /** One line of a tree laid out flat: a folder, or an item under it */
 export type TreeLine<T> =
   | { kind: "folder"; key: string; node: FolderNode<T>; depth: number; siblings: string[] }
@@ -264,7 +270,7 @@ export type TreeFilter<T> = {
 /**
  * The tree as lines, depth first: each folder, then while it is open its items and the folders
  * under it, by their keys. `siblings` lists the keys of the folders beside a folder, itself
- * included, which Alt-click opens or closes together.
+ * included, which an Alt-click opens or closes together.
  *
  * With a `filter` the open folders are ignored: a folder shows, open, when it or a folder under
  * it matches, so the way to every match is in view, and of its items those the filter keeps

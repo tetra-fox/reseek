@@ -9,6 +9,7 @@ import {
   type FolderNode,
   folderNode,
   folderTree,
+  foldersUnder,
   itemsUnder,
   NO_FOLDER,
   separatorOf,
@@ -106,6 +107,8 @@ export type Group = {
   folder?: string;
   /** the keys of the groups beside it, itself included, which Alt-click opens or closes with it */
   siblings: string[];
+  /** the keys of the groups inside it, at every depth, which Ctrl-click opens or closes with it */
+  inside: () => string[];
 };
 
 export type Item =
@@ -184,9 +187,17 @@ export const layout = (
     if (children) children();
     else rows(group, group.transfers);
   };
+  const folderKey = (username: string) => (node: FolderNode<Transfer>) =>
+    `folder:${username}\u0000${node.path}`;
+  const tree = (list: Transfer[]) =>
+    folderTree(
+      list,
+      (t) => t.filename,
+      (t) => t.size
+    );
   /** a user's folders as nested groups, from `depth` down */
   const folders = (username: string, list: Transfer[], depth: number) => {
-    const key = (node: FolderNode<Transfer>) => `folder:${username}\u0000${node.path}`;
+    const key = folderKey(username);
     const walk = (nodes: FolderNode<Transfer>[], at: number) => {
       const siblings = nodes.map(key);
       for (const node of nodes) {
@@ -198,7 +209,8 @@ export const layout = (
           depth: at,
           transfers: itemsUnder(node),
           folder: node.path,
-          siblings
+          siblings,
+          inside: () => foldersUnder(node, key)
         };
         add(group, () => {
           rows(group, node.items);
@@ -206,14 +218,7 @@ export const layout = (
         });
       }
     };
-    walk(
-      folderTree(
-        list,
-        (t) => t.filename,
-        (t) => t.size
-      ),
-      depth
-    );
+    walk(tree(list), depth);
   };
   if (groupBy === "user") {
     const byUser = [...bucket(sorted, (t) => t.username)];
@@ -226,7 +231,11 @@ export const layout = (
         username,
         depth: 0,
         transfers: list,
-        siblings
+        siblings,
+        inside: () => {
+          const key = folderKey(username);
+          return tree(list).flatMap((node) => [key(node), ...foldersUnder(node, key)]);
+        }
       };
       add(user, () => folders(username, list, 1));
     }
@@ -243,7 +252,8 @@ export const layout = (
         username: list[0].username,
         depth: 0,
         transfers: list,
-        siblings
+        siblings,
+        inside: () => []
       });
     }
   }

@@ -156,15 +156,15 @@ describe("ticked counts", () => {
 });
 
 describe("expansion", () => {
-  it("toggles one folder, or with Alt every sibling to the state it takes", () => {
+  it("toggles one folder, or with others taking the state it takes", () => {
     const open = new Expansion(false);
     const siblings = ["a", "b", "c"];
-    open.toggle("b", siblings);
+    open.toggle("b");
     expect(siblings.map(open.isOpen)).toEqual([false, true, false]);
-    // Alt on an open one closes them all, on a closed one opens them all
-    open.toggle("b", siblings, true);
+    // on an open one the others close with it, on a closed one they open with it
+    open.toggle("b", ["a", "c"]);
     expect(siblings.map(open.isOpen)).toEqual([false, false, false]);
-    open.toggle("a", siblings, true);
+    open.toggle("a", ["b", "c"]);
     expect(siblings.map(open.isOpen)).toEqual([true, true, true]);
     open.toggle("c");
     expect(siblings.map(open.isOpen)).toEqual([true, true, false]);

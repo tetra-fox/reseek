@@ -11,8 +11,8 @@
   import { type AllTick, ListControl } from "#lib/lists/list.svelte.js";
   import { ListWindow } from "#lib/lists/virtual.svelte.js";
   import { settings } from "#lib/settings.svelte.js";
-  import { type Expansion, withSiblings } from "#lib/tree/expansion.svelte.js";
-  import { type FolderNode, itemsUnder, type TreeLine } from "#lib/tree/folders.js";
+  import { type Expansion, withInside, withSiblings } from "#lib/tree/expansion.svelte.js";
+  import { type FolderNode, foldersUnder, itemsUnder, type TreeLine } from "#lib/tree/folders.js";
   import { GAP_REM, itemStart, lineStart } from "#lib/tree/indent.js";
   import { nesting, pins } from "#lib/tree/pins.js";
   import { inControl } from "#lib/ui/keys.js";
@@ -165,11 +165,14 @@
   const inset = (depth: number, kind: "folder" | "item") =>
     framed ? `${kind === "item" ? itemStart(depth) : lineStart(depth)}rem` : undefined;
 
-  /** Opens or closes a folder from the keys, as its toggle would */
-  const show = (node: FolderNode<T>, open: boolean) => {
-    if (expansion.isOpen(node.key) === open) return;
-    expansion.set(node.key, open);
-    ontoggle?.(open, [node.key]);
+  /** Opens or closes a folder from the keys, as its toggle would, with `deep` every folder inside */
+  const show = (node: FolderNode<T>, open: boolean, deep = false) => {
+    const keys = [node.key, ...(deep ? foldersUnder(node) : [])].filter(
+      (key) => expansion.isOpen(key) !== open
+    );
+    if (!keys.length) return;
+    for (const key of keys) expansion.set(key, open);
+    ontoggle?.(open, keys);
   };
 
   /**
@@ -213,10 +216,11 @@
       else if (onopenfolder) onopenfolder(line.node);
       else show(line.node, !expansion.isOpen(line.node.key));
     },
-    // Right opens a folder and Left closes it, as in a file manager's tree
+    // Right opens a folder and Left closes it, as in a file manager's tree; with Ctrl, or Cmd on a
+    // Mac, every folder inside it too
     onkey: (e, line) => {
       if (line.kind === "folder" && (e.key === "ArrowRight" || e.key === "ArrowLeft")) {
-        show(line.node, e.key === "ArrowRight");
+        show(line.node, e.key === "ArrowRight", withInside(e));
         return true;
       }
       if (menu && (e.key === "ContextMenu" || (e.key === "F10" && e.shiftKey))) {
@@ -280,10 +284,10 @@
     }
     if (!document.getSelection()?.isCollapsed) return;
     const key = line.node.key;
-    const all = withSiblings(e);
+    const also = withSiblings(e) ? line.siblings.filter((s) => s !== key) : [];
     const open = !expansion.isOpen(key);
-    expansion.toggle(key, line.siblings, all);
-    ontoggle?.(open, all ? line.siblings : [key]);
+    expansion.toggle(key, also);
+    ontoggle?.(open, [key, ...also]);
   };
 
   /** the line whose menu is open, and where the menu hangs: the pointer, or the line for the keys */
@@ -401,6 +405,7 @@
         {expansion}
         key={line.node.key}
         siblings={line.siblings}
+        inside={() => foldersUnder(line.node)}
         name={line.node.label}
         {ontoggle} />
       {@render folder(line.node, line.depth)}
