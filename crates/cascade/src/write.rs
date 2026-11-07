@@ -12,30 +12,35 @@ use crate::{Error, files};
 const SECRET_MODE: u32 = 0o600;
 /// Mode of any other new file.
 const PLAIN_MODE: u32 = 0o640;
+/// The mode bits of the group and of others, which a file that holds a secret loses.
+const SHARED_BITS: u32 = 0o077;
 
 impl FileEditor<'_> {
   /// Writes `text` to `path` if the file is still at `revision` (`None`: there is no file),
   /// copying the previous text to `<file>.bak` first. Returns the new revision.
   ///
   /// The write is atomic: a temporary file next to it is renamed over it. A file that exists
-  /// keeps its permissions; a new one is readable only by its owner when it holds a secret, and
-  /// by its group as well otherwise.
+  /// keeps its permissions, less those of its group and others when `text` holds a secret; a
+  /// new one is readable only by its owner when it holds a secret, and by its group as well
+  /// otherwise. The backup gets the mode the file ends up with.
   pub fn write(&self, path: &Path, revision: Option<&str>, text: &str) -> Result<String, Error> {
     let current = files::read_optional(path)?;
     if current.as_deref().map(files::revision_of).as_deref() != revision {
       return Err(Error::Stale);
     }
+    let secret = self.holds_secrets(text);
+    let existing = file_mode(path).map(|mode| if secret { mode & !SHARED_BITS } else { mode });
     if let Some(previous) = current {
-      // the backup holds what the file held, so it gets the file's mode whatever it had
-      let mode = file_mode(path).map_or(Mode::KeepOr(SECRET_MODE), Mode::Set);
+      // the backup holds what the file held, so it gets the file's mode, not an older backup's
+      let mode = existing.map_or(Mode::KeepOr(SECRET_MODE), Mode::Set);
       write_atomic(&backup_path(path), &previous, mode)?;
     }
-    let mode = if self.holds_secrets(text) {
-      SECRET_MODE
-    } else {
-      PLAIN_MODE
+    let mode = match (existing, secret) {
+      (Some(mode), true) => Mode::Set(mode),
+      (None, true) => Mode::KeepOr(SECRET_MODE),
+      (_, false) => Mode::KeepOr(PLAIN_MODE),
     };
-    write_atomic(path, text.as_bytes(), Mode::KeepOr(mode))?;
+    write_atomic(path, text.as_bytes(), mode)?;
     Ok(files::revision_of(text.as_bytes()))
   }
 }
@@ -200,7 +205,7 @@ mod tests {
 
   #[cfg(unix)]
   #[test]
-  fn writes_keep_modes_and_new_secret_files_start_private() {
+  fn writes_keep_modes_less_group_and_other_access_when_they_hold_a_secret() {
     use std::os::unix::fs::PermissionsExt;
     let schema = example_schema();
     let editor = FileEditor::new(&schema);
@@ -215,13 +220,26 @@ mod tests {
       .unwrap();
     assert_eq!(mode(&secret), 0o600);
 
-    fs::set_permissions(&plain, fs::Permissions::from_mode(0o604)).unwrap();
+    fs::set_permissions(&plain, fs::Permissions::from_mode(0o744)).unwrap();
     let revision = files::revision(&plain).unwrap();
-    editor
-      .write(&plain, revision.as_deref(), "[server]\npassword = \"x\"\n")
+    let revision = editor
+      .write(&plain, revision.as_deref(), "[server]\nport = 2\n")
       .unwrap();
-    assert_eq!(mode(&plain), 0o604, "an existing file keeps its mode");
-    assert_eq!(mode(&dir.path().join("plain.toml.bak")), 0o604);
+    assert_eq!(
+      mode(&plain),
+      0o744,
+      "a file without a secret keeps its mode"
+    );
+    assert_eq!(mode(&dir.path().join("plain.toml.bak")), 0o744);
+    editor
+      .write(&plain, Some(&revision), "[server]\npassword = \"x\"\n")
+      .unwrap();
+    assert_eq!(
+      mode(&plain),
+      0o700,
+      "a secret takes the access of the group and others away"
+    );
+    assert_eq!(mode(&dir.path().join("plain.toml.bak")), 0o700);
 
     let bak = dir.path().join("secret.toml.bak");
     fs::write(&bak, "old").unwrap();
