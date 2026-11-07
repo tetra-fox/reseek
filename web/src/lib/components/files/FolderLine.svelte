@@ -56,7 +56,9 @@
   <span class="name-count gap-1.5">
     <Tooltip text={node.locked ? undefined : node.path} dense>
       {#snippet child({ props })}
-        <span {...props} class={["truncate", depth === 0 ? "text-fg" : "text-fg-muted"]}
+        <span
+          {...props}
+          class={["truncate font-mono text-xs", depth === 0 ? "text-fg" : "text-fg-muted"]}
           >{node.label}</span>
       {/snippet}
     </Tooltip>

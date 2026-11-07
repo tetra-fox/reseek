@@ -263,7 +263,7 @@
       {#snippet child({ props })}
         <span
           {...props}
-          class="flex shrink-0 items-center gap-1.5 text-xs text-fg-muted tabular-nums">
+          class="flex shrink-0 items-center gap-1.5 font-mono text-xs text-fg-muted tabular-nums">
           <Progress
             value={progress.percent}
             label={`Progress of ${group.label}`}

@@ -28,7 +28,8 @@
         <td class="py-1 text-right text-fg-muted tabular-nums">{i + 1}</td>
         <Tooltip text={row.directory} dense>
           {#snippet child({ props })}
-            <td {...props} class="px-2 py-1 wrap-anywhere">{shortDirectory(row.directory)}</td>
+            <td {...props} class="px-2 py-1 font-mono text-xs wrap-anywhere"
+              >{shortDirectory(row.directory)}</td>
           {/snippet}
         </Tooltip>
         <td class="px-2 py-1 text-right tabular-nums">{row.count.toLocaleString()}</td>

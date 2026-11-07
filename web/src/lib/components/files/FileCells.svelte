@@ -107,17 +107,19 @@
   {/if}
 </span>
 {#if shows("size")}
-  <span role="gridcell" class="pr-3 text-right whitespace-nowrap tabular-nums"
+  <span role="gridcell" class="pr-3 text-right font-mono text-xs whitespace-nowrap tabular-nums"
     >{formatBytes(file.size)}</span>
 {/if}
 {#if shows("quality")}
   <span role="gridcell" class="flex min-w-0 items-center gap-1 text-fg-muted">
     {#if "suspect" in file && file.suspect}<Suspect suspect={file.suspect} />{/if}
-    <span class="truncate">{formatAttributes(file)}</span>
+    <span class="truncate font-mono text-xs">{formatAttributes(file)}</span>
   </span>
 {/if}
 {#if shows("length")}
-  <span role="gridcell" class="pr-3 text-right whitespace-nowrap text-fg-muted tabular-nums"
+  <span
+    role="gridcell"
+    class="pr-3 text-right font-mono text-xs whitespace-nowrap text-fg-muted tabular-nums"
     >{formatSeconds(file.length)}</span>
 {/if}
 {#if shows("menu")}

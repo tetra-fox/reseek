@@ -159,7 +159,7 @@
       value={t.percentComplete}
       label={`Progress of ${getFileName(t.filename)}`}
       class="h-2 min-w-0 flex-1" />
-    <span class="text-xs tabular-nums">{chip.text}</span>
+    <span class="font-mono text-xs tabular-nums">{chip.text}</span>
   {:else}
     {#if write && can.reorder}
       <!-- a download waiting here is dragged onto another to start before it; the keyboard has
@@ -203,7 +203,7 @@
     class={[
       "flex min-w-0 items-center gap-1.5 px-2",
       ["size", "speed", "eta", "elapsed", "attempts", "transferred"].includes(column) &&
-        "justify-end whitespace-nowrap tabular-nums",
+        "justify-end font-mono text-xs whitespace-nowrap tabular-nums",
       column === "actions" && "pl-0"
     ]}
     style:padding-left={column === "file" ? fileInset : undefined}>
