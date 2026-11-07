@@ -1,5 +1,9 @@
 # reseek task runner
 
+# the packages and features of every cargo build the gate makes: with one set, a build after
+# `just test` finds everything compiled
+tested := "--workspace --all-features"
+
 default:
     @just --list
 
@@ -101,8 +105,8 @@ web-build: web-install
 
 # cargo nextest, the doc examples nextest does not run, then vitest
 test: web-install
-    cargo nextest run --workspace --all-features
-    cargo test --workspace --all-features --doc
+    cargo nextest run {{ tested }}
+    cargo test {{ tested }} --doc
     @[ -n "$({{ just_executable() }} --justfile {{ justfile() }} soulfind-bin)" ] || echo "soulfind not found at SOULFIND_BIN or on PATH: the soulfind suites were skipped"
     pnpm --dir web test
 
@@ -110,7 +114,7 @@ test: web-install
 lint: web-install
     cargo fmt --all --check
     cargo fmt --manifest-path fuzz/Cargo.toml --all --check
-    cargo clippy --workspace --all-targets --all-features -- -D warnings
+    cargo clippy {{ tested }} --all-targets -- -D warnings
     pnpm --dir web lint
     pnpm --dir web check
 
@@ -126,15 +130,17 @@ api: web-install
 config-fixture:
     {{ just_executable() }} --justfile {{ justfile() }} config-view > web/src/lib/config/fixtures/view.json
 
-# prints the settings view of the default configuration
+# prints the settings view of the default configuration, from the example built in the test
+# profile, where `just test` has compiled everything it needs
 [private]
 config-view:
-    @cargo run -q -p reseek --example config_view
+    @cargo build -q {{ tested }} --profile test --example config_view
+    @"${CARGO_TARGET_DIR:-target}/debug/examples/config_view"
 
 # fail if api/openapi.json no longer matches the handlers, the UI's types no longer match it, or
 # the settings fixture no longer matches the daemon's options
 api-check: web-install
-    cargo nextest run --workspace --all-features -E "package(reseek) & test(the_committed_openapi_document_is_current)"
+    cargo nextest run {{ tested }} -E "package(reseek) & test(the_committed_openapi_document_is_current)"
     pnpm --dir web api-check
     @view="$({{ just_executable() }} --justfile {{ justfile() }} config-view)" \
       || { echo "the settings fixture could not be generated" >&2; exit 1; }; \
@@ -151,7 +157,8 @@ web-smoke: (web-playwright "smoke")
 web-perf: (web-playwright "perf")
 
 # builds the UI and the daemon and runs the web package's playwright script SCRIPT, skipped
-# without chromium
+# without chromium. The daemon is the one the test build writes for the integration tests: a
+# plain cargo build leaves out the dev-dependencies, whose features change what it compiles
 [private]
 web-playwright SCRIPT:
     #!/usr/bin/env bash
@@ -162,7 +169,7 @@ web-playwright SCRIPT:
       exit 0
     fi
     {{ just_executable() }} --justfile {{ justfile() }} web-build
-    cargo build -p reseek-bin
+    cargo nextest run {{ tested }} --no-run
     CHROMIUM_BIN="$chromium" pnpm --dir web {{ SCRIPT }}
 
 # the web UI's packages as the lockfile pins them
@@ -182,9 +189,8 @@ e2e:
       exit 0
     fi
     export SOULFIND_BIN="$soulfind" SOULSEEK_RS_BIN="$soulseek_rs"
-    # the same packages and features as `just test`, so nothing is built again after it
-    cargo nextest run --workspace --all-features --run-ignored only -E "binary_id(soulseek-client::interop)"
-    cargo nextest run --workspace --all-features --run-ignored only -E "binary_id(reseek-bin::smoke) & test(soulseek_rs)"
+    cargo nextest run {{ tested }} --run-ignored only -E "binary_id(soulseek-client::interop)"
+    cargo nextest run {{ tested }} --run-ignored only -E "binary_id(reseek-bin::smoke) & test(soulseek_rs)"
 
 # run by hand only, never from ci or by an agent: the daemon logs in to the real Soulseek server
 # with the throwaway account in RESEEK_TEST_USERNAME and RESEEK_TEST_PASSWORD, searches, browses
@@ -192,7 +198,7 @@ e2e:
 # what it looks for and where
 [doc("the daemon's smoke run against the real Soulseek server, run by hand only")]
 live-smoke:
-    cargo nextest run --workspace --all-features --run-ignored only --no-capture -E "binary_id(reseek-bin::smoke) & test(real_network)"
+    cargo nextest run {{ tested }} --run-ignored only --no-capture -E "binary_id(reseek-bin::smoke) & test(real_network)"
 
 # prints the soulfind to test against: SOULFIND_BIN, else soulfind on PATH, else nothing, which
 # the callers take as a skip; with SOULFIND_REQUIRED=1 a missing soulfind fails instead
