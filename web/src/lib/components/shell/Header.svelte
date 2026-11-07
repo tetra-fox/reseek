@@ -29,20 +29,19 @@
 
   let shown = untrack(() => crumbs.map(keyOf));
   let changedAt = -Infinity;
-  let moves = { enter: false, leave: false };
+  let entering = false;
 
-  // crumbs move only once the trail has held for 300ms, as browse rewrites it for each row a held
-  // arrow key passes; one leaving as another enters goes at once, so it never pushes that one aside
+  // a crumb comes in moving only once the trail has held for 300ms, as browse rewrites it for each
+  // row a held arrow key passes
   const moving = () => {
     const keys = crumbs.map(keyOf);
     if (keys.length !== shown.length || keys.some((k, i) => k !== shown[i])) {
       const now = performance.now();
-      const settled = now - changedAt >= 300;
-      moves = { enter: settled, leave: settled && keys.every((k) => shown.includes(k)) };
+      entering = now - changedAt >= 300;
       shown = keys;
       changedAt = now;
     }
-    return moves;
+    return entering;
   };
   const step = (on: boolean) => ({ x: -4, duration: on ? motionFast() : 0, easing: easeOutSoft });
 
@@ -72,15 +71,12 @@
     <ol class="flex min-w-0 items-center gap-1 text-sm">
       {#each crumbs as crumb, i (keyOf(crumb, i))}
         {@const last = i === crumbs.length - 1}
-        <!-- svelte makes a leaving crumb inert, so it takes no clicks, and a phone hides it to
-        show the new last one alone -->
+        <!-- a leaving crumb goes at once: svelte 5.57 never removes a batch of leaving each items
+             whose outros mix instant and animated ones, as a crumb's cached outro could here, so
+             they stayed on screen. TODO: give crumbs an outro again once svelte fixes it -->
         <li
-          class={[
-            "flex min-w-0 items-center gap-1 max-sm:[&[inert]]:hidden",
-            !last && "max-sm:hidden"
-          ]}
-          in:fly={step(moving().enter)}
-          out:fly={step(moving().leave)}>
+          class={["flex min-w-0 items-center gap-1", !last && "max-sm:hidden"]}
+          in:fly={step(moving())}>
           <!-- a phone shows only the last step, so it has no step before it to point from -->
           {#if i > 0}<ChevronRightIcon
               class="size-3.5 shrink-0 text-fg-subtle max-sm:hidden" />{/if}

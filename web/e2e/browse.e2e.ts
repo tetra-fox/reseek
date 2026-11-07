@@ -209,3 +209,23 @@ test("Ctrl-click on a folder's arrow opens or closes every folder inside it too"
   await expect(folder(tree, "\\Deep\\CD1")).toBeVisible();
   await expect(track).toHaveCount(0);
 });
+
+test("the breadcrumb hands over between a user's tabs and leaves no steps behind", async ({
+  page
+}) => {
+  await fakeShare(page);
+  await login(page, "/users/carol");
+  const crumbs = page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("listitem");
+  await expect(crumbs).toHaveText(["Users", "carol"]);
+  // the user's step stays put as the Shares tab takes the breadcrumb over
+  const user = crumbs.nth(1);
+  await user.evaluate((li) => li.setAttribute("data-kept", ""));
+  await page.getByRole("link", { name: "Shares", exact: true }).last().click();
+  const tree = page.getByRole("treegrid", { name: "Shared folders" });
+  await folder(tree, "\\Deep").click();
+  await folder(tree, "\\Deep\\CD1").click();
+  await expect(crumbs).toHaveText(["Users", "carol", "Shares", "@@c", "Music", "Deep", "CD1"]);
+  await expect(crumbs.nth(1)).toHaveAttribute("data-kept", "");
+  await page.getByRole("link", { name: "Downloads" }).first().click();
+  await expect(crumbs).toHaveText(["Downloads"]);
+});

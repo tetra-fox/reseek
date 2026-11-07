@@ -16,8 +16,12 @@ export const useCrumbs = (make: () => Crumb[]) => {
   $effect(() => {
     const crumbs = make();
     trail.page = crumbs;
+    // the steps go once the update that unmounted them is over, unless a component mounted in it
+    // put its own in their place, so a hand-off never shows the breadcrumb without them between
     return () => {
-      if (trail.page === crumbs) trail.page = [];
+      queueMicrotask(() => {
+        if (trail.page === crumbs) trail.page = [];
+      });
     };
   });
 };
