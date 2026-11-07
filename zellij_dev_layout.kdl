@@ -1,0 +1,14 @@
+// opened by `just dev`, from the repository root
+layout {
+    pane split_direction="vertical" {
+        pane name="daemon" command="nix" {
+            args "develop" "-c" "just" "dev-daemon"
+        }
+        pane name="web" command="nix" {
+            args "develop" "-c" "just" "dev-web"
+        }
+    }
+    pane size=1 borderless=true {
+        plugin location="status-bar"
+    }
+}

@@ -7,13 +7,30 @@ tested := "--workspace --all-features"
 default:
     @just --list
 
-# the daemon without its built-in ui, restarted on change, plus the vite ui with proxy; the
-# daemon's flags are in crates/reseek-bin/dev-flags, which the cli tests start it with
+# in zellij_dev_layout.kdl, as a new tab when already in zellij; without zellij, both in this
+# terminal
+[doc("dev-daemon and dev-web side by side in zellij")]
 dev: web-install
     #!/usr/bin/env bash
     set -euo pipefail
+    layout="{{ justfile_directory() }}/zellij_dev_layout.kdl"
+    if command -v zellij > /dev/null; then
+      if [ -n "${ZELLIJ:-}" ]; then
+        exec zellij action new-tab --layout "$layout" --cwd "{{ justfile_directory() }}" --name reseek
+      fi
+      exec zellij --layout "$layout"
+    fi
     trap 'kill 0' EXIT
-    watchexec --restart --watch crates --exts rs,toml -- cargo run -p reseek-bin -- $(cat crates/reseek-bin/dev-flags) &
+    {{ just_executable() }} --justfile {{ justfile() }} dev-daemon &
+    {{ just_executable() }} --justfile {{ justfile() }} dev-web
+
+# its flags are in crates/reseek-bin/dev-flags, which the cli tests start it with
+[doc("the daemon without its built-in ui, restarted on change")]
+dev-daemon:
+    watchexec --restart --watch crates --exts rs,toml -- cargo run -p reseek-bin -- $(cat crates/reseek-bin/dev-flags)
+
+# the vite ui, proxying the api to the daemon
+dev-web: web-install
     pnpm --dir web dev
 
 # pnpm build, then cargo build --release (cargo never runs pnpm)

@@ -148,6 +148,8 @@
                 bacon
                 watchexec
                 just
+                # `just dev` opens zellij_dev_layout.kdl in it
+                zellij
                 typos
                 sqlite
                 # the Soulseek server the client and daemon test suites start, and the other
