@@ -193,10 +193,12 @@ impl Paths {
     // the configuration directory may be read-only, such as a Nix store path
     create(&self.config)?;
     create(&self.scripts)?;
-    for dir in [&self.data, &self.backups, &self.cache, &self.logs] {
+    for dir in [&self.data, &self.cache, &self.logs] {
       create(dir)?;
       writable(dir)?;
     }
+    create_private(&self.backups)?;
+    writable(&self.backups)?;
     for (dir, default) in [
       (&self.downloads, self.downloads_is_default),
       (&self.incomplete, self.incomplete_is_default),
@@ -211,12 +213,27 @@ impl Paths {
 }
 
 fn create(dir: &Path) -> Result<(), PathError> {
-  std::fs::create_dir_all(dir).map_err(|e| {
-    PathError(format!(
-      "Directory {} does not exist, and could not be created: {e}",
-      dir.display()
-    ))
-  })
+  std::fs::create_dir_all(dir).map_err(|e| not_created(dir, e))
+}
+
+/// Creates `dir` accessible by its owner only, its missing parents as [`create`] does. The
+/// backups of private databases hold credentials.
+fn create_private(dir: &Path) -> Result<(), PathError> {
+  if let Some(parent) = dir.parent() {
+    create(parent)?;
+  }
+  let mut builder = std::fs::DirBuilder::new();
+  builder.recursive(true);
+  #[cfg(unix)]
+  std::os::unix::fs::DirBuilderExt::mode(&mut builder, 0o700);
+  builder.create(dir).map_err(|e| not_created(dir, e))
+}
+
+fn not_created(dir: &Path, e: std::io::Error) -> PathError {
+  PathError(format!(
+    "Directory {} does not exist, and could not be created: {e}",
+    dir.display()
+  ))
 }
 
 /// Checks `dir` is writable by creating and removing a file with a fresh name.
@@ -278,6 +295,17 @@ impl InstanceLock {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[cfg(unix)]
+  #[test]
+  fn the_backups_directory_is_for_its_owner_only() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let backups = dir.path().join("data/backups");
+    create_private(&backups).unwrap();
+    let mode = std::fs::metadata(&backups).unwrap().permissions().mode();
+    assert_eq!(mode & 0o777, 0o700);
+  }
 
   #[test]
   fn the_app_dir_puts_everything_under_one_root_and_options_override() {

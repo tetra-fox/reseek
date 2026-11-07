@@ -154,7 +154,7 @@ pub(super) fn run(
     return Ok(());
   }
   if let Some(backups) = backups.filter(|_| !fresh) {
-    backup(conn, schema.name, current, backups)?;
+    backup(conn, schema, current, backups)?;
   }
   warn!(
     database = schema.name,
@@ -195,8 +195,9 @@ pub(super) fn run(
 }
 
 /// Copies the database as it stands into `<backups>/<name>.db.<version>.bak.db`, a consistent
-/// copy even with the write-ahead log.
-fn backup(conn: &Connection, name: &str, version: u32, backups: &Path) -> Result<(), DbError> {
+/// copy even with the write-ahead log. The copy of a private database is private too.
+fn backup(conn: &Connection, schema: &Schema, version: u32, backups: &Path) -> Result<(), DbError> {
+  let name = schema.name;
   let target = backups.join(format!("{name}.db.{version:04}.bak.db"));
   // VACUUM INTO refuses a file that exists, and an older backup of the same version is stale
   match std::fs::remove_file(&target) {
@@ -205,6 +206,10 @@ fn backup(conn: &Connection, name: &str, version: u32, backups: &Path) -> Result
     Err(e) => {
       warn!(path = %target.display(), error = %e, "old database backup not removed");
     }
+  }
+  // VACUUM INTO writes into an empty file that exists and keeps its mode
+  if schema.private {
+    super::create_private(&target)?;
   }
   conn.execute("VACUUM INTO ?1", [target.to_string_lossy()])?;
   info!(database = name, path = %target.display(), "database backed up before migrating");
@@ -366,9 +371,9 @@ pub(super) mod tests {
   }
 
   #[tokio::test]
-  async fn a_database_with_data_is_backed_up_before_a_pending_migration() {
+  async fn a_database_with_data_is_backed_up_for_its_owner_before_a_pending_migration() {
     static TWO: Schema = Schema {
-      private: false,
+      private: true,
       name: "auth",
       migrations: &[
         Migration {
@@ -382,7 +387,7 @@ pub(super) mod tests {
       ],
     };
     static ONE: Schema = Schema {
-      private: false,
+      private: true,
       name: "auth",
       migrations: &[Migration {
         file: "0001_initial",
@@ -407,7 +412,18 @@ pub(super) mod tests {
       .await
       .unwrap();
     assert_eq!(versions, [1, 2]);
-    let backup = Connection::open(location.backups.join("auth.db.0001.bak.db")).unwrap();
+    let copy = location.backups.join("auth.db.0001.bak.db");
+    #[cfg(unix)]
+    {
+      use std::os::unix::fs::PermissionsExt;
+      let mode = std::fs::metadata(&copy).unwrap().permissions().mode();
+      assert_eq!(
+        mode & 0o777,
+        0o600,
+        "the copy of a private database is private"
+      );
+    }
+    let backup = Connection::open(&copy).unwrap();
     let kept: i64 = backup
       .query_row("SELECT x FROM a", [], |row| row.get(0))
       .unwrap();

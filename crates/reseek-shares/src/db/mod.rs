@@ -7,6 +7,7 @@
 
 mod migrate;
 
+use std::panic::AssertUnwindSafe;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -15,7 +16,7 @@ use chrono::{DateTime, NaiveDate, NaiveTime, SecondsFormat, Utc};
 use rusqlite::trace::{TraceEvent, TraceEventCodes};
 use rusqlite::{Connection, OpenFlags};
 use tokio::sync::Semaphore;
-use tracing::{debug, info, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 
 use crate::lock;
 
@@ -127,6 +128,37 @@ struct Inner {
 struct Readers {
   idle: Arc<Mutex<Vec<Connection>>>,
   available: Arc<Semaphore>,
+  source: Arc<Source>,
+}
+
+impl Readers {
+  /// Opens the pool's connections from `source`.
+  fn open(source: Source) -> Result<Self, DbError> {
+    let idle = (0..reader_count())
+      .map(|_| source.open())
+      .collect::<Result<Vec<_>, DbError>>()?;
+    Ok(Self {
+      available: Arc::new(Semaphore::new(idle.len())),
+      idle: Arc::new(Mutex::new(idle)),
+      source: Arc::new(source),
+    })
+  }
+}
+
+/// How a database's read-only connections are opened.
+struct Source {
+  /// the file, or a `file:` URI when `flags` has `SQLITE_OPEN_URI`
+  target: PathBuf,
+  flags: OpenFlags,
+  log_sql: bool,
+}
+
+impl Source {
+  fn open(&self) -> Result<Connection, DbError> {
+    let conn = Connection::open_with_flags(&self.target, self.flags)?;
+    configure(&conn, self.log_sql)?;
+    Ok(conn)
+  }
 }
 
 impl Database {
@@ -169,30 +201,22 @@ impl Database {
       let mut uri = url::Url::from_file_path(&path)
         .map_err(|()| DbError::Create(path.clone(), std::io::ErrorKind::InvalidInput.into()))?;
       uri.set_query(Some("immutable=1"));
-      let open = || -> Result<Connection, DbError> {
-        let conn = Connection::open_with_flags(
-          uri.as_str(),
-          OpenFlags::SQLITE_OPEN_READ_ONLY
-            | OpenFlags::SQLITE_OPEN_NO_MUTEX
-            | OpenFlags::SQLITE_OPEN_URI,
-        )?;
-        configure(&conn, false)?;
-        Ok(conn)
+      let source = Source {
+        target: PathBuf::from(uri.as_str()),
+        flags: OpenFlags::SQLITE_OPEN_READ_ONLY
+          | OpenFlags::SQLITE_OPEN_NO_MUTEX
+          | OpenFlags::SQLITE_OPEN_URI,
+        log_sql: false,
       };
-      let writer = open()?;
-      let idle = (0..reader_count())
-        .map(|_| open())
-        .collect::<Result<Vec<_>, DbError>>()?;
+      let writer = source.open()?;
+      let readers = Readers::open(source)?;
       debug!(database = schema.name, path = %path.display(), "database opened for reading only");
       Ok(Database {
         inner: Arc::new(Inner {
           name: schema.name,
           path: Some(path),
           writer: Arc::new(tokio::sync::Mutex::new(writer)),
-          readers: Some(Readers {
-            available: Arc::new(Semaphore::new(idle.len())),
-            idle: Arc::new(Mutex::new(idle)),
-          }),
+          readers: Some(readers),
         }),
       })
     })
@@ -234,24 +258,49 @@ impl Database {
       .await
       .map_err(|e| DbError::Task(e.to_string()))?;
     let idle = readers.idle.clone();
+    let source = readers.source.clone();
+    let name = self.inner.name;
     let conn = lock(&idle)
       .pop()
       .ok_or_else(|| DbError::Task("no idle reader although a permit was free".to_string()))?;
-    let result = tokio::task::spawn_blocking(move || {
-      let result = f(&conn);
-      lock(&idle).push(conn);
-      result
+    // the permit is released only once a connection is back in the pool. a call that panicked
+    // may have left its connection inside a transaction, so a fresh one takes its place
+    let outcome = tokio::task::spawn_blocking(move || {
+      match std::panic::catch_unwind(AssertUnwindSafe(|| f(&conn))) {
+        Ok(result) => {
+          lock(&idle).push(conn);
+          drop(permit);
+          Ok(result)
+        }
+        Err(panic) => {
+          drop(conn);
+          match source.open() {
+            Ok(fresh) => {
+              lock(&idle).push(fresh);
+              drop(permit);
+            }
+            Err(e) => {
+              error!(
+                database = name,
+                error = %e,
+                "a read connection could not be reopened, so the database has one reader fewer"
+              );
+              permit.forget();
+            }
+          }
+          Err(panic_message(&*panic))
+        }
+      }
     })
     .await;
-    match result {
-      Ok(result) => {
-        drop(permit);
-        Ok(result?)
+    match outcome {
+      Ok(Ok(result)) => Ok(result?),
+      Ok(Err(message)) => {
+        warn!(database = name, panic = message, "a database read panicked");
+        Err(DbError::Task(message))
       }
       Err(e) => {
-        // the connection went down with the call, so the pool keeps one permit fewer
-        permit.forget();
-        warn!(database = self.inner.name, error = %e, "a database read did not finish");
+        warn!(database = name, error = %e, "a database read did not finish");
         Err(DbError::Task(e.to_string()))
       }
     }
@@ -304,6 +353,15 @@ pub fn remove_database(path: &std::path::Path) {
   }
 }
 
+/// The message a panic carried.
+fn panic_message(panic: &(dyn std::any::Any + Send)) -> String {
+  panic
+    .downcast_ref::<&str>()
+    .map(|s| s.to_string())
+    .or_else(|| panic.downcast_ref::<String>().cloned())
+    .unwrap_or_else(|| "a call panicked without a message".to_string())
+}
+
 /// How many read-only connections a database keeps: half the processors, at least two.
 fn reader_count() -> usize {
   let processors = std::thread::available_parallelism().map_or(1, |n| n.get());
@@ -341,20 +399,11 @@ fn open_blocking(
   let readers = if location.volatile {
     None
   } else {
-    let idle = (0..reader_count())
-      .map(|_| {
-        let reader = Connection::open_with_flags(
-          &path,
-          OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
-        )?;
-        configure(&reader, location.log_sql)?;
-        Ok(reader)
-      })
-      .collect::<Result<Vec<_>, DbError>>()?;
-    Some(Readers {
-      available: Arc::new(Semaphore::new(idle.len())),
-      idle: Arc::new(Mutex::new(idle)),
-    })
+    Some(Readers::open(Source {
+      target: path.clone(),
+      flags: OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+      log_sql: location.log_sql,
+    })?)
   };
   let place = if location.volatile {
     "memory".to_string()
@@ -525,6 +574,35 @@ mod tests {
         .mode();
       assert_eq!(mode & 0o777, 0o600, "{file}");
     }
+  }
+
+  #[tokio::test]
+  async fn a_read_that_panics_is_given_a_fresh_connection() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = Database::open(&migrate::tests::PRIVATE, &Location::on_disk(dir.path()))
+      .await
+      .unwrap();
+    for _ in 0..reader_count() {
+      let failed = db
+        .read(|_| -> rusqlite::Result<()> { panic!("a read that panics") })
+        .await;
+      assert!(matches!(failed, Err(DbError::Task(_))), "{failed:?}");
+    }
+    let reads = async {
+      for _ in 0..=reader_count() {
+        let one: i64 = db
+          .read(|conn| conn.query_row("SELECT 1", [], |row| row.get(0)))
+          .await
+          .unwrap();
+        assert_eq!(one, 1);
+      }
+    };
+    tokio::time::timeout(Duration::from_secs(10), reads)
+      .await
+      .expect("a read waited for a reader that is gone");
+    let readers = db.inner.readers.as_ref().unwrap();
+    assert_eq!(readers.available.available_permits(), reader_count());
+    assert_eq!(lock(&readers.idle).len(), reader_count());
   }
 
   #[test]
