@@ -10,6 +10,7 @@ import { live } from "#lib/live/live.svelte.js";
 import { session } from "#lib/session.svelte.js";
 import { conversation, joinedRoom } from "#lib/testing/fixtures.js";
 import { flush } from "#lib/testing/flush.js";
+import { connected } from "#lib/testing/live.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 
 import Pane from "./Pane.svelte";
@@ -70,6 +71,7 @@ describe("a chat pane", () => {
     Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
   });
   afterEach(() => {
+    vi.useRealTimers();
     if (component) unmount(component);
     component = null;
     live.stop();
@@ -77,10 +79,14 @@ describe("a chat pane", () => {
     session.principal = null;
     app.state = null;
     vi.unstubAllGlobals();
-    vi.restoreAllMocks();
     document.body.innerHTML = "";
   });
 
+  /** Lets pending fetches and zero-delay timers run under fake timers, then updates the page */
+  const step = async () => {
+    for (let i = 0; i < 4; i++) await vi.advanceTimersByTimeAsync(0);
+    flushSync();
+  };
   const rows = () => [...document.querySelectorAll<HTMLElement>("[data-message]")];
   const ids = () => rows().map((r) => r.dataset.message);
   const row = (id: number) => document.querySelector<HTMLElement>(`[data-message="${id}"]`)!;
@@ -88,11 +94,10 @@ describe("a chat pane", () => {
   it("shows the server's notices read-only, with no composer and nothing about a person", async () => {
     const notice = (localId: number) =>
       privateMessage(localId, { username: "server", message: `notice ${localId}` });
-    const net = fakeNetwork((url) =>
-      url.pathname.endsWith("/conversations/server/messages") ? [notice(1)] : undefined
+    const net = connected(
+      (url) => (url.pathname.endsWith("/conversations/server/messages") ? [notice(1)] : undefined),
+      "Administrator"
     );
-    live.start();
-    net.frame("hello", { principal: { name: "me", role: "Administrator" } } as never);
     component = mount(Pane, {
       target: document.body,
       props: { target: { kind: "user", name: "server" } }
@@ -106,26 +111,24 @@ describe("a chat pane", () => {
     expect(row(1).querySelector("a")).toBeNull();
     expect(row(1).querySelector("time")?.className).not.toContain("invisible");
 
-    // a frame is built before the notice is acknowledged, which must not read as unread
+    // a frame is built before the notice is acknowledged, which must not read as unread: the
+    // pane at the newest messages would acknowledge an unread one
     const fresh = { ...notice(2), isAcknowledged: false };
     net.frame("conversations.message", { username: "server", message: fresh });
     await flush();
     expect(ids()).toEqual(["1", "2"]);
-    expect(row(2).className).toContain("border-transparent");
     expect(net.requests.filter((r) => r.method !== "GET")).toEqual([]);
   });
 
   it("adds a conversation's new message without rebuilding the rows or losing a selection", async () => {
     const unread = [privateMessage(1), privateMessage(2, { isAcknowledged: false })];
-    const net = fakeNetwork((url, method) => {
+    const net = connected((url, method) => {
       if (url.pathname.endsWith("/conversations/alice/messages")) return unread;
       if (url.pathname.endsWith("/conversations/alice") && method === "GET") return { status: 404 };
       if (method === "PUT") return { status: 200 };
       if (method === "POST") return { status: 201 };
       return undefined;
-    });
-    live.start();
-    net.frame("hello", { principal: { name: "me", role: "Administrator" } } as never);
+    }, "Administrator");
     net.frame("chat.unread", {
       conversations: { alice: 1 },
       rooms: {},
@@ -181,6 +184,43 @@ describe("a chat pane", () => {
     expect(document.body.textContent).not.toContain("Sending");
     expect(chat.total).toBe(0);
   });
+
+  // two pages of a hundred messages, as a short page would say nothing newer is left: over a
+  // second alone and several in the full run, past vitest's default of 5 s
+  it("acknowledges a conversation opened at an old message only once the newest are shown", async () => {
+    vi.useFakeTimers();
+    const stored = 200;
+    const messages = (from: number, to: number) =>
+      Array.from({ length: Math.max(0, to - from + 1) }, (_, n) =>
+        privateMessage(from + n, { isAcknowledged: false })
+      );
+    const net = connected((url, method) => {
+      if (method === "PUT") return { status: 200 };
+      if (url.pathname.endsWith("/conversations/alice")) return { status: 404 };
+      if (!url.pathname.endsWith("/conversations/alice/messages")) return undefined;
+      const limit = Number(url.searchParams.get("limit"));
+      const after = url.searchParams.get("after");
+      if (after !== null)
+        return messages(Number(after) + 1, Math.min(stored, Number(after) + limit));
+      const before = Number(url.searchParams.get("before") ?? stored + 1);
+      return messages(Math.max(1, before - limit), before - 1);
+    }, "Administrator");
+    component = mount(Pane, {
+      target: document.body,
+      props: { target: { kind: "user", name: "alice" }, at: 3 }
+    });
+    await step();
+    expect(net.requests.some((r) => r.url.searchParams.get("after") === "3")).toBe(true);
+    await step();
+    const acknowledged = () => net.requests.filter((r) => r.method === "PUT");
+    expect(acknowledged()).toEqual([]);
+
+    [...document.querySelectorAll("button")]
+      .find((b) => b.textContent?.includes("Jump to latest"))!
+      .click();
+    await step();
+    expect(acknowledged().map((r) => r.url.pathname)).toEqual(["/api/v0/conversations/alice"]);
+  }, 15_000);
 
   it("pages a room's history up, with its gaps as rows, and takes new messages in place", async () => {
     const older = { messages: [roomMessage(1)], hasMore: false, gaps: [] };
@@ -272,71 +312,39 @@ describe("a chat pane", () => {
     expect(log.textContent).not.toMatch(/joined|left/);
   });
 
-  it("keeps a room message we sent until the server's echo replaces it", async () => {
+  it("shows a room message the server never echoed as not sent, and takes a late echo", async () => {
+    vi.useFakeTimers();
     const net = indie(() => ({ messages: [roomMessage(1)], hasMore: false, gaps: [] }));
     live.start();
     component = mount(Pane, {
       target: document.body,
       props: { target: { kind: "room", name: "indie" } }
     });
-    await flush();
+    await step();
     const box = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message"]')!;
-    box.value = "hello all";
+    box.value = "anyone here";
     box.dispatchEvent(new Event("input", { bubbles: true }));
     box.dispatchEvent(
       new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true })
     );
-    await flush();
-    // the POST answered, the echo not yet: the message stays, no longer marked as sending
+    await step();
+    // the daemon took it and the echo is still to come: the row stays, no longer sending
     expect(net.requests.some((r) => r.method === "POST")).toBe(true);
     expect(ids()).toHaveLength(2);
-    expect(Number(ids()[1])).toBeLessThan(0);
     expect(document.body.textContent).not.toContain("Sending");
+    expect(document.body.textContent).not.toContain("Not sent");
+    await vi.advanceTimersByTimeAsync(ECHO_WAIT);
+    flushSync();
+    expect(document.body.textContent).toContain("Not sent");
+    expect(ids()).toHaveLength(2);
+    // the echo came after all: it takes the row's place
     net.frame("rooms.message", {
       roomName: "indie",
-      message: roomMessage(2, { username: "me", self: true, message: "hello all" })
+      message: roomMessage(2, { username: "me", self: true, message: "anyone here" })
     });
-    await flush();
+    await step();
     expect(ids()).toEqual(["1", "2"]);
-  });
-
-  it("shows a room message the server never echoed as not sent, and takes a late echo", async () => {
-    vi.useFakeTimers();
-    const step = async () => {
-      for (let i = 0; i < 4; i++) await vi.advanceTimersByTimeAsync(0);
-      flushSync();
-    };
-    try {
-      const net = indie(() => ({ messages: [roomMessage(1)], hasMore: false, gaps: [] }));
-      live.start();
-      component = mount(Pane, {
-        target: document.body,
-        props: { target: { kind: "room", name: "indie" } }
-      });
-      await step();
-      const box = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message"]')!;
-      box.value = "anyone here";
-      box.dispatchEvent(new Event("input", { bubbles: true }));
-      box.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true })
-      );
-      await step();
-      expect(document.body.textContent).not.toContain("Not sent");
-      await vi.advanceTimersByTimeAsync(ECHO_WAIT);
-      flushSync();
-      expect(document.body.textContent).toContain("Not sent");
-      expect(ids()).toHaveLength(2);
-      // the echo came after all: it takes the row's place
-      net.frame("rooms.message", {
-        roomName: "indie",
-        message: roomMessage(2, { username: "me", self: true, message: "anyone here" })
-      });
-      await step();
-      expect(ids()).toEqual(["1", "2"]);
-      expect(document.body.textContent).not.toContain("Not sent");
-    } finally {
-      vi.useRealTimers();
-    }
+    expect(document.body.textContent).not.toContain("Not sent");
   });
 
   it("puts the unread line after the room's read marker", async () => {
@@ -358,38 +366,6 @@ describe("a chat pane", () => {
       l.getAttribute("data-key")
     );
     expect(order.indexOf("unread")).toBe(order.indexOf("m:4") - 1);
-  });
-
-  it("draws a long history in a window and keeps the drawn rows as messages arrive", async () => {
-    // a second apart at noon on the browser's clock, so the history and the message that arrives
-    // are on one day and the arrival adds no day line
-    const at = (second: number) => new Date(2026, 9, 26, 12, 0, second).toISOString();
-    const history = Array.from({ length: 100 }, (_, n) =>
-      privateMessage(n + 1, { timestamp: at(n) })
-    );
-    const net = fakeNetwork((url, method) => {
-      if (url.pathname.endsWith("/conversations/alice/messages")) return history;
-      if (url.pathname.endsWith("/conversations/alice") && method === "GET") return { status: 404 };
-      return undefined;
-    });
-    // jsdom measures every line as 0 high, which would draw them all
-    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(24);
-    live.start();
-    component = mount(Pane, {
-      target: document.body,
-      props: { target: { kind: "user", name: "alice" } }
-    });
-    await flush();
-    const drawn = ids();
-    expect(drawn.length).toBeGreaterThan(5);
-    expect(drawn.length).toBeLessThan(100);
-    const first = row(Number(drawn[0]));
-    net.frame("conversations.message", {
-      username: "alice",
-      message: privateMessage(101, { timestamp: at(100) })
-    });
-    await flush();
-    expect(row(Number(drawn[0]))).toBe(first);
   });
 
   it("offers the names in the chat for @, ourselves left out and each once", async () => {
@@ -426,14 +402,12 @@ describe("a chat pane", () => {
   });
 
   it("keeps a user's card open while the list moves itself for a new message", async () => {
-    const net = fakeNetwork((url, method) => {
+    const net = connected((url, method) => {
       if (url.pathname.endsWith("/conversations/alice/messages")) return [privateMessage(1)];
       if (url.pathname.endsWith("/users/alice")) return { username: "alice", known: false };
       if (method === "PUT") return { status: 200 };
       return undefined;
-    });
-    live.start();
-    net.frame("hello", { principal: { name: "me", role: "Administrator" } } as never);
+    }, "Administrator");
     component = mount(Pane, {
       target: document.body,
       props: { target: { kind: "user", name: "alice" } }

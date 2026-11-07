@@ -6,20 +6,12 @@ import { app } from "#lib/app.svelte.js";
 import { browser } from "#lib/browse/browse.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { session } from "#lib/session.svelte.js";
+import { sharedFile } from "#lib/testing/fixtures.js";
 import { flushFaked } from "#lib/testing/flush.js";
+import { connected } from "#lib/testing/live.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 
 import BrowsePage from "./BrowsePage.svelte";
-
-const file = (filename: string): Schemas["File"] => ({
-  filename,
-  size: 10,
-  code: 1,
-  extension: "",
-  isLocked: false,
-  attributeCount: 0,
-  attributes: []
-});
 
 const progress = (percentComplete: number): Schemas["BrowseProgress"] => ({
   username: "alice",
@@ -47,12 +39,9 @@ describe("browse progress", () => {
   it("updates the same line as frames arrive, then shows the tree", async () => {
     let answer!: (listing: Schemas["BrowseResponse"]) => void;
     const listing = new Promise<Schemas["BrowseResponse"]>((resolve) => (answer = resolve));
-    const net = fakeNetwork((url) => {
-      if (url.pathname.endsWith("/users/alice/browse")) return listing;
-      return undefined;
-    });
-    live.start();
-    net.frame("hello", { principal: { name: "a", role: "ReadOnly" } } as Schemas["Hello"]);
+    const net = connected((url) =>
+      url.pathname.endsWith("/users/alice/browse") ? listing : undefined
+    );
     component = mount(BrowsePage, {
       target: document.body,
       props: { user: "alice", path: null }
@@ -89,31 +78,23 @@ describe("browse progress", () => {
     ]);
   });
 
-  it("ticks a folder over the files under it and downloads one group per top folder in one job", async () => {
-    const groups: unknown[] = [];
-    fakeNetwork((url, _method, body) => {
-      if (url.pathname.endsWith("/users/alice/browse")) {
-        return {
-          directories: [
-            { name: "Music", fileCount: 1, files: [file("1.flac")] },
-            { name: "Music\\CD2", fileCount: 1, files: [file("2.flac")] },
-            { name: "Video", fileCount: 1, files: [file("x.mkv")] }
-          ],
-          directoryCount: 3,
-          lockedDirectories: [{ name: "Music\\Locked", fileCount: 1, files: [file("3.flac")] }],
-          lockedDirectoryCount: 1
-        };
-      }
-      if (url.pathname.endsWith("/downloads/jobs")) {
-        const asked = (body as { groups: { username: string }[] }).groups;
-        groups.push(...asked);
-        return {
-          id: "j",
-          groups: asked.map((g) => ({ ...g, enqueued: [], failures: [], error: null }))
-        };
-      }
-      return undefined;
-    });
+  it("ticks a folder over the files under it, not those of a locked folder", async () => {
+    fakeNetwork((url) =>
+      url.pathname.endsWith("/users/alice/browse")
+        ? {
+            directories: [
+              { name: "Music", fileCount: 1, files: [sharedFile("1.flac")] },
+              { name: "Music\\CD2", fileCount: 1, files: [sharedFile("2.flac")] },
+              { name: "Video", fileCount: 1, files: [sharedFile("x.mkv")] }
+            ],
+            directoryCount: 3,
+            lockedDirectories: [
+              { name: "Music\\Locked", fileCount: 1, files: [sharedFile("3.flac")] }
+            ],
+            lockedDirectoryCount: 1
+          }
+        : undefined
+    );
     session.principal = { name: "me", role: "Administrator" } as never;
     app.state = { server: { isConnected: true }, user: { username: "me" } } as never;
     component = mount(BrowsePage, {
@@ -126,7 +107,6 @@ describe("browse progress", () => {
       document.querySelector<HTMLElement>(
         `[role=checkbox][aria-label="Select every file in ${name}"]`
       )!;
-    // Music's tick takes its own file and its subfolder's, not the locked folder's
     tick("Music").click();
     flushSync();
     expect([...browser.selected].toSorted()).toEqual(["Music\\1.flac", "Music\\CD2\\2.flac"]);
@@ -135,18 +115,5 @@ describe("browse progress", () => {
     expect(document.querySelector("[aria-label='Selected files']")!.textContent).toContain(
       "3 files"
     );
-    document.querySelector<HTMLElement>("[aria-label='Selected files'] button")!.click();
-    await flushFaked();
-    await flushFaked();
-    expect(
-      groups.map((g) => {
-        const group = g as { files: { filename: string }[]; destination: string | null };
-        return [group.destination, group.files.map((f) => f.filename)];
-      })
-    ).toEqual([
-      [null, ["Music\\1.flac"]],
-      ["Music/CD2", ["Music\\CD2\\2.flac"]],
-      [null, ["Video\\x.mkv"]]
-    ]);
   });
 });

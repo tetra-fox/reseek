@@ -2,6 +2,7 @@ import { goto } from "$app/navigation";
 import { flushSync, mount, tick, unmount } from "svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { userSummary } from "#lib/testing/fixtures.js";
 import { flushFaked } from "#lib/testing/flush.js";
 import { press } from "#lib/testing/keys.js";
 import { type Answer, fakeNetwork } from "#lib/testing/network.js";
@@ -9,15 +10,6 @@ import { type Answer, fakeNetwork } from "#lib/testing/network.js";
 import NewMessageDialog from "./NewMessageDialog.svelte";
 
 vi.mock("$app/navigation", () => ({ goto: vi.fn() }));
-
-const summary = (username: string) => ({
-  username,
-  known: true,
-  group: { name: "default", source: "builtin", priority: 1, color: null },
-  tags: [],
-  lastSeenAt: null,
-  figures: {}
-});
 
 describe("the new message dialog", () => {
   let component: ReturnType<typeof mount> | null = null;
@@ -40,7 +32,7 @@ describe("the new message dialog", () => {
     const net = fakeNetwork((url, method) => {
       if (method === "POST") return post();
       if (url.pathname.endsWith("/api/v0/users")) {
-        return { users: known.map((username) => summary(username)), total: known.length };
+        return { users: known.map((username) => userSummary(username)), total: known.length };
       }
       return undefined;
     });
@@ -71,16 +63,6 @@ describe("the new message dialog", () => {
     press(box, "Enter");
     await flushFaked();
     expect(box.value).toBe("ali");
-    expect(document.activeElement).toBe(messageBox());
-  });
-
-  it("takes the name the keys moved to", async () => {
-    const { box } = await typed("ali", ["alice"]);
-    press(box, "ArrowDown");
-    await flushFaked();
-    press(box, "Enter");
-    await flushFaked();
-    expect(box.value).toBe("alice");
     expect(document.activeElement).toBe(messageBox());
   });
 

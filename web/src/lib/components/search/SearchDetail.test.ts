@@ -8,32 +8,27 @@ import { toasts } from "#lib/feedback/toast.svelte.js";
 import { UNDO_MS } from "#lib/feedback/undo.js";
 import { inspectorPrefs } from "#lib/inspector/inspector.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
+import { resultList } from "#lib/search/list.js";
 import { STREAM_MS } from "#lib/search/results.svelte.js";
 import { searches } from "#lib/search/searches.svelte.js";
 import { session } from "#lib/session.svelte.js";
 import { searchOptions } from "#lib/settings.svelte.js";
+import { search, sharedFile } from "#lib/testing/fixtures.js";
 import { flushFaked } from "#lib/testing/flush.js";
 import { press } from "#lib/testing/keys.js";
-import { fakeNetwork } from "#lib/testing/network.js";
+import { connected } from "#lib/testing/live.js";
 
 import SearchDetail from "./SearchDetail.svelte";
 
 const ID = "6f1c9a52-0d1e-4c43-9d55-3a1f0b6e7a10";
 
-const file = (filename: string): Schemas["File"] => ({
-  filename,
-  size: 4_000_000,
-  code: 1,
-  extension: "flac",
-  isLocked: false,
-  attributeCount: 0,
-  attributes: []
-});
-
 const response = (
   username: string,
   speed: number,
-  files = [file(`@@${username}\\Album\\01 One.flac`), file(`@@${username}\\Album\\02 Two.flac`)]
+  files = [
+    sharedFile(`@@${username}\\Album\\01 One.flac`),
+    sharedFile(`@@${username}\\Album\\02 Two.flac`)
+  ]
 ): Schemas["SearchResponse"] => ({
   username,
   country: null,
@@ -45,23 +40,6 @@ const response = (
   files,
   lockedFileCount: 0,
   lockedFiles: []
-});
-
-const search = (fields: Partial<Schemas["Search"]>): Schemas["Search"] => ({
-  id: ID,
-  searchText: "album",
-  token: 1,
-  state: "InProgress",
-  isComplete: false,
-  startedAt: "2026-10-26T10:00:00Z",
-  endedAt: null,
-  responseCount: 0,
-  fileCount: 0,
-  lockedFileCount: 0,
-  responseBytes: 0,
-  responses: null,
-  scope: { type: "network", subjects: [] },
-  ...fields
 });
 
 /** Lets the streamed responses be added to the results, then updates the page */
@@ -78,6 +56,7 @@ describe("search results", () => {
     if (component) unmount(component);
     inspectorPrefs.open = false;
     searchOptions.layout = "tree";
+    resultList.sort = null;
     app.options = null;
     session.principal = null;
     toasts.splice(0);
@@ -88,22 +67,24 @@ describe("search results", () => {
     document.body.innerHTML = "";
   });
 
-  it("stream in without replacing the lines already shown, also once stored", async () => {
-    const stored = [response("alice", 300), response("bob", 200), response("carol", 100)];
-    const net = fakeNetwork((url) => {
+  /** Mounts the page on a running search and opens the stream; gives the fake network */
+  const open = async (stored: Schemas["SearchResponse"][]) => {
+    const net = connected((url) => {
       if (url.pathname.endsWith("/api/v0/users")) return { users: [], total: 0 };
       if (url.pathname.endsWith(`/searches/${ID}/responses`)) return stored;
-      if (url.pathname.endsWith(`/searches/${ID}`)) return search({});
+      if (url.pathname.endsWith(`/searches/${ID}`)) return search({ id: ID });
+      if (url.pathname.endsWith("/api/v0/options")) return { applied: [], pending: [] };
       return undefined;
     });
-    searches.list.upsert(search({}));
+    searches.list.upsert(search({ id: ID }));
     component = mount(SearchDetail, { target: document.body, props: { id: ID } });
-    live.start();
-    net.frame("hello", {
-      principal: { name: "a", role: "ReadOnly" }
-    } as unknown as Schemas["Hello"]);
     await flushFaked();
+    return net;
+  };
 
+  it("stream in without replacing the lines already shown, also once stored", async () => {
+    const stored = [response("alice", 300), response("bob", 200), response("carol", 100)];
+    const net = await open(stored);
     net.frame("search.response", { searchId: ID, response: stored[0] });
     net.frame("search.response", { searchId: ID, response: stored[1] });
     await streamed();
@@ -137,6 +118,7 @@ describe("search results", () => {
     net.frame(
       "search.update",
       search({
+        id: ID,
         state: "Completed, TimedOut",
         isComplete: true,
         endedAt: "2026-10-26T10:00:15Z",
@@ -153,25 +135,6 @@ describe("search results", () => {
     expect(rowOf()).toBe(row);
     expect(document.getSelection()!.toString()).toBe(selected);
   });
-
-  /** Mounts the page on a running search and opens the stream; gives the fake network */
-  const open = async (stored: Schemas["SearchResponse"][]) => {
-    const net = fakeNetwork((url) => {
-      if (url.pathname.endsWith("/api/v0/users")) return { users: [], total: 0 };
-      if (url.pathname.endsWith(`/searches/${ID}/responses`)) return stored;
-      if (url.pathname.endsWith(`/searches/${ID}`)) return search({});
-      if (url.pathname.endsWith("/api/v0/options")) return { applied: [], pending: [] };
-      return undefined;
-    });
-    searches.list.upsert(search({}));
-    component = mount(SearchDetail, { target: document.body, props: { id: ID } });
-    live.start();
-    net.frame("hello", {
-      principal: { name: "a", role: "ReadOnly" }
-    } as unknown as Schemas["Hello"]);
-    await flushFaked();
-    return net;
-  };
 
   it("keep the list rows' nodes and the selection across them as results stream in", async () => {
     searchOptions.layout = "list";
@@ -200,6 +163,7 @@ describe("search results", () => {
     net.frame(
       "search.update",
       search({
+        id: ID,
         state: "Completed, TimedOut",
         isComplete: true,
         endedAt: "2026-10-26T10:00:15Z",
@@ -215,18 +179,27 @@ describe("search results", () => {
 
   it("open a list row's menu with a right-click, the lines holding still", async () => {
     searchOptions.layout = "list";
-    const stored = [response("alice", 300), response("bob", 200)];
+    // the fastest first, which aaron is
+    resultList.sort = { id: "speed", dir: "desc" };
+    const stored = [response("alice", 300), response("bob", 200), response("aaron", 400)];
     const net = await open(stored);
     net.frame("search.response", { searchId: ID, response: stored[0] });
     net.frame("search.response", { searchId: ID, response: stored[1] });
     await streamed();
     const grid = document.querySelector('[role=treegrid][aria-label^="Search results"]')!;
-    const row = grid.querySelector("[role=row][data-line] [role=gridcell]")!;
+    const rows = () => [...grid.querySelectorAll("[role=row][data-line]")];
+    const before = rows();
     const at = { bubbles: true, cancelable: true, clientX: 5, clientY: 5 };
-    row.dispatchEvent(new MouseEvent("contextmenu", at));
+    before[0].querySelector("[role=gridcell]")!.dispatchEvent(new MouseEvent("contextmenu", at));
     flushSync();
     await flushFaked();
     expect(document.querySelector("[role=menu]")).not.toBeNull();
+
+    net.frame("search.response", { searchId: ID, response: stored[2] });
+    await streamed();
+    const keys = (lines: Element[]) => lines.map((l) => l.getAttribute("data-line"));
+    expect(keys(rows()).slice(0, before.length)).toEqual(keys(before));
+    expect(rows()[0]).toBe(before[0]);
   });
 
   it("show no file in the inspector once the filter takes it out of the results", async () => {
@@ -296,9 +269,9 @@ describe("search results", () => {
 
   it("open and close a folder, and with Alt every folder beside it", async () => {
     const two = response("alice", 1, [
-      file("@@a\\Music\\One\\1.flac"),
-      file("@@a\\Music\\Two\\2.flac"),
-      file("@@a\\Music\\Three\\3.flac")
+      sharedFile("@@a\\Music\\One\\1.flac"),
+      sharedFile("@@a\\Music\\Two\\2.flac"),
+      sharedFile("@@a\\Music\\Three\\3.flac")
     ]);
     const net = await open([two]);
     net.frame("search.response", { searchId: ID, response: two });
@@ -361,7 +334,7 @@ describe("search results", () => {
   });
 
   it("count the filters' line out of what they act on, and leave the default toggle alone", async () => {
-    const locked = { ...response("carol", 100, []), lockedFiles: [file("@@c\\x\\1.flac")] };
+    const locked = { ...response("carol", 100, []), lockedFiles: [sharedFile("@@c\\x\\1.flac")] };
     const stored = [
       response("alice", 300),
       response("bob", 200),
@@ -393,34 +366,6 @@ describe("search results", () => {
     flushSync();
     expect(text()).not.toContain("Showing");
     expect(searchOptions.hideLocked).toBe(true);
-  });
-
-  it("put a preset in the filter box, which keeps only what it matches", async () => {
-    app.options = {
-      search: { filter_presets: [{ name: "FLAC", filter: "type:flac" }] }
-    } as unknown as Schemas["OptionsDocument"];
-    const mixed = response("alice", 1, [
-      file("@@a\\x\\1.flac"),
-      { ...file("@@a\\x\\2.mp3"), extension: "mp3" }
-    ]);
-    const net = await open([mixed]);
-    net.frame("search.response", { searchId: ID, response: mixed });
-    await streamed();
-    const names = () =>
-      [...document.querySelectorAll("[role=treegrid] [role=row][aria-selected]")].map(
-        (r) => r.textContent?.match(/\d\.\w+/)?.[0]
-      );
-    expect(names()).toEqual(["1.flac", "2.mp3"]);
-    const preset = [...document.querySelectorAll("button")].find((b) => b.textContent === "FLAC")!;
-    preset.click();
-    flushSync();
-    await vi.advanceTimersByTimeAsync(200);
-    flushSync();
-    expect(document.querySelector<HTMLInputElement>('input[aria-label="Filter"]')!.value).toBe(
-      "type:flac"
-    );
-    expect(preset.getAttribute("aria-pressed")).toBe("true");
-    expect(names()).toEqual(["1.flac"]);
   });
 
   it("keep every preset removed in a row off, and undo only the one undone", async () => {

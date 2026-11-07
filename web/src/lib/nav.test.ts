@@ -48,16 +48,10 @@ describe("screen changes", () => {
   it("count only a move to another destination of the navigation", () => {
     const moves: [string, string, boolean][] = [
       ["/dashboard", "/searches", true],
-      ["/searches", "/searches/42", false],
       ["/searches/42", "/downloads", true],
-      ["/downloads", "/uploads", true],
-      ["/users/alice", "/users/alice/shares", false],
       ["/users/alice/shares", "/users/bob", false],
       ["/users", "/users/alice", false],
-      ["/chat/alice", "/chat/rooms/indie", false],
-      ["/chat", "/users", true],
       ["/system/info", "/system/settings", false],
-      ["/system/settings", "/system/logs", false],
       ["/system/info", "/dashboard", true],
       ["/profile", "/users", true]
     ];

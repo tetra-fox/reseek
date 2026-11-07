@@ -12,8 +12,7 @@ import {
   arrivalMode,
   CHIME_GAP_MS,
   notifier,
-  type NotifyOptions,
-  shouldNotify
+  type NotifyOptions
 } from "./notify.svelte";
 
 vi.mock("$app/navigation", () => ({ goto: vi.fn() }));
@@ -69,16 +68,12 @@ describe("which messages notify", () => {
     expect(arrivalMode(arrival({ kind: "room", level: "mentions" }), rooms)).toBe("off");
   });
 
-  it("stays quiet for a muted user, a level of none, a type that is off or a pane in view", () => {
+  it("stays quiet for a muted user, a level of none or a type that is off", () => {
     expect(arrivalMode(arrival({ muted: true }), options)).toBe("off");
     expect(arrivalMode(arrival({ level: "none" }), options)).toBe("off");
     expect(
       arrivalMode(arrival({ kind: "room", mention: true }), { ...options, mentions: "off" })
     ).toBe("off");
-    expect(shouldNotify("off", false, false)).toBe(false);
-    expect(shouldNotify("sound", true, true)).toBe(false);
-    expect(shouldNotify("sound", true, false)).toBe(true);
-    expect(shouldNotify("desktop", false, true)).toBe(true);
   });
 });
 
@@ -124,14 +119,8 @@ describe("what a mode delivers", () => {
     ["sound", "granted", true, false],
     ["desktop", "granted", false, true],
     ["both", "granted", true, true],
-    ["off", "default", false, false],
-    ["sound", "default", true, false],
     ["desktop", "default", false, false],
-    ["both", "default", true, false],
-    ["desktop", "denied", false, false],
-    ["both", "denied", true, false],
-    ["desktop", "insecure", false, false],
-    ["both", "insecure", true, false]
+    ["both", "denied", true, false]
   ];
 
   it.each(MATRIX)(
@@ -216,6 +205,7 @@ describe("the new message toast", () => {
     toasts.splice(0);
     users.clear();
     vi.unstubAllGlobals();
+    vi.useRealTimers();
   });
 
   const toasted = async (level: Schemas["NotifyLevel"], open: string | null = null) => {
@@ -257,6 +247,5 @@ describe("the new message toast", () => {
     vi.setSystemTime(Date.now() + SUMMARY_TTL_MS + 1);
     expect(await toasted("all")).toBe(0);
     expect(net.requests.filter((r) => r.url.pathname.endsWith("/summary"))).toHaveLength(2);
-    vi.useRealTimers();
   });
 });

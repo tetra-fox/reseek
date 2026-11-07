@@ -1,9 +1,7 @@
-import { flushSync, mount, unmount } from "svelte";
+import { type ComponentProps, flushSync, mount, unmount } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { Schemas } from "#lib/api/client.js";
 import InspectorPane from "#lib/components/inspector/InspectorPane.svelte";
-import Header from "#lib/components/shell/Header.svelte";
 import { toasts } from "#lib/feedback/toast.svelte.js";
 import { UNDO_MS } from "#lib/feedback/undo.js";
 import { inspectorPrefs, SETTLE_MS } from "#lib/inspector/inspector.svelte.js";
@@ -13,7 +11,7 @@ import { session } from "#lib/session.svelte.js";
 import { transfer } from "#lib/testing/fixtures.js";
 import { flushFaked } from "#lib/testing/flush.js";
 import { press, ticked } from "#lib/testing/keys.js";
-import { fakeNetwork } from "#lib/testing/network.js";
+import { connected } from "#lib/testing/live.js";
 import { defaults, views } from "#lib/transfers/grid/settings.svelte.js";
 import type { Transfer } from "#lib/transfers/states.js";
 import { downloads } from "#lib/transfers/transfers.svelte.js";
@@ -36,15 +34,6 @@ describe("the transfers table", () => {
 
   beforeEach(() => {
     vi.useFakeTimers();
-    // jsdom lays nothing out, so the table's measured height stays at its first guess
-    vi.stubGlobal(
-      "ResizeObserver",
-      class {
-        observe() {}
-        unobserve() {}
-        disconnect() {}
-      }
-    );
     Object.assign(views.download, defaults("download"), { layout: "list" });
   });
   afterEach(() => {
@@ -60,13 +49,11 @@ describe("the transfers table", () => {
     document.body.innerHTML = "";
   });
 
-  const start = async () => {
-    const net = fakeNetwork((url) =>
+  const start = async (props: ComponentProps<typeof TransfersPage> = { direction: "download" }) => {
+    const net = connected((url) =>
       url.pathname.endsWith("/api/v0/transfers/downloads") ? grouped(listing) : undefined
     );
-    live.start();
-    net.frame("hello", { principal: { name: "a", role: "ReadOnly" } } as Schemas["Hello"]);
-    component = mount(TransfersPage, { target: document.body, props: { direction: "download" } });
+    component = mount(TransfersPage, { target: document.body, props });
     hostPane = mount(InspectorPane, { target: document.body });
     await flushFaked();
     await flushFaked();
@@ -306,42 +293,24 @@ describe("the transfers table", () => {
       expect(ticked().toSorted()).toEqual([a.id, c.id].toSorted());
     });
 
-    it("go on from the row that took a removed row's place", async () => {
-      signIn();
-      const a = transfer({ filename: "x\\a.flac", state: "Completed, Succeeded" });
-      const b = transfer({ filename: "x\\b.flac", state: "Completed, Succeeded" });
-      const c = transfer({ filename: "x\\c.flac", state: "Completed, Succeeded" });
-      listing = [a, b, c];
-      const net = await start();
-      press(grid(), "ArrowDown");
-      press(grid(), "ArrowDown");
-      press(grid(), "Delete");
-      await vi.advanceTimersByTimeAsync(UNDO_MS);
-      flushSync();
-      expect(bulk(net).map((r) => r.body)).toEqual([{ action: "remove", ids: [b.id] }]);
-      net.frame("transfers.removed", { id: b.id, username: b.username, direction: "Download" });
-      await flushFaked();
-      expect(row(b.id)).toBeNull();
-      // c took b's place, so Down has nowhere further to go and Up reaches a
-      press(grid(), " ", { shiftKey: true });
-      expect(ticked()).toEqual([c.id]);
-      press(grid(), "ArrowUp");
-      press(grid(), " ", { shiftKey: true });
-      expect(ticked().toSorted()).toEqual([a.id, c.id].toSorted());
-    });
-
-    it("leave focus on a control whose row stays rendered through a scroll", async () => {
+    it("keep focus on a row control while its row is drawn, and on the table once it is not", async () => {
       listing = Array.from({ length: 80 }, (_, n) =>
         transfer({ filename: `x\\${String(n).padStart(2, "0")}.flac` })
       );
       await start();
-      // jsdom measures the table as 0 px high, so ten rows past the top are rendered
+      const scrollTo = (top: number) => {
+        Object.defineProperty(grid(), "scrollTop", { value: top, configurable: true });
+        grid().dispatchEvent(new Event("scroll"));
+        flushSync();
+      };
       const box = row(listing[5].id)!.querySelector<HTMLElement>('[role="checkbox"]')!;
       box.focus();
-      Object.defineProperty(grid(), "scrollTop", { value: 36 * 3, configurable: true });
-      grid().dispatchEvent(new Event("scroll"));
-      flushSync();
+      // three rows down, the sixth row is still drawn
+      scrollTo(36 * 3);
       expect(document.activeElement).toBe(box);
+      scrollTo(2000);
+      expect(document.activeElement).toBe(grid());
+      expect(grid().getAttribute("aria-activedescendant")).toBeNull();
     });
 
     it("give focus to the table when a confirm closes onto a control that left", async () => {
@@ -373,20 +342,6 @@ describe("the transfers table", () => {
       expect(document.activeElement).toBe(grid());
     });
 
-    it("keep focus on the table when a focused row control scrolls away", async () => {
-      listing = Array.from({ length: 80 }, (_, n) =>
-        transfer({ filename: `x\\${String(n).padStart(2, "0")}.flac` })
-      );
-      await start();
-      const box = row(listing[0].id)!.querySelector<HTMLElement>('[role="checkbox"]')!;
-      box.focus();
-      Object.defineProperty(grid(), "scrollTop", { value: 2000, configurable: true });
-      grid().dispatchEvent(new Event("scroll"));
-      flushSync();
-      expect(document.activeElement).toBe(grid());
-      expect(grid().getAttribute("aria-activedescendant")).toBeNull();
-    });
-
     it("select a group from the pinned header after scrolling", async () => {
       Object.assign(views.download, { layout: "tree", groupBy: "user" });
       listing = Array.from({ length: 30 }, (_, n) =>
@@ -406,48 +361,6 @@ describe("the transfers table", () => {
       press(pinned, "a", { ctrlKey: true });
       expect(ticked().length).toBeGreaterThan(0);
       expect(document.body.textContent).toContain("25 selected");
-    });
-
-    it("do nothing on a row whose buttons don't offer it", async () => {
-      signIn();
-      const open = vi.spyOn(window, "open").mockReturnValue(null);
-      const a = transfer({ state: "Queued, Remotely" });
-      listing = [a];
-      const net = await start();
-      press(grid(), "ArrowDown");
-      press(grid(), "r");
-      press(grid(), "o");
-      await flushFaked();
-      expect(bulk(net)).toEqual([]);
-      expect(open).not.toHaveBeenCalled();
-    });
-
-    it("open and close the inspector on a row, which follows the focus", async () => {
-      const a = transfer({ filename: "x\\a.flac" });
-      const b = transfer({ filename: "x\\b.flac" });
-      listing = [a, b];
-      await start();
-      press(grid(), "ArrowDown");
-      expect(pane()).toBeNull();
-      expect(press(grid(), "i").defaultPrevented).toBe(true);
-      expect(pane()?.querySelector("h2")?.textContent).toBe("a.flac");
-      expect(row(a.id)!.hasAttribute("data-inspected")).toBe(true);
-
-      press(grid(), "ArrowDown");
-      expect(pane()?.querySelector("h2")?.textContent).toBe("b.flac");
-      expect(row(a.id)!.hasAttribute("data-inspected")).toBe(false);
-      expect(row(b.id)!.hasAttribute("data-inspected")).toBe(true);
-
-      // Space closes it as `i` did and leaves the row unticked; Shift+Space ticks
-      await flushFaked();
-      press(grid(), " ");
-      await vi.runOnlyPendingTimersAsync();
-      flushSync();
-      expect(pane()).toBeNull();
-      expect(ticked()).toEqual([]);
-      press(grid(), " ", { shiftKey: true });
-      expect(ticked()).toEqual([b.id]);
-      expect(pane()).toBeNull();
     });
 
     it("show no transfer in the inspector once the filter takes it out of the table", async () => {
@@ -480,25 +393,6 @@ describe("the transfers table", () => {
       flushSync();
       expect(pane()).toBeNull();
       expect(document.activeElement).toBe(grid());
-    });
-
-    it("give focus back to the table when the breadcrumb closes the inspector", async () => {
-      const a = transfer({ username: "alice" });
-      listing = [a];
-      await start();
-      const header = mount(Header, { target: document.body });
-      press(grid(), "ArrowDown");
-      press(grid(), "i");
-      const crumb = [...document.querySelectorAll("nav button")].find(
-        (b) => b.textContent === "alice"
-      ) as HTMLButtonElement;
-      crumb.focus();
-      crumb.click();
-      await vi.runOnlyPendingTimersAsync();
-      flushSync();
-      expect(pane()).toBeNull();
-      expect(document.activeElement).toBe(grid());
-      unmount(header);
     });
 
     it("give focus to the pane when its menu removes the last transfer", async () => {
@@ -584,17 +478,7 @@ describe("the transfers table", () => {
       transfer({ id: "a", jobId: "J1" }),
       transfer({ id: "b", jobId: "J2", filename: "@@a\\Music\\Album\\02 Two.flac" })
     ];
-    const net = fakeNetwork((url) =>
-      url.pathname.endsWith("/api/v0/transfers/downloads") ? grouped(listing) : undefined
-    );
-    live.start();
-    net.frame("hello", { principal: { name: "a", role: "ReadOnly" } } as Schemas["Hello"]);
-    component = mount(TransfersPage, {
-      target: document.body,
-      props: { direction: "download", job: "J1" }
-    });
-    await flushFaked();
-    await flushFaked();
+    await start({ direction: "download", job: "J1" });
     expect(row("a")).not.toBeNull();
     expect(row("b")).toBeNull();
     expect(document.body.textContent).toContain("One download job");

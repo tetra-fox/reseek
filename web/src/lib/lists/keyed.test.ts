@@ -92,7 +92,6 @@ describe("a keyed list on screen", () => {
     flushSync();
 
     const after = items();
-    expect(after.slice(0, 3)).toEqual(before);
     expect(after.slice(0, 3).every((li, i) => li === before[i])).toBe(true);
     expect(after.map((li) => li.querySelector(".name")!.firstChild).slice(0, 3)).toEqual(names);
     expect(after[2].querySelector(".size")!.textContent).toBe("36");

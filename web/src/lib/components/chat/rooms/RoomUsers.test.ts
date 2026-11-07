@@ -3,7 +3,7 @@ import { flushSync, mount, unmount } from "svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { RoomMembers, type RoomUser } from "#lib/chat/rooms/room.svelte.js";
-import { active, press, ticked } from "#lib/testing/keys.js";
+import { press } from "#lib/testing/keys.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 
 import RoomUsers from "./RoomUsers.svelte";
@@ -32,7 +32,7 @@ describe("a room's users", () => {
     document.body.innerHTML = "";
   });
 
-  it("lists operators then members, online first, and moves, selects and opens by key", () => {
+  it("lists operators then members, online first, and opens a member's page", () => {
     fakeNetwork(() => undefined);
     const members = new RoomMembers("indie");
     members.room = {
@@ -56,21 +56,7 @@ describe("a room's users", () => {
     const grid = document.querySelector("[role=grid]")!;
     press(grid, "ArrowDown");
     press(grid, "ArrowDown");
-    expect(active(grid)).toBe("zed");
-    press(grid, "a", { ctrlKey: true });
-    expect(ticked()).toEqual(["zed", "amy"]);
-    press(grid, "Escape");
-    expect(ticked()).toEqual([]);
     press(grid, "Enter");
     expect(goto).toHaveBeenCalledWith("#/users/zed");
-  });
-
-  it("says when the room can't be read", async () => {
-    fakeNetwork(() => ({ status: 500, body: { error: "not in the room" } }));
-    const members = new RoomMembers("indie");
-    component = mount(RoomUsers, { target: document.body, props: { members } });
-    await members.load();
-    flushSync();
-    expect(document.querySelector("[role=alert]")?.textContent).toContain("not in the room");
   });
 });

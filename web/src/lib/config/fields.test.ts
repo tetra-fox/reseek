@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { editability } from "./editability";
 import { type ConfigView, controlOf, errorsByKey, fromDraft, toDraft } from "./fields";
 import fixture from "./fixtures/view.json";
-import { asNixSettings } from "./nix";
 import { sections, unlisted, valueAt } from "./sections";
 
 /**
@@ -11,32 +9,9 @@ import { sections, unlisted, valueAt } from "./sections";
  * `just config-fixture`; `just api-check` fails once the daemon's options differ from it
  */
 const view = fixture as unknown as ConfigView;
-const copy = (): ConfigView => structuredClone(view);
 
 describe("the settings forms", () => {
-  it("cover every section of the configuration, in its order", () => {
-    expect(sections.map((s) => s.title)).toEqual([
-      "Soulseek",
-      "Shares",
-      "Transfers",
-      "Groups",
-      "Chat",
-      "Notifications",
-      "Search filters",
-      "Throttling",
-      "Folders",
-      "Analysis",
-      "Retention",
-      "Schedules",
-      "Web",
-      "Authentication",
-      "Integrations",
-      "Logging",
-      "Metrics",
-      "Relay",
-      "Flags"
-    ]);
-    // the side list gathers them by heading, so each heading's sections stand together
+  it("stand together under each heading of the side list", () => {
     const groups = sections.map((s) => s.group);
     expect(groups.filter((g, i) => g !== groups[i - 1])).toEqual(["Network", "Storage", "Server"]);
   });
@@ -173,103 +148,6 @@ describe("controls and drafts", () => {
       "transfers.groups":
         "invalid type: floating point `1.5`, expected u32 (at transfers.groups.friends.upload.slots)"
     });
-  });
-});
-
-describe("editability", () => {
-  /** the fixture with remote configuration on, without which nothing can be changed */
-  const remote = (): ConfigView => {
-    const v = copy();
-    (v.values as Record<string, unknown>).remote_configuration = true;
-    return v;
-  };
-
-  it("saves to a writable file", () => {
-    expect(editability(remote(), "soulseek.description")).toEqual({ mode: "save", notice: null });
-    expect(editability(remote(), "web.port")).toEqual({ mode: "save", notice: null });
-  });
-
-  it("locks everything while remote configuration is off, which the page says once", () => {
-    expect(editability(view, "soulseek.description")).toEqual({ mode: "locked", notice: null });
-  });
-
-  it("locks what the environment or the command line set, naming where", () => {
-    const v = remote();
-    v.fields["soulseek.username"].source = { layer: "env", var: "RESEEK_SLSK_USERNAME" };
-    v.fields["web.port"].source = { layer: "cli", flag: "--http-port" };
-    expect(editability(v, "soulseek.username")).toEqual({
-      mode: "locked",
-      notice: "Set by RESEEK_SLSK_USERNAME"
-    });
-    expect(editability(v, "web.port").notice).toBe("Set by --http-port");
-  });
-
-  it("applies at runtime what a managed file holds, unless it needs a restart", () => {
-    const v = remote();
-    v.managedBy = "Nix";
-    v.files[0].writable = false;
-    expect(editability(v, "soulseek.description")).toEqual({ mode: "runtime", notice: null });
-    expect(editability(v, "web.port")).toEqual({
-      mode: "locked",
-      notice: "Change it in the Nix configuration"
-    });
-  });
-
-  it("says on a page that keeps a change until removed what it overrides", () => {
-    const v = remote();
-    v.files[0].writable = false;
-    v.files[0].readOnlyReason = "permission denied";
-    expect(editability(v, "soulseek.description", "page")).toEqual({
-      mode: "runtime",
-      notice:
-        "config.toml is read-only (permission denied), so a change here overrides it until removed"
-    });
-    v.managedBy = "Nix";
-    expect(editability(v, "soulseek.description", "page").notice).toBe(
-      "Overrides the Nix configuration until removed"
-    );
-    expect(editability(v, "web.port", "page")).toEqual(editability(v, "web.port"));
-  });
-
-  it("names why a file can't be written", () => {
-    const v = remote();
-    v.files[0].writable = false;
-    v.files[0].readOnlyReason = "permission denied";
-    expect(editability(v, "soulseek.description")).toEqual({
-      mode: "runtime",
-      notice: "config.toml is read-only (permission denied), so changes here are temporary"
-    });
-  });
-
-  it("says whether a value applied at runtime lasts until restart or until removed", () => {
-    const v = remote();
-    v.files[0].writable = false;
-    const applied = (untilRestart: boolean) => {
-      v.fields["soulseek.description"].source = {
-        layer: "runtime",
-        setBy: "admin",
-        setAt: "2026-10-29T10:00:00Z",
-        expiresAt: null,
-        untilRestart
-      };
-      return editability(v, "soulseek.description").notice;
-    };
-    expect(applied(true)).toBe("Applied here until restart");
-    expect(applied(false)).toBe("Applied here until removed");
-  });
-});
-
-describe("Copy as Nix", () => {
-  it("nests dotted keys and escapes interpolation", () => {
-    expect(
-      asNixSettings([
-        ["web.port", 5030],
-        ["shares.directories", []],
-        ["a.b", "${x}"]
-      ])
-    ).toBe(
-      'services.reseek.settings = {\n  web = {\n    port = 5030;\n  };\n  shares = {\n    directories = [ ];\n  };\n  a = {\n    b = "\\${x}";\n  };\n};\n'
-    );
   });
 });
 

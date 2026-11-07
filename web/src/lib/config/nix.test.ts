@@ -10,6 +10,12 @@ describe("Copy as Nix", () => {
     );
   });
 
+  it("writes an empty list as [ ]", () => {
+    expect(asNixSettings([["shares.directories", []]])).toBe(
+      `services.reseek.settings = {\n  shares = {\n    directories = [ ];\n  };\n};\n`
+    );
+  });
+
   it("quotes a key that is not a Nix name", () => {
     expect(asNixSettings([["rooms", { "my room": true }]])).toBe(
       `services.reseek.settings = {\n  rooms = {\n    "my room" = true;\n  };\n};\n`

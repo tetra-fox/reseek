@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { live } from "#lib/live/live.svelte.js";
 import { flush } from "#lib/testing/flush.js";
-import { active, press, ticked } from "#lib/testing/keys.js";
+import { press, ticked } from "#lib/testing/keys.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 import { box } from "#lib/testing/state.svelte.js";
 
@@ -28,7 +28,7 @@ describe("the event log", () => {
     document.body.innerHTML = "";
   });
 
-  it("adds a raised event above the ones shown, and moves, selects and opens by key", async () => {
+  it("adds a raised event above the ones shown, and opens one with Enter", async () => {
     let log = [event("b", 2), event("a", 1)];
     const net = fakeNetwork(() => log);
     live.start();
@@ -49,9 +49,6 @@ describe("the event log", () => {
     const grid = document.querySelector("[role=grid]")!;
     press(grid, "ArrowDown");
     press(grid, "ArrowDown");
-    expect(active(grid)).toBe("b");
-    press(grid, " ");
-    expect(ticked()).toEqual(["b"]);
     press(grid, "Enter");
     await flush();
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain("b at");

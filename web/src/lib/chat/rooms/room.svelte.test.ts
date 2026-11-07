@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Schemas } from "#lib/api/client.js";
 import { live } from "#lib/live/live.svelte.js";
-import { fakeNetwork } from "#lib/testing/network.js";
+import { connected } from "#lib/testing/live.js";
 
 import { RoomMembers } from "./room.svelte";
 
@@ -23,14 +23,12 @@ describe("a room's members", () => {
   it("keep the room a push brought while a read from before it was on its way", async () => {
     let answer: ((room: unknown) => void) | undefined;
     let reads = 0;
-    const net = fakeNetwork((url) => {
+    const net = connected((url) => {
       if (!url.pathname.endsWith("/rooms/joined/jazz")) return undefined;
       reads += 1;
       if (reads === 1) return { status: 503, body: { error: "the daemon is restarting" } };
       return new Promise((resolve) => (answer = resolve));
-    });
-    live.start();
-    net.frame("hello", { principal: { name: "me", role: "Administrator" } } as never);
+    }, "Administrator");
     const members = new RoomMembers("jazz");
     const stop = $effect.root(() => members.follow());
     flushSync();

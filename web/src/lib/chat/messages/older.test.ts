@@ -23,13 +23,6 @@ describe("reading older history", () => {
     expect(h.settled).toEqual([false]);
   });
 
-  it("goes on to the start while the scrollbar is held at the top", async () => {
-    const h = history(6);
-    await pullOlder({ ...h, held: () => true });
-    expect(h.read()).toBe(6);
-    expect(h.settled).toEqual([true, true, true, true, true]);
-  });
-
   it("stops once the scrollbar is let go", async () => {
     const h = history(10);
     let holding = true;

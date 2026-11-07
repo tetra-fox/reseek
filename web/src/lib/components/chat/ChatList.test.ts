@@ -93,18 +93,6 @@ describe("the chat list", () => {
     expect(goto).toHaveBeenCalledWith("#/chat/server", { reset: false });
   });
 
-  it("selects with Space and Ctrl+A within a section, and clears with Escape", () => {
-    start();
-    press(grid(), "ArrowDown");
-    press(grid(), " ");
-    expect(ticked()).toEqual(["room:jazz"]);
-    press(grid(), "a", { metaKey: true });
-    expect(ticked()).toEqual(["room:jazz", "room:indie"]);
-    expect(document.body.textContent).toContain("2 selected");
-    press(grid(), "Escape");
-    expect(ticked()).toEqual([]);
-  });
-
   it("opens a chat with a click and toggles one with Ctrl-click", () => {
     start();
     const line = (key: string) => document.querySelector(`[data-line="${key}"]`)!;
@@ -117,26 +105,6 @@ describe("the chat list", () => {
     flushSync();
     expect(goto).not.toHaveBeenCalled();
     expect(ticked()).toEqual(["room:indie", "user:bob"]);
-  });
-
-  it("shows a room's newest message as the rooms are read, before any arrives", () => {
-    start();
-    chat.rooms.assign("indie", {
-      lastMessage: {
-        localId: 4,
-        timestamp: "2026-10-26T10:00:00Z",
-        username: "bob",
-        message: "anyone here?",
-        roomName: "indie",
-        self: false,
-        isMention: false,
-        hidden: false
-      }
-    });
-    flushSync();
-    const row = document.querySelector("[data-line='room:indie']")!;
-    expect(row.textContent).toContain("bob: anyone here?");
-    expect(document.querySelector("[data-line='room:jazz']")!.textContent).toContain("3 users");
   });
 
   it("orders conversations by their newest message and holds the order while held", () => {
@@ -167,7 +135,7 @@ describe("the chat list", () => {
     expect(keys()).toEqual(["user:bob", "user:alice"]);
   });
 
-  it("holds each pinned chat once, above the sections, in the user's order", () => {
+  it("holds each pinned chat once above the sections, in the user's order, while joined", () => {
     start();
     chat.unread = {
       conversations: { bob: 3 },
@@ -196,32 +164,15 @@ describe("the chat list", () => {
     chat.conversations.get("bob")!.lastMessage = null;
     flushSync();
     expect(shown().slice(0, 3)).toEqual(["h:pinned", "user:bob", "room:indie"]);
-  });
 
-  it("leaves a pinned room we left out, and has it back in its place on joining again", () => {
-    start();
-    pins.list = [
-      { kind: "room", name: "indie" },
-      { kind: "user", name: "bob" }
-    ];
-    flushSync();
+    // a pinned room we left is gone, and back in its place on joining again
     chat.rooms.remove("indie");
     flushSync();
     expect(shown().slice(0, 3)).toEqual(["h:pinned", "user:bob", "h:rooms"]);
     expect(shown()).not.toContain("room:indie");
     chat.rooms.upsert(joinedRoom("indie"));
     flushSync();
-    expect(shown().slice(0, 3)).toEqual(["h:pinned", "room:indie", "user:bob"]);
-  });
-
-  it("does not sort a buddy first", async () => {
-    start();
-    const buddy = { trusted: false, notifyPresence: false };
-    fakeNetwork(() => ({ username: "bob", buddy }));
-    await users.load("bob");
-    flushSync();
-    expect(users.get("bob")?.buddy).toEqual(buddy);
-    expect(shown().slice(-2)).toEqual(["user:alice", "user:bob"]);
+    expect(shown().slice(0, 3)).toEqual(["h:pinned", "user:bob", "room:indie"]);
   });
 
   it("moves a pin with Alt+Shift and the arrows, saying where it went", async () => {

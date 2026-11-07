@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Schemas } from "#lib/api/client.js";
 import { live } from "#lib/live/live.svelte.js";
 import { flush } from "#lib/testing/flush.js";
+import { connected } from "#lib/testing/live.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 
 import { pins } from "./pins.svelte";
@@ -20,16 +21,15 @@ const taking = () => fakeNetwork((_url, _method, body) => ({ revision: 1, pins: 
 const daemon = (read: () => unknown = () => undefined) => {
   const answers: (() => void)[] = [];
   let revision = 0;
-  const network = fakeNetwork((_url, method, body) =>
-    method === "PUT"
-      ? new Promise((resolve) => answers.push(() => resolve({ revision: ++revision, pins: body })))
-      : read()
+  const network = connected(
+    (_url, method, body) =>
+      method === "PUT"
+        ? new Promise((resolve) =>
+            answers.push(() => resolve({ revision: ++revision, pins: body }))
+          )
+        : read(),
+    "ReadWrite"
   );
-  live.start();
-  network.frame("hello", {
-    principal: { name: "me", role: "ReadWrite" },
-    resumed: false
-  } as Schemas["Hello"]);
   const writes = () => network.requests.filter((r) => r.method === "PUT");
   return {
     writes,
@@ -44,11 +44,7 @@ const daemon = (read: () => unknown = () => undefined) => {
       await flush();
     },
     /** a stream opened again without the frames missed, as after a restart */
-    reopen: () =>
-      network.frame("hello", {
-        principal: { name: "me", role: "ReadWrite" },
-        resumed: false
-      } as Schemas["Hello"])
+    reopen: network.greet
   };
 };
 

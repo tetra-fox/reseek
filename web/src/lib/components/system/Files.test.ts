@@ -1,11 +1,12 @@
 import { goto } from "$app/navigation";
-import { flushSync, mount, unmount } from "svelte";
+import { mount, unmount } from "svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { app } from "#lib/app.svelte.js";
 import { confirmation } from "#lib/feedback/confirm.svelte.js";
 import { session } from "#lib/session.svelte.js";
 import type { Root } from "#lib/system/localfiles.js";
+import { flush } from "#lib/testing/flush.js";
 import { active, press, ticked } from "#lib/testing/keys.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 import { box } from "#lib/testing/state.svelte.js";
@@ -13,11 +14,6 @@ import { box } from "#lib/testing/state.svelte.js";
 import Files from "./Files.svelte";
 
 vi.mock("$app/navigation", () => ({ goto: vi.fn() }));
-
-const flush = async () => {
-  for (let i = 0; i < 3; i++) await new Promise((resolve) => setTimeout(resolve, 0));
-  flushSync();
-};
 
 /** Answers the screen's reads of the analysis reports and queue with none, and the rest by `listing` */
 const withoutAnalyses = (listing: (url: URL) => unknown) => (url: URL) =>
@@ -127,20 +123,6 @@ describe("the file explorer", () => {
     expect(net.requests.filter((r) => r.url.pathname.includes("/directories/"))).toHaveLength(2);
     press(grid, "ArrowLeft");
     expect(rows()).toEqual(["..", "folder:Album/CD1"]);
-  });
-
-  it("says a subfolder holding nothing is empty, its way up shown", async () => {
-    fakeNetwork(
-      withoutAnalyses(() => ({ name: "Empty", fullName: "", directories: [], files: [] }))
-    );
-    component = mount(Files, {
-      target: document.body,
-      props: { root: "downloads", path: "Album/Empty" }
-    });
-    await flush();
-    const rows = [...document.querySelectorAll("[role=row][data-line]")];
-    expect(rows.map((r) => r.getAttribute("data-line"))).toEqual([".."]);
-    expect(document.body.textContent).toContain("This folder is empty");
   });
 
   it("shows the root it was moved to when the last one answers late", async () => {

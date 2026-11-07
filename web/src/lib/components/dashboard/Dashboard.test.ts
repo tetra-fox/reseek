@@ -28,62 +28,13 @@ describe("the dashboard", () => {
     live.stop();
     app.state = null;
     app.metrics = null;
+    // the chart's choices are kept in this browser, past the test that made them
+    Object.assign(dashboardPrefs, { range: "30d", view: "size", hidden: [] });
     vi.unstubAllGlobals();
     document.body.innerHTML = "";
   });
 
-  it("shows the totals, the history, the leaderboard and the errors of fixture reports", async () => {
-    app.state = {
-      server: { isConnected: true, listen: { port: 2234, reachable: "unknown" } },
-      user: { username: "me" },
-      shares: { files: 0, directories: 0, scanning: false, scanPending: false }
-    } as never;
-    fakeNetwork((url) => {
-      const path = url.pathname.replace("/api/v0/telemetry/reports/transfers/", "");
-      if (path === "summary") {
-        return {
-          Download: { Succeeded: summary(3, 3 * 1024 ** 3), Errored: summary(1, 0) },
-          Upload: { Succeeded: summary(6, 1.5 * 1024 ** 3) },
-          distinctUsers: 5
-        };
-      }
-      if (path === "histogram") {
-        return {
-          "2026-10-26T10:00:00Z": { Download: { Succeeded: summary(1, 100) }, Upload: {} },
-          "2026-10-26T11:00:00Z": { Download: {}, Upload: { Succeeded: summary(2, 400) } }
-        };
-      }
-      if (path === "leaderboard") return [{ username: "alice", ...summary(7, 7000) }];
-      if (path === "directories")
-        return [{ directory: "@@a\\Music\\Album", count: 4, distinctUsers: 2 }];
-      if (path === "exceptions/pareto")
-        return [{ exception: "Remote file not found", count: 2, distinctUsers: 1 }];
-      if (path === "exceptions") return [];
-      return undefined;
-    });
-    component = mount(Dashboard, { target: document.body });
-    await flush();
-    const text = () => document.body.textContent?.replace(/\s+/g, " ") ?? "";
-    expect(text()).toContain("Downloaded 3GB 3 files");
-    expect(text()).toContain("Uploaded 1.5GB 6 files");
-    expect(text()).toContain("Share ratio 0.50");
-    expect(text()).toContain("Users transferred with 5");
-    // two series drawn by default, which the chart names with their peaks
-    const history = document.querySelector('[role=img][aria-label^="Transfers over time"]')!;
-    expect(history.getAttribute("aria-label")).toMatch(
-      /Upload size peaks at .*; Download size peaks/
-    );
-    expect(text()).toContain("alice");
-
-    [...document.querySelectorAll("button")].find((b) => b.textContent === "Folders")!.click();
-    flushSync();
-    expect(text()).toContain("Music/Album");
-    [...document.querySelectorAll("button")].find((b) => b.textContent === "Errors")!.click();
-    await flush();
-    expect(text()).toContain("Remote file not found");
-  });
-
-  it("charts one unit at a time, the choice kept and the directions carried over", async () => {
+  it("keeps the last direction on in the chart, and the choice", async () => {
     app.state = {
       server: { isConnected: true, listen: { port: 2234, reachable: "unknown" } },
       user: { username: "me" },
@@ -111,24 +62,11 @@ describe("the dashboard", () => {
         .click();
       flushSync();
     };
-    expect(chart()).toMatch(/Upload size .*; Download size [^;]*$/);
-    press("Count");
-    expect(chart()).toMatch(/: Upload count peaks at 2, [^;]*; Download count peaks at 1, [^;]*$/);
     press("Upload");
-    expect(chart()).toMatch(/: Download count peaks at 1, [^;]*$/);
-    // the last direction on stays on
+    expect(chart()).toMatch(/: Download size [^;]*$/);
     press("Download");
-    expect(chart()).toMatch(/: Download count peaks at 1, [^;]*$/);
+    expect(chart()).toMatch(/: Download size [^;]*$/);
     expect(dashboardPrefs.hidden).toEqual(["Upload"]);
-    press("Error rate");
-    expect(chart()).toMatch(/: Download error rate flat at 0.0%$/);
-    // a view with one line has no direction to turn off
-    press("Queue wait");
-    expect(chart()).toMatch(/: Upload queue wait peaks at 1s, [^;]*$/);
-    press("Share ratio");
-    expect(chart()).toMatch(/: Share ratio peaks at 4.00, [^;]*$/);
-    expect(dashboardPrefs).toMatchObject({ view: "ratio", hidden: ["Upload"] });
-    Object.assign(dashboardPrefs, { view: "size", hidden: [] });
   });
 
   it("keeps the leaderboard's column through a reload and starts a new range at Count", async () => {

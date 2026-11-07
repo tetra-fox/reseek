@@ -5,28 +5,20 @@ import type { Schemas } from "#lib/api/client.js";
 import { live } from "#lib/live/live.svelte.js";
 import { searches } from "#lib/search/searches.svelte.js";
 import { session } from "#lib/session.svelte.js";
+import { search } from "#lib/testing/fixtures.js";
 import { flushFaked } from "#lib/testing/flush.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 
 import SearchList from "./SearchList.svelte";
 
-const search = (id: string, minute: number, fields: Partial<Schemas["Search"]> = {}) =>
-  ({
+/** A search named after `id`, started `minute` minutes past ten */
+const listed = (id: string, minute: number, fields: Partial<Schemas["Search"]> = {}) =>
+  search({
     id,
     searchText: `search ${id}`,
-    token: 1,
-    state: "InProgress",
-    isComplete: false,
     startedAt: `2026-10-26T10:${String(minute).padStart(2, "0")}:00Z`,
-    endedAt: null,
-    responseCount: 0,
-    fileCount: 0,
-    lockedFileCount: 0,
-    responseBytes: 0,
-    responses: null,
-    scope: { type: "network", subjects: [] },
     ...fields
-  }) as Schemas["Search"];
+  });
 
 describe("the searches list", () => {
   let component: ReturnType<typeof mount> | null = null;
@@ -47,7 +39,7 @@ describe("the searches list", () => {
   });
 
   it("keeps its rows and a text selection in them through frames and a reload", async () => {
-    let stored = [search("a", 1), search("b", 2)];
+    let stored = [listed("a", 1), listed("b", 2)];
     const net = fakeNetwork((url) =>
       url.pathname.endsWith("/api/v0/searches") ? stored : undefined
     );
@@ -59,10 +51,10 @@ describe("the searches list", () => {
     const link = a.querySelector("a")!;
     document.getSelection()!.selectAllChildren(link);
 
-    net.frame("search.update", search("a", 1, { fileCount: 5, responseCount: 1 }));
-    net.frame("search.update", search("a", 1, { fileCount: 9, responseCount: 2 }));
+    net.frame("search.update", listed("a", 1, { fileCount: 5, responseCount: 1 }));
+    net.frame("search.update", listed("a", 1, { fileCount: 9, responseCount: 2 }));
     await flushFaked();
-    stored = [search("a", 1, { fileCount: 9 }), search("b", 2), search("c", 3)];
+    stored = [listed("a", 1, { fileCount: 9 }), listed("b", 2), listed("c", 3)];
     await searches.load();
     await flushFaked();
 

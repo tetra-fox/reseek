@@ -6,12 +6,18 @@ const LIMITS = { min: 15, width: 18, max: 28 };
 const REM = 16;
 
 describe("column", () => {
-  it("shows its default width until one is dragged to", () => {
+  it("shows its default width at the browser's text size until one is dragged to", () => {
     expect(column(LIMITS, null, Infinity, REM)).toEqual({
       min: 240,
       max: 448,
       initial: 288,
       width: 288
+    });
+    expect(column(LIMITS, null, Infinity, 20)).toEqual({
+      min: 300,
+      max: 560,
+      initial: 360,
+      width: 360
     });
   });
 
@@ -27,14 +33,5 @@ describe("column", () => {
     expect(narrow.max).toBe(260);
     expect(narrow.initial).toBe(260);
     expect(column(LIMITS, 400, 100, REM)).toMatchObject({ width: 240, max: 240, initial: 240 });
-  });
-
-  it("follows the browser's text size", () => {
-    expect(column(LIMITS, null, Infinity, 20)).toEqual({
-      min: 300,
-      max: 560,
-      initial: 360,
-      width: 360
-    });
   });
 });

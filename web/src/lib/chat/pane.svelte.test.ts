@@ -67,9 +67,12 @@ describe("a room's pane opened by a link", () => {
   it("places the unread line from the read marker and reads to the newest", async () => {
     let answerRooms: () => void = () => {};
     const rooms = new Promise<void>((done) => (answerRooms = done));
+    let roomsAsked: () => void = () => {};
+    const asked = new Promise<void>((done) => (roomsAsked = done));
     const net = fakeNetwork(async (url, method) => {
       if (url.pathname.endsWith("/rooms/joined")) {
-        // the joined rooms come after the room's own messages
+        // the joined rooms answer only once the pane is waiting on them
+        roomsAsked();
         await rooms;
         return [
           {
@@ -93,7 +96,7 @@ describe("a room's pane opened by a link", () => {
     });
     const pane = new MessagePane({ kind: "room", name: "indie" }, () => "me");
     const loading = pane.load();
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await asked;
     answerRooms();
     await loading;
     expect(pane.unreadFrom).toBe(4);

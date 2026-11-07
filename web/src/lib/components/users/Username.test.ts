@@ -2,29 +2,30 @@ import { flushSync, mount, unmount } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { interaction } from "#lib/lists/interaction.svelte.js";
+import { userSummary } from "#lib/testing/fixtures.js";
 import { CLOSE_DELAY_MS, OPEN_DELAY_MS } from "#lib/users/hover.svelte.js";
 
 import Username from "./Username.svelte";
 
-const summary = {
-  username: "alice",
-  known: true,
-  isPrivileged: false,
+const summary = userSummary("alice", {
   group: { name: "friends", source: "config", priority: 2, color: "blue" },
   description: "plays bass\nlikes dub",
   notes: "owes me a record",
-  info: { hasPicture: true, pictureUrl: "/api/v0/users/alice/picture?v=ab" },
-  tags: [],
-  muted: false,
-  buddy: null,
+  info: {
+    fetchedAt: "2026-10-26T10:00:00Z",
+    hasFreeUploadSlot: true,
+    hasPicture: true,
+    pictureUrl: "/api/v0/users/alice/picture?v=ab",
+    queueLength: 0,
+    stale: false,
+    uploadSlots: 1
+  },
   figures: {
     downloads: { succeeded: 1, failed: 0, active: 0, queued: 0 },
     uploads: { succeeded: 2, failed: 0, active: 0, queued: 0 },
     messages: { in: 0, out: 0, unread: 0 }
-  },
-  unreadMessages: 0,
-  activeTransfers: 0
-};
+  }
+});
 
 const pointer = (type: string, pointerType: string) => {
   const event = new MouseEvent(type, {

@@ -3,6 +3,7 @@ import { flushSync, mount, unmount } from "svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import fixture from "#lib/config/fixtures/view.json";
+import { written } from "#lib/testing/fixtures.js";
 import { flush } from "#lib/testing/flush.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 
@@ -51,12 +52,9 @@ describe("the raw configuration file", () => {
   };
 
   it("saves the text against the revision it read and says what the reload did", async () => {
-    const net = await start(() => ({
-      revision: "sha256:two",
-      applied: ["b"],
-      reconnectRequired: [],
-      restartRequired: ["web.port"]
-    }));
+    const net = await start(() =>
+      written({ revision: "sha256:two", applied: ["b"], restartRequired: ["web.port"] })
+    );
     const put = net.requests.find((r) => r.method === "PUT");
     expect(put?.body).toEqual({
       text: "a = 1\nb = 2\n",
@@ -69,16 +67,9 @@ describe("the raw configuration file", () => {
     expect(document.body.textContent).toContain("Restart reseek to apply: web.port.");
   });
 
-  it("asks to reload when the file changed on disk", async () => {
+  it("asks to reload a file changed on disk, and clears the refusal once it is read again", async () => {
     await start(() => ({ status: 409, body: { error: "config file changed on disk" } }));
     expect(document.body.textContent).toContain("changed on disk. Reload it");
-    expect(
-      [...document.querySelectorAll("button")].some((b) => b.textContent?.trim() === "Reload")
-    ).toBe(true);
-  });
-
-  it("clears the refusal once the file is read again", async () => {
-    await start(() => ({ status: 409, body: { error: "config file changed on disk" } }));
     button("Reload")!.click();
     await flush();
     expect(document.body.textContent).not.toContain("changed on disk");
@@ -87,19 +78,7 @@ describe("the raw configuration file", () => {
 
   it("keeps what is typed while a save runs as a change still to save", async () => {
     let answer!: () => void;
-    const net = await start(
-      () =>
-        new Promise(
-          (resolve) =>
-            (answer = () =>
-              resolve({
-                revision: "sha256:two",
-                applied: [],
-                reconnectRequired: [],
-                restartRequired: []
-              }))
-        )
-    );
+    const net = await start(() => new Promise((resolve) => (answer = () => resolve(written()))));
     const editor = EditorView.findFromDOM(document.querySelector<HTMLElement>(".cm-editor")!)!;
     editor.dispatch({ changes: { from: editor.state.doc.length, insert: "c = 3\n" } });
     flushSync();

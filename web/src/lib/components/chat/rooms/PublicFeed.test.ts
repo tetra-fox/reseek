@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { app } from "#lib/app.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { flush } from "#lib/testing/flush.js";
-import { fakeNetwork } from "#lib/testing/network.js";
+import { connected } from "#lib/testing/live.js";
 
 import PublicFeed from "./PublicFeed.svelte";
 
@@ -17,9 +17,7 @@ describe("the public room feed", () => {
 
   it("follows the feed only while it is open, and filters what came", async () => {
     app.state = { server: { isConnected: true } } as never;
-    const net = fakeNetwork(() => undefined);
-    live.start();
-    net.frame("hello", { principal: { name: "me", role: "Administrator" } } as never);
+    const net = connected(() => undefined, "Administrator");
     const feed = mount(PublicFeed, { target: document.body, props: {} });
     await flush();
     expect(live.topics).toContain("public_rooms");

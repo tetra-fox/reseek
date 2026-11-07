@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { flush } from "#lib/testing/flush.js";
+
 import { Loader } from "./loader.svelte";
 import type { Outcome } from "./request";
 
@@ -10,8 +12,6 @@ const slowFetch = () => {
   const answer = (outcome: Outcome<number>) => pending.shift()!(outcome);
   return { fetch, pending, answer };
 };
-
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe("Loader", () => {
   it("takes each answer while loads keep being asked for faster than they come back", async () => {
@@ -25,7 +25,7 @@ describe("Loader", () => {
     expect(pending).toHaveLength(1);
 
     answer({ ok: true, data: 1 });
-    await settle();
+    await flush();
     expect(loader.data).toBe(1);
     expect(loader.loading).toBe(false);
     // the loads asked for while the first ran come to one more
@@ -33,7 +33,7 @@ describe("Loader", () => {
 
     void loader.load();
     answer({ ok: true, data: 2 });
-    await settle();
+    await flush();
     expect(loader.data).toBe(2);
 
     answer({ ok: true, data: 3 });

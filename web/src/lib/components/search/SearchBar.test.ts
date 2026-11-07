@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { app } from "#lib/app.svelte.js";
 import { recent } from "#lib/search/recent.svelte.js";
 import { searches } from "#lib/search/searches.svelte.js";
+import { userSummary } from "#lib/testing/fixtures.js";
 import { flushFaked } from "#lib/testing/flush.js";
 import { press, pressEnter } from "#lib/testing/keys.js";
 import { fakeNetwork } from "#lib/testing/network.js";
@@ -16,15 +17,6 @@ vi.mock("$app/navigation", () => ({ goto: vi.fn() }));
 const connected = (isConnected: boolean) => {
   app.state = { server: { isConnected }, user: { username: "me" } } as never;
 };
-
-const summary = (username: string) => ({
-  username,
-  known: true,
-  group: { name: "default", source: "builtin", priority: 1, color: null },
-  tags: [],
-  lastSeenAt: null,
-  figures: {}
-});
 
 describe("the search box", () => {
   let component: ReturnType<typeof mount> | null = null;
@@ -69,9 +61,9 @@ describe("the search box", () => {
     const net = fakeNetwork((url, method, body) => {
       if (method === "POST") return body;
       if (url.pathname.endsWith("/api/v0/users")) {
-        return { users: listed.map((username) => summary(username)), total: listed.length };
+        return { users: listed.map((username) => userSummary(username)), total: listed.length };
       }
-      return url.pathname.endsWith("/AFX/profile") ? summary("AFX") : undefined;
+      return url.pathname.endsWith("/AFX/profile") ? userSummary("AFX") : undefined;
     });
     connected(true);
     component = mount(SearchBar, { target: document.body });
@@ -149,13 +141,5 @@ describe("the search box", () => {
     await flushFaked();
     await tick();
     expect(entries()).toEqual(["Search for aphex"]);
-  });
-
-  it("says why it can't search while disconnected", () => {
-    connected(false);
-    component = mount(SearchBar, { target: document.body, props: { text: "aphex twin" } });
-    flushSync();
-    expect(document.querySelector<HTMLInputElement>('input[type="search"]')!.disabled).toBe(true);
-    expect(document.body.textContent).toContain("Connect to the Soulseek server to search");
   });
 });

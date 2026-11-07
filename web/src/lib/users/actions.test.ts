@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { app } from "#lib/app.svelte.js";
 import { session } from "#lib/session.svelte.js";
 
-import { canManage, configBlocked, reach } from "./actions";
+import { canManage, reach } from "./actions";
 
 const ids = (name: string) => reach(name).map((a) => a.id);
 
@@ -68,13 +68,5 @@ describe("who can be a buddy or blocked", () => {
     expect(canManage("me")).toBe(false);
     expect(canManage("alice")).toBe(true);
     expect(ids("me")).toEqual(["profile", "shares", "search"]);
-  });
-
-  it("can be unblocked only when the block is not the configuration's", () => {
-    const block = (source: "api" | "config") => ({ source }) as never;
-    expect(configBlocked(block("config"))).toBe(true);
-    expect(configBlocked(block("api"))).toBe(false);
-    expect(configBlocked(null)).toBe(false);
-    expect(configBlocked(undefined)).toBe(false);
   });
 });

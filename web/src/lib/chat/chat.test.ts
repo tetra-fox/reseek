@@ -4,11 +4,25 @@ import { toasts } from "#lib/feedback/toast.svelte.js";
 import { DEBOUNCE_MS, live } from "#lib/live/live.svelte.js";
 import { conversation } from "#lib/testing/fixtures.js";
 import { flush } from "#lib/testing/flush.js";
+import { connected } from "#lib/testing/live.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 import { users } from "#lib/users/users.svelte.js";
 
 import { chat } from "./chat.svelte";
 import { ChatSearch } from "./search/search.svelte";
+
+/** a notice from the server */
+const notice = {
+  localId: 3,
+  id: 3,
+  timestamp: "2026-10-26T10:00:00Z",
+  username: "server",
+  direction: "In",
+  message: "user bob has not enabled private room add",
+  isAcknowledged: false,
+  wasReplayed: false,
+  autoReply: false
+} as const;
 
 describe("the chat store", () => {
   afterEach(() => {
@@ -43,20 +57,7 @@ describe("the chat store", () => {
   });
 
   it("holds the server's notices apart from the conversations", async () => {
-    const notice = {
-      localId: 3,
-      id: 3,
-      timestamp: "2026-10-26T10:00:00Z",
-      username: "server",
-      direction: "In",
-      message: "User bob is now a member of room jazz",
-      isAcknowledged: false,
-      wasReplayed: false,
-      autoReply: false
-    } as const;
-    const net = fakeNetwork(() => undefined);
-    live.start();
-    net.frame("hello", { principal: { name: "me", role: "Administrator" } } as never);
+    const net = connected(() => undefined, "Administrator");
     net.frame("conversations.message", { username: "server", message: notice });
     net.frame("conversations.update", {
       conversation: { ...conversation("server"), isServerNotice: true, lastMessage: notice }
@@ -83,26 +84,15 @@ describe("the chat store", () => {
   });
 
   it("keeps a notice that comes while a read from before it is on its way", async () => {
-    const notice = {
-      localId: 3,
-      id: 3,
-      timestamp: "2026-10-26T10:00:00Z",
-      username: "server",
-      direction: "In",
-      message: "user bob has not enabled private room add",
-      isAcknowledged: false,
-      wasReplayed: false,
-      autoReply: false
-    } as const;
     // the read started before the notice was stored, so it finds no conversation
     let answer = (_reply: undefined) => {};
-    const net = fakeNetwork((url) =>
-      url.pathname.endsWith("/conversations/server")
-        ? new Promise((resolve) => (answer = resolve))
-        : undefined
+    const net = connected(
+      (url) =>
+        url.pathname.endsWith("/conversations/server")
+          ? new Promise((resolve) => (answer = resolve))
+          : undefined,
+      "Administrator"
     );
-    live.start();
-    net.frame("hello", { principal: { name: "me", role: "Administrator" } } as never);
     net.frame("conversations.list", []);
     await flush();
     net.frame("conversations.message", { username: "server", message: notice });
@@ -115,14 +105,12 @@ describe("the chat store", () => {
 
   it("keeps a conversation that opens while a read from before it is on its way", async () => {
     let answer: ((list: unknown) => void) | undefined;
-    const net = fakeNetwork((url) => {
+    const net = connected((url) => {
       if (url.pathname.endsWith("/api/v0/conversations")) {
         return new Promise((resolve) => (answer = resolve));
       }
       return url.pathname.endsWith("/rooms/joined") ? [] : undefined;
-    });
-    live.start();
-    net.frame("hello", { principal: { name: "me", role: "Administrator" } } as never);
+    }, "Administrator");
     const reading = chat.load();
     await vi.waitFor(() => expect(answer).toBeDefined());
     // carol writes for the first time after the daemon read the list
@@ -134,17 +122,6 @@ describe("the chat store", () => {
   });
 
   it("reads a notice a stream that resumed to add the conversations never sends", async () => {
-    const notice = {
-      localId: 3,
-      id: 3,
-      timestamp: "2026-10-26T10:00:00Z",
-      username: "server",
-      direction: "In",
-      message: "user bob has not enabled private room add",
-      isAcknowledged: false,
-      wasReplayed: false,
-      autoReply: false
-    } as const;
     let stored: typeof notice | null = null;
     const net = fakeNetwork((url) => {
       if (url.pathname.endsWith("/conversations/server")) {

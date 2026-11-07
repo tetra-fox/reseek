@@ -72,7 +72,7 @@ export const arrivalMode = (a: Arrival, o: NotifyOptions): NotifyMode => {
 };
 
 /** Whether a notification in `mode` goes out, `seen` when what it tells of is already in view */
-export const shouldNotify = (mode: NotifyMode, seen: boolean, onlyWhenHidden: boolean) =>
+const shouldNotify = (mode: NotifyMode, seen: boolean, onlyWhenHidden: boolean) =>
   mode !== "off" && !(onlyWhenHidden && seen);
 
 /**

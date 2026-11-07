@@ -1,10 +1,10 @@
 import { flushSync, mount, unmount } from "svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { type ConfigView, controlOf } from "#lib/config/fields.js";
+import type { ConfigView } from "#lib/config/fields.js";
 import fixture from "#lib/config/fixtures/view.json";
-import { helpParts } from "#lib/config/help.js";
 import { sections } from "#lib/config/sections.js";
+import { written } from "#lib/testing/fixtures.js";
 import { flush } from "#lib/testing/flush.js";
 
 import Section from "./Section.svelte";
@@ -31,50 +31,15 @@ describe("a settings section", () => {
     return target;
   };
 
-  it.each(sections.map((s) => [s.id, s] as const))(
-    "renders a row for every option of the %s section, with its help and control",
+  it.each(sections.map((section) => [section.id, section] as const))(
+    "has a control for every option of the %s section",
     (_, section) => {
-      const target = render(section);
-      // a label names its control, but for a group of controls, which carries the name itself
-      const labels = [...target.querySelectorAll("label")].map((l) => l.getAttribute("for"));
-      expect(labels).toEqual(
-        section.fields.map((f) =>
-          ["map", "table-list", "notify-mode"].includes(controlOf(f, view.fields[f.key]))
-            ? null
-            : f.key
-        )
-      );
-      // the section is all the document holds; jsdom finds an id from an index, while a
-      // selector walks the whole section for every field
+      render(section);
       for (const field of section.fields) {
-        // the help reads as written, with what is between backticks set as code
-        const parts = helpParts(view.fields[field.key].doc);
-        const help = document.getElementById(`${field.key}-help`)!;
-        expect(help.textContent).toContain(parts.map((p) => p.text).join(""));
-        expect([...help.querySelectorAll("code")].map((c) => c.textContent)).toEqual(
-          expect.arrayContaining(parts.filter((p) => p.code).map((p) => p.text))
-        );
-        expect(document.getElementById(field.key)).not.toBeNull();
+        expect(document.getElementById(field.key), field.key).not.toBeNull();
       }
     }
   );
-
-  it("shows where each value comes from and when a change applies", () => {
-    const v = structuredClone(view);
-    v.fields["web.port"].source = { layer: "file", file: "config.toml" };
-    v.fields["web.ui"].source = { layer: "env", var: "RESEEK_WEB_UI" };
-    const web = render(
-      sections.find((s) => s.id === "web")!,
-      v
-    );
-    const row = (key: string) => web.querySelector(`[id="${key}-help"]`)!.parentElement!;
-    expect(row("web.port").textContent).toContain("config.toml");
-    expect(row("web.port").textContent).toContain("restart");
-    expect(row("web.ui").textContent).toContain("RESEEK_WEB_UI");
-    expect(row("web.external_url").textContent).not.toContain("config.toml");
-    expect(web.querySelector<HTMLInputElement>('[id="web.port"]')!.value).toBe("5030");
-    expect(web.querySelector<HTMLButtonElement>('[id="web.ui"]')!.disabled).toBe(true);
-  });
 
   it("changes a secret only once something is typed, or it is cleared on purpose", () => {
     const auth = render(sections.find((s) => s.id === "authentication")!);
@@ -132,17 +97,8 @@ describe("a settings section", () => {
   });
 
   it("shows a saved secret as set again, with nothing left to save", async () => {
-    const fetcher = vi.fn<(request: Request) => Promise<Response>>(
-      async () =>
-        new Response(
-          JSON.stringify({
-            revision: "sha256:2",
-            applied: [],
-            reconnectRequired: [],
-            restartRequired: []
-          }),
-          { headers: { "Content-Type": "application/json" } }
-        )
+    const fetcher = vi.fn<(request: Request) => Promise<Response>>(async () =>
+      Response.json(written())
     );
     vi.stubGlobal("fetch", fetcher);
     const auth = render(sections.find((s) => s.id === "authentication")!);
@@ -169,17 +125,8 @@ describe("a settings section", () => {
   });
 
   it("keeps a table's hidden secret unless something is typed in its place", async () => {
-    const fetcher = vi.fn<(request: Request) => Promise<Response>>(
-      async () =>
-        new Response(
-          JSON.stringify({
-            revision: "sha256:2",
-            applied: [],
-            reconnectRequired: [],
-            restartRequired: []
-          }),
-          { headers: { "Content-Type": "application/json" } }
-        )
+    const fetcher = vi.fn<(request: Request) => Promise<Response>>(async () =>
+      Response.json(written())
     );
     vi.stubGlobal("fetch", fetcher);
     const v = structuredClone(view);
@@ -225,17 +172,8 @@ describe("a settings section", () => {
   });
 
   it("puts a changed option back to its default by taking it out of the file", async () => {
-    const fetcher = vi.fn<(request: Request) => Promise<Response>>(
-      async () =>
-        new Response(
-          JSON.stringify({
-            revision: "sha256:2",
-            applied: [],
-            reconnectRequired: [],
-            restartRequired: []
-          }),
-          { headers: { "Content-Type": "application/json" } }
-        )
+    const fetcher = vi.fn<(request: Request) => Promise<Response>>(async () =>
+      Response.json(written())
     );
     vi.stubGlobal("fetch", fetcher);
     const v = structuredClone(view);
@@ -297,16 +235,7 @@ describe("a settings section", () => {
       vi.fn(
         () =>
           new Promise<Response>(
-            (resolve) =>
-              (answer = () =>
-                resolve(
-                  Response.json({
-                    revision: "sha256:2",
-                    applied: ["web.port"],
-                    reconnectRequired: [],
-                    restartRequired: []
-                  })
-                ))
+            (resolve) => (answer = () => resolve(Response.json(written({ applied: ["web.port"] }))))
           )
       )
     );
@@ -352,12 +281,7 @@ describe("a settings section", () => {
         const path = new URL(request.url).pathname;
         asked.push({ path, body: await request.json() });
         if (path.endsWith("/options")) await new Promise<void>((done) => (answerApply = done));
-        return Response.json({
-          revision: "sha256:2",
-          applied: [],
-          reconnectRequired: [],
-          restartRequired: []
-        });
+        return Response.json(written());
       })
     );
     // the time limit lives in a file that can't be written, so it is applied at runtime

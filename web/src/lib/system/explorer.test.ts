@@ -33,5 +33,11 @@ describe("the file explorer's lines", () => {
       "A.flac",
       "z.flac"
     ]);
+    expect(entries(listing, [], "date", "asc").map((l) => l.name)).toEqual([
+      "b10",
+      "b9",
+      "z.flac",
+      "A.flac"
+    ]);
   });
 });

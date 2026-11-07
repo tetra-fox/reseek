@@ -55,6 +55,13 @@ describe("your own profile page", () => {
     );
     return view;
   };
+  /** Mounts the page on the profile the test's network answers */
+  const open = async () => {
+    // the page asks for the profile once and keeps it, so it is read again for each test
+    await ownProfile.loader.load();
+    component = mount(MyProfile, { target: document.body });
+    await flush();
+  };
   const type = (text: string) => {
     const textarea = document.querySelector<HTMLTextAreaElement>("#profile-text")!;
     textarea.value = text;
@@ -79,8 +86,7 @@ describe("your own profile page", () => {
       if (method === "PUT") return { status: 204 };
       return undefined;
     });
-    component = mount(MyProfile, { target: document.body });
-    await flush();
+    await open();
 
     expect(document.querySelector<HTMLTextAreaElement>("#profile-text")!.value).toBe("hello");
     type("plays bass\nlikes dub");
@@ -120,8 +126,7 @@ describe("your own profile page", () => {
       if (method === "PUT") return { status: 204 };
       return undefined;
     });
-    component = mount(MyProfile, { target: document.body });
-    await flush();
+    await open();
     let release!: () => void;
     reread = new Promise((done) => (release = done));
     type("plays bass");
@@ -150,8 +155,7 @@ describe("your own profile page", () => {
       if (method === "PUT") return { status: 204 };
       return undefined;
     });
-    component = mount(MyProfile, { target: document.body });
-    await flush();
+    await open();
     type("plays the tuba");
     pickPicture();
     saveButton().click();
@@ -177,8 +181,7 @@ describe("your own profile page", () => {
       }
       return undefined;
     });
-    component = mount(MyProfile, { target: document.body });
-    await flush();
+    await open();
 
     const dislike = document.querySelector<HTMLInputElement>('[aria-label="Add a dislike"]')!;
     dislike.value = " jazz ";
@@ -198,23 +201,5 @@ describe("your own profile page", () => {
     document.querySelector<HTMLButtonElement>('[aria-label="Remove jazz"]')!.click();
     await flush();
     expect(document.activeElement).toBe(dislike);
-  });
-
-  it("shows the interests without a way to change them while remote configuration is off", async () => {
-    asAdmin();
-    fakeNetwork((url, method) => {
-      if (url.pathname.endsWith("/api/v0/options/view")) return fixture;
-      if (url.pathname.endsWith("/api/v0/profile") && method === "GET") return own;
-      return undefined;
-    });
-    // the profile is fetched once for the page and kept, so it still holds what the tests
-    // before saved
-    await ownProfile.loader.load();
-    component = mount(MyProfile, { target: document.body });
-    await flush();
-    const liked = document.querySelector('[aria-label="Interests"]');
-    expect(liked?.textContent).toContain("jazz");
-    expect(document.querySelector('[aria-label="Remove jazz"]')).toBeNull();
-    expect(document.querySelector('[aria-label="Add a dislike"]')).toBeNull();
   });
 });

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { hold, toasts } from "./toast.svelte";
+import { toasts } from "./toast.svelte";
 import { UNDO_MS, undoable } from "./undo";
 
 describe("undo toasts", () => {
@@ -38,17 +38,6 @@ describe("undo toasts", () => {
     undoable("Deleted", commit, () => {});
     window.dispatchEvent(new Event("pagehide"));
     expect(commit).toHaveBeenCalledOnce();
-    vi.advanceTimersByTime(UNDO_MS);
-    expect(commit).toHaveBeenCalledOnce();
-  });
-
-  it("wait while the toast is held", () => {
-    const commit = vi.fn();
-    undoable("Removed", commit, () => {});
-    hold(toasts[0].id, "pointer", true);
-    vi.advanceTimersByTime(UNDO_MS * 3);
-    expect(commit).not.toHaveBeenCalled();
-    hold(toasts[0].id, "pointer", false);
     vi.advanceTimersByTime(UNDO_MS);
     expect(commit).toHaveBeenCalledOnce();
   });

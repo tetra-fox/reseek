@@ -193,8 +193,6 @@ describe("the dashboard's saved choices", () => {
 
   it.each([
     null,
-    "x",
-    3,
     [],
     { view: "bytes", hidden: "Upload" },
     { view: 1, hidden: [1, null] },

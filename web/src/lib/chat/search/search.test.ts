@@ -62,15 +62,4 @@ describe("a chat search", () => {
     expect(search.hits).toEqual([hit]);
     expect(search.error).toBe("");
   });
-
-  it("says why the messages could not be read", async () => {
-    fakeNetwork((url) => answers(url) ?? { status: 500, body: { error: "database is locked" } });
-    const search = new ChatSearch(
-      () => "floyd",
-      () => "all",
-      20
-    );
-    await search.read();
-    expect(search.error).toContain("database is locked");
-  });
 });

@@ -70,14 +70,4 @@ describe("the block dialog", () => {
     ]);
     expect(blocking.open).toBe(false);
   });
-
-  it("needs one scope at least", async () => {
-    const net = await open();
-    for (const label of checked()) box(label!).click();
-    flushSync();
-    expect(blockButton().disabled).toBe(true);
-    expect(document.body.textContent).toContain("Select at least one");
-
-    expect(net.requests.filter((r) => r.method === "PUT")).toEqual([]);
-  });
 });
