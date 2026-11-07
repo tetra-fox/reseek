@@ -5,9 +5,12 @@
   import ErrorSegment from "#lib/components/ErrorSegment.svelte";
   import Toaster from "#lib/components/shell/Toaster.svelte";
   import TooltipHost from "#lib/components/ui/TooltipHost.svelte";
+  import { followPointer } from "#lib/ui/hover.js";
   import { SCREEN_FAILED } from "#lib/wording.js";
 
   let { children } = $props();
+
+  $effect(followPointer);
 </script>
 
 <!-- the theme follows the OS until the user picks one, which is then kept in this browser -->

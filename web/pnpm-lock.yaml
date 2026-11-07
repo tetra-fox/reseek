@@ -26,6 +26,9 @@ importers:
       openapi-fetch:
         specifier: ^0.17.0
         version: 0.17.0
+      super-hover:
+        specifier: ^0.2.2
+        version: 0.2.2
     devDependencies:
       '@codemirror/commands':
         specifier: ^6.11.1
@@ -1489,6 +1492,17 @@ packages:
   style-to-object@1.0.14:
     resolution: {integrity: sha512-LIN7rULI0jBscWQYaSswptyderlarFkjQ+t79nzty8tcIAceVomEVlLzH5VP4Cmsv6MtKhs7qaAiwlcp+Mgaxw==}
 
+  super-hover@0.2.2:
+    resolution: {integrity: sha512-oqwg/qQIJdN1X519TAjYCIH5WrcFoBn1woMl6CODcwoZ4O5/zjJETin5R9Mk+6pDFiFpWwO7+ejxSUWXsnODAw==}
+    peerDependencies:
+      react: ^18.0.0 || ^19.0.0
+      vue: ^3.4.0
+    peerDependenciesMeta:
+      react:
+        optional: true
+      vue:
+        optional: true
+
   supports-color@10.2.2:
     resolution: {integrity: sha512-SS+jx45GF1QjgEXQx4NJZV9ImqmO2NPz5FNsIHrsDjh2YsHnawpan7SNQ1o8NuhrbHZy9AZhIoCUiCeaW/C80g==}
     engines: {node: '>=18'}
@@ -2875,6 +2889,8 @@ snapshots:
   style-to-object@1.0.14:
     dependencies:
       inline-style-parser: 0.2.7
+
+  super-hover@0.2.2: {}
 
   supports-color@10.2.2: {}
 

@@ -8,10 +8,11 @@
 
 /* inside a row someone is using: the pointer is on it, the keys are on it or on a control in it, or
    one of its menus is open. A row's control keeps no state from a mouse click, which leaves focus
-   on it */
+   on it. Rows take the pointer from data-super-hover-active, not :hover, which holds still while a
+   list scrolls; lib/ui/hover.ts lists every element a rule here keys on it */
 @custom-variant row-active {
   @media (hover: hover) {
-    &:is(:where(.group, [data-line]):hover *) {
+    &:is(:where(.group, [data-line])[data-super-hover-active] *) {
       @slot;
     }
   }
@@ -489,7 +490,7 @@
    deepens and never hides */
 @utility line-tint {
   @media (hover: hover) {
-    &:hover {
+    &[data-super-hover-active] {
       background-color: var(--color-hover);
     }
   }
@@ -503,7 +504,7 @@
     background-color: color-mix(in oklab, var(--color-accent-soft) 60%, transparent);
   }
   @media (hover: hover) {
-    &[aria-selected="true"]:hover {
+    &[aria-selected="true"][data-super-hover-active] {
       background-color: var(--color-accent-soft);
     }
   }
@@ -733,7 +734,7 @@
     /* where the pointer can hover, as tailwind's hover variant does: a touch screen would keep
        the tint on the row last tapped */
     @media (hover: hover) {
-      tbody tr:hover {
+      tbody tr[data-super-hover-active] {
         background: var(--color-hover);
       }
     }
