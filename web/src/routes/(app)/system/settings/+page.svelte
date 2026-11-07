@@ -86,15 +86,20 @@
 
   // the section in view, which the side list marks
   let current = $state<string | null>(null);
-  /** the line under the sticky header that a section's top passes to become the current one */
-  const LINE = 96;
+  /**
+   * the line, measured down from the content area's top, that a section's top passes to become
+   * the current one: a little below where a section scrolled to lands, past its scroll margin
+   */
+  const LINE = 40;
   const spy = () => {
+    const box = content.scroller;
+    if (!box) return;
+    const origin = box.getBoundingClientRect().top;
     const tops = all
       .map((s) => ({ id: s.id, el: document.getElementById(s.id) }))
       .filter((s): s is { id: string; el: HTMLElement } => !!s.el && !s.el.hidden)
-      .map((s) => ({ id: s.id, top: s.el.getBoundingClientRect().top }));
-    const box = content.scroller;
-    const end = !!box && box.scrollTop + box.clientHeight >= box.scrollHeight - 4;
+      .map((s) => ({ id: s.id, top: s.el.getBoundingClientRect().top - origin }));
+    const end = box.scrollTop + box.clientHeight >= box.scrollHeight - 4;
     current = currentSection(tops, LINE, end);
   };
   let frame = 0;

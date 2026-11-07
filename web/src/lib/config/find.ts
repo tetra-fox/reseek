@@ -18,9 +18,9 @@ export const fieldMatches = (field: Field, info: FieldView | undefined, query: s
 };
 
 /**
- * The section the reader is in: the last one whose top has reached `line` (the line under the
- * sticky header), the first while none has; the last once the page is scrolled to its end, so a
- * short section at the bottom can still be the current one
+ * The section the reader is in: the last one whose top has reached `line`, the first while none
+ * has; the last once the page is scrolled to its end, so a short section at the bottom can still
+ * be the current one
  */
 export const currentSection = (
   tops: { id: string; top: number }[],
