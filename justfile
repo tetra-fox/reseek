@@ -49,8 +49,8 @@ dev-web: web-install
 build: web-build
     cargo build --release
 
-# the static release binaries for linux x86_64 and aarch64 into dist/: the daemon with the ui
-# built in, and the relay agent
+# the daemon with the ui built in, and the relay agent
+[doc("the static release binaries for linux x86_64 and aarch64 into dist/")]
 release:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -61,8 +61,8 @@ release:
       install -m755 "$out/bin/reseek-agent" "dist/reseek-agent-linux-$arch"
     done
 
-# the universal macos binaries into dist/: the daemon with the ui built in, and the relay agent;
-# run on a mac
+# the daemon with the ui built in, and the relay agent
+[doc("the universal macos binaries into dist/, on a mac")]
 release-macos: web-build
     #!/usr/bin/env bash
     set -euo pipefail
@@ -101,20 +101,24 @@ test: web-install
     @[ -n "$({{ just_executable() }} --justfile {{ justfile() }} soulfind-bin)" ] || echo "soulfind not found at SOULFIND_BIN or on PATH: the soulfind suites were skipped"
     pnpm --dir web test
 
-# fmt --check, clippy -D warnings, oxlint, oxfmt --check, svelte-check
+# fmt --check, clippy -D warnings, oxlint, oxfmt --check, svelte-check, and the UI's API types
+# and settings fixture still what the daemon generates
+[doc("formatting, clippy, the UI's linters and types, and the generated files up to date")]
 lint: web-install
     cargo fmt --all --check
     cargo fmt --manifest-path fuzz/Cargo.toml --all --check
     cargo clippy {{ tested }} --all-targets -- -D warnings
     pnpm --dir web lint
     pnpm --dir web check
+    pnpm --dir web api-check
+    @view="$({{ just_executable() }} --justfile {{ justfile() }} config-view)" \
+      || { echo "the settings fixture could not be generated" >&2; exit 1; }; \
+      printf '%s\n' "$view" | diff -q web/src/lib/config/fixtures/view.json - > /dev/null \
+      || { echo "web/src/lib/config/fixtures/view.json is stale, run \`just config-fixture\`" >&2; exit 1; }
 
-# regenerate api/openapi.json from the handlers
-api-spec:
-    cargo run -q -p reseek --example openapi > api/openapi.json
-
-# regenerate web/src/lib/api/schema.d.ts from api/openapi.json
+# regenerate api/openapi.json from the handlers, then web/src/lib/api/schema.d.ts from it
 api: web-install
+    cargo run -q -p reseek --example openapi > api/openapi.json
     pnpm --dir web api
 
 # regenerate web/src/lib/config/fixtures/view.json, the settings view of the default configuration
@@ -127,16 +131,6 @@ config-fixture:
 config-view:
     @cargo build -q {{ tested }} --profile test --example config_view
     @"${CARGO_TARGET_DIR:-target}/debug/examples/config_view"
-
-# fail if api/openapi.json no longer matches the handlers, the UI's types no longer match it, or
-# the settings fixture no longer matches the daemon's options
-api-check: web-install
-    cargo nextest run {{ tested }} -E "package(reseek) & test(the_committed_openapi_document_is_current)"
-    pnpm --dir web api-check
-    @view="$({{ just_executable() }} --justfile {{ justfile() }} config-view)" \
-      || { echo "the settings fixture could not be generated" >&2; exit 1; }; \
-      printf '%s\n' "$view" | diff -q web/src/lib/config/fixtures/view.json - > /dev/null \
-      || { echo "web/src/lib/config/fixtures/view.json is stale, run \`just config-fixture\`" >&2; exit 1; }
 
 # the built UI served by the daemon, driven in a browser
 web-e2e: (web-playwright "e2e")
@@ -179,7 +173,7 @@ soulfind-bin:
     echo "$soulfind"
 
 # the gate for every push
-ci: lint test api-check web-e2e
+ci: lint test web-e2e
 
 # soulfind on its default port 2242 with its data under .dev/soulfind, for trying things by hand
 soulfind:
@@ -188,8 +182,8 @@ soulfind:
 
 # the fuzz recipes need nightly cargo and cargo-fuzz: run them inside `nix develop .#fuzz`
 
-# write the round-trip vectors into fuzz/corpus/<target> as seeds, and an ALAC file for the WAV
-# target
+# and an ALAC file for the WAV target
+[doc("write the round-trip vectors into fuzz/corpus/<target> as seeds")]
 fuzz-seed:
     cargo test -p soulseek-proto --lib -- --ignored --exact testing::write_fuzz_corpus
     mkdir -p fuzz/corpus/wav_stream

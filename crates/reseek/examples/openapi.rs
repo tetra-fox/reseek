@@ -1,4 +1,4 @@
-//! Prints the API's OpenAPI document, which `just api-spec` writes to `api/openapi.json`.
+//! Prints the API's OpenAPI document, which `just api` writes to `api/openapi.json`.
 
 fn main() {
   let document = reseek::api::openapi()

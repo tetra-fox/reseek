@@ -15,7 +15,7 @@ fn the_committed_openapi_document_is_current() {
   let committed = std::fs::read_to_string(path).unwrap_or_default();
   assert!(
     committed == generated,
-    "api/openapi.json does not match the handlers; run `just api-spec`"
+    "api/openapi.json does not match the handlers; run `just api`"
   );
 }
 

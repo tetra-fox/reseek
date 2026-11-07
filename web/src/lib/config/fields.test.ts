@@ -6,7 +6,7 @@ import { sections, unlisted, valueAt } from "./sections";
 
 /**
  * The daemon's options view of the default configuration with an empty config.toml, written by
- * `just config-fixture`; `just api-check` fails once the daemon's options differ from it
+ * `just config-fixture`; `just lint` fails once the daemon's options differ from it
  */
 const view = fixture as unknown as ConfigView;
 
