@@ -34,7 +34,7 @@ describe("Pictures", () => {
     });
     const pictures = new Pictures({ kind: "download", username: "alice", id: "x" }, layout);
     pictures.want(0, 20);
-    await vi.waitFor(() => expect(pictures.lost).toBe("the spectrogram is no longer kept"));
+    await vi.waitFor(() => expect(pictures.lost.tile).toBe("the spectrogram is no longer kept"));
     await vi.waitFor(() => expect(asked).toHaveLength(4));
     // a pan over the same stretch, and on to the next, asks only for what was not asked before
     for (let i = 0; i < 10; i++) pictures.want(i, 20 + i);

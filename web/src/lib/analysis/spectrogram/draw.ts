@@ -341,6 +341,12 @@ export const drawTimeline = (
     });
   }
 
+  // the cursor's time sits on the axis, and a time label it would cover is left out
+  const across = acrossOf(view, scene.cursor);
+  const cursor = across >= 0 && across <= 1 ? Math.round(spec.x + across * spec.width) : null;
+  const cursorTime = formatTime(scene.cursor, true);
+  const flag = cursor === null ? null : chipSpan(context, cursorTime, cursor, stage);
+
   context.textAlign = "center";
   context.textBaseline = "top";
   const ticks = timeTicks(view, (5 * rem) / axis.width);
@@ -351,7 +357,9 @@ export const drawTimeline = (
     context.fillRect(x, axis.y, dpr, 0.25 * rem);
     const label = formatTime(t, tenths);
     const w = context.measureText(label).width / 2;
-    context.fillText(label, Math.min(stage.width - w, Math.max(w, x)), axis.y + 0.3 * rem);
+    const middle = Math.min(stage.width - w, Math.max(w, x));
+    if (flag && middle + w > flag.left && middle - w < flag.left + flag.width) continue;
+    context.fillText(label, middle, axis.y + 0.3 * rem);
   }
 
   // the line under the pointer, under the cursor's
@@ -365,16 +373,25 @@ export const drawTimeline = (
     context.globalAlpha = 1;
   }
 
-  const across = acrossOf(view, scene.cursor);
-  if (across >= 0 && across <= 1) {
-    const x = Math.round(spec.x + across * spec.width);
+  if (cursor !== null) {
     context.fillStyle = palette.cursor;
     const width = Math.max(1, Math.round(1.5 * dpr));
-    context.fillRect(x - Math.floor(width / 2), spec.y, width, wave.y + wave.height - spec.y);
-    chip(context, formatTime(scene.cursor, true), x, axis.y + 0.15 * rem, stage, palette, true);
+    context.fillRect(cursor - Math.floor(width / 2), spec.y, width, wave.y + wave.height - spec.y);
+    chip(context, cursorTime, cursor, axis.y + 0.15 * rem, stage, palette, true);
   }
 
   if (hovered) readout(context, stage, scene, overview, shown, detail);
+};
+
+/** Where the box of a label at `x` goes across the canvas, kept on it */
+const chipSpan = (context: CanvasRenderingContext2D, text: string, x: number, stage: Stage) => {
+  const { rem } = stage;
+  context.font = `${Math.round(0.7 * rem)}px ui-sans-serif, system-ui, sans-serif`;
+  const width = context.measureText(text).width + 0.6 * rem;
+  return {
+    left: Math.min(stage.width - width, Math.max(stage.spectrogram.x, x - width / 2)),
+    width
+  };
 };
 
 /** A label in a box at `x`, kept on the canvas */
@@ -388,10 +405,8 @@ const chip = (
   dark: boolean
 ) => {
   const { rem } = stage;
-  context.font = `${Math.round(0.7 * rem)}px ui-sans-serif, system-ui, sans-serif`;
-  const width = context.measureText(text).width + 0.6 * rem;
+  const { left, width } = chipSpan(context, text, x, stage);
   const height = 1.1 * rem;
-  const left = Math.min(stage.width - width, Math.max(stage.spectrogram.x, x - width / 2));
   context.fillStyle = dark ? palette.cursor : palette.plot;
   context.globalAlpha = dark ? 1 : 0.9;
   context.fillRect(left, y, width, height);

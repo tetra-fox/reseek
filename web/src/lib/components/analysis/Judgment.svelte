@@ -13,7 +13,7 @@
   import Segmented from "#lib/components/ui/Segmented.svelte";
   import Textarea from "#lib/components/ui/Textarea.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
-  import { formatDate } from "#lib/format.js";
+  import { dateTime } from "#lib/format.js";
   import { session } from "#lib/session.svelte.js";
 
   // the user's own judgment of the file, which lists show in place of the analyzer's reading:
@@ -56,9 +56,10 @@
   };
 </script>
 
-<fieldset class="flex flex-col gap-2" disabled={!write || saving}>
+<fieldset class="flex max-w-2xl flex-col gap-2" disabled={!write || saving}>
   <legend class="mb-1 text-sm font-medium">Your judgment</legend>
   <Segmented
+    class="self-start"
     size="sm"
     label="Your judgment"
     options={CHOICES}
@@ -84,7 +85,7 @@
       <span class="flex items-center gap-1 text-sm text-success" role="status"
         ><CheckIcon class="size-4" />Saved</span>
     {:else if report.override}
-      <span class="text-xs text-fg-muted">Saved {formatDate(report.override.at)}</span>
+      <span class="text-xs text-fg-muted">Saved {dateTime(report.override.at)}</span>
     {/if}
   </div>
 </fieldset>

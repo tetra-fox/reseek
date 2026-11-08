@@ -99,8 +99,8 @@ export class Pictures {
   spectra = $state.raw<Spectra | null>(null);
   /** why the overview could not be loaded, empty while it loads or once it has */
   error = $state("");
-  /** why a piece beside the overview could not be loaded: the waveform, the spectra or a tile */
-  lost = $state("");
+  /** why a piece beside the overview could not be loaded, by piece; `tile` for the latest tile */
+  lost = $state<{ waveform?: string; spectra?: string; tile?: string }>({});
   version = $state(0);
   readonly #tiles = new Map<string, Cells>();
   readonly #wanted: string[] = [];
@@ -137,12 +137,12 @@ export class Pictures {
     if (this.error) return;
     // without the waveform its strip stays hatched as unread, and the view says why
     if (waveform.ok) this.waveform = waveformCells(waveform.data);
-    else this.lost = waveform.error;
+    else this.lost.waveform = waveform.error;
     if (spectra.ok) {
       const { header, bytes } = unframe<Schemas["WindowSpectra"]>(spectra.data);
       this.spectra = { ...header, bytes };
     } else {
-      this.lost = spectra.error;
+      this.lost.spectra = spectra.error;
     }
     this.version++;
   }
@@ -198,7 +198,7 @@ export class Pictures {
         // keeps the overview there and says why
         if (!outcome.ok) {
           this.#failed.add(key);
-          this.lost = outcome.error;
+          this.lost.tile = outcome.error;
         } else {
           this.#tiles.set(
             key,

@@ -20,7 +20,7 @@
   import Button from "#lib/components/ui/Button.svelte";
   import Segmented from "#lib/components/ui/Segmented.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
-  import { formatDuration } from "#lib/format.js";
+  import { formatCount, formatDuration } from "#lib/format.js";
 
   import Minimap from "./Minimap.svelte";
   import Timeline from "./Timeline.svelte";
@@ -189,11 +189,14 @@
     {:else}
       <Timeline {scope} {motion} {readout} onseek={seek} ontoggle={toggle} />
       <Minimap {scope} {motion} />
-      {#if scope.pictures.lost}
+      {#if scope.pictures.lost.waveform}
         <p class="text-xs text-fg-muted" role="status">
-          Part of the spectrogram could not be loaded and is shown at lower detail: {sentence(
-            scope.pictures.lost
-          )}
+          Could not load the waveform: {scope.pictures.lost.waveform}
+        </p>
+      {/if}
+      {#if scope.pictures.lost.tile}
+        <p class="text-xs text-fg-muted" role="status">
+          Part of the view is shown at lower detail: {scope.pictures.lost.tile}
         </p>
       {/if}
       <!-- read out as the user moves the cursor, not as playback moves it every frame -->
@@ -208,7 +211,7 @@
     {/if}
     {#if layout.sampled}
       <p class="text-xs text-fg-muted">
-        Only {scope.starts.length} one-second samples of this {formatDuration(
+        Only {formatCount(scope.starts.length)} one-second samples of this {formatDuration(
           layout.durationSeconds
         )} file were analyzed; the hatched stretches were not
       </p>

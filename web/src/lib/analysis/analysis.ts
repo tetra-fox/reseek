@@ -121,3 +121,40 @@ export const FLAGS: Record<Report["flags"][number], string> = {
 
 /** The judgment in words */
 export const JUDGMENTS: Record<Judgment, string> = { legit: "Genuine", fake: "Fake" };
+
+/** A line of the cutoff distribution: the lowest and highest cutoff it holds, in Hz, and its windows */
+export type CutoffRow = { from: number; to: number; count: number };
+
+/** The share of the windows under which a cutoff is rare */
+const RARE = 0.01;
+
+/**
+ * The cutoff histogram, ascending by cutoff, as the reading lists it: a run of cutoffs that
+ * each hold under 1% of the windows becomes one line spanning them, so a wandering cutoff reads
+ * as a few lines rather than one per 500 Hz
+ */
+export const cutoffRows = (histogram: Report["measures"]["cutoffHzHistogram"]): CutoffRow[] => {
+  const total = histogram.reduce((n, [, count]) => n + count, 0);
+  const rows: CutoffRow[] = [];
+  let lastRare = false;
+  for (const [hz, count] of histogram) {
+    const rare = count < total * RARE;
+    const last = rows.at(-1);
+    if (rare && lastRare && last) {
+      last.to = hz;
+      last.count += count;
+    } else {
+      rows.push({ from: hz, to: hz, count });
+    }
+    lastRare = rare;
+  }
+  return rows;
+};
+
+/** `count` of `total` as a whole percentage that never reads 0% or 100% when it is neither */
+export const percentOf = (count: number, total: number): string => {
+  const percent = Math.round((count / total) * 100);
+  if (percent === 0 && count > 0) return "<1%";
+  if (percent === 100 && count < total) return ">99%";
+  return `${percent}%`;
+};

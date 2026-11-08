@@ -13,6 +13,7 @@
   import Button from "#lib/components/ui/Button.svelte";
   import Switch from "#lib/components/ui/Switch.svelte";
   import { FILE_ACTIONS as A } from "#lib/files/actions.js";
+  import { formatCount } from "#lib/format.js";
 
   import AnalysisGuide from "./AnalysisGuide.svelte";
   import AnalysisJobs from "./AnalysisJobs.svelte";
@@ -37,7 +38,7 @@
       {#snippet child({ props })}
         <Button {...props} variant="ghost" size="sm">
           <Icon />{label}
-          {#if count}<Badge class="tabular-nums">{count}</Badge>{/if}
+          {#if count}<Badge class="tabular-nums">{formatCount(count)}</Badge>{/if}
         </Button>
       {/snippet}
     </Popover.Trigger>
@@ -45,7 +46,7 @@
       <Popover.Content
         sideOffset={6}
         collisionPadding={8}
-        class="z-50 w-[min(30rem,calc(100vw-2rem))] rounded-card border bg-overlay p-3 shadow-raised outline-none data-[state=closed]:animate-popover-out data-[state=open]:animate-popover-in">
+        class="z-50 flex max-h-(--bits-popover-content-available-height) w-[min(30rem,calc(100vw-2rem))] flex-col overflow-y-auto rounded-card border bg-overlay p-3 shadow-raised outline-none data-[state=closed]:animate-popover-out data-[state=open]:animate-popover-in">
         {@render content()}
       </Popover.Content>
     </Popover.Portal>

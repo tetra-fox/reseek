@@ -3,14 +3,17 @@
 
   import { jobs } from "#lib/analysis/jobs.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
+  import MiddleTruncate from "#lib/components/ui/MiddleTruncate.svelte";
   import Progress from "#lib/components/ui/Progress.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
-  import { plural } from "#lib/format.js";
+  import { formatCount, plural } from "#lib/format.js";
   import { session } from "#lib/session.svelte.js";
 
   // the files waiting for or under analysis, with how far each is and a way to cancel it. The
-  // toolbar this opens from keeps the queue current
+  // toolbar this opens from keeps the queue current. The list scrolls under the heading, and past
+  // its first files says how many more there are, as a batch can queue thousands
+  const SHOWN = 50;
   const write = $derived(session.can("ReadWrite"));
   const name = (path: string) => path.split(/[/\\]/).pop() ?? path;
   const cancel = async (id: string) => {
@@ -18,15 +21,16 @@
     if (!outcome.ok) toast(`Could not cancel the analysis: ${outcome.error}`, "error");
   };
   const waiting = $derived(jobs.list.filter((j) => j.state !== "running").length + jobs.backlog);
+  const shown = $derived(jobs.list.slice(0, SHOWN));
   const cancelWaiting = async () => {
     const outcome = await jobs.cancelWaiting();
     if (!outcome.ok) toast(`Could not cancel the waiting files: ${outcome.error}`, "error");
   };
 </script>
 
-<section class="flex flex-col gap-1">
-  <div class="flex items-center gap-2">
-    <h3 class="flex-1 text-sm font-medium">Analysis queue</h3>
+<section class="flex min-h-0 flex-col gap-1">
+  <div class="flex shrink-0 flex-wrap items-center gap-x-2">
+    <h3 class="flex-1 text-sm font-medium whitespace-nowrap">Analysis queue</h3>
     <!-- each listed file has its own cancel; the backlog has only this -->
     {#if write && (waiting > 1 || jobs.backlog)}
       <Button variant="ghost" size="sm" onclick={() => void cancelWaiting()}
@@ -34,12 +38,13 @@
     {/if}
   </div>
   {#if jobs.list.length}
-    <ul class="flex flex-col gap-1">
-      {#each jobs.list as job (job.id)}
+    <ul class="flex min-h-0 flex-col gap-1 overflow-y-auto">
+      {#each shown as job (job.id)}
         <li class="flex items-center gap-2 text-sm">
           <Tooltip text={job.path} dense>
             {#snippet child({ props })}
-              <span {...props} class="min-w-0 flex-1 truncate">{name(job.path)}</span>
+              <span {...props} class="flex min-w-0 flex-1"
+                ><MiddleTruncate text={name(job.path)} /></span>
             {/snippet}
           </Tooltip>
           <span class="w-24 shrink-0 text-right text-xs text-fg-muted tabular-nums">
@@ -63,10 +68,15 @@
           {/if}
         </li>
       {/each}
+      {#if jobs.list.length > SHOWN}
+        <li class="text-xs text-fg-muted tabular-nums">
+          {formatCount(jobs.list.length - SHOWN)} more in the queue
+        </li>
+      {/if}
     </ul>
   {/if}
   {#if jobs.backlog}
-    <p class="text-xs text-fg-muted tabular-nums">
+    <p class="shrink-0 text-xs text-fg-muted tabular-nums">
       {plural(jobs.backlog, "more file joins", "more files join")} the queue as it empties
     </p>
   {:else if !jobs.list.length}

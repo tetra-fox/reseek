@@ -10,6 +10,7 @@
   import { trackOf } from "#lib/analysis/track.js";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
+  import Notice from "#lib/components/ui/Notice.svelte";
   import Progress from "#lib/components/ui/Progress.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
@@ -122,7 +123,12 @@
         {#if name}
           <Tooltip text={local ? name : (path ?? name)} clipped={local || !path}>
             {#snippet child({ props })}
-              <h2 {...props} class="min-w-0 truncate text-sm font-medium">{name}</h2>
+              <h2
+                {...props}
+                dir="auto"
+                class="line-clamp-2 min-w-0 text-sm font-medium wrap-anywhere">
+                {name}
+              </h2>
             {/snippet}
           </Tooltip>
         {:else}
@@ -144,7 +150,12 @@
     <div class="flex flex-col gap-2 px-3 py-2 md:min-h-0 md:flex-1 md:overflow-y-auto">
       {#if job}<AnalysisProgress {job} />{/if}
       {#if analyzed.error}
-        <p class="text-sm text-fg-muted">{analyzed.error}</p>
+        <Notice kind="error">
+          {analyzed.error}
+          {#snippet action()}
+            <Button variant="ghost" size="sm" onclick={() => void analyzed.load()}>Retry</Button>
+          {/snippet}
+        </Notice>
       {:else if report === undefined}
         <Skeleton class="h-40" />
       {:else if report === null}
@@ -194,6 +205,12 @@
           {/key}
         {:else}
           <p class="text-sm">{report.summary}</p>
+          <!-- with no plot, what kept the analyzer from reading the file stays in view -->
+          {#if report.limitations.length}
+            <ul class="list-disc pl-5 text-sm text-fg-muted">
+              {#each report.limitations as limit (limit)}<li>{limit}</li>{/each}
+            </ul>
+          {/if}
           {@render beside()}
         {/if}
       {/if}

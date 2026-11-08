@@ -11,7 +11,7 @@
   } from "#lib/analysis/spectrogram/frequency.js";
   import type { Scope } from "#lib/analysis/spectrogram/scope.svelte.js";
   import { formatTime } from "#lib/analysis/spectrogram/timeview.js";
-  import { chartCurve, tickLabel } from "#lib/dashboard/chart.js";
+  import { axisPadding, chartCurve, tickLabel } from "#lib/dashboard/chart.js";
 
   // the spectrum of the window the cursor is in on LayerChart: level against frequency, on the
   // frequency axis the spectrogram uses, moving with it. Every window's spectrum loads with the
@@ -20,7 +20,8 @@
 
   let { scope, curve }: Props = $props();
 
-  const PADDING = { left: 40, bottom: 20, top: 4, right: 8 };
+  const DB_TICKS = [-150, -100, -50, 0];
+  const dbLabel = (db: number) => `${db} dB`;
   /** how many pixels of the axis one plotted point stands for */
   const SMOOTH_PX = 3;
   let width = $state(0);
@@ -33,9 +34,11 @@
   const spectra = $derived(scope.pictures.spectra);
   const index = $derived(scope.window);
   const maxHz = $derived(scope.layout.maxHz);
+  // the top frequency's label is the widest that can sit at the right end of the axis
+  const padding = $derived(axisPadding(DB_TICKS.map(dbLabel), rem, [formatHz(maxHz)]));
   /** across the axis from its lowest frequency (0) to its highest (1), as the spectrogram runs */
   const across = (hz: number) => 1 - heightOn(curve, maxHz, hz);
-  const inner = $derived(Math.max(0, width - PADDING.left - PADDING.right));
+  const inner = $derived(Math.max(0, width - padding.left - padding.right));
   /**
    * The window's levels as the line draws them: bins that fall within the same few pixels on
    * the current axis are averaged by power into one point, so the crowded top of a log or mel
@@ -79,18 +82,14 @@
       aria-label={`The spectrum of the window at ${at}`}
       bind:clientWidth={width}
       bind:clientHeight={height}>
-      <Chart data={points} x="x" y="db" xDomain={[0, 1]} yDomain={[-160, 0]} padding={PADDING}>
+      <Chart data={points} x="x" y="db" xDomain={[0, 1]} yDomain={[-160, 0]} {padding}>
         <Svg>
           <Grid y class="stroke-border" style="stroke-dasharray: 3 3" />
-          <Axis
-            placement="left"
-            ticks={[-150, -100, -50, 0]}
-            format={(db: number) => `${db} dB`}
-            tickLabelProps={tickLabel} />
+          <Axis placement="left" ticks={DB_TICKS} format={dbLabel} tickLabelProps={tickLabel} />
           <!-- the frequency labels, drawn here so each keeps its element as it moves and fades -->
           {#each ticks as tick (tick.hz)}
             <g
-              transform={`translate(${(1 - tick.at) * inner} ${height - PADDING.top - PADDING.bottom})`}
+              transform={`translate(${(1 - tick.at) * inner} ${height - padding.top - padding.bottom})`}
               opacity={tick.alpha}>
               <line y2="4" class="stroke-border" />
               <text
@@ -105,9 +104,11 @@
         </Svg>
       </Chart>
     </div>
-  {:else if spectra === null && !scope.pictures.lost && !scope.pictures.error}
-    <p class="text-sm text-fg-muted">Loading...</p>
-  {:else if spectra === null}
+  {:else if spectra === null && scope.pictures.lost.spectra}
+    <p class="text-sm text-fg-muted">Could not load the spectrum: {scope.pictures.lost.spectra}</p>
+  {:else if spectra === null && scope.pictures.error}
     <p class="text-sm text-fg-muted">Could not load the spectrum</p>
+  {:else if spectra === null}
+    <p class="text-sm text-fg-muted">Loading...</p>
   {/if}
 </div>

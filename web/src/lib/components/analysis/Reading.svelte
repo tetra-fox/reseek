@@ -1,8 +1,8 @@
 <script lang="ts">
   import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
 
-  import { FLAGS, type Report, VERDICTS } from "#lib/analysis/analysis.js";
-  import { formatDuration } from "#lib/format.js";
+  import { cutoffRows, FLAGS, percentOf, type Report, VERDICTS } from "#lib/analysis/analysis.js";
+  import { formatCount, formatDuration } from "#lib/format.js";
   import { disclose } from "#lib/ui/motion.js";
 
   // the analyzer's own reading, under the spectrogram and folded away until asked for: its
@@ -67,7 +67,20 @@
     ).filter(([, value]) => value !== null)
   );
   const counted = $derived(m.cutoffHzHistogram.reduce((n, [, count]) => n + count, 0));
-  const tallest = $derived(Math.max(1, ...m.cutoffHzHistogram.map(([, count]) => count)));
+  const cutoffs = $derived(cutoffRows(m.cutoffHzHistogram));
+  const tallest = $derived(Math.max(1, ...cutoffs.map((row) => row.count)));
+  /** what the container claims, leaving out what a file that could not be read has none of */
+  const format = $derived(
+    [
+      report.claimed.codec !== "unknown" && report.claimed.codec.toUpperCase(),
+      report.claimed.sampleRate > 0 && `${formatCount(report.claimed.sampleRate)} Hz`,
+      report.claimed.bitDepth && `${report.claimed.bitDepth}-bit`,
+      report.claimed.bitrateKbps && `${report.claimed.bitrateKbps} kbps`,
+      report.durationSeconds > 0 && formatDuration(report.durationSeconds)
+    ]
+      .filter(Boolean)
+      .join(" · ")
+  );
 </script>
 
 <section class="rounded-control border">
@@ -101,40 +114,38 @@
       {#if m.cutoffHzHistogram.length}
         <div class="flex flex-col gap-1">
           <h4 class="text-xs font-medium text-fg-muted">Cutoff distribution</h4>
-          <ul class="flex flex-col gap-0.5" aria-label="Cutoffs by share of windows">
-            {#each m.cutoffHzHistogram as [hz, count] (hz)}
-              <li class="grid grid-cols-[5rem_1fr_3rem] items-center gap-2 text-xs">
-                <span class="tabular-nums">{kHz(hz)}</span>
+          <ul
+            class="grid grid-cols-[max-content_1fr_auto] gap-x-2 gap-y-0.5 text-xs"
+            aria-label="Cutoffs by share of windows">
+            {#each cutoffs as { from, to, count } (from)}
+              <li class="col-span-3 grid grid-cols-subgrid items-center">
+                <span class="tabular-nums"
+                  >{from === to ? kHz(from) : `${(from / 1000).toFixed(1)}-${kHz(to)}`}</span>
                 <span class="rounded-sm h-2 bg-accent" style:width={`${(count / tallest) * 100}%`}
                 ></span>
                 <span class="text-right text-fg-muted tabular-nums"
-                  >{Math.round((count / counted) * 100)}%</span>
+                  >{percentOf(count, counted)}</span>
               </li>
             {/each}
           </ul>
         </div>
       {/if}
-      <div class="flex flex-col gap-1">
-        <h4 class="text-xs font-medium text-fg-muted">Measures</h4>
-        <dl class="flex flex-col gap-1.5">
-          {#each rows as [name, value, meaning] (name)}
-            <div>
-              <dt class="flex justify-between gap-2">
-                <span class="font-medium">{name}</span><span class="tabular-nums">{value}</span>
-              </dt>
-              {#if meaning}<dd class="text-xs text-fg-muted">{meaning}</dd>{/if}
-            </div>
-          {/each}
-        </dl>
-      </div>
-      <p class="text-xs text-fg-muted">
-        {report.claimed.codec.toUpperCase()} · {report.claimed.sampleRate.toLocaleString()} Hz{report
-          .claimed.bitDepth
-          ? ` · ${report.claimed.bitDepth}-bit`
-          : ""}{report.claimed.bitrateKbps ? ` · ${report.claimed.bitrateKbps} kbps` : ""} · {formatDuration(
-          report.durationSeconds
-        )}
-      </p>
+      {#if rows.length}
+        <div class="flex flex-col gap-1">
+          <h4 class="text-xs font-medium text-fg-muted">Measures</h4>
+          <dl class="flex flex-col gap-1.5">
+            {#each rows as [name, value, meaning] (name)}
+              <div>
+                <dt class="flex justify-between gap-2">
+                  <span class="font-medium">{name}</span><span class="tabular-nums">{value}</span>
+                </dt>
+                {#if meaning}<dd class="text-xs text-fg-muted">{meaning}</dd>{/if}
+              </div>
+            {/each}
+          </dl>
+        </div>
+      {/if}
+      {#if format}<p class="text-xs text-fg-muted">{format}</p>{/if}
       {#if report.limitations.length}
         <div class="flex flex-col gap-1">
           <h4 class="text-xs font-medium text-fg-muted">Limitations</h4>

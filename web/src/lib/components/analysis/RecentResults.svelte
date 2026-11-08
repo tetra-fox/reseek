@@ -5,6 +5,7 @@
   import { slots } from "#lib/analysis/slots.svelte.js";
   import { api } from "#lib/api/client.js";
   import Button from "#lib/components/ui/Button.svelte";
+  import MiddleTruncate from "#lib/components/ui/MiddleTruncate.svelte";
   import Notice from "#lib/components/ui/Notice.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Time from "#lib/components/ui/Time.svelte";
@@ -68,7 +69,7 @@
                 class="flex min-h-9 w-full min-w-0 items-center gap-2 px-2 text-left text-sm"
                 aria-label={`${A.openAnalysis.label}: ${name}`}
                 onclick={() => slots.open(target(report), name)}>
-                <span class="min-w-0 flex-1 truncate">{name}</span>
+                <MiddleTruncate text={name} class="flex-1" />
                 <AnalysisMark mark={mark?.judgment ? mark : undefined} />
                 <span class="shrink-0 text-xs text-fg-muted max-sm:hidden"
                   >{report.stale ? "Analyzed by an older version" : VERDICTS[report.verdict]}</span>

@@ -9,6 +9,7 @@
   import FolderLine from "#lib/components/files/FolderLine.svelte";
   import EmptyRow from "#lib/components/ui/EmptyRow.svelte";
   import Input from "#lib/components/ui/Input.svelte";
+  import MiddleTruncate from "#lib/components/ui/MiddleTruncate.svelte";
   import Notice from "#lib/components/ui/Notice.svelte";
   import Segmented from "#lib/components/ui/Segmented.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
@@ -18,6 +19,7 @@
   import type { Root } from "#lib/system/localfiles.js";
   import { Expansion } from "#lib/tree/expansion.svelte.js";
   import { folderNode, folderTree, treeLines } from "#lib/tree/folders.js";
+  import { viewport } from "#lib/ui/viewport.svelte.js";
 
   import AnalysisMark from "./AnalysisMark.svelte";
 
@@ -145,9 +147,21 @@
               role="gridcell"
               class="flex h-full min-w-0 items-center gap-2 pr-3 text-left"
               onclick={() => pick(f)}>
-              <span class="min-w-0 flex-1 truncate">{getFileName(f.path)}</span>
-              <AnalysisMark mark={marks.file(root, f.path)} />
-              <span class="shrink-0 text-xs text-fg-muted tabular-nums">{formatBytes(f.size)}</span>
+              {#if viewport.phone}
+                <!-- a phone gives the name the row's width, with the mark and size under it -->
+                <span class="flex min-w-0 flex-1 flex-col">
+                  <MiddleTruncate text={getFileName(f.path)} />
+                  <span class="flex items-center gap-2">
+                    <AnalysisMark mark={marks.file(root, f.path)} />
+                    <span class="text-xs text-fg-muted tabular-nums">{formatBytes(f.size)}</span>
+                  </span>
+                </span>
+              {:else}
+                <MiddleTruncate text={getFileName(f.path)} class="flex-1" />
+                <AnalysisMark mark={marks.file(root, f.path)} />
+                <span class="shrink-0 text-xs text-fg-muted tabular-nums"
+                  >{formatBytes(f.size)}</span>
+              {/if}
             </button>
           {/snippet}
         </Tooltip>
