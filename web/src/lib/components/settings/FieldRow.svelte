@@ -157,16 +157,13 @@
         !tabular && "md:col-start-1 md:row-start-2"
       ]}>
       {#if restorable}
-        <Tooltip
-          text={tabular
-            ? "Changed from the default. Click to restore it"
-            : `Changed from the default (${shown(info.default)}). Click to restore it`}>
+        <Tooltip text={tabular ? "Restore default" : `Restore default: ${shown(info.default)}`}>
           {#snippet child({ props })}
             <button
               {...props}
               type="button"
               class="flex items-center gap-1 rounded-badge border border-dashed border-accent/50 px-1.5 text-xs text-accent-soft-fg hover:bg-accent-soft"
-              aria-label={`Restore the default of ${field.label}`}
+              aria-label={`Restore default of ${field.label}`}
               onclick={ondefault}>
               <RotateCcwIcon class="size-3" />default
             </button>
@@ -181,7 +178,7 @@
                 {...props}
                 type="button"
                 class="flex w-fit items-center gap-1 rounded-badge text-xs text-fg-subtle hover:text-fg"
-                aria-label={`Set ${field.label} from the environment or the command line`}>
+                aria-label={`Environment variable and flag for ${field.label}`}>
                 <TerminalIcon class="size-3.5" />Environment and flag
               </button>
             {/snippet}

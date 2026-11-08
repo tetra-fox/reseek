@@ -75,5 +75,5 @@ test("a right-click on a download offers what its ... button does, and on its us
   await page.keyboard.press("Escape");
 
   await table.getByRole("row").filter({ hasText: "alice" }).first().click({ button: "right" });
-  await expect(page.getByRole("menuitem", { name: "Remove the group" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Remove group" })).toBeVisible();
 });

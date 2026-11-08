@@ -79,7 +79,7 @@
     <div
       class="h-40"
       role="img"
-      aria-label={`The spectrum of the window at ${at}`}
+      aria-label={`Spectrum at ${at}`}
       bind:clientWidth={width}
       bind:clientHeight={height}>
       <Chart data={points} x="x" y="db" xDomain={[0, 1]} yDomain={[-160, 0]} {padding}>

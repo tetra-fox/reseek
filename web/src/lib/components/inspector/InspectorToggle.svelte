@@ -9,7 +9,7 @@
 
 <!-- a phone's inspector is a sheet opened from a row, so it has no pane to show or hide here -->
 {#if !viewport.phone}
-  <Tooltip text="Show or hide file details (I or Space)">
+  <Tooltip text="File details (I or Space)">
     {#snippet child({ props })}
       <Button
         {...props}

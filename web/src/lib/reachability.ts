@@ -55,5 +55,5 @@ export const reachableText = (listen: Listen): string =>
   listen.reachable === "yes"
     ? "Other users can connect to you"
     : listen.reachable === "no"
-      ? "Other users have not been able to connect to you"
-      : "It is not known yet whether other users can connect to you";
+      ? "Other users could not connect to you"
+      : "Not known yet whether other users can connect to you";

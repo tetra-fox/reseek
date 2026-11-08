@@ -15,7 +15,7 @@ import SaveIcon from "@lucide/svelte/icons/save";
  */
 export const FILE_ACTIONS = {
   download: { label: "Download", icon: DownloadIcon },
-  downloadFolder: { label: "Download this folder", icon: FolderDownIcon },
+  downloadFolder: { label: "Download folder", icon: FolderDownIcon },
   open: { label: "Open", icon: ExternalLinkIcon },
   analyze: { label: "Analyze", icon: AudioLinesIcon },
   openAnalysis: { label: "Open in Analysis", icon: AudioLinesIcon },
@@ -24,6 +24,6 @@ export const FILE_ACTIONS = {
   copyPath: { label: "Copy path", icon: CopyIcon },
   copyLocalPath: { label: "Copy local path", icon: CopyIcon },
   copyLink: { label: "Copy slsk:// link", icon: LinkIcon },
-  browseFolder: { label: "Browse this folder", icon: FolderOpenIcon },
-  allFiles: { label: "View all files in this folder", icon: ListIcon }
+  browseFolder: { label: "Browse folder", icon: FolderOpenIcon },
+  allFiles: { label: "View all files", icon: ListIcon }
 } as const;

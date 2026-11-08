@@ -25,7 +25,7 @@
   type Props = {
     /** the username, shown exactly as it is */
     name: string;
-    /** the folder the name was shown with, which "Search their shares" starts from */
+    /** the folder the name was shown with, which "Search shares" starts from */
     folder?: string;
     /**
      * a click opens the card and keeps it open, and a double click opens a private chat, as

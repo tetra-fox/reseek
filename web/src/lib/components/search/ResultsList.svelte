@@ -96,7 +96,7 @@
   );
   const chosen = $derived(sorted.filter((r) => selected.has(r.key)));
 
-  /** the files of each user's folder, for a row's "Download this folder" */
+  /** the files of each user's folder, for a row's "Download folder" */
   const folders = $derived.by(() => {
     const map = new Map<string, ResultRow[]>();
     for (const r of rows) {

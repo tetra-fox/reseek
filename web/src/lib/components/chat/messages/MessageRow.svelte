@@ -73,8 +73,8 @@
   const actions = $derived.by((): Action[] => {
     if (!actionable(m)) return [];
     return [
-      ...(onreply ? [{ label: "Reply with a quote", icon: ReplyIcon, run: () => onreply(m) }] : []),
-      { label: "Copy the text", icon: CopyIcon, run: () => void copyText(m.text) },
+      ...(onreply ? [{ label: "Quote", icon: ReplyIcon, run: () => onreply(m) }] : []),
+      { label: "Copy text", icon: CopyIcon, run: () => void copyText(m.text) },
       ...(room && !m.self
         ? reach(m.author, { only: ["message"] }).map((reached) => ({
             label: reached.of(m.author),
@@ -188,7 +188,7 @@
           {/snippet}
         </Tooltip>
         {#if m.replayed}
-          <Tooltip text="The server held it until you connected" dense>
+          <Tooltip text="Held by the server until you connected" dense>
             {#snippet child({ props })}
               <span {...props} class="min-w-0 truncate text-xs text-fg-subtle italic"
                 >sent while offline</span>
@@ -196,7 +196,7 @@
           </Tooltip>
         {/if}
         {#if m.automatic}
-          <Tooltip text="Sent automatically because you were away" dense>
+          <Tooltip text="Your away reply" dense>
             {#snippet child({ props })}
               <span {...props} class="min-w-0 truncate text-xs text-fg-subtle italic"
                 >sent automatically</span>

@@ -97,9 +97,9 @@ test("Shift-click ticks a range across two folders, and the bar counts it", asyn
 test("a locked folder is dimmed and nothing in it can be ticked", async ({ page }) => {
   const tree = await browseCarol(page);
   const locked = folder(tree, "\\Locked");
-  await expect(locked.getByText(/shares these only with buddies/)).toBeVisible();
+  await expect(locked.getByText(/shared only with their buddies/)).toBeVisible();
   await expect(locked.getByRole("checkbox")).toHaveCount(0);
-  await expect(locked.getByRole("button", { name: /Download this folder/ })).toHaveCount(0);
+  await expect(locked.getByRole("button", { name: /Download folder/ })).toHaveCount(0);
   await locked.click();
   await expect(fileLine(tree, "\\Locked\\secret.flac")).toBeVisible();
   await expect(fileLine(tree, "\\Locked\\secret.flac").getByRole("checkbox")).toHaveCount(0);

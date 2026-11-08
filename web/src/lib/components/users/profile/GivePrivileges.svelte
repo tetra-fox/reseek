@@ -63,7 +63,7 @@
   bind:open
   busy={sending}
   title={`Give ${username} privileges`}
-  description="Privileged users go first in other users' queues. The days come off your own privileges, and if the server refuses, it says so in a private message.">
+  description="Moves them ahead in other users' queues, using days of your own privileges. A refusal comes as a private message.">
   {#if daysLeft < 1}
     <Notice kind="info">You have no whole days of privileges to give</Notice>
   {:else}

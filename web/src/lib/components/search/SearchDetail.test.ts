@@ -308,7 +308,7 @@ describe("search results", () => {
       [...document.querySelectorAll("button")].filter((b) => b.textContent?.trim() === label);
 
     // a dismissed result is counted as dismissed, not as hidden by filters
-    document.querySelector<HTMLButtonElement>('button[aria-label="Hide this result"]')!.click();
+    document.querySelector<HTMLButtonElement>('button[aria-label="Hide result"]')!.click();
     await flushFaked();
     expect(text()).toContain("1 dismissed");
     expect(text()).not.toContain("hidden by filters");
@@ -353,7 +353,7 @@ describe("search results", () => {
     expect(text()).toContain("1 result hidden by Locked files");
 
     // a dismissed user's files are not the filters' to count
-    document.querySelector<HTMLButtonElement>('button[aria-label="Hide this result"]')!.click();
+    document.querySelector<HTMLButtonElement>('button[aria-label="Hide result"]')!.click();
     const box = document.querySelector<HTMLInputElement>('input[aria-label="Filter"]')!;
     box.value = "One";
     box.dispatchEvent(new Event("input", { bubbles: true }));

@@ -121,7 +121,7 @@
       disabled={!connected}
       class="h-11 pl-10 text-base md:text-base">
       <Suggest.Item value={RUN} icon={link ? LinkIcon : SearchIcon}>
-        {link ? "Open this slsk:// link" : searchFor(phrase)}
+        {link ? "Open slsk:// link" : searchFor(phrase)}
       </Suggest.Item>
       {#if earlier.length}
         <Suggest.Group heading="Recent searches">
@@ -164,7 +164,7 @@
       <Badge tone="accent">
         {scoped}
         {#if onclearscope}
-          <button type="button" aria-label="Search the whole network" onclick={onclearscope}>
+          <button type="button" aria-label="Search whole network" onclick={onclearscope}>
             <XIcon />
           </button>
         {/if}

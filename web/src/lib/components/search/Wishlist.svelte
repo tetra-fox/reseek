@@ -45,15 +45,15 @@
 <Card
   title="Wishlist"
   description={schedule?.every
-    ? "Searches run again regularly and report new files"
+    ? "Searched again regularly for new files"
     : app.isServerConnected
-      ? "Waiting for the Soulseek server to say how often searches may run"
-      : "Searches run while you are connected"}>
+      ? "Waiting for the Soulseek server"
+      : "Searched only while connected"}>
   {#if write}
     <form class="flex gap-inline px-5" onsubmit={add}>
       <Input
-        placeholder="Add a search to the wishlist"
-        aria-label="Search to add to the wishlist"
+        placeholder="Add to wishlist"
+        aria-label="Search to add to wishlist"
         maxlength={256}
         wrapperClass="flex-1"
         bind:value={text} />
@@ -95,13 +95,13 @@
             {/if}
           </div>
           {#if write}
-            <Tooltip text="Remove from the wishlist">
+            <Tooltip text="Remove from wishlist">
               {#snippet child({ props })}
                 <Button
                   {...props}
                   variant="ghost"
                   size="icon-sm"
-                  aria-label={`Remove ${w.searchText} from the wishlist`}
+                  aria-label={`Remove ${w.searchText} from wishlist`}
                   disabled={busy.running}
                   onclick={() => void busy.run(() => wishlist.remove(w.id))}><Trash2Icon /></Button>
               {/snippet}

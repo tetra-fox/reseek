@@ -83,7 +83,7 @@
   bind:open
   busy={changing}
   title="Change password"
-  description="This takes effect at once. Other clients on this account need the new password at their next login.">
+  description="Other clients on this account need it at their next login">
   <form id="change-password" class="flex flex-col gap-group" onsubmit={change}>
     <!-- for password managers, which pair a new password with its account -->
     <input type="text" class="hidden" autocomplete="username" value={name} readonly />

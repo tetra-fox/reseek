@@ -136,7 +136,7 @@
   </Tooltip>
 </div>
 
-<Dialog bind:open={saving} title="Save a filter preset" {busy}>
+<Dialog bind:open={saving} title="Save filter preset" {busy}>
   <form
     id="save-preset"
     class="flex flex-col gap-3"

@@ -59,9 +59,7 @@ test("the activity log docks under the screen, keeps its height and opens with a
   expect(before - (await area.evaluate((e) => e.clientHeight))).toBe(288);
 
   // its top edge drags it taller, and the height and the open state stay through a reload
-  const edge = (await page
-    .getByRole("separator", { name: "Height of the activity log" })
-    .boundingBox())!;
+  const edge = (await page.getByRole("separator", { name: "Activity log height" }).boundingBox())!;
   await page.mouse.move(edge.x + edge.width / 2, edge.y + edge.height / 2);
   await page.mouse.down();
   await page.mouse.move(edge.x + edge.width / 2, edge.y + edge.height / 2 - 100, { steps: 5 });

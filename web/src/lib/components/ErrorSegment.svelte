@@ -33,7 +33,7 @@
     <Button
       variant="ghost"
       onclick={() => void copier.copy([caption, detail].filter(Boolean).join("\n"))}>
-      <CopyIcon copied={copier.copied} />{copier.copied ? "Copied" : "Copy the error"}
+      <CopyIcon copied={copier.copied} />{copier.copied ? "Copied" : "Copy error"}
     </Button>
   </div>
 </div>

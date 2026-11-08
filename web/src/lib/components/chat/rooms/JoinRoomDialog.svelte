@@ -160,7 +160,7 @@
   };
 </script>
 
-<Dialog bind:open title="Join a room" busy={creating} class="w-[min(36rem,calc(100vw-2rem))]">
+<Dialog bind:open title="Join room" busy={creating} class="w-[min(36rem,calc(100vw-2rem))]">
   <h3 class="text-sm font-medium">Public rooms</h3>
   <div class="flex gap-2">
     <Input
@@ -173,13 +173,13 @@
         e.preventDefault();
         joinFocused();
       }} />
-    <Tooltip text="Refresh the room list">
+    <Tooltip text="Refresh room list">
       {#snippet child({ props })}
         <Button
           {...props}
           variant="outline"
           size="icon"
-          aria-label="Refresh the room list"
+          aria-label="Refresh room list"
           onclick={() => void available.load()}><RefreshCwIcon /></Button>
       {/snippet}
     </Tooltip>
@@ -274,7 +274,7 @@
       e.preventDefault();
       void create();
     }}>
-    <h3 class="text-sm font-medium">Create a room</h3>
+    <h3 class="text-sm font-medium">New room</h3>
     <Field label="Name" for="create-name">
       <Input id="create-name" maxlength={24} bind:value={name} autocomplete="off" />
     </Field>
@@ -282,13 +282,13 @@
       <div class="flex flex-wrap items-center gap-inline text-sm" role="status">
         <span class="text-fg-muted">{existing.name} is already a public room</span>
         {#if isJoined(existing.name)}
-          <Button size="sm" variant="outline" onclick={() => enter(existing.name)}>Open it</Button>
+          <Button size="sm" variant="outline" onclick={() => enter(existing.name)}>Open</Button>
         {:else}
           <Button
             size="sm"
             variant="outline"
             disabled={busy.has(existing.name)}
-            onclick={() => void joinRow(existing.name)}>Join it</Button>
+            onclick={() => void joinRow(existing.name)}>Join</Button>
         {/if}
       </div>
     {/if}

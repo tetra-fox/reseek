@@ -215,7 +215,7 @@
       onCheckedChange={state.ontick} />
   {/if}
   <Tooltip
-    text={response.hasFreeUploadSlot ? "Has a free upload slot" : "No free upload slot"}
+    text={response.hasFreeUploadSlot ? "Free upload slot" : "No free upload slot"}
     dense
     spoken>
     {#snippet child({ props })}
@@ -261,13 +261,13 @@
           <DownloadIcon />Download all
         </Button>
       {/if}
-      <Tooltip text="Hide this result">
+      <Tooltip text="Hide result">
         {#snippet child({ props })}
           <Button
             {...props}
             variant="ghost"
             size="icon-sm"
-            aria-label="Hide this result"
+            aria-label="Hide result"
             onclick={() => ondismiss(name)}>
             <EyeOffIcon />
           </Button>

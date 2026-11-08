@@ -232,7 +232,7 @@
   <EmptyState
     icon={UsersIcon}
     title="No buddies yet"
-    description="Add a buddy to see when they are online and to share folders with buddies only" />
+    description="See when buddies are online and share folders with them alone" />
 {:else}
   <div
     class="max-h-[max(20rem,calc(var(--content-h)-12rem))] overflow-auto rounded-card border bg-surface text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent"

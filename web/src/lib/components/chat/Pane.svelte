@@ -198,25 +198,25 @@
       {/if}
       {#if target.kind === "room" && joined}
         {#if !viewport.phone}
-          <Tooltip text={layout.users ? "Hide the side panel" : "Show the side panel"}>
+          <Tooltip text={layout.users ? "Hide side panel" : "Show side panel"}>
             {#snippet child({ props })}
               <Button
                 {...props}
                 variant="ghost"
                 size="icon-sm"
-                aria-label={layout.users ? "Hide the side panel" : "Show the side panel"}
+                aria-label={layout.users ? "Hide side panel" : "Show side panel"}
                 aria-pressed={layout.users}
                 onclick={() => (layout.users = !layout.users)}><PanelRightIcon /></Button>
             {/snippet}
           </Tooltip>
         {:else}
-          <Tooltip text="Show the side panel">
+          <Tooltip text="Show side panel">
             {#snippet child({ props })}
               <Button
                 {...props}
                 variant="ghost"
                 size="icon-sm"
-                aria-label="Show the side panel"
+                aria-label="Show side panel"
                 onclick={() => (sheet = true)}><PanelRightIcon /></Button>
             {/snippet}
           </Tooltip>
@@ -276,7 +276,7 @@
       {/if}
       {#if target.kind === "room" && !joined && !write}
         <p class="border-t px-3 py-2 text-xs text-fg-muted">
-          This room is not joined, so only its stored history shows
+          Not joined, showing the stored history
         </p>
       {:else if !notices}
         <Composer bind:this={composer} {pane} {disabled} {names} />
@@ -292,7 +292,7 @@
           {max}
           {initial}
           edge="left"
-          label="Width of the side panel"
+          label="Side panel width"
           onchange={(w) => (layout.sideWidth = w)}
           class="absolute inset-y-0 -left-1 z-10 w-2" />
         {@render side(members)}

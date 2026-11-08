@@ -132,7 +132,7 @@
                 {...props}
                 type="button"
                 class="nav-item"
-                aria-label="Switch between light and dark theme"
+                aria-label="Switch theme"
                 onclick={() =>
                   void crossFade(async () => {
                     toggleMode();

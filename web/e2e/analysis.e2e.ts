@@ -112,9 +112,7 @@ test("analyzes a finished download from its row and keeps a judgment", async ({ 
   await page.keyboard.press("ArrowRight");
   await expect(plot).toHaveAttribute("aria-valuenow", "1");
   await expect(viewer.getByText("Spectrum at 0:01")).toBeVisible();
-  await expect(
-    viewer.getByRole("img", { name: "The spectrum of the window at 0:01" })
-  ).toBeVisible();
+  await expect(viewer.getByRole("img", { name: "Spectrum at 0:01" })).toBeVisible();
   await page.keyboard.press("Shift+ArrowRight");
   await expect(plot).toHaveAttribute("aria-valuenow", "11");
   await page.keyboard.press("End");
@@ -171,7 +169,7 @@ test("dragging the cursor on the waveform moves it on the spectrogram and the sp
   const viewer = await openSlot(page);
   const plot = viewer.getByRole("slider", { name: "Cursor" });
   const spectrum = viewer
-    .getByRole("img", { name: /^The spectrum of the window at/ })
+    .getByRole("img", { name: /^Spectrum at/ })
     .locator("path")
     .last();
   await expect(viewer.getByText("Spectrum at 0:00")).toBeVisible();
@@ -262,7 +260,7 @@ test("zooms around the pointer, pans, and loads the detail in view", async ({ pa
   }
 
   // the zoom buttons work around the cursor, and the whole file comes back with one press
-  await viewer.getByRole("button", { name: "Show the whole file" }).click();
+  await viewer.getByRole("button", { name: "Show whole file" }).click();
   await expect(plot).toHaveAttribute("data-view", "0.000 300.000");
   await viewer.getByRole("button", { name: "Zoom in" }).click();
   await expect.poll(async () => (await view())[1]).toBe(150);
@@ -542,7 +540,7 @@ test("analyzes a file and queues a folder from the Files screen", async ({ page 
   await page.getByRole("menuitem", { name: "Details" }).click();
   const inspector = page.getByRole("complementary", { name: "Details" });
   // queued by another browser, it shows its place in the queue
-  await expect(inspector.getByText("Waiting in the analysis queue")).toBeVisible();
+  await expect(inspector.getByText("Waiting in queue")).toBeVisible();
   await expect(inspector.getByText("Likely a transcode").first()).toBeVisible();
   // the file's own actions sit under its name, the rest in its menu
   await expect(inspector.getByRole("button", { name: "Open", exact: true })).toBeVisible();
@@ -563,7 +561,7 @@ test("analyzes a file and queues a folder from the Files screen", async ({ page 
   await page.getByRole("menuitem", { name: "Open" }).click();
   await page.getByRole("button", { name: "More for 01.flac" }).click();
   await page.getByRole("menuitem", { name: "Details" }).click();
-  await expect(inspector.getByText("Waiting in the analysis queue")).toBeVisible();
+  await expect(inspector.getByText("Waiting in queue")).toBeVisible();
   await inspector.getByRole("button", { name: "Open in Analysis" }).click();
   // the toolbar counts the queue and opens it
   await page.getByRole("button", { name: /^Queue/ }).click();

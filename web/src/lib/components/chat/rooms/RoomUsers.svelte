@@ -115,7 +115,7 @@
   };
   const remove = (name: string) =>
     confirmation.ask({
-      title: "Remove from the room",
+      title: "Remove from room",
       body: `Remove ${name} from ${members.name}? They can rejoin only if added again.`,
       confirm: "Remove",
       run: () => void members.removeMember(name).then(report(`${name} was removed`))
@@ -129,7 +129,7 @@
     });
   const quit = () =>
     confirmation.ask({
-      title: "Leave the private room",
+      title: "Leave private room",
       body: `Leave ${members.name}? You can rejoin only if added again.`,
       confirm: "Leave",
       run: () => void members.dropMembership().then(report(`Left ${members.name}`))
@@ -161,7 +161,7 @@
           {#if role === "owner"}
             <Menu.Item onSelect={giveUp}><CrownIcon />Give up ownership</Menu.Item>
           {:else}
-            <Menu.Item onSelect={quit}><UserMinusIcon />Leave the private room</Menu.Item>
+            <Menu.Item onSelect={quit}><UserMinusIcon />Leave private room</Menu.Item>
           {/if}
         </Menu.Content>
       </Menu.Root>
@@ -190,7 +190,7 @@
       }}>
       <Input
         class="h-control-sm"
-        placeholder="Add a member"
+        placeholder="Add member"
         aria-label="Username to add"
         bind:value={adding} />
       <Tooltip text="Add">
@@ -209,7 +209,7 @@
   <div
     class="min-h-0 flex-1 overflow-y-auto rounded-control outline-none focus-visible:ring-2 focus-visible:ring-accent pointer-fine:[--line-h:1.625rem]"
     role="grid"
-    aria-label="Users in the room"
+    aria-label="Room members"
     aria-multiselectable="true"
     aria-activedescendant={list.activeId}
     tabindex="0"
@@ -291,7 +291,7 @@
                 {/if}
                 {#if can.remove}
                   <Menu.Item onSelect={() => remove(u.username)}
-                    ><UserMinusIcon />Remove from the room</Menu.Item>
+                    ><UserMinusIcon />Remove from room</Menu.Item>
                 {/if}
               </Menu.Content>
             </Menu.Root>

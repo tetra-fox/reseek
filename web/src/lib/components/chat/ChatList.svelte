@@ -442,11 +442,11 @@
   <div class="flex flex-wrap gap-1">
     {#if write}
       <Button variant="outline" size="sm" class="flex-auto" onclick={() => onjoin()}
-        ><UsersRoundIcon />Join a room</Button>
+        ><UsersRoundIcon />Join room</Button>
       <Button variant="outline" size="sm" class="flex-auto" onclick={() => onnew()}
         ><MessageSquarePlusIcon />New message</Button>
     {/if}
-    <Tooltip text="Messages from every public room, shown live">
+    <Tooltip text="Live messages from every public room">
       {#snippet child({ props })}
         <Button
           {...props}

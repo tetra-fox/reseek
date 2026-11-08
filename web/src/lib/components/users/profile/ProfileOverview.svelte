@@ -64,13 +64,13 @@
       <p class="mt-4 flex items-center gap-1 text-sm">
         <span class="shrink-0 text-fg-muted">Address</span>
         <span class="min-w-0 font-mono wrap-anywhere">{endpoint}</span>
-        <Tooltip text="Copy the address">
+        <Tooltip text="Copy address">
           {#snippet child({ props })}
             <Button
               {...props}
               variant="ghost"
               size="icon-sm"
-              aria-label="Copy the address"
+              aria-label="Copy address"
               onclick={() => void copyText(endpoint)}><CopyIcon /></Button>
           {/snippet}
         </Tooltip>

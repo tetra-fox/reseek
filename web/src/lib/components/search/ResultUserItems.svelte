@@ -26,4 +26,4 @@
     ><DownloadIcon />{named ? `Download all from ${name}` : "Download all"}</Menu.Item>
 {/if}
 <Menu.Item onSelect={ondismiss}
-  ><EyeOffIcon />{named ? `Hide results from ${name}` : "Hide this result"}</Menu.Item>
+  ><EyeOffIcon />{named ? `Hide results from ${name}` : "Hide result"}</Menu.Item>

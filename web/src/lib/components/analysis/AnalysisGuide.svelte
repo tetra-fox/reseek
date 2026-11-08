@@ -4,8 +4,8 @@
   // what holds for every spectrogram on the page: the mouse and keyboard controls and the
   // disclaimer
   const CONTROLS = [
-    ["Click", "Place the cursor"],
-    ["Drag line", "Move the cursor"],
+    ["Click", "Place cursor"],
+    ["Drag line", "Move cursor"],
     ["Drag", "Pan"],
     ["Scroll", "Zoom"],
     ["Shift+scroll", "Pan"],

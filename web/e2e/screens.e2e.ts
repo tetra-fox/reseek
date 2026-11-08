@@ -11,8 +11,8 @@ test("opens the dashboard, chat, rooms, a profile and your profile", async ({ pa
   await page.getByRole("link", { name: "Chat" }).click();
   await expect(page).toHaveURL(/#\/chat$/);
   await expect(page.getByRole("grid", { name: "Rooms and conversations" })).toBeVisible();
-  await page.getByRole("button", { name: "Join a room" }).click();
-  await expect(page.getByRole("dialog", { name: "Join a room" })).toBeVisible();
+  await page.getByRole("button", { name: "Join room" }).click();
+  await expect(page.getByRole("dialog", { name: "Join room" })).toBeVisible();
   await page.keyboard.press("Escape");
 
   // a path no screen renders goes where it belongs rather than to a blank page

@@ -2904,7 +2904,7 @@
       "kind": {
         "list": "string"
       },
-      "doc": "Interests we hate, in lowercase. An interest is in one of the two lists at most.",
+      "doc": "Dislikes, in lowercase. An interest is in one of the two lists at most.",
       "choices": null,
       "default": [],
       "apply": "live",
@@ -2922,7 +2922,7 @@
       "kind": {
         "list": "string"
       },
-      "doc": "Interests we like, in lowercase, such as `jazz`.",
+      "doc": "Interests, in lowercase, such as `jazz`.",
       "choices": null,
       "default": [],
       "apply": "live",

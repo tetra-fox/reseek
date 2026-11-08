@@ -100,9 +100,7 @@ describe("Live", () => {
     server.opened[0].end();
     await settle();
     expect(live.status).toBe("polling");
-    expect(notices).toEqual([
-      "Live connection to reseek lost. The page refreshes periodically until it is restored."
-    ]);
+    expect(notices).toEqual(["Live connection to reseek lost, refreshing until it is back"]);
     await vi.advanceTimersByTimeAsync(999);
     expect(server.opened).toHaveLength(1);
     await vi.advanceTimersByTimeAsync(1);

@@ -134,14 +134,14 @@
           <span class="min-w-0 text-xs wrap-anywhere text-fg-subtle">
             by {setBy(override.setBy)}, {lasting(override)}
           </span>
-          <Tooltip text={`Remove the override of ${key}`}>
+          <Tooltip text={`Remove override of ${key}`}>
             {#snippet child({ props })}
               <Button
                 {...props}
                 variant="ghost"
                 size="icon-sm"
                 class="ml-auto"
-                aria-label={`Remove the override of ${key}`}
+                aria-label={`Remove override of ${key}`}
                 disabled={busy.running}
                 onclick={() => remove(key)}>
                 <Trash2Icon />

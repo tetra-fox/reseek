@@ -356,13 +356,13 @@
       </Tooltip>
     {/if}
     <div class="flex flex-wrap gap-inline">
-      <Tooltip text={pinned ? "Unpin this search" : "Pin this search under the search box"}>
+      <Tooltip text={pinned ? "Unpin search" : "Pin search"}>
         {#snippet child({ props })}
           <Button
             {...props}
             variant="ghost"
             size="icon"
-            aria-label={pinned ? "Unpin this search" : "Pin this search under the search box"}
+            aria-label={pinned ? "Unpin search" : "Pin search"}
             aria-pressed={pinned}
             onclick={() => togglePin(search.searchText)}>
             {#if pinned}<PinOffIcon />{:else}<PinIcon />{/if}

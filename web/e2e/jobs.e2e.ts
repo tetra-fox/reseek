@@ -18,7 +18,7 @@ test("runs the cleanup from its schedule and finds it in the list by its kind", 
   const row = page.locator("li[id^=job-]").filter({ hasText: "Started by you" }).first();
   await expect(row).toContainText("Cleanup");
   await expect(row).toContainText("Succeeded");
-  await row.getByRole("button", { name: "Show the parts of Cleanup" }).click();
+  await row.getByRole("button", { name: "Show parts of Cleanup" }).click();
   await expect(row).toContainText("Finished transfers");
   await expect(row).toContainText("Sessions and tokens");
 

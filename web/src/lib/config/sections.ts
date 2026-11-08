@@ -284,10 +284,10 @@ export const sections: Section[] = [
             valueAt(values, "shares.share_downloads") === true
               ? String(valueAt(values, "directories.downloads") ?? "the downloads folder")
               : null,
-          note: "Added by Share the downloads folder"
+          note: "Added by Share downloads folder"
         }
       },
-      { key: "shares.share_downloads", label: "Share the downloads folder" },
+      { key: "shares.share_downloads", label: "Share downloads folder" },
       { key: "shares.buddies_only", label: "Shares only buddies see" },
       { key: "shares.trusted_only", label: "Shares only trusted buddies see" },
       { key: "shares.filters", label: "Excluded files", control: "regex-list" },

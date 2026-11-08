@@ -106,7 +106,7 @@ describe("a chat pane", () => {
     expect(ids()).toEqual(["1"]);
     expect(document.querySelector("h2")?.textContent).toBe("Server");
     expect(document.querySelector("textarea")).toBeNull();
-    expect(document.querySelector("[aria-label='Reply with a quote']")).toBeNull();
+    expect(document.querySelector("[aria-label='Quote']")).toBeNull();
     expect(row(1).textContent).not.toContain("server");
     expect(row(1).querySelector("a")).toBeNull();
     expect(row(1).querySelector("time")?.className).not.toContain("invisible");

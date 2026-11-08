@@ -60,7 +60,7 @@
       {
         id: "activity",
         group: "Screens",
-        label: activityPrefs.open ? "Close the activity log" : "Activity log",
+        label: activityPrefs.open ? "Close activity log" : "Activity log",
         hint: shortcutText("J"),
         keywords: "browsing searches queued uploads log network",
         run: () => (activityPrefs.open = !activityPrefs.open)

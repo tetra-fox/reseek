@@ -32,7 +32,7 @@
       rel="noopener noreferrer"
       class="text-accent underline-offset-2 hover:underline">{part.text}</a
     >{:else if part.kind === "slsk"}<Tooltip
-      text={`${part.link.folder ? "Browse this folder" : "Show this file"} in ${part.link.username}'s shares`}
+      text={`${part.link.folder ? "Browse folder" : "Show file"} in ${part.link.username}'s shares`}
       >{#snippet child({ props })}<a
           {...props}
           href={slskBrowse(part.link)}

@@ -55,13 +55,13 @@
             label={`Analysis of ${name(job.path)}`}
             class="w-20 shrink-0 max-sm:hidden" />
           {#if write}
-            <Tooltip text={`Cancel the analysis of ${name(job.path)}`}>
+            <Tooltip text={`Cancel analysis of ${name(job.path)}`}>
               {#snippet child({ props })}
                 <Button
                   {...props}
                   variant="ghost"
                   size="icon-sm"
-                  aria-label={`Cancel the analysis of ${name(job.path)}`}
+                  aria-label={`Cancel analysis of ${name(job.path)}`}
                   onclick={() => void cancel(job.id)}><XIcon /></Button>
               {/snippet}
             </Tooltip>

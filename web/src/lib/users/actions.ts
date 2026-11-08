@@ -29,7 +29,7 @@ export const USER_ACTIONS = {
     icon: FolderOpenIcon
   },
   search: {
-    label: "Search their shares",
+    label: "Search shares",
     of: (name: string) => `Search ${name}'s shares`,
     icon: SearchIcon
   }

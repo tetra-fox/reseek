@@ -83,7 +83,7 @@
       }} />
     <div class="flex flex-wrap gap-inline">
       <Button variant="outline" size="sm" {disabled} onclick={() => input?.click()}>
-        <ImageUpIcon />Choose a picture
+        <ImageUpIcon />Choose picture
       </Button>
       {#if removable}
         <Button variant="ghost" size="sm" {disabled} onclick={onremove}>

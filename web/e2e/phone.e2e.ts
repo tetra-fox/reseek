@@ -188,7 +188,7 @@ const everyScreen = async (page: Page) => {
   await fits(page, "/searches", shows("No searches yet"));
   await fits(page, `/searches/${SEARCH_ID}`, shows("01 One.flac"));
   // the whole folder's dialog keeps its buttons on the screen
-  await page.getByRole("button", { name: "View all files in this folder" }).first().click();
+  await page.getByRole("button", { name: "View all files" }).first().click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByText("04 A Long Track Name.flac")).toBeVisible();
   for (const button of await dialog.getByRole("button").all()) {
@@ -322,7 +322,7 @@ test("a toast's countdown runs along its foot and holds under the pointer", asyn
   await page.goto("./#/chat/rooms/indie");
   const log = page.getByRole("log");
   await log.getByText("thanks bob, grabbing it now").hover();
-  await page.getByRole("button", { name: "Copy the text" }).last().click();
+  await page.getByRole("button", { name: "Copy text" }).last().click();
   const toast = page.getByRole("alert").filter({ hasText: "Could not copy" });
   await expect(toast).toBeVisible();
   const bar = toast.locator(".countdown");

@@ -143,14 +143,14 @@
               </Tooltip>
               {#if crumb.copy}
                 {@const text = crumb.copy}
-                <Tooltip text="Copy the path">
+                <Tooltip text="Copy path">
                   {#snippet child({ props })}
                     <Button
                       {...props}
                       variant="ghost"
                       size="icon-sm"
                       class="size-6"
-                      aria-label="Copy the path"
+                      aria-label="Copy path"
                       onclick={() => void copier.copy(text)}>
                       <CopyIcon copied={copier.copied} class="text-success" />
                     </Button>

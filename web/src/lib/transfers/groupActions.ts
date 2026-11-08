@@ -83,14 +83,14 @@ export const groupActions = (
 
   const all: (GroupAction & { shown: boolean })[] = [
     {
-      label: "Show the job",
+      label: "Show job",
       icon: ListChecksIcon,
       shown: job !== null,
       run: () => void goto(href(`/jobs?job=${job}`)),
       text: true
     },
     {
-      label: "Pause the group",
+      label: "Pause group",
       icon: PauseIcon,
       shown: write && direction === "download" && pausable.length > 0,
       run: () =>
@@ -107,7 +107,7 @@ export const groupActions = (
         })
     },
     {
-      label: "Resume the group",
+      label: "Resume group",
       icon: PlayIcon,
       shown: write && direction === "download" && paused.length > 0,
       run: () =>
@@ -118,7 +118,7 @@ export const groupActions = (
         )
     },
     {
-      label: "Retry the group",
+      label: "Retry group",
       icon: RotateCwIcon,
       shown: write && direction === "download" && retryable.length > 0,
       run: () =>
@@ -129,14 +129,14 @@ export const groupActions = (
         )
     },
     {
-      label: "Cancel the group",
+      label: "Cancel group",
       icon: XIcon,
       shown: write && list.some((t) => isCancelable(t.state)),
       run: oncancel
     },
-    { label: "Remove the group", icon: Trash2Icon, shown: write, run: onremove },
+    { label: "Remove group", icon: Trash2Icon, shown: write, run: onremove },
     {
-      label: "Download more from this folder",
+      label: A.browseFolder.label,
       icon: FolderSearchIcon,
       shown: folderActions,
       run: () =>
@@ -153,7 +153,7 @@ export const groupActions = (
       run: () => openFolder(list)
     },
     // files directly in the downloads directory have no folder to zip
-    { label: "Download folder", icon: FileArchiveIcon, shown: folderActions && !!local, run: zip },
+    { label: "Save as zip", icon: FileArchiveIcon, shown: folderActions && !!local, run: zip },
     {
       label: A.analyze.label,
       icon: A.analyze.icon,

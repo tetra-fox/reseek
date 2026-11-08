@@ -68,7 +68,7 @@
   bind:open
   busy={sending}
   title="Message everyone downloading from you"
-  description={`Sends a private message to each of the ${plural(usernames.length, "user", "users")} in the filtered list`}>
+  description={`To the ${plural(usernames.length, "user", "users")} in the filtered list`}>
   <form
     id="message-all"
     onsubmit={(e) => {

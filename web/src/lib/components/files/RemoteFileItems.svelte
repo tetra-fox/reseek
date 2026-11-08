@@ -37,7 +37,7 @@
 <Menu.Item onSelect={() => void copyText(slskLink(username, path))}
   ><A.copyLink.icon />{A.copyLink.label}</Menu.Item>
 {#if ours}
-  <Menu.Item onSelect={() => sending.ask([path])}><SendIcon />Send to a user...</Menu.Item>
+  <Menu.Item onSelect={() => sending.ask([path])}><SendIcon />Send to user...</Menu.Item>
 {/if}
 {#if ondetails}
   <Menu.Separator />

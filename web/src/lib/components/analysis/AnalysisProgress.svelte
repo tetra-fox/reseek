@@ -17,7 +17,7 @@
 
 <div class="flex items-center gap-2 text-sm">
   <div class="flex flex-1 flex-col gap-1">
-    <span>{running ? `Analyzing: ${percent}%` : "Waiting in the analysis queue"}</span>
+    <span>{running ? `Analyzing: ${percent}%` : "Waiting in queue"}</span>
     <!-- a queued job has no progress yet, which the bar says by leaving its value out -->
     <Progress value={running ? percent : null} label="Analysis progress" />
   </div>

@@ -70,13 +70,13 @@
         class="min-w-0 flex-1 rounded-control bg-surface-muted px-2 py-1.5 text-xs wrap-anywhere">
         {created.secret}
       </code>
-      <Tooltip text="Copy the secret">
+      <Tooltip text="Copy secret">
         {#snippet child({ props })}
           <Button
             {...props}
             variant="outline"
             size="icon-sm"
-            aria-label="Copy the secret"
+            aria-label="Copy secret"
             onclick={() => copying.copy(created!.secret)}>
             <CopyIcon copied={copying.copied} />
           </Button>

@@ -63,11 +63,11 @@
       ? undefined
       : !connected
         ? away
-          ? "You will show as away once connected. Click to show as online."
-          : "Click to show as away once connected"
+          ? "Show as online once connected"
+          : "Show as away once connected"
         : away
-          ? "Others see you as away. Click to show as online."
-          : "Others see you as online. Click to show as away."}>
+          ? "Show as online"
+          : "Show as away"}>
     {#snippet child({ props })}
       <button
         {...props}

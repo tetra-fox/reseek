@@ -112,7 +112,7 @@
       max={dockMax()}
       initial={DOCK_HEIGHT}
       edge="top"
-      label="Height of the activity log"
+      label="Activity log height"
       onchange={(h) => (activityPrefs.height = h)}
       class="absolute inset-x-0 -top-1 z-10 h-2" />
   {/if}
@@ -130,23 +130,23 @@
           {/each}
         </Filter.Group>
       </Filter.Panel>
-      <Tooltip text="Clear the list">
+      <Tooltip text="Clear list">
         {#snippet child({ props })}
           <Button
             {...props}
             variant="ghost"
             size="icon-sm"
-            aria-label="Clear the list"
+            aria-label="Clear list"
             onclick={() => activity.clearView()}><EraserIcon /></Button>
         {/snippet}
       </Tooltip>
-      <Tooltip text="Close the activity log">
+      <Tooltip text="Close activity log">
         {#snippet child({ props })}
           <Button
             {...props}
             variant="ghost"
             size="icon-sm"
-            aria-label="Close the activity log"
+            aria-label="Close activity log"
             onclick={() => (activityPrefs.open = false)}><XIcon /></Button>
         {/snippet}
       </Tooltip>

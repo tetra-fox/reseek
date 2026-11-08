@@ -182,7 +182,7 @@ describe("your own profile page", () => {
     });
     await open();
 
-    const dislike = document.querySelector<HTMLInputElement>('[aria-label="Add a dislike"]')!;
+    const dislike = document.querySelector<HTMLInputElement>('[aria-label="Add dislike"]')!;
     dislike.value = " jazz ";
     dislike.dispatchEvent(new Event("input", { bubbles: true }));
     flushSync();

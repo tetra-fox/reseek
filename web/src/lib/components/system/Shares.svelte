@@ -321,8 +321,7 @@
               {#if r.derivedFrom}
                 <span class="text-xs">
                   Shared because
-                  <a href={href("/system/settings")} class="underline"
-                    >Share the downloads folder</a>
+                  <a href={href("/system/settings")} class="underline">Share downloads folder</a>
                   is on (<code>{r.derivedFrom}</code>)
                 </span>
               {/if}

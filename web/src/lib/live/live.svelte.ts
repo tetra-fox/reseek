@@ -250,10 +250,7 @@ export class Live {
       delay = Math.max(delay, end.retryAfterMs);
     this.status = "polling";
     if (!this.#warned) {
-      this.#deps.notice(
-        "Live connection to reseek lost. The page refreshes periodically until it is restored.",
-        "error"
-      );
+      this.#deps.notice("Live connection to reseek lost, refreshing until it is back", "error");
     }
     this.#warned = true;
     this.retryAt = now + delay;

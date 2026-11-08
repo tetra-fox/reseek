@@ -161,10 +161,10 @@
           <div class="flex flex-wrap justify-center gap-1">
             {#if q !== SERVER}
               <Button variant="outline" size="sm" onclick={() => onnew(q)}
-                ><MessageSquarePlusIcon />Start a conversation</Button>
+                ><MessageSquarePlusIcon />Message {q}</Button>
             {/if}
             <Button variant="outline" size="sm" onclick={() => onjoin(q)}
-              ><UsersRoundIcon />Join this room</Button>
+              ><UsersRoundIcon />Join {q}</Button>
           </div>
         {/if}
       {/snippet}

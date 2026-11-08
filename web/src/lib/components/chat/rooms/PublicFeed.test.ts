@@ -38,9 +38,7 @@ describe("the public room feed", () => {
     expect(lines()).toHaveLength(2);
     expect(lines()[0]).toContain("#indie");
 
-    const box = document.querySelector<HTMLInputElement>(
-      'input[aria-label="Filter the messages"]'
-    )!;
+    const box = document.querySelector<HTMLInputElement>('input[aria-label="Filter messages"]')!;
     box.value = "JAZZ";
     box.dispatchEvent(new Event("input", { bubbles: true }));
     await flush();

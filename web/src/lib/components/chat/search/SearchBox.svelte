@@ -171,11 +171,11 @@
   {#if noName && write}
     {#if text !== SERVER}
       <Suggest.Item value={NEW} icon={MessageSquarePlusIcon}>
-        Start a conversation with <span class="font-medium">{text}</span>
+        Message <span class="font-medium">{text}</span>
       </Suggest.Item>
     {/if}
     <Suggest.Item value={JOIN} icon={UsersRoundIcon}>
-      Join room <span class="font-medium">{text}</span>
+      Join <span class="font-medium">{text}</span>
     </Suggest.Item>
   {/if}
   {#if listed.hard}{@render everything()}{/if}

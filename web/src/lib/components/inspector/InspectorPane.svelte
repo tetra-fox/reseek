@@ -79,7 +79,7 @@
       max={paneMax()}
       initial={PANE_WIDTH}
       edge="left"
-      label="Width of the details pane"
+      label="Details pane width"
       onchange={(w) => (inspectorPrefs.width = w)}
       class="absolute inset-y-0 -left-1 z-10 w-2" />
     {@render body()}

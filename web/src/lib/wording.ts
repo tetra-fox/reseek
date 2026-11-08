@@ -15,7 +15,7 @@ export const BUDDY = {
   trusted: "Trusted",
   trustedHint: "Also sees folders shared only with trusted buddies",
   notify: "Notify when online",
-  notifyHint: "Tells you when they come online, go away or go offline"
+  notifyHint: "Also when they go away or offline"
 } as const;
 
 /** Why Unblock is unavailable for a user the configuration blocks */

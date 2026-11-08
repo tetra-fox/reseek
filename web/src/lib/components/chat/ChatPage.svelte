@@ -170,7 +170,7 @@
         {max}
         {initial}
         edge="right"
-        label="Width of the chat list"
+        label="Chat list width"
         onchange={(w) => (chatLayout.listWidth = w)}
         class="absolute inset-y-0 -right-1 z-10 w-2" />
     </div>
@@ -205,7 +205,7 @@
           class="flex min-w-0 items-center gap-1.5 border-b px-3 py-1.5 text-left text-xs text-fg-muted hover:text-fg"
           onclick={backToResults}>
           <ArrowLeftIcon class="size-3.5 shrink-0" />
-          <span class="truncate">Back to the results for "{q}"</span>
+          <span class="truncate">Back to results for "{q}"</span>
         </button>
       {/if}
       {#key `${current} ${at}`}

@@ -50,8 +50,8 @@
   {#if !disabled}
     <Input
       class="h-control-sm w-32"
-      placeholder="Add a tag"
-      aria-label="Add a tag"
+      placeholder="Add tag"
+      aria-label="Add tag"
       maxlength={32}
       bind:value={typed}
       onkeydown={add} />

@@ -185,7 +185,7 @@
     wrapperClass="min-w-32 flex-1"
     class={["h-control-sm", text.trim() && Filter.FILTERING]}
     placeholder="Filter"
-    aria-label="Filter the log"
+    aria-label="Filter log"
     bind:value={text} />
   <div class="ml-auto flex gap-inline">
     {#if chosen.length}

@@ -56,7 +56,7 @@ test.describe("on a wide screen", () => {
       .toEqual({ under: true, shown: true });
 
     // wider with the keys, and the same after a reload
-    const handle = page.getByRole("separator", { name: "Width of the details pane" });
+    const handle = page.getByRole("separator", { name: "Details pane width" });
     await handle.focus();
     await page.keyboard.press("ArrowLeft");
     await page.keyboard.press("ArrowLeft");

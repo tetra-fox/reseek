@@ -33,7 +33,7 @@ test("a room reads like a chat: names, actions, links, the wall and the activity
   const color = await log
     .getByRole("link", { name: "bob", exact: true })
     .evaluate((a) => getComputedStyle(a).color);
-  const listed = page.getByRole("grid", { name: "Users in the room" });
+  const listed = page.getByRole("grid", { name: "Room members" });
   await expect(listed.getByRole("link", { name: "bob", exact: true })).toHaveCSS("color", color);
   // a name takes only its text's width: its menu button takes no room until it shows
   const widths = await log
@@ -116,8 +116,8 @@ test("the server's notices are one read-only entry, reached by the keys", async 
   // the reserved name is offered as a room, never as a user
   const search = page.getByRole("combobox", { name: "Search chats" });
   await search.fill("server");
-  await expect(page.getByRole("option", { name: "Join room server" })).toBeVisible();
-  await expect(page.getByRole("option", { name: /Start a conversation/ })).toHaveCount(0);
+  await expect(page.getByRole("option", { name: "Join server" })).toBeVisible();
+  await expect(page.getByRole("option", { name: "Message server" })).toHaveCount(0);
   await page.goto("./#/users/server");
   await expect(page).toHaveURL(/#\/chat\/server$/);
 });
@@ -144,7 +144,7 @@ test("the keys reach what can be done with a message", async ({ page }) => {
   await page.goto("./#/chat/rooms/indie");
   const log = page.getByRole("log");
   await expect(log.getByText("anyone have the new boards of canada rip?")).toBeVisible();
-  const copy = log.getByRole("button", { name: "Copy the text" });
+  const copy = log.getByRole("button", { name: "Copy text" });
   await expect(copy).toBeHidden();
   await log.focus();
   await page.keyboard.press("ArrowUp");
@@ -154,7 +154,7 @@ test("the keys reach what can be done with a message", async ({ page }) => {
   await expect(copy).toHaveCount(1);
   await expect(copy).toBeVisible();
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("menuitem", { name: "Copy the text" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Copy text" })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(newest).toBeFocused();
   // Tab goes from the message to its own toolbar, which comes after its text, and back
@@ -179,7 +179,7 @@ test("a toast sits above the docked activity log", async ({ page }) => {
   const dock = page.getByRole("region", { name: "Activity on the network" });
   await expect.poll(async () => (await dock.boundingBox())?.height).toBe(288);
   await log.getByText("thanks bob, grabbing it now").hover();
-  await page.getByRole("button", { name: "Copy the text" }).last().click();
+  await page.getByRole("button", { name: "Copy text" }).last().click();
   const toast = page.getByRole("alert").filter({ hasText: "Could not copy" });
   await expect(toast).toBeVisible();
   const [above, top] = [(await toast.boundingBox())!, (await dock.boundingBox())!];

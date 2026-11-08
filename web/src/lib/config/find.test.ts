@@ -6,7 +6,7 @@ import { currentSection, fieldMatches } from "./find";
 const info = (fields: Partial<FieldView>) => fields as FieldView;
 
 describe("the settings search", () => {
-  const field = { key: "shares.share_downloads", label: "Share the downloads folder" };
+  const field = { key: "shares.share_downloads", label: "Share downloads folder" };
   const view = info({
     doc: "Adds the downloads directory to the shares.",
     envVar: "RESEEK_SHARES_SHARE_DOWNLOADS",

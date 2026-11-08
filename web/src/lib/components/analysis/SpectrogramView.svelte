@@ -135,13 +135,13 @@
             bind:value={spectrogramView.volume}
             class="w-20 accent-(--color-accent)" />
         </span>
-        <Tooltip text={scope.following ? "Following the playhead" : "Not following the playhead"}>
+        <Tooltip text={scope.following ? "Following playhead" : "Not following playhead"}>
           {#snippet child({ props })}
             <Button
               {...props}
               variant="ghost"
               size="icon-sm"
-              aria-label="Follow the playhead"
+              aria-label="Follow playhead"
               aria-pressed={scope.following}
               onclick={() => scope.setFollowing(!scope.following)}>
               {#if scope.following}<LocateFixedIcon />{:else}<LocateOffIcon />{/if}
@@ -156,7 +156,7 @@
       <span class="ml-auto flex gap-0.5">
         {@render tool("Zoom out", ZoomOutIcon, () => scope.zoomAtCursor(0.5), all)}
         {@render tool("Zoom in", ZoomInIcon, () => scope.zoomAtCursor(2), deepest)}
-        {@render tool("Show the whole file", ScanIcon, () => scope.showAll(), all)}
+        {@render tool("Show whole file", ScanIcon, () => scope.showAll(), all)}
       </span>
     </div>
     <div class="flex flex-wrap items-center gap-1" role="group" aria-label="Guide lines">

@@ -77,7 +77,7 @@
               </Tooltip>
             {/if}
             {#if search}
-              <Tooltip text="Search for it">
+              <Tooltip text="Search">
                 {#snippet child({ props })}
                   <Button
                     {...props}

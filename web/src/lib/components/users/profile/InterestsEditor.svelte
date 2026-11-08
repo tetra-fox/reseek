@@ -81,7 +81,7 @@
 {/snippet}
 
 <div class="grid grid-cols-[minmax(0,1fr)] gap-group sm:grid-cols-2">
-  {@render list("liked", "Interests", "Add an interest")}
-  {@render list("hated", "Dislikes", "Add a dislike")}
+  {@render list("liked", "Interests", "Add interest")}
+  {@render list("hated", "Dislikes", "Add dislike")}
 </div>
 {#if notice}<p class="text-xs text-fg-muted">{notice}</p>{/if}

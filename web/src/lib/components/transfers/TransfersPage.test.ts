@@ -322,7 +322,7 @@ describe("the transfers table", () => {
       listing = [a, b, other];
       const net = await start();
       const cancelGroup = row("user:alice")!.querySelector<HTMLButtonElement>(
-        'button[aria-label="Cancel the group"]'
+        'button[aria-label="Cancel group"]'
       )!;
       cancelGroup.focus();
       // a group with running transfers asks before it is canceled

@@ -187,7 +187,7 @@ test("Enter opens the results, walked by key, and Back and Escape return from a 
   await expect(log.locator('[data-message="151"]')).toBeVisible();
   await expect(page.getByRole("textbox", { name: "Message" })).toBeVisible();
   await found.hover();
-  await expect(found.getByRole("button", { name: "Copy the text" })).toBeVisible();
+  await expect(found.getByRole("button", { name: "Copy text" })).toBeVisible();
 
   // older and newer pages come as the list scrolls
   await log.evaluate((b) => (b.scrollTop = b.scrollHeight));
@@ -215,7 +215,7 @@ test("Enter opens the results, walked by key, and Back and Escape return from a 
   // the same way back from the bar over the chat
   await results(page).getByRole("row").filter({ hasText: "have you heard" }).click();
   await expect(page).toHaveURL(/#\/chat\/alice\?at=2&q=floyd$/);
-  await page.getByRole("button", { name: 'Back to the results for "floyd"' }).click();
+  await page.getByRole("button", { name: 'Back to results for "floyd"' }).click();
   await expect(results(page)).toBeVisible();
 });
 
@@ -257,7 +257,7 @@ test("a search that finds nothing says so, and offers the name", async ({ page }
   await expect(page.getByRole("listbox")).toContainText("No rooms, users or messages match");
   await page.keyboard.press("Enter");
   await expect(page.getByText('Nothing matches "zzz"')).toBeVisible();
-  await page.getByRole("button", { name: "Join this room" }).click();
+  await page.getByRole("button", { name: "Join zzz" }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
 });
 
@@ -307,7 +307,7 @@ test.describe("on a phone", () => {
 
     await results(page).getByRole("row").filter({ hasText: "came up here" }).click();
     await expect(page.getByRole("log").locator('[data-message="150"]')).toBeVisible();
-    await page.getByRole("button", { name: 'Back to the results for "floyd"' }).click();
+    await page.getByRole("button", { name: 'Back to results for "floyd"' }).click();
     await expect(results(page)).toBeVisible();
 
     // from a chat the box is in the sheet

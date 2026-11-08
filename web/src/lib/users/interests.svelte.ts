@@ -9,7 +9,7 @@ import { ownProfile } from "./profile.svelte";
 export type Interests = Schemas["Interests"];
 
 /** What the interests editor's card says about the lists */
-export const INTERESTS_HINT = "The server uses these to suggest similar users";
+export const INTERESTS_HINT = "Used to suggest similar users";
 
 /** Which of the two lists */
 export type Side = keyof Interests;

@@ -53,7 +53,7 @@ test("finds options by search, follows the section in view and gathers unsaved c
 
   // the environment variable and the flag show on hover
   await page
-    .getByRole("button", { name: /^Set Listen port from the environment/ })
+    .getByRole("button", { name: /^Environment variable and flag for Listen port/ })
     .first()
     .hover();
   await expect(page.getByRole("button", { name: /^Copy RESEEK_/ }).first()).toBeVisible();
@@ -133,7 +133,7 @@ test("a row's control comes before its other buttons in the tab order", async ({
   await page.locator('[id="soulseek.listen_port"]').focus();
   await page.keyboard.press("Tab");
   const trigger = page.getByRole("button", {
-    name: "Set Listen port from the environment or the command line"
+    name: "Environment variable and flag for Listen port"
   });
   await expect(trigger).toBeFocused();
   // and it shows after the control on a phone, where the row is one column

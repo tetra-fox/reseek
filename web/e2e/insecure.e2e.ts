@@ -46,7 +46,7 @@ test("copies a message by selecting it, and says notifications need HTTPS", asyn
   await expect(page.getByText(/Browsers show desktop notifications only over HTTPS/)).toBeVisible();
   const log = page.getByRole("log");
   await log.getByText("thanks bob, grabbing it now").hover();
-  await page.getByRole("button", { name: "Copy the text" }).last().click();
+  await page.getByRole("button", { name: "Copy text" }).last().click();
   await expect
     .poll(() => page.evaluate(() => (window as unknown as { copied?: string }).copied))
     .toBe("thanks bob, grabbing it now");

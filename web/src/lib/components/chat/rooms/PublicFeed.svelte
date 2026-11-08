@@ -69,15 +69,14 @@
     <RadioTowerIcon class="size-4 shrink-0 text-fg-muted" />
     <div class="name-count min-w-0 flex-1 gap-2">
       <h2 class="truncate font-medium">All public rooms</h2>
-      <span class="text-xs text-fg-muted"
-        ><span>Messages from every public room, shown live and not saved</span></span>
+      <span class="text-xs text-fg-muted"><span>Live and not saved</span></span>
     </div>
     <Input
       type="search"
       icon={SearchIcon}
       bind:value={filter}
       placeholder="Filter by room, name or text"
-      aria-label="Filter the messages"
+      aria-label="Filter messages"
       wrapperClass="w-full sm:w-64" />
   </header>
   <div class="relative flex min-h-0 flex-1 flex-col">

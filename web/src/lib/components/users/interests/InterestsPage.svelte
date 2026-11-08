@@ -70,7 +70,7 @@
   );
   const note = $derived(
     !interest && source === "personal" && read?.popularInstead
-      ? "Nothing is recommended for you yet, so these are popular interests"
+      ? "Nothing recommended for you yet"
       : undefined
   );
 

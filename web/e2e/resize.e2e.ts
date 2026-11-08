@@ -26,8 +26,8 @@ test.describe("on a wide screen", () => {
   test.use({ viewport: { width: 1600, height: 900 } });
 
   for (const { label, sign, initial, min } of [
-    { label: "Width of the chat list", sign: 1, initial: 288, min: 240 },
-    { label: "Width of the side panel", sign: -1, initial: 256, min: 208 }
+    { label: "Chat list width", sign: 1, initial: 288, min: 240 },
+    { label: "Side panel width", sign: -1, initial: 256, min: 208 }
   ]) {
     test(`${label}: a drag, the keys, limits, a reset and a reload`, async ({ page }) => {
       await room(page);
@@ -63,8 +63,8 @@ test.describe("on a wide screen", () => {
 
   test("the messages keep their room as a narrow window limits the columns", async ({ page }) => {
     await room(page);
-    const list = page.getByRole("separator", { name: "Width of the chat list" });
-    const side = page.getByRole("separator", { name: "Width of the side panel" });
+    const list = page.getByRole("separator", { name: "Chat list width" });
+    const side = page.getByRole("separator", { name: "Side panel width" });
     await drag(page, list, 900);
     await drag(page, side, -900);
     await page.setViewportSize({ width: 1100, height: 800 });

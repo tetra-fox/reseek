@@ -99,7 +99,7 @@
       {#if session.can("Administrator")}
         <a
           class="text-xs text-accent hover:underline"
-          href={href("/system/settings?section=transfers")}>Change the limits in Settings</a>
+          href={href("/system/settings?section=transfers")}>Change in Settings</a>
       {/if}
     </Popover.Content>
   </Popover.Portal>
