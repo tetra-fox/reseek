@@ -46,10 +46,19 @@ pub fn now() -> DateTime<Utc> {
   DateTime::from_timestamp_micros(now.timestamp_micros()).unwrap_or(now)
 }
 
-/// `n` with the word for one or many of what it counts, such as `1 file` or `12 files`.
+/// `n` with the word for one or many of what it counts, its digits grouped in threes as the UI
+/// writes counts: `1 file`, `12,345 files`.
 pub fn counted(n: impl Into<u64>, one: &str, many: &str) -> String {
   let n = n.into();
-  format!("{n} {}", if n == 1 { one } else { many })
+  let digits = n.to_string();
+  let mut grouped = String::with_capacity(digits.len() + digits.len() / 3);
+  for (i, digit) in digits.chars().enumerate() {
+    if i > 0 && (digits.len() - i) % 3 == 0 {
+      grouped.push(',');
+    }
+    grouped.push(digit);
+  }
+  format!("{grouped} {}", if n == 1 { one } else { many })
 }
 
 /// A job to make.

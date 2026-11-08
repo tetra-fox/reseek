@@ -44,6 +44,21 @@ fn counts(total: u32, succeeded: u32, failed: u32, canceled: u32) -> JobCounts {
 }
 
 #[test]
+fn counted_groups_digits_in_threes() {
+  assert_eq!(counted(0u32, "file", "files"), "0 files");
+  assert_eq!(counted(1u32, "file", "files"), "1 file");
+  assert_eq!(counted(999u32, "file", "files"), "999 files");
+  assert_eq!(counted(1_000u32, "file", "files"), "1,000 files");
+  assert_eq!(counted(12_345u32, "file", "files"), "12,345 files");
+  assert_eq!(counted(123_456u32, "file", "files"), "123,456 files");
+  assert_eq!(counted(1_234_567u32, "file", "files"), "1,234,567 files");
+  assert_eq!(
+    counted(u64::MAX, "file", "files"),
+    "18,446,744,073,709,551,615 files"
+  );
+}
+
+#[test]
 fn a_job_ends_as_its_parts_did() {
   let ending = |c: JobCounts| c.ending();
   assert_eq!(ending(counts(3, 3, 0, 0)), JobEnding::Succeeded);
