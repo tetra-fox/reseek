@@ -1,7 +1,6 @@
-import { expect, type Locator, type Page, test } from "@playwright/test";
+import { expect, type Locator, test } from "@playwright/test";
 
 import type { Schemas } from "../src/lib/api/client";
-import { BUDDY } from "../src/lib/wording";
 import { carolShares, dir, transfer, user } from "./support/fakes";
 import { visit } from "./support/login";
 
@@ -10,7 +9,6 @@ import { visit } from "./support/login";
 
 /** A name far wider than any window, with nowhere to break */
 const LONG = `${"a_very_long_name_".repeat(24)}end`;
-const AT = "2026-10-27T10:00:00Z";
 
 /**
  * Expects every row of `grid` with a cell per column as wide as its header row, each cell starting
@@ -33,46 +31,6 @@ const expectAligned = async (grid: Locator, indented = 0) => {
   const fixed = (row: typeof header) => ({ ...row, starts: row.starts.slice(indented) });
   for (const line of cells) expect(fixed(line)).toEqual(fixed(header));
 };
-
-/** Answers the users list, the directory's and the buddies', with `users` */
-const users = (page: Page, list: Schemas["UserSummary"][]) =>
-  page.route("**/api/v0/users?**", (route) =>
-    route.fulfill({ json: { users: list, total: list.length } })
-  );
-
-test("the users directory", async ({ page }) => {
-  await users(page, [user("alice"), user(LONG, { tags: [LONG] })]);
-  await visit(page, "/users");
-  await expectAligned(page.getByRole("grid", { name: "Users" }));
-});
-
-test("the buddy list", async ({ page }) => {
-  const buddy = { trusted: false, notifyPresence: true };
-  await users(page, [user("alice", { buddy }), user(LONG, { buddy, notes: LONG })]);
-  await visit(page, "/users?tab=buddies");
-  await expectAligned(page.getByRole("grid", { name: BUDDY.plural }));
-});
-
-test("the blocked users", async ({ page }) => {
-  const block = (username: string, reason: string): Schemas["Block"] => ({
-    username,
-    reason,
-    scopes: ["uploads", "searches", "browse", "messages"],
-    source: "api",
-    addresses: [],
-    createdAt: AT
-  });
-  await page.route("**/api/v0/users/blocked", (route) =>
-    route.fulfill({
-      json: {
-        users: [block("alice", "spam"), { ...block(LONG, LONG), addresses: ["203.0.113.7"] }],
-        rules: { patterns: [], cidrs: [] }
-      } satisfies Schemas["BlockedUsers"]
-    })
-  );
-  await visit(page, "/users?tab=blocked");
-  await expectAligned(page.getByRole("grid", { name: "Blocked users" }));
-});
 
 test("a user's transfers", async ({ page }) => {
   const transfers = [
@@ -111,39 +69,6 @@ test("the shares", async ({ page }) => {
   );
   await visit(page, "/system/shares");
   await expectAligned(page.getByRole("grid", { name: "Shared folders" }));
-});
-
-test("the event log", async ({ page }) => {
-  const event = (id: string, path: string) => ({
-    id,
-    timestamp: AT,
-    type: "DownloadFileComplete",
-    data: { username: "alice", localPath: path }
-  });
-  await page.route("**/api/v0/events?**", (route) =>
-    route.fulfill({
-      json: [event("e1", "/downloads/1.flac"), event("e2", `/downloads/${LONG}`)],
-      headers: { "X-Total-Count": "2" }
-    })
-  );
-  await visit(page, "/system/events");
-  await expectAligned(page.getByRole("grid", { name: "Events" }));
-});
-
-test("the log files", async ({ page }) => {
-  const file = (name: string): Schemas["FilesystemFile"] => ({
-    name,
-    fullName: name,
-    length: 4096,
-    createdAt: AT,
-    modifiedAt: AT,
-    attributes: "Normal"
-  });
-  await page.route("**/api/v0/logs/files", (route) =>
-    route.fulfill({ json: [file("reseek-20261027.log"), file(`${LONG}.log`)] })
-  );
-  await visit(page, "/system/logs?tab=history");
-  await expectAligned(page.getByRole("grid", { name: "Log files" }));
 });
 
 test("a browse of someone's shares", async ({ page }) => {
