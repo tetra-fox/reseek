@@ -1,3 +1,5 @@
+import { formatCount } from "#lib/format.js";
+
 /** What happened to a member of a room, as the room's activity pane says it */
 export type PresenceKind =
   | "joined"
@@ -75,7 +77,7 @@ export const burstLine = (b: Burst) => {
 /** A burst's line as text */
 export const burstText = (b: Burst): string => {
   const { shown, others, verb } = burstLine(b);
-  const names = others ? [...shown, `${others} others`] : shown;
+  const names = others ? [...shown, `${formatCount(others)} others`] : shown;
   const list =
     names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
   return `${list} ${verb}`;

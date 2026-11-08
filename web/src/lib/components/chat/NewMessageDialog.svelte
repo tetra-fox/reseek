@@ -1,20 +1,22 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
 
-  import { api } from "#lib/api/client.js";
+  import { api, byUser } from "#lib/api/client.js";
   import { NOT_A_USER, SERVER } from "#lib/chat/notices.js";
   import Field from "#lib/components/Field.svelte";
   import Form from "#lib/components/Form.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Dialog from "#lib/components/ui/Dialog.svelte";
-  import Input from "#lib/components/ui/Input.svelte";
   import Notice from "#lib/components/ui/Notice.svelte";
   import * as Suggest from "#lib/components/ui/suggest/suggest.js";
+  import Textarea from "#lib/components/ui/Textarea.svelte";
   import UserEntry from "#lib/components/users/UserEntry.svelte";
   import { chatHref } from "#lib/nav.js";
   import { call } from "#lib/request.js";
   import { USER_ACTIONS } from "#lib/users/actions.js";
   import { UserFinder, userOf, userValue } from "#lib/users/finder.svelte.js";
+
+  import LengthCount, { maxLength, nearMax } from "./LengthCount.svelte";
 
   // a first message to someone, with the users the directory knows offered as the name is typed.
   // Names are exact, so Enter keeps the name as typed unless the keys moved to one of them
@@ -28,12 +30,15 @@
   let error = $state("");
   let sending = $state(false);
   let suggesting = $state(false);
-  let messageBox = $state<HTMLInputElement | null>(null);
+  let messageBox = $state<HTMLTextAreaElement | null>(null);
 
-  const name = $derived(username.trim());
+  // a name is taken as typed, edge spaces and all; only a blank one is no name
+  const name = $derived(username.trim() ? username : "");
   const refused = $derived(name === SERVER);
   const finder = new UserFinder(() => name);
   const problem = $derived(refused ? NOT_A_USER : error);
+  const max = $derived(maxLength());
+  const length = $derived([...message.trim()].length);
 
   $effect(() => {
     if (!open) return;
@@ -50,12 +55,12 @@
   const send = async (e: SubmitEvent) => {
     e.preventDefault();
     const text = message.trim();
-    if (!name || refused || !text || sending) return;
+    if (!name || refused || !text || length > max || sending) return;
     const to = name;
     sending = true;
     const outcome = await call(() =>
       api.POST("/api/v0/conversations/{username}", {
-        params: { path: { username: to }, query: { username: to } },
+        params: byUser(to),
         body: text
       })
     );
@@ -95,12 +100,20 @@
       </Suggest.Box>
     </Field>
     <Field label="Message" for="new-message-text">
-      <Input
+      <!-- a private message is one line: Enter sends it, as in a conversation -->
+      <Textarea
         id="new-message-text"
         bind:ref={messageBox}
+        class="field-sizing-content max-h-48 min-h-10 text-sm"
         autocomplete="off"
         required
-        bind:value={message} />
+        bind:value={message}
+        onkeydown={(e) => {
+          if (e.key !== "Enter" || e.isComposing) return;
+          e.preventDefault();
+          e.currentTarget.form?.requestSubmit();
+        }} />
+      {#if nearMax(length, max)}<p class="flex text-xs"><LengthCount {length} {max} /></p>{/if}
     </Field>
     {#if problem}<Notice kind="error">{problem}</Notice>{/if}
   </Form>
@@ -109,6 +122,6 @@
     <Button
       type="submit"
       form="new-message"
-      disabled={!name || refused || !message.trim() || sending}>Send</Button>
+      disabled={!name || refused || !message.trim() || length > max || sending}>Send</Button>
   {/snippet}
 </Dialog>

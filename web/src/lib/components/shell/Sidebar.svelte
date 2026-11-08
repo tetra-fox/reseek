@@ -16,6 +16,7 @@
   import Badge from "#lib/components/ui/Badge.svelte";
   import Scrim from "#lib/components/ui/Scrim.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
+  import { badgeCount, formatCount } from "#lib/format.js";
   import { DENSITY_LABELS } from "#lib/lists/density.js";
   import { href, navCurrent, navItems, type NavItem, route, systemItem } from "#lib/nav.js";
   import { settings } from "#lib/settings.svelte.js";
@@ -84,7 +85,7 @@
               in:scale={{ start: 0.9, duration: motionFast(), easing: easeOutSoft }}>
               <Badge
                 tone={chat.totalMentions ? "accent" : "danger"}
-                aria-label={`${chat.total} unread`}>{chat.total}</Badge>
+                aria-label={`${formatCount(chat.total)} unread`}>{badgeCount(chat.total)}</Badge>
             </span>
           {/if}
         </a>

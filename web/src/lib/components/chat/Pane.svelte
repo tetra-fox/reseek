@@ -2,6 +2,7 @@
   import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
   import HashIcon from "@lucide/svelte/icons/hash";
   import LockIcon from "@lucide/svelte/icons/lock";
+  import MessagesSquareIcon from "@lucide/svelte/icons/messages-square";
   import PanelRightIcon from "@lucide/svelte/icons/panel-right";
   import ServerIcon from "@lucide/svelte/icons/server";
   import { Dialog, Tabs } from "bits-ui";
@@ -31,7 +32,7 @@
   import Presence from "#lib/components/users/Presence.svelte";
   import Username from "#lib/components/users/Username.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
-  import { plural } from "#lib/format.js";
+  import { formatCount, plural } from "#lib/format.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { session } from "#lib/session.svelte.js";
   import { fields } from "#lib/stored.svelte.js";
@@ -138,8 +139,9 @@
           value={t.id}
           class="relative z-1 flex h-control-sm flex-1 items-center justify-center rounded-control text-sm text-fg-muted transition-colors duration-(--motion-fast) hover:text-fg data-[state=active]:text-fg data-[state=inactive]:hover:bg-hover">
           {t.title}
-          {#if t.id === "wall" && members.wall.length}
-            <span class="ml-1 text-xs text-fg-subtle tabular-nums">{members.wall.length}</span>
+          {#if t.id === "wall" && members.shownWall.length}
+            <span class="ml-1 text-xs text-fg-subtle tabular-nums"
+              >{formatCount(members.shownWall.length)}</span>
           {/if}
         </Tabs.Trigger>
       {/each}
@@ -174,13 +176,15 @@
       </div>
     {:else if target.kind === "user"}
       <Presence presence={summary?.presence} worded={!!summary?.presence} />
-      <Username name={target.name} class="text-base" />
-      <span class="text-xs text-fg-muted">{summary?.presence ?? ""}</span>
+      <div class="name-count flex-1 gap-2">
+        <Username name={target.name} class="text-base" />
+        <span class="text-xs text-fg-muted"><span>{summary?.presence ?? ""}</span></span>
+      </div>
     {:else}
       {#if members?.room?.isPrivate}
-        <LockIcon class="size-4 text-fg-muted" aria-label="Private room" />
+        <LockIcon class="size-4 shrink-0 text-fg-muted" aria-label="Private room" />
       {:else}
-        <HashIcon class="size-4 text-fg-muted" />
+        <HashIcon class="size-4 shrink-0 text-fg-muted" />
       {/if}
       <div class="name-count flex-1 gap-2">
         <h2 class="truncate font-medium">{target.name}</h2>
@@ -188,7 +192,7 @@
           ><span>{plural(members?.users.size ?? 0, "user", "users")}</span></span>
       </div>
     {/if}
-    <div class="ml-auto flex items-center gap-1">
+    <div class="ml-auto flex shrink-0 items-center gap-1">
       {#if target.kind === "room" && !joined && write}
         <Button size="sm" onclick={() => void join()}>Join</Button>
       {/if}
@@ -258,11 +262,11 @@
             </div>
           {/each}
         </div>
-      {:else if notices && !pane.ordered.length && !pane.error}
+      {:else if !pane.ordered.length && !pane.gaps.length && !pane.error}
         <EmptyState
-          icon={ServerIcon}
+          icon={notices ? ServerIcon : MessagesSquareIcon}
           class="flex-1 justify-center"
-          title="No notices from the server" />
+          title={notices ? "No notices from the server" : "No messages yet"} />
       {:else}
         <MessageList
           {pane}

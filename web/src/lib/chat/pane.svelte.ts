@@ -410,7 +410,7 @@ export class MessagePane {
     const outcome = await call(() =>
       api.GET("/api/v0/conversations/{username}", {
         params: {
-          path: { username: this.target.name },
+          path: byUser(this.target.name).path,
           query: { ...byUser(this.target.name).query, includeMessages: false }
         }
       })
@@ -445,7 +445,7 @@ export class MessagePane {
       const outcome = await call(() =>
         api.GET("/api/v0/conversations/{username}/messages", {
           params: {
-            path: { username: name },
+            path: byUser(name).path,
             query: { ...byUser(name).query, ...cursor, limit: PAGE }
           }
         })
@@ -464,7 +464,7 @@ export class MessagePane {
       };
     }
     const params = {
-      path: { roomName: name },
+      path: byRoom(name).path,
       query: { ...byRoom(name).query, ...cursor, limit: PAGE }
     };
     const outcome = chat.rooms.get(name)

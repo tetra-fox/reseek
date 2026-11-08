@@ -235,7 +235,7 @@ class Chat {
   markRoomReadNewest = async (name: string) => {
     const page = await call(() =>
       api.GET("/api/v0/rooms/joined/{roomName}/messages", {
-        params: { path: { roomName: name }, query: { ...byRoom(name).query, limit: 1 } }
+        params: { path: byRoom(name).path, query: { ...byRoom(name).query, limit: 1 } }
       })
     );
     const newest = page.ok ? page.data.messages.at(-1)?.localId : undefined;
@@ -250,7 +250,7 @@ class Chat {
   close = async (username: string, purge = false) => {
     const outcome = await call(() =>
       api.DELETE("/api/v0/conversations/{username}", {
-        params: { path: { username }, query: { ...byUser(username).query, purge } }
+        params: { path: byUser(username).path, query: { ...byUser(username).query, purge } }
       })
     );
     // a conversation already gone is closed all the same

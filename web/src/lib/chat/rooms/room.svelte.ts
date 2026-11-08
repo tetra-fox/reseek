@@ -37,6 +37,8 @@ export class RoomMembers {
   bursts = $state<Burst[]>([]);
   /** the members' tickers, the latest change first */
   wall = $state.raw<WallLine[]>([]);
+  /** the tickers the wall shows: all but those hidden with their members' messages */
+  readonly shownWall = $derived(this.wall.filter((l) => !l.hidden));
   /** counts the pushes of the whole room, each newer than any read already on its way */
   #pushes = 0;
 

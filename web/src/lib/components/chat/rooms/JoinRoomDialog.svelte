@@ -24,9 +24,11 @@
   import Dialog from "#lib/components/ui/Dialog.svelte";
   import GridHeader from "#lib/components/ui/GridHeader.svelte";
   import Input from "#lib/components/ui/Input.svelte";
+  import MiddleTruncate from "#lib/components/ui/MiddleTruncate.svelte";
   import Notice from "#lib/components/ui/Notice.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import Switch from "#lib/components/ui/Switch.svelte";
+  import { formatCount } from "#lib/format.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
   import { Grid, keptIn } from "#lib/lists/table.svelte.js";
   import { ListWindow } from "#lib/lists/virtual.svelte.js";
@@ -68,7 +70,7 @@
   });
   const grid = new Grid<Room>({
     columns: () => [
-      { id: "name", label: "Name", width: "8rem", grow: true, value: (r) => r.name.toLowerCase() },
+      { id: "name", label: "Name", width: "4rem", grow: true, value: (r) => r.name.toLowerCase() },
       {
         id: "users",
         label: "Users",
@@ -77,7 +79,8 @@
         descFirst: true,
         value: (r) => r.userCount
       },
-      { id: "join", label: "Join", width: "8.5rem", quiet: true, fixed: true }
+      // set by the list's box: narrower on a phone, where "Joined" shows as its check alone
+      { id: "join", label: "Join", width: "var(--join-width)", quiet: true, fixed: true }
     ],
     data: () => matching,
     ...keptIn(view),
@@ -189,7 +192,7 @@
     <Notice kind="error">{available.error}</Notice>
   {:else}
     <div
-      class="max-h-72 min-h-32 overflow-y-auto rounded-control border text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      class="max-h-72 min-h-32 overflow-y-auto rounded-control border text-sm outline-none [--join-width:6rem] focus-visible:ring-2 focus-visible:ring-accent sm:[--join-width:8.5rem]"
       role="grid"
       aria-label="Rooms"
       aria-activedescendant={list.activeId}
@@ -211,16 +214,22 @@
             class="group absolute inset-x-0 top-0 grid items-center line-tint">
             <span role="gridcell" class="flex min-w-0 items-center gap-1.5 px-2">
               {#if room.isPrivate}<LockIcon
-                  class="size-3.5 text-fg-muted"
+                  class="size-3.5 shrink-0 text-fg-muted"
                   aria-label="Private" />{/if}
-              {#if room.isOwned}<CrownIcon class="size-3.5 text-warning" aria-label="Owned" />{/if}
+              {#if room.isOwned}<CrownIcon
+                  class="size-3.5 shrink-0 text-warning"
+                  aria-label="Owned" />{/if}
               {#if room.isModerated}<GavelIcon
-                  class="size-3.5 text-fg-muted"
+                  class="size-3.5 shrink-0 text-fg-muted"
                   aria-label="Operator" />{/if}
-              <span class="truncate">{room.name}</span>
+              <Tooltip text={room.name} clipped>
+                {#snippet child({ props })}
+                  <span {...props} class="flex min-w-0"><MiddleTruncate text={room.name} /></span>
+                {/snippet}
+              </Tooltip>
             </span>
             <span role="gridcell" class="truncate px-2 text-right tabular-nums"
-              >{room.userCount.toLocaleString()}</span>
+              >{formatCount(room.userCount)}</span>
             <span role="gridcell" class="flex items-center justify-end gap-1 px-2">
               {#if busy.has(room.name)}
                 <Spinner class="size-4" />
@@ -231,7 +240,9 @@
                       {...props}
                       type="button"
                       class="flex items-center gap-1 rounded-badge px-1.5 text-xs text-success hover:underline"
-                      onclick={() => enter(room.name)}><CheckIcon class="size-3.5" />Joined</button>
+                      onclick={() => enter(room.name)}
+                      ><CheckIcon class="size-3.5" /><span class="max-sm:sr-only">Joined</span
+                      ></button>
                   {/snippet}
                 </Tooltip>
                 <Button

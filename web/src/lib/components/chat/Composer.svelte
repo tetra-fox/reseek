@@ -14,7 +14,6 @@
   import { untrack } from "svelte";
 
   import { api, byUser } from "#lib/api/client.js";
-  import { app } from "#lib/app.svelte.js";
   import { Autosave } from "#lib/autosave.svelte.js";
   import { chat, paneKey } from "#lib/chat/chat.svelte.js";
   import { COMMANDS, commandsFor, parseCommand } from "#lib/chat/commands.js";
@@ -31,9 +30,10 @@
   import { chatHref, roomHref, userHref } from "#lib/nav.js";
   import { call } from "#lib/request.js";
   import { openSearch } from "#lib/search/searches.svelte.js";
-  import { fields } from "#lib/stored.svelte.js";
   import { links } from "#lib/users/actions.js";
   import { blocking } from "#lib/users/block.svelte.js";
+
+  import LengthCount, { maxLength, nearMax } from "./LengthCount.svelte";
 
   type Props = {
     pane: MessagePane;
@@ -56,10 +56,7 @@
 
   const target = $derived(pane.target);
   const key = $derived(paneKey(target.kind, target.name));
-  const max = $derived.by(() => {
-    const configured = fields(fields(app.options).chat).max_message_length;
-    return typeof configured === "number" && configured > 0 ? configured : 2000;
-  });
+  const max = $derived(maxLength());
 
   let text = $state("");
   let field = $state<HTMLTextAreaElement | null>(null);
@@ -364,14 +361,14 @@
       {/snippet}
     </Tooltip>
   </div>
-  {#if said?.kind === "error" || pasted || flattened || length > max * 0.9}
+  {#if said?.kind === "error" || pasted || flattened || nearMax(length, max)}
     <div class="flex flex-wrap items-center gap-x-3 px-1 text-xs">
       {#if said?.kind === "error"}
         <span class="text-danger" role="alert">{said.text}</span>
       {:else if pasted}
         <span class="flex items-center gap-1 text-fg-muted">
           <ClipboardPasteIcon class="size-3.5" />
-          Pasted {pasted.chars.toLocaleString()} characters on {plural(
+          Pasted {plural(pasted.chars, "character", "characters")} on {plural(
             pasted.lines,
             "line",
             "lines"
@@ -381,11 +378,7 @@
       {#if flattened}
         <span class="text-fg-muted">Line breaks become spaces in private messages</span>
       {/if}
-      {#if length > max * 0.9}
-        <span class={["ml-auto tabular-nums", length > max ? "text-danger" : "text-fg-muted"]}>
-          {length.toLocaleString()}/{max.toLocaleString()}
-        </span>
-      {/if}
+      {#if nearMax(length, max)}<LengthCount {length} {max} />{/if}
     </div>
   {/if}
 </div>

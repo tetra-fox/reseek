@@ -9,7 +9,7 @@
   import Input from "#lib/components/ui/Input.svelte";
   import Username from "#lib/components/users/Username.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
-  import { ago } from "#lib/format.js";
+  import { ago, formatCount } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
   import { userHref } from "#lib/nav.js";
@@ -23,10 +23,9 @@
   const us = $derived(app.state?.user.username ?? "");
   const mine = $derived(members.wall.find((l) => l.username === us)?.ticker ?? "");
   const write = $derived(session.can("ReadWrite"));
-  const shown = $derived(members.wall.filter((l) => !l.hidden));
-  const hiddenCount = $derived(members.wall.length - shown.length);
+  const hiddenCount = $derived(members.wall.length - members.shownWall.length);
   const list = new ListControl<WallLine>({
-    lines: () => shown,
+    lines: () => members.shownWall,
     key: (l) => l.username,
     id: (l) => l.username,
     onopen: (l) => void goto(userHref(l.username))
@@ -75,16 +74,16 @@
     tabindex="0"
     {@attach list.attach}
     {@attach freezesWhileUsed}>
-    {#each shown as line, i (line.username)}
+    {#each members.shownWall as line, i (line.username)}
       <div role="row" {...list.line(line, i)} class="list-row px-1 py-1.5 text-sm">
         <div role="gridcell">
           <div class="flex items-baseline gap-2">
             <Username name={line.username} card class="text-xs" />
-            {#if line.at}<span class="ml-auto text-xs text-fg-subtle"
+            {#if line.at}<span class="ml-auto shrink-0 text-xs text-fg-subtle"
                 >{ago(new Date(line.at).toISOString(), clock.now)}</span
               >{/if}
           </div>
-          <p class="cursor-text text-sm wrap-anywhere">{line.ticker}</p>
+          <p class="cursor-text text-sm wrap-anywhere" dir="auto">{line.ticker}</p>
         </div>
       </div>
     {:else}
@@ -97,7 +96,7 @@
     <p class="text-xs text-fg-muted">
       {hiddenCount === 1
         ? "1 ticker from a blocked user is hidden"
-        : `${hiddenCount} tickers from blocked users are hidden`}
+        : `${formatCount(hiddenCount)} tickers from blocked users are hidden`}
     </p>
   {/if}
 </section>

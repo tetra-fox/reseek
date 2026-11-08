@@ -5,7 +5,7 @@
   import ReplyIcon from "@lucide/svelte/icons/reply";
   import type { Component } from "svelte";
 
-  import { actionable, LONG, type Message } from "#lib/chat/messages/messages.js";
+  import { actionable, type Message } from "#lib/chat/messages/messages.js";
   import { actionOf } from "#lib/chat/messages/rich.js";
   import Button from "#lib/components/ui/Button.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
@@ -20,7 +20,7 @@
   import { LONG_PRESS_MS } from "#lib/users/hover.svelte.js";
   import { pictureOf } from "#lib/users/profile.svelte.js";
 
-  import ChatText from "./ChatText.svelte";
+  import LongText from "./LongText.svelte";
 
   type Props = {
     message: Message;
@@ -59,9 +59,7 @@
     onretry
   }: Props = $props();
 
-  let unfolded = $state(false);
   let shownHidden = $state(false);
-  const long = $derived(m.text.length > LONG && !unfolded);
   const action = $derived(notice ? null : actionOf(m.text));
   const text = $derived(action ?? m.text);
 
@@ -126,13 +124,7 @@
 
 {#snippet body()}
   <!-- our own messages and the server's mark nothing: our name in them is no mention -->
-  <ChatText text={long ? `${text.slice(0, LONG)}…` : text} watch={m.self || notice ? [] : watch} />
-  {#if long}
-    <button
-      type="button"
-      class="ml-1 text-xs text-accent hover:underline"
-      onclick={() => (unfolded = true)}>Show more</button>
-  {/if}
+  <LongText {text} watch={m.self || notice ? [] : watch} />
 {/snippet}
 
 <!-- the tabindex is only ever -1: the message the keys are on takes focus from them, not Tab.
@@ -186,24 +178,28 @@
     {#if head}
       <div class="flex items-baseline gap-2 leading-5">
         <Username name={m.author} card class="text-sm font-semibold" />
-        {#if m.self}<span class="text-xs text-fg-subtle">you</span>{/if}
+        {#if m.self}<span class="shrink-0 text-xs text-fg-subtle">you</span>{/if}
         <Tooltip text={formatDate(m.timestamp)} dense>
           {#snippet child({ props })}
-            <time {...props} class="text-xs text-fg-subtle" datetime={m.timestamp}
-              >{chatTime(m.timestamp, clock.now)}</time>
+            <time
+              {...props}
+              class="shrink-0 text-xs whitespace-nowrap text-fg-subtle"
+              datetime={m.timestamp}>{chatTime(m.timestamp, clock.now)}</time>
           {/snippet}
         </Tooltip>
         {#if m.replayed}
           <Tooltip text="The server held it until you connected" dense>
             {#snippet child({ props })}
-              <span {...props} class="text-xs text-fg-subtle italic">sent while offline</span>
+              <span {...props} class="min-w-0 truncate text-xs text-fg-subtle italic"
+                >sent while offline</span>
             {/snippet}
           </Tooltip>
         {/if}
         {#if m.automatic}
           <Tooltip text="Sent automatically because you were away" dense>
             {#snippet child({ props })}
-              <span {...props} class="text-xs text-fg-subtle italic">sent automatically</span>
+              <span {...props} class="min-w-0 truncate text-xs text-fg-subtle italic"
+                >sent automatically</span>
             {/snippet}
           </Tooltip>
         {/if}
@@ -217,11 +213,12 @@
     {:else if action}
       <!-- an action reads as a sentence: the name starts it unless the header above shows it -->
       <p
-        class="cursor-text text-sm leading-5 wrap-anywhere whitespace-pre-wrap text-fg-muted italic">
+        class="cursor-text text-sm leading-5 wrap-anywhere whitespace-pre-wrap text-fg-muted italic"
+        dir="auto">
         {#if !head}<Username name={m.author} card class="not-italic" />{" "}{/if}{@render body()}
       </p>
     {:else}
-      <p class="cursor-text text-sm leading-5 wrap-anywhere whitespace-pre-wrap">
+      <p class="cursor-text text-sm leading-5 wrap-anywhere whitespace-pre-wrap" dir="auto">
         {@render body()}
       </p>
     {/if}

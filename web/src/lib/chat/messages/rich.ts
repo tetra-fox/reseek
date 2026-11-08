@@ -64,6 +64,10 @@ export const richText = (text: string, watch: string[] = []): Rich[] => {
   return parts;
 };
 
+/** A `slsk://` link as a reader sees it: the name and the path decoded, the path's parts split by `/` */
+export const slskText = (link: SlskLink): string =>
+  `slsk://${link.username}/${link.path.replaceAll("\\", "/")}${link.folder ? "/" : ""}`;
+
 /** The action of a `/me` message, `/me waves` read as "waves"; null for any other message */
 export const actionOf = (text: string): string | null =>
   /^\/me\s+\S/.test(text) ? text.replace(/^\/me\s+/, "") : null;

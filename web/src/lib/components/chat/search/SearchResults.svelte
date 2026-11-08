@@ -26,7 +26,7 @@
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import UserEntry from "#lib/components/users/UserEntry.svelte";
   import Username from "#lib/components/users/Username.svelte";
-  import { formatDate, plural } from "#lib/format.js";
+  import { formatCount, formatDate, plural } from "#lib/format.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
   import { session } from "#lib/session.svelte.js";
   import { snippetParts } from "#lib/text.js";
@@ -189,7 +189,7 @@
           </div>
         {:else if line.kind === "more"}
           <div role="row" {...list.line(line, i)} class={[row, "text-sm text-accent"]}>
-            <span role="gridcell">Show all {line.count} {line.of}</span>
+            <span role="gridcell">Show all {formatCount(line.count)} {line.of}</span>
           </div>
         {:else if line.kind === "chat"}
           <div
@@ -225,7 +225,7 @@
               <time class="text-xs text-fg-subtle" datetime={hit.timestamp}
                 >{formatDate(hit.timestamp)}</time>
               {#if hit.room}<Username name={hit.username} class="text-xs" />{/if}
-              <span class="min-w-0 flex-1 basis-48 text-sm wrap-anywhere"
+              <span class="min-w-0 flex-1 basis-48 text-sm wrap-anywhere" dir="auto"
                 ><Marked parts={snippetParts(hit.snippet)} /></span>
             </span>
           </div>

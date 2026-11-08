@@ -1,7 +1,7 @@
 <script lang="ts">
   import DownloadIcon from "@lucide/svelte/icons/download";
 
-  import { richText } from "#lib/chat/messages/rich.js";
+  import { richText, slskText } from "#lib/chat/messages/rich.js";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { enqueue } from "#lib/files/downloads.js";
@@ -36,7 +36,7 @@
       >{#snippet child({ props })}<a
           {...props}
           href={slskBrowse(part.link)}
-          class="text-accent underline-offset-2 hover:underline">{part.text}</a
+          class="text-accent underline-offset-2 hover:underline">{slskText(part.link)}</a
         >{/snippet}</Tooltip
     >{#if write && !part.link.folder}<Tooltip text="Download"
         >{#snippet child({ props })}<button

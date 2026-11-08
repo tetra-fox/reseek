@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { actionOf, richText } from "./rich";
+import { actionOf, richText, slskText } from "./rich";
 
 const kinds = (text: string, watch: string[] = []) =>
   richText(text, watch).map((p) => [p.kind, p.text]);
@@ -20,6 +20,10 @@ describe("a chat message's text", () => {
       path: "a\\b.flac",
       folder: false
     });
+    // shown decoded, as typed before it was encoded
+    expect(link.kind === "slsk" && slskText(link.link)).toBe("slsk://al ice/a/b.flac");
+    const [folder] = richText("slsk://bob/My%20Music/%D9%85%D9%88%D8%B3%D9%8A%D9%82%D9%89/");
+    expect(folder.kind === "slsk" && slskText(folder.link)).toBe("slsk://bob/My Music/موسيقى/");
     // not a link to anything: plain text
     expect(kinds("slsk://nobody")).toEqual([["text", "slsk://nobody"]]);
   });

@@ -158,7 +158,7 @@
                 {/snippet}
               </Tooltip>
             </span>
-            <span class="line-clamp-2 wrap-anywhere"
+            <span class="line-clamp-2 wrap-anywhere" dir="auto"
               ><Marked parts={snippetParts(hit.snippet)} /></span>
           </span>
         </Suggest.Item>

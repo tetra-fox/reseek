@@ -14,6 +14,7 @@
   import { tick } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
 
+  import { app } from "#lib/app.svelte.js";
   import { chat, paneKey, paneOf } from "#lib/chat/chat.svelte.js";
   import { actionOf } from "#lib/chat/messages/rich.js";
   import { chatName, isNotices, NOTICES } from "#lib/chat/notices.js";
@@ -24,11 +25,12 @@
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
+  import MiddleTruncate from "#lib/components/ui/MiddleTruncate.svelte";
   import Notice from "#lib/components/ui/Notice.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import Avatar from "#lib/components/users/Avatar.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
-  import { ago, plural } from "#lib/format.js";
+  import { ago, badgeCount, formatCount, plural } from "#lib/format.js";
   import { freezesWhileUsed, heldOrder, interaction } from "#lib/lists/interaction.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
   import { RowDrag } from "#lib/lists/rowdrag.svelte.js";
@@ -83,7 +85,9 @@
   const hold = heldOrder<Line>((l) => l.key);
   $effect(() => (menuFor ? interaction.hold() : undefined));
   const lines = $derived.by(() => {
+    // an empty section shows no heading
     const section = (key: string, title: string, targets: Target[]): Line[] => {
+      if (!targets.length) return [];
       const ids = targets.map((t) => paneKey(t.kind, t.name));
       return [
         { kind: "header", key, title, ids },
@@ -99,7 +103,7 @@
       ];
     };
     return hold([
-      ...(pinned.length ? section(PINNED, "Pinned", pinned) : []),
+      ...section(PINNED, "Pinned", pinned),
       ...section(
         "h:rooms",
         "Rooms",
@@ -110,7 +114,7 @@
         "Conversations",
         conversations.map((c) => ({ kind: "user", name: c.username }))
       ),
-      ...(chat.latestNotice ? section("h:notices", "Notices", [NOTICES]) : [])
+      ...section("h:notices", "Notices", chat.latestNotice ? [NOTICES] : [])
     ]);
   });
   // focus stays on the list, so the arrows go on from the chat just opened
@@ -270,7 +274,11 @@
         {@const conversation = person ? chat.conversations.get(t.name) : undefined}
         {@const last = notices ? chat.latestNotice : conversation?.lastMessage}
         {@const preview = last
-          ? { author: "", text: last.message, at: last.timestamp }
+          ? {
+              author: last.direction === "Out" ? (app.state?.user.username ?? "") : t.name,
+              text: last.message,
+              at: last.timestamp
+            }
           : room?.lastMessage
             ? {
                 author: room.lastMessage.username,
@@ -278,6 +286,8 @@
                 at: room.lastMessage.timestamp
               }
             : undefined}
+        {@const action = preview ? actionOf(preview.text) : null}
+        {@const author = t.kind === "room" || (person && action) ? preview?.author : ""}
         {@const counts = t.kind === "room" ? chat.roomUnread(t.name) : null}
         {@const unread = person ? chat.unreadOf(t.name) : 0}
         {@const notify = (room ?? conversation)?.notify}
@@ -341,9 +351,19 @@
           <span role="gridcell" class="flex h-9 min-w-0 flex-1 flex-col justify-center row-text">
             <span class="name-count gap-2">
               <span class="flex min-w-0 items-center gap-1">
-                <span
-                  class="truncate text-sm font-medium"
-                  style:color={person ? nameColor(t.name) : undefined}>{chatName(t)}</span>
+                {#if t.kind === "room"}
+                  <Tooltip text={t.name} clipped>
+                    {#snippet child({ props })}
+                      <span {...props} class="flex min-w-0 text-sm font-medium"
+                        ><MiddleTruncate text={t.name} /></span>
+                    {/snippet}
+                  </Tooltip>
+                {:else}
+                  <span
+                    class="truncate text-sm font-medium"
+                    dir="auto"
+                    style:color={person ? nameColor(t.name) : undefined}>{chatName(t)}</span>
+                {/if}
                 {#if notify === "none" || summary?.muted}<BellOffIcon
                     class="size-3 shrink-0 text-fg-subtle"
                     aria-label="Muted" />{/if}
@@ -353,26 +373,30 @@
                 ><span>{at ? ago(at, clock.now) : ""}</span></span>
             </span>
             <span class="flex items-center gap-2">
-              <span class="truncate text-xs text-fg-muted">
-                {#if preview}{@const action = actionOf(preview.text)}{preview.author &&
-                  t.kind === "room"
-                    ? `${preview.author}${action ? " " : ": "}`
-                    : ""}{action ?? preview.text}{:else if t.kind === "room"}{plural(
-                    room?.userCount ?? 0,
-                    "user",
-                    "users"
-                  )}{/if}
+              <!-- a room's preview names who said it, a conversation's only an action, which needs
+                   its subject. The name takes at most half, so some of the text always shows -->
+              <span class="flex min-w-0 text-xs text-fg-muted">
+                {#if preview}
+                  {#if author}
+                    <span class="max-w-1/2 shrink-0 truncate" dir="auto">{author}</span>
+                    <span class="shrink-0 whitespace-pre">{action ? " " : ": "}</span>
+                  {/if}
+                  <span class="min-w-0 truncate" dir="auto">{action ?? preview.text}</span>
+                {:else if t.kind === "room"}
+                  <span class="truncate">{plural(room?.userCount ?? 0, "user", "users")}</span>
+                {/if}
               </span>
               {#if counts?.mentions}
                 <Tooltip text="Mentions" dense spoken>
                   {#snippet child({ props })}
-                    <Badge {...props} tone="accent" class={count}>@{counts.mentions}</Badge>
+                    <Badge {...props} tone="accent" class={count}
+                      >@{badgeCount(counts.mentions)}</Badge>
                   {/snippet}
                 </Tooltip>
               {:else if counts?.unread}
-                <Badge class={count}>{counts.unread}</Badge>
+                <Badge class={count}>{badgeCount(counts.unread)}</Badge>
               {:else if unread}
-                <Badge tone="danger" class={count}>{unread}</Badge>
+                <Badge tone="danger" class={count}>{badgeCount(unread)}</Badge>
               {/if}
             </span>
           </span>
@@ -393,6 +417,8 @@
           </Menu.Root>
         </div>
       {/if}
+    {:else}
+      <p class="px-4 py-2 text-sm text-fg-muted">No rooms or conversations yet</p>
     {/each}
   </div>
 
@@ -401,7 +427,7 @@
       class="flex flex-wrap items-center gap-1 rounded-control border bg-overlay p-1 text-sm"
       role="toolbar"
       aria-label="Selected chats">
-      <span class="px-1">{chosen.length} selected</span>
+      <span class="px-1">{formatCount(chosen.length)} selected</span>
       {#if write}
         <Button size="sm" variant="ghost" onclick={() => void markChosen()}>Mark read</Button>
         <Button size="sm" variant="ghost" onclick={() => pins.set(chosenChats, !chosenPinned)}

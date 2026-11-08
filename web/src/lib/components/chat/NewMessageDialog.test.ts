@@ -49,7 +49,7 @@ describe("the new message dialog", () => {
   };
   const entries = () =>
     [...document.querySelectorAll<HTMLElement>("[role=option]")].map((e) => e.textContent.trim());
-  const messageBox = () => document.querySelector<HTMLInputElement>("#new-message-text")!;
+  const messageBox = () => document.querySelector<HTMLTextAreaElement>("#new-message-text")!;
   const send = () => document.querySelector<HTMLButtonElement>("button[type=submit]")!;
   const writeMessage = () => {
     messageBox().value = "hello";

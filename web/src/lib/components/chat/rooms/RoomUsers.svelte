@@ -18,7 +18,7 @@
   import Username from "#lib/components/users/Username.svelte";
   import { confirmation } from "#lib/feedback/confirm.svelte.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
-  import { formatSpeed, plural } from "#lib/format.js";
+  import { formatCount, formatSpeed, plural } from "#lib/format.js";
   import { freezesWhileUsed, heldOrder, interaction } from "#lib/lists/interaction.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
   import { userHref } from "#lib/nav.js";
@@ -136,10 +136,10 @@
     });
 </script>
 
-<aside class="flex min-h-0 w-full flex-col gap-2 p-2" aria-label="Room users">
+<aside class="@container flex min-h-0 w-full flex-col gap-2 p-2" aria-label="Room users">
   <div class="flex items-center gap-1 px-1">
     <p class="text-xs text-fg-muted">
-      {plural(all.length, "user", "users")} · {online} online
+      {plural(all.length, "user", "users")} · {formatCount(online)} online
     </p>
     {#if room?.isPrivate && session.can("ReadWrite")}
       <Menu.Root>
@@ -252,8 +252,11 @@
                 >{/if}
               {#if u.self}<span class="text-xs text-accent">you</span>{/if}
             </span>
-            <span role="gridcell" class="text-right text-xs text-fg-muted tabular-nums"
-              >{formatSpeed(u.averageSpeed)} · {u.fileCount.toLocaleString()}</span>
+            <!-- a narrow panel gives the names its width; the card on a name has the figures -->
+            <span
+              role="gridcell"
+              class="text-right text-xs text-fg-muted tabular-nums @max-[22rem]:hidden"
+              >{formatSpeed(u.averageSpeed)} · {plural(u.fileCount, "file", "files")}</span>
           </span>
           {#if can}
             <Menu.Root

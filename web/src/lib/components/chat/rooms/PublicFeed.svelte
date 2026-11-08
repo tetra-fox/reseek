@@ -6,14 +6,15 @@
   import { tick } from "svelte";
 
   import { app } from "#lib/app.svelte.js";
+  import { actionOf } from "#lib/chat/messages/rich.js";
   import { feedMatches, PublicFeed } from "#lib/chat/rooms/feed.svelte.js";
-  import ChatText from "#lib/components/chat/messages/ChatText.svelte";
+  import LongText from "#lib/components/chat/messages/LongText.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
   import Input from "#lib/components/ui/Input.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import Username from "#lib/components/users/Username.svelte";
-  import { formatDate, shortTime } from "#lib/format.js";
+  import { formatCount, formatDate, shortTime } from "#lib/format.js";
   import { interaction } from "#lib/lists/interaction.svelte.js";
   import { roomHref } from "#lib/nav.js";
 
@@ -100,6 +101,7 @@
         aria-label="Messages in public rooms"
         onscroll={seen}>
         {#each shown as line (line.id)}
+          {@const action = actionOf(line.message)}
           <div class="flex items-baseline gap-2 px-3 py-0.5 text-sm leading-5">
             <Tooltip text={formatDate(line.receivedAt)} dense>
               {#snippet child({ props })}
@@ -115,7 +117,9 @@
                 class="font-medium text-fg-muted underline-offset-2 hover:text-fg hover:underline"
                 >#{line.roomName}</a>
               <Username name={line.username} card class="ml-1" />
-              <span class="ml-1"><ChatText text={line.message} watch={[]} /></span>
+              <span
+                class={["ml-1 whitespace-pre-wrap", action && "text-fg-muted italic"]}
+                dir="auto"><LongText text={action ?? line.message} watch={[]} /></span>
             </p>
           </div>
         {/each}
@@ -126,7 +130,7 @@
           variant="secondary"
           class="absolute bottom-3 left-1/2 -translate-x-1/2 shadow-raised"
           onclick={toBottom}>
-          <ArrowDownIcon />{fresh ? `${fresh} new` : "Jump to latest"}
+          <ArrowDownIcon />{fresh ? `${formatCount(fresh)} new` : "Jump to latest"}
         </Button>
       {/if}
     {/if}
