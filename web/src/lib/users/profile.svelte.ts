@@ -55,3 +55,6 @@ export const pictureOf = (
 
 /** The first `n` lines of a text, as the hover card shows a profile */
 export const firstLines = (text: string, n: number) => text.split("\n").slice(0, n).join("\n");
+
+/** What a profile says in place of a user's share figures before the server has sent any */
+export const SHARES_UNKNOWN = "Shares not known yet";

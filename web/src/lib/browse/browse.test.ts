@@ -68,4 +68,17 @@ describe("the kept browse", () => {
     expect(browser.phase).toBe("complete");
     expect(browser.tree.roots.map((r) => r.path)).toEqual(["Alice's music"]);
   });
+
+  it("browses a name with spaces at its end as written, another user than without them", async () => {
+    const net = fakeNetwork(() => ({
+      directories: [],
+      directoryCount: 0,
+      lockedDirectories: [],
+      lockedDirectoryCount: 0
+    }));
+    await browser.browse("dj shadow  ");
+    expect(browser.username).toBe("dj shadow  ");
+    const asked = net.requests.filter((r) => r.url.pathname.endsWith("/browse"));
+    expect(asked.map((r) => r.url.searchParams.get("username"))).toEqual(["dj shadow  "]);
+  });
 });

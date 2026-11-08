@@ -6,6 +6,7 @@
   import Notice from "#lib/components/ui/Notice.svelte";
   import Select from "#lib/components/ui/Select.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
+  import { plural } from "#lib/format.js";
   import { assignGroup, userGroups } from "#lib/users/actions.js";
   import { users } from "#lib/users/users.svelte.js";
 
@@ -44,7 +45,7 @@
   busy={sending}
   title={usernames.length === 1
     ? `Upload group for ${usernames[0]}`
-    : `Upload group for ${usernames.length} users`}
+    : `Upload group for ${plural(usernames.length, "user", "users")}`}
   description="A group set in the configuration overrides this one">
   <Form layout="stacked">
     <Field label="Upload group" for="assign-group">

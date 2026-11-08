@@ -44,11 +44,13 @@
       <ul class="flex flex-wrap gap-1" aria-label={title}>
         {#each lists[side] as interest (interest)}
           <li class="min-w-0">
-            <Badge tone="outline" class="max-w-full whitespace-normal">
-              <span class="wrap-anywhere">{interest}</span>
+            <!-- a flex chip, so its text and remove button line up -->
+            <Badge tone="outline" class="inline-flex items-center gap-1 whitespace-normal">
+              <span class="min-w-0 wrap-anywhere">{interest}</span>
               {#if !disabled}
                 <button
                   type="button"
+                  class="shrink-0"
                   aria-label={`Remove ${interest}`}
                   onclick={() => void remove(side, interest)}>
                   <XIcon class="size-3" />

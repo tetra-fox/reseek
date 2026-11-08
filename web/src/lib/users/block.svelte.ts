@@ -1,7 +1,7 @@
 import { api, byUser, type Schemas } from "#lib/api/client.js";
 import { app } from "#lib/app.svelte.js";
 import { toast } from "#lib/feedback/toast.svelte.js";
-import { plural } from "#lib/format.js";
+import { ago, plural } from "#lib/format.js";
 import { call } from "#lib/request.js";
 import { fields } from "#lib/stored.svelte.js";
 
@@ -41,6 +41,16 @@ export const addressOf = async (username: string): Promise<string | null> => {
     api.GET("/api/v0/users/{username}/endpoint", { params: byUser(username) })
   );
   return outcome.ok ? outcome.data.address : null;
+};
+
+/** Whether a block's end has passed, which a list read before then still shows */
+export const blockEnded = (block: Schemas["Block"], now: number) =>
+  !!block.expiresAt && Date.parse(block.expiresAt) <= now;
+
+/** When a block ends, for a line about it: "ends in 3 days", "ends Mar 14", "expired"; null when never */
+export const blockEnd = (block: Schemas["Block"], now: number): string | null => {
+  if (!block.expiresAt) return null;
+  return blockEnded(block, now) ? "expired" : `ends ${ago(block.expiresAt, now)}`;
 };
 
 /** The scopes a new block starts with: `blocking.default_scopes` from the options in effect */

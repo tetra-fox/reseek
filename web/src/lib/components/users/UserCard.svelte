@@ -13,17 +13,19 @@
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { Busy } from "#lib/feedback/busy.svelte.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
-  import { ago, formatSpeed, plural } from "#lib/format.js";
+  import { ago, chatTime, formatCount, formatSpeed, plural } from "#lib/format.js";
   import { userHref } from "#lib/nav.js";
   import { clock } from "#lib/ui/clock.svelte.js";
   import { canManage, configBlocked, reach, setBuddy, USER_ACTIONS } from "#lib/users/actions.js";
+  import { blockEnd } from "#lib/users/block.svelte.js";
   import { nameColor } from "#lib/users/colors.js";
-  import { firstLines, ownProfile, pictureOf } from "#lib/users/profile.svelte.js";
+  import { firstLines, ownProfile, pictureOf, SHARES_UNKNOWN } from "#lib/users/profile.svelte.js";
   import { type UserSummary, users } from "#lib/users/users.svelte.js";
   import { BUDDY, CONFIG_BLOCKED } from "#lib/wording.js";
 
   import Avatar from "./Avatar.svelte";
   import GroupBadge from "./GroupBadge.svelte";
+  import NameText from "./NameText.svelte";
 
   type Props = {
     name: string;
@@ -48,7 +50,7 @@
     if (p === "Away") {
       return {
         dot: "bg-warning",
-        text: user?.presenceAt ? `Away ${ago(user.presenceAt, clock.now)}` : "Away"
+        text: user?.presenceAt ? `Away since ${chatTime(user.presenceAt, clock.now)}` : "Away"
       };
     }
     return {
@@ -89,13 +91,15 @@
     <Avatar {name} {pictureUrl} src={draft?.src} link={!draft} class="size-12" />
     <div class="flex min-w-0 flex-col">
       {#if draft}
-        <span class="font-mono font-medium wrap-anywhere" style:color={nameColor(name)}
-          >{name}</span>
+        <span class="font-mono font-medium wrap-anywhere" dir="auto" style:color={nameColor(name)}
+          ><NameText {name} /></span>
       {:else}
         <a
           href={userHref(name)}
           class="font-mono font-medium wrap-anywhere underline-offset-2 hover:underline"
-          style:color={nameColor(name)}>{name}</a>
+          dir="auto"
+          aria-label={name}
+          style:color={nameColor(name)}><NameText {name} /></a>
       {/if}
       <span class="flex items-center gap-1.5 text-xs text-fg-muted">
         <span class={["size-2 rounded-full", presence.dot]}></span>
@@ -119,9 +123,8 @@
         {#if user.block}
           {@const block = user.block}
           <Tooltip
-            text={[block.reason, block.expiresAt && `expires ${ago(block.expiresAt, clock.now)}`]
-              .filter(Boolean)
-              .join(", ") || undefined}
+            text={[block.reason, blockEnd(block, clock.now)].filter(Boolean).join(", ") ||
+              undefined}
             spoken>
             {#snippet child({ props })}
               <Badge {...props} tone="danger">blocked</Badge>
@@ -138,11 +141,15 @@
     {/if}
 
     <p class="text-xs">
-      {stats ? plural(stats.fileCount, "file", "files") : "? files"} ·
-      {stats ? plural(stats.directoryCount, "folder", "folders") : "? folders"} ·
-      {stats ? formatSpeed(stats.averageSpeed) : "?"}
-      {#if stats?.fetchedAt}<span class="text-fg-subtle">· {ago(stats.fetchedAt, clock.now)}</span
-        >{/if}
+      {#if stats}
+        {plural(stats.fileCount, "file", "files")} ·
+        {plural(stats.directoryCount, "folder", "folders")} ·
+        {formatSpeed(stats.averageSpeed)}
+        {#if stats.fetchedAt}<span class="text-fg-subtle">· {ago(stats.fetchedAt, clock.now)}</span
+          >{/if}
+      {:else}
+        <span class="text-fg-muted">{SHARES_UNKNOWN}</span>
+      {/if}
     </p>
 
     {#if user && figures}
@@ -150,7 +157,7 @@
         {plural(figures.uploads.succeeded + figures.uploads.active, "upload", "uploads")} ·
         {plural(figures.downloads.succeeded + figures.downloads.active, "download", "downloads")} ·
         {plural(figures.messages.in + figures.messages.out, "message", "messages")}
-        {#if figures.messages.unread}({figures.messages.unread} unread){/if}
+        {#if figures.messages.unread}({formatCount(figures.messages.unread)} unread){/if}
         {#if user.firstSeenAt}<br />First seen {ago(user.firstSeenAt, clock.now)}{/if}
       </p>
     {/if}

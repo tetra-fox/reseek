@@ -27,6 +27,7 @@
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import Avatar from "#lib/components/users/Avatar.svelte";
   import GroupBadge from "#lib/components/users/GroupBadge.svelte";
+  import NameText from "#lib/components/users/NameText.svelte";
   import Presence from "#lib/components/users/Presence.svelte";
   import { Busy } from "#lib/feedback/busy.svelte.js";
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
@@ -45,9 +46,9 @@
     setBuddy,
     userGroups
   } from "#lib/users/actions.js";
-  import { blocking, unblock } from "#lib/users/block.svelte.js";
+  import { blockEnd, blocking, unblock } from "#lib/users/block.svelte.js";
   import { nameColor } from "#lib/users/colors.js";
-  import { pictureOf } from "#lib/users/profile.svelte.js";
+  import { pictureOf, SHARES_UNKNOWN } from "#lib/users/profile.svelte.js";
   import { BUDDY, CONFIG_BLOCKED } from "#lib/wording.js";
 
   import GivePrivileges from "./GivePrivileges.svelte";
@@ -95,7 +96,7 @@
       () =>
         call(() =>
           api.DELETE("/api/v0/users/{username}", {
-            params: { path: { username: name }, query: { ...byUser(name).query, purge } }
+            params: { path: byUser(name).path, query: { ...byUser(name).query, purge } }
           })
         ),
       `Removed ${name} from the user list`
@@ -111,21 +112,21 @@
     <Avatar {name} pictureUrl={pictureOf(name, p)} link={false} class="size-16 text-2xl" />
     <div class="flex min-w-0 flex-1 flex-col gap-1.5">
       <div class="flex flex-wrap items-center gap-2">
-        <Presence
-          presence={p.presence}
-          text={p.presence && p.presenceAt
-            ? `${p.presence} since ${chatTime(p.presenceAt, clock.now)}`
-            : undefined} />
-        <Tooltip text={name} clipped>
-          {#snippet child({ props })}
-            <h1
-              {...props}
-              class="truncate font-mono text-2xl font-semibold tracking-tight"
-              style:color={nameColor(name)}>
-              {name}
-            </h1>
-          {/snippet}
-        </Tooltip>
+        <!-- the name wraps rather than cut, and its presence dot stays beside it -->
+        <span class="flex min-w-0 items-center gap-2">
+          <Presence
+            presence={p.presence}
+            text={p.presence && p.presenceAt
+              ? `${p.presence} since ${chatTime(p.presenceAt, clock.now)}`
+              : undefined} />
+          <h1
+            class="min-w-0 font-mono text-2xl font-semibold tracking-tight wrap-anywhere"
+            dir="auto"
+            aria-label={name}
+            style:color={nameColor(name)}>
+            <NameText {name} />
+          </h1>
+        </span>
         <Tooltip text="Copy username">
           {#snippet child({ props })}
             <Button
@@ -150,9 +151,7 @@
         {#if p.block}
           {@const b = p.block}
           <Tooltip
-            text={[b.reason, b.expiresAt && `ends ${ago(b.expiresAt, clock.now)}`]
-              .filter(Boolean)
-              .join(", ") || undefined}
+            text={[b.reason, blockEnd(b, clock.now)].filter(Boolean).join(", ") || undefined}
             spoken>
             {#snippet child({ props })}
               <Badge {...props} tone="danger">blocked</Badge>
@@ -163,17 +162,21 @@
             >{p.buddy.trusted ? `trusted ${BUDDY.badge}` : BUDDY.badge}</Badge
           >{/if}
         {#each p.tags as tag (tag)}
-          <a class="inline-flex" href={href(`/users?tag=${encodeURIComponent(tag)}`)}>
+          <a class="inline-flex max-w-full" href={href(`/users?tag=${encodeURIComponent(tag)}`)}>
             <Badge tone="outline">{tag}</Badge>
           </a>
         {/each}
       </div>
       <!-- wraps as words do, so how long ago moves to the next line whole -->
       <p class="flex flex-wrap items-center gap-x-1.5 text-sm">
-        {stats ? plural(stats.fileCount, "file", "files") : "? files"} ·
-        {stats ? plural(stats.directoryCount, "folder", "folders") : "? folders"} ·
-        {stats ? formatSpeed(stats.averageSpeed) : "?"} ·
-        {stats ? plural(stats.uploadCount, "upload", "uploads") : "? uploads"}
+        {#if stats}
+          {plural(stats.fileCount, "file", "files")} ·
+          {plural(stats.directoryCount, "folder", "folders")} ·
+          {formatSpeed(stats.averageSpeed)} ·
+          {plural(stats.uploadCount, "upload", "uploads")}
+        {:else}
+          <span class="text-fg-muted">{SHARES_UNKNOWN}</span>
+        {/if}
         {#if refreshing}
           <Spinner class="size-3.5" label="Refreshing" />
         {:else if stats}

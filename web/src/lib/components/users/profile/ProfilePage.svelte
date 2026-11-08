@@ -86,7 +86,8 @@
     {refreshing}
     onrefresh={() => void refresh()}
     onchanged={() => void fetch(false)} />
-  <nav aria-label="Profile" class="flex gap-1 overflow-x-auto">
+  <!-- the tabs wrap where a phone leaves no room for all of them -->
+  <nav aria-label="Profile" class="flex flex-wrap gap-1">
     {#each TABS as t (t.id)}
       <a
         href={userHref(username, t.id === "overview" ? undefined : t.id)}

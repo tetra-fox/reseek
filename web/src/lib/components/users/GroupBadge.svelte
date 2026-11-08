@@ -11,7 +11,9 @@
   {#snippet child({ props })}
     <Badge {...props} tone="outline" class={className}>
       {#if group.color}
-        <span class="size-2 rounded-full" style:background-color={group.color}></span>
+        <span
+          class="mr-1 inline-block size-2 rounded-full align-middle"
+          style:background-color={group.color}></span>
       {/if}
       {group.name}
     </Badge>

@@ -54,12 +54,12 @@
     const [transfers, messages, events] = await Promise.all([
       call(() =>
         api.GET("/api/v0/users/{username}/transfers", {
-          params: { path: { username }, query: { ...byUser(username).query, limit } }
+          params: { path: byUser(username).path, query: { ...byUser(username).query, limit } }
         })
       ),
       call(() =>
         api.GET("/api/v0/conversations/{username}/messages", {
-          params: { path: { username }, query: { ...byUser(username).query, limit } }
+          params: { path: byUser(username).path, query: { ...byUser(username).query, limit } }
         })
       ),
       call(() =>

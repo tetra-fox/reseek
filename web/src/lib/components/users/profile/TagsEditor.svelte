@@ -33,13 +33,17 @@
 
 <div class="flex flex-wrap items-center gap-1">
   {#each tags as tag (tag)}
-    <Badge tone="outline">
-      <a href={href(`/users?tag=${encodeURIComponent(tag)}`)} class="hover:underline">{tag}</a>
+    <!-- a flex chip, so its link and remove button line up -->
+    <Badge tone="outline" class="inline-flex items-center gap-1">
+      <a
+        href={href(`/users?tag=${encodeURIComponent(tag)}`)}
+        class="min-w-0 truncate hover:underline">{tag}</a>
       {#if !disabled}
         <button
           type="button"
+          class="shrink-0"
           aria-label={`Remove tag ${tag}`}
-          onclick={() => void save(tags.filter((t) => t !== tag))}><XIcon /></button>
+          onclick={() => void save(tags.filter((t) => t !== tag))}><XIcon class="size-3" /></button>
       {/if}
     </Badge>
   {/each}

@@ -3,7 +3,6 @@
   import { untrack } from "svelte";
 
   import { api } from "#lib/api/client.js";
-  import { app } from "#lib/app.svelte.js";
   import LoadError from "#lib/components/LoadError.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Card from "#lib/components/ui/Card.svelte";
@@ -18,6 +17,7 @@
   import { Loader } from "#lib/loader.svelte.js";
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
+  import { ownName } from "#lib/users/actions.js";
   import {
     INTERESTS_HINT,
     OwnInterests,
@@ -43,7 +43,7 @@
   const interests = new OwnInterests();
 
   const profile = $derived(ownProfile.data);
-  const name = $derived(app.state?.user.username ?? session.principal?.name ?? "");
+  const name = $derived(ownName() ?? "");
   const remote = $derived(valueAt(view.data?.values, "remote_configuration") === true);
   const textEdit = $derived(
     view.data ? editability(view.data, "soulseek.description", "page") : null

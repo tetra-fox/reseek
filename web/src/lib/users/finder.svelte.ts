@@ -57,7 +57,7 @@ export class UserFinder {
   });
 
   /**
-   * `text` gives the box's text, trimmed. `tab` is the tab of the profile a pick opens, `onread`
+   * `text` gives the box's text, empty when it holds nothing to find. `tab` is the tab of the profile a pick opens, `onread`
    * hears the text once typing stops, and `onmissed` when a look-up found nobody
    */
   constructor(

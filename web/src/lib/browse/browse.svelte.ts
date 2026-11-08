@@ -73,11 +73,12 @@ class Browse {
     });
   }
 
-  /** Asks `username` for everything they share */
-  browse = async (username: string) => {
-    const name = username.trim();
+  /** Asks `name` for everything they share */
+  browse = async (name: string) => {
+    // a name is used as written, spaces at its ends too, which make it another user's
+    if (!name.trim()) return;
     // a browse of someone else under way is left to finish unseen: its answer is dropped
-    if (!name || (this.phase === "pending" && this.username === name)) return;
+    if (this.phase === "pending" && this.username === name) return;
     this.username = name;
     this.phase = "pending";
     this.errorMessage = "";

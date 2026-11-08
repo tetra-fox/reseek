@@ -6,7 +6,7 @@
   import Card from "#lib/components/ui/Card.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
-  import { formatBytes } from "#lib/format.js";
+  import { formatBytes, formatCount } from "#lib/format.js";
   import { session } from "#lib/session.svelte.js";
 
   import NotesEditor from "./NotesEditor.svelte";
@@ -26,12 +26,14 @@
     {
       label: "Failed",
       value: f.downloads.failed + f.uploads.failed,
-      sub: `${f.downloads.active + f.uploads.active} active, ${f.downloads.queued + f.uploads.queued} queued`
+      sub: `${formatCount(f.downloads.active + f.uploads.active)} active, ${formatCount(f.downloads.queued + f.uploads.queued)} queued`
     },
     {
       label: "Messages",
       value: f.messages.in + f.messages.out,
-      sub: f.messages.unread ? `${f.messages.unread} unread` : `${f.messages.in} received`
+      sub: f.messages.unread
+        ? `${formatCount(f.messages.unread)} unread`
+        : `${formatCount(f.messages.in)} received`
     }
   ]);
 </script>
@@ -52,7 +54,7 @@
 
 <UserInterests username={p.username} />
 
-<div class="grid gap-section md:grid-cols-2">
+<div class="grid grid-cols-[minmax(0,1fr)] gap-section md:grid-cols-2">
   <Card title="Notes">
     <NotesEditor username={p.username} notes={p.notes} disabled={!write} />
   </Card>
@@ -60,8 +62,8 @@
     <TagsEditor username={p.username} tags={p.tags} disabled={!write} />
     {#if endpoint}
       <p class="mt-4 flex items-center gap-1 text-sm">
-        <span class="text-fg-muted">Address</span>
-        <span class="font-mono">{endpoint}</span>
+        <span class="shrink-0 text-fg-muted">Address</span>
+        <span class="min-w-0 font-mono wrap-anywhere">{endpoint}</span>
         <Tooltip text="Copy the address">
           {#snippet child({ props })}
             <Button
@@ -82,7 +84,7 @@
     <div class="flex flex-col gap-0.5 p-4">
       <span class="text-xs text-fg-muted">{tile.label}</span>
       <span class="text-3xl font-semibold tracking-tight tabular-nums"
-        >{tile.value.toLocaleString()}</span>
+        >{formatCount(tile.value)}</span>
       <span class="text-xs text-fg-subtle">{tile.sub}</span>
     </div>
   {/each}

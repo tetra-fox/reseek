@@ -23,7 +23,7 @@
   import Textarea from "#lib/components/ui/Textarea.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
-  import { ago, dateTime, listText, plural } from "#lib/format.js";
+  import { ago, dateTime, formatCount, listText, plural } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
   import { Grid, keptIn } from "#lib/lists/table.svelte.js";
@@ -34,7 +34,7 @@
   import { session } from "#lib/session.svelte.js";
   import { clock } from "#lib/ui/clock.svelte.js";
   import { configBlocked } from "#lib/users/actions.js";
-  import { unblock, unblockMany } from "#lib/users/block.svelte.js";
+  import { blockEnded, unblock, unblockMany } from "#lib/users/block.svelte.js";
 
   import Username from "./Username.svelte";
 
@@ -133,13 +133,15 @@
     if (!outcome.ok) return void (importError = outcome.error);
     importing = false;
     text = "";
-    toast(`${outcome.data.added} imported, ${outcome.data.skipped} skipped`);
+    toast(
+      `${formatCount(outcome.data.added)} imported, ${formatCount(outcome.data.skipped)} skipped`
+    );
     void blocked.load();
   };
 </script>
 
 <div class="flex flex-wrap items-center gap-inline">
-  <span class="text-sm text-fg-muted">{entries.length} blocked</span>
+  <span class="text-sm text-fg-muted">{formatCount(entries.length)} blocked</span>
   <!-- the buttons wrap onto a second line where large text leaves no room for all three -->
   <div class="ml-auto flex flex-wrap justify-end gap-inline">
     {#if admin}
@@ -193,10 +195,7 @@
     aria-activedescendant={list.activeId}
     tabindex="0"
     {@attach list.attach}>
-    <GridHeader
-      {grid}
-      all={list.allTick}
-      class="h-9 border-b bg-surface-muted text-fg-muted" />
+    <GridHeader {grid} all={list.allTick} class="h-9 border-b bg-surface-muted text-fg-muted" />
     <div role="rowgroup" {@attach freezesWhileUsed}>
       {#each entries as b, i (b.username)}
         <div
@@ -221,9 +220,10 @@
             <Username name={b.username} />
             {#if b.source === "config"}<Badge tone="outline">configuration</Badge>{/if}
             {#if b.addresses.length}
+              <!-- the addresses take what the name leaves -->
               <Tooltip text={`Also blocked from ${b.addresses.join(", ")}`} dense>
                 {#snippet child({ props })}
-                  <span {...props} class="truncate font-mono text-xs text-fg-muted"
+                  <span {...props} class="grow basis-0 truncate font-mono text-xs text-fg-muted"
                     >{b.addresses.join(", ")}</span>
                 {/snippet}
               </Tooltip>
@@ -234,12 +234,20 @@
               <span {...props} role="gridcell" class="truncate px-2">{b.reason}</span>
             {/snippet}
           </Tooltip>
-          <span role="gridcell" class="truncate px-2 text-xs text-fg-muted"
-            >{b.scopes.join(", ")}</span>
+          <Tooltip text={b.scopes.join(", ")} clipped>
+            {#snippet child({ props })}
+              <span {...props} role="gridcell" class="truncate px-2 text-xs text-fg-muted"
+                >{b.scopes.join(", ")}</span>
+            {/snippet}
+          </Tooltip>
           <Tooltip text={b.expiresAt ? dateTime(b.expiresAt) : undefined} dense>
             {#snippet child({ props })}
               <span {...props} role="gridcell" class="truncate px-2 text-xs">
-                {b.expiresAt ? ago(b.expiresAt, clock.now) : "never"}
+                {!b.expiresAt
+                  ? "never"
+                  : blockEnded(b, clock.now)
+                    ? "expired"
+                    : ago(b.expiresAt, clock.now)}
               </span>
             {/snippet}
           </Tooltip>
@@ -274,7 +282,7 @@
 
 {#if list.selected.size && write}
   <div class="selection-bar" role="toolbar" aria-label="Selected blocks">
-    <span class="text-sm">{chosen.length} selected</span>
+    <span class="text-sm">{formatCount(chosen.length)} selected</span>
     <Button size="sm" variant="outline" onclick={() => void unblockChosen()}>Unblock</Button>
     <Button size="sm" variant="ghost" onclick={() => list.clear()}>Clear</Button>
   </div>

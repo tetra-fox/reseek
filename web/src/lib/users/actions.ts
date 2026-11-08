@@ -48,7 +48,10 @@ export const links = (username: string, folder?: string) => ({
 });
 
 /** Our Soulseek name: the one logged in, or the configured one while disconnected, when the state names none */
-const ownName = () => app.state?.user.username ?? fields(fields(app.options).soulseek).username;
+export const ownName = (): string | undefined => {
+  const configured = fields(fields(app.options).soulseek).username;
+  return app.state?.user.username ?? (typeof configured === "string" ? configured : undefined);
+};
 
 /**
  * The ways to reach `username` this session has, `only` narrowing them. Messaging and searching
@@ -89,7 +92,7 @@ export const configBlocked = (block: Schemas["Block"] | null | undefined) =>
 export const profileOf = (username: string, refresh: boolean) =>
   call(() =>
     api.GET("/api/v0/users/{username}/profile", {
-      params: { path: { username }, query: { ...byUser(username).query, refresh } }
+      params: { path: byUser(username).path, query: { ...byUser(username).query, refresh } }
     })
   );
 

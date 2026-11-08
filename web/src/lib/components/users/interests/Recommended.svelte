@@ -6,6 +6,7 @@
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
+  import { formatCount } from "#lib/format.js";
   import { href } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
   import type { Interests, Side } from "#lib/users/interests.svelte.js";
@@ -32,7 +33,8 @@
 {#snippet list(title: string, items: Recommendations["recommended"])}
   <section class="flex flex-col gap-1" aria-label={title}>
     <h4 class="text-xs font-medium text-fg-muted">{title}</h4>
-    <ul class="flex max-h-[32rem] flex-col overflow-y-auto">
+    <!-- a block list: in a flex column of capped height, the lines would shrink below their text -->
+    <ul class="max-h-[32rem] overflow-y-auto">
       {#each items as { interest, score } (interest)}
         {@const mine = ours.liked.includes(interest)
           ? "Liked"
@@ -46,10 +48,10 @@
           <Tooltip text="Score" dense spoken>
             {#snippet child({ props })}
               <span {...props} class="w-14 shrink-0 text-right text-xs text-fg-muted tabular-nums"
-                >{score.toLocaleString()}</span>
+                >{formatCount(score)}</span>
             {/snippet}
           </Tooltip>
-          <span class="flex w-28 shrink-0 justify-end gap-0.5">
+          <span class="flex w-28 shrink-0 items-center justify-end gap-0.5">
             {#if mine}
               <Badge tone="outline">{mine}</Badge>
             {:else if canMark}

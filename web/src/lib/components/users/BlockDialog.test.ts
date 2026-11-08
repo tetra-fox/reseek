@@ -39,7 +39,7 @@ describe("the block dialog", () => {
       .filter((l) => l.querySelector('[role=checkbox][aria-checked="true"]'))
       .map((l) => l.textContent?.trim());
   const blockButton = () =>
-    [...document.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Block alice")!;
+    [...document.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Block")!;
 
   it("starts from the default scopes with what the caller adds, and sends what is chosen", async () => {
     app.options = { blocking: { default_scopes: ["searches", "browse"] } } as never;

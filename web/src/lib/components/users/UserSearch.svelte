@@ -18,7 +18,8 @@
 
   let open = $state(false);
 
-  const text = $derived(typed.trim());
+  // a name is looked up as written, spaces at its ends too, which make it another user's
+  const text = $derived(typed.trim() ? typed : "");
   const finder = new UserFinder(() => text, {
     onread: (value) => onsearch(value),
     onmissed: () => (open = true)

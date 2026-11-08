@@ -26,17 +26,27 @@
   import Switch from "#lib/components/ui/Switch.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
-  import { chatTime, columnWidth, dateTime, formatSpeed, plural, WIDEST } from "#lib/format.js";
+  import {
+    chatTime,
+    columnWidth,
+    dateTime,
+    formatCount,
+    formatSpeed,
+    plural,
+    WIDEST
+  } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { Keyed } from "#lib/lists/keyed.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
   import { Grid, keptIn } from "#lib/lists/table.svelte.js";
+  import { ListWindow } from "#lib/lists/virtual.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
   import { userHref } from "#lib/nav.js";
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
   import { clock } from "#lib/ui/clock.svelte.js";
+  import { rem } from "#lib/ui/viewport.svelte.js";
   import { befriend, reach, setBuddy } from "#lib/users/actions.js";
   import { pictureOf } from "#lib/users/profile.svelte.js";
   import type { UserSummary } from "#lib/users/users.svelte.js";
@@ -124,7 +134,8 @@
         descFirst: true,
         value: (u) => u.statistics?.fileCount ?? -1
       },
-      { id: "note", label: "Note", width: "8rem", grow: true },
+      // narrow until there is room, so a row fits beside the sidebar on a 1280px screen
+      { id: "note", label: "Note", width: "5rem", grow: true },
       { id: "trusted", label: BUDDY.trusted, width: "5rem", hint: BUDDY.trustedHint },
       { id: "notify", label: "Notify", width: "5rem", hint: BUDDY.notifyHint },
       { id: "actions", label: "Actions", width: "6rem", quiet: true, fixed: true }
@@ -137,18 +148,35 @@
   const online = $derived(shown.filter((u) => u.presence && u.presence !== "Offline").length);
   const write = $derived(session.can("ReadWrite"));
 
+  let headerHeight = $state(0);
   const list = new ListControl<UserSummary>({
     lines: () => shown,
     key: (u) => u.username,
     id: (u) => u.username,
-    onopen: (u) => void goto(userHref(u.username))
+    onopen: (u) => void goto(userHref(u.username)),
+    rendered: (index) => lines.isDrawn(index),
+    reveal: (index) => lines.scrollTo(index)
   });
+  // a buddy list can run to hundreds; the window draws those in view
+  const lines: ListWindow<UserSummary> = new ListWindow(
+    () => shown,
+    (u) => u.username,
+    () => ({
+      estimateSize: () => 2.5 * rem.px,
+      overscan: 10,
+      scrollMargin: headerHeight,
+      scrollPaddingStart: headerHeight,
+      sizes: rem.px,
+      onchange: () => list.scrolled()
+    })
+  );
 
   let adding = $state("");
   let busy = $state(false);
   const add = async () => {
-    const name = adding.trim();
-    if (!name || busy) return;
+    // a name is used as written, spaces at its ends too, which make it another user's
+    const name = adding;
+    if (!name.trim() || busy) return;
     busy = true;
     const outcome = await setBuddy(name, true);
     busy = false;
@@ -170,7 +198,7 @@
 <div class="flex flex-wrap items-center gap-inline">
   {#if write}
     <form
-      class="flex items-center gap-inline"
+      class="flex min-w-0 items-center gap-inline"
       onsubmit={(e) => {
         e.preventDefault();
         void add();
@@ -182,13 +210,17 @@
         autocomplete="off"
         spellcheck="false"
         bind:value={adding} />
-      <Button type="submit" size="sm" variant="outline" disabled={!adding.trim() || busy}
-        ><UserPlusIcon />{BUDDY.add}</Button>
+      <Button
+        type="submit"
+        size="sm"
+        variant="outline"
+        class="shrink-0"
+        disabled={!adding.trim() || busy}><UserPlusIcon />{BUDDY.add}</Button>
     </form>
   {/if}
   {#if shown.length}
     <span class="ml-auto text-sm text-fg-muted"
-      >{online} of {plural(shown.length, "buddy", "buddies")} online</span>
+      >{formatCount(online)} of {plural(shown.length, "buddy", "buddies")} online</span>
   {/if}
 </div>
 
@@ -203,21 +235,32 @@
     description="Add a buddy to see when they are online and to share folders with buddies only" />
 {:else}
   <div
-    class="overflow-x-auto rounded-card border bg-surface text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent"
+    class="max-h-[max(20rem,calc(var(--content-h)-12rem))] overflow-auto rounded-card border bg-surface text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent"
     role="grid"
     aria-label={BUDDY.plural}
     aria-activedescendant={list.activeId}
+    aria-rowcount={shown.length}
     tabindex="0"
+    {@attach lines.attach}
     {@attach list.attach}>
-    <GridHeader {grid} class="h-9 border-b bg-surface-muted text-fg-muted" />
-    <div role="rowgroup" {@attach freezesWhileUsed}>
-      {#each shown as u, i (u.username)}
+    <div class="sticky top-0 z-10" bind:offsetHeight={headerHeight}>
+      <GridHeader {grid} class="h-9 border-b bg-surface-muted text-fg-muted" />
+    </div>
+    <div
+      role="rowgroup"
+      class="relative"
+      style:height={`${lines.total}px`}
+      {@attach freezesWhileUsed}>
+      {#each lines.drawn as { line: u, index, start } (u.username)}
         {@const buddy = u.buddy ?? { trusted: false, notifyPresence: false }}
         <div
           role="row"
-          {...list.line(u, i)}
-          class="grid items-center list-row py-1.5"
-          style={grid.row}>
+          {...list.line(u, index)}
+          data-index={index}
+          {@attach lines.measure}
+          class="absolute inset-x-0 top-0 grid items-center list-row py-1.5"
+          style={grid.row}
+          style:transform={`translateY(${start - headerHeight}px)`}>
           <span role="gridcell" class="flex min-w-0 items-center gap-2 px-2">
             <Avatar
               name={u.username}
@@ -240,7 +283,7 @@
           <span role="gridcell" class="truncate px-2 text-right tabular-nums"
             >{u.statistics ? formatSpeed(u.statistics.averageSpeed) : ""}</span>
           <span role="gridcell" class="truncate px-2 text-right tabular-nums"
-            >{u.statistics?.fileCount.toLocaleString() ?? ""}</span>
+            >{u.statistics ? formatCount(u.statistics.fileCount) : ""}</span>
           <Tooltip text={u.notes ?? undefined} clipped>
             {#snippet child({ props })}
               <span {...props} role="gridcell" class="truncate px-2 text-xs text-fg-muted"

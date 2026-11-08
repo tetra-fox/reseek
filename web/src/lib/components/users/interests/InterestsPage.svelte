@@ -15,6 +15,7 @@
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import InterestsEditor from "#lib/components/users/profile/InterestsEditor.svelte";
   import { valueAt } from "#lib/config/sections.js";
+  import { plural } from "#lib/format.js";
   import { Loader } from "#lib/loader.svelte.js";
   import { href } from "#lib/nav.js";
   import { call } from "#lib/request.js";
@@ -125,7 +126,7 @@
   <Card title={interest ? `Users who like ${interest}` : "Users like you"}>
     {#snippet action()}
       <span class="text-xs text-fg-muted">
-        {finder.users.data ? `${finder.users.data.length.toLocaleString()} users` : ""}
+        {finder.users.data ? plural(finder.users.data.length, "user", "users") : ""}
       </span>
     {/snippet}
     <LoadError loader={finder.users} />

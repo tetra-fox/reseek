@@ -63,7 +63,7 @@
       const outcome = await call(() =>
         api.GET("/api/v0/users/{username}/transfers", {
           params: {
-            path: { username },
+            path: byUser(username).path,
             query: { ...byUser(username).query, direction, offset: 0, limit: wanted }
           }
         })

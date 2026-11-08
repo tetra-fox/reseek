@@ -34,7 +34,7 @@
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
-  import { ago, dateTime, plural } from "#lib/format.js";
+  import { ago, badgeCount, dateTime, formatCount, plural } from "#lib/format.js";
   import { type ActiveFilter, typedFilter } from "#lib/lists/filtered.js";
   import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { Keyed } from "#lib/lists/keyed.svelte.js";
@@ -71,6 +71,8 @@
   let { tag: startTag = null, withTransfers = false }: Props = $props();
 
   const PAGE = 50;
+  /** how many of a user's tags a row shows; the rest are on the profile */
+  const TAGS = 3;
   const BUILTIN_GROUPS = ["privileged", "default", "leechers"];
 
   const rows = new Keyed<UserSummary>((u) => u.username);
@@ -216,18 +218,19 @@
   const unblockAll = (names: string[]) => unblockMany(names.filter((name) => known(name)?.block));
 
   // below a very wide screen the group column is left out, so the table fits beside the sidebar
-  // without a sideways scroll. The group shows on the user's card
+  // on a 1280px screen, a scroll bar's width to spare, without a sideways scroll. The group
+  // shows on the user's card
   const COLUMNS: GridColumn<UserSummary>[] = [
     { id: "select", label: "Select", width: "2.5rem", quiet: true, fixed: true },
-    { id: "username", label: "User", width: "11rem", grow: true, sortable: true },
-    { id: "presence", label: "Presence", width: "6rem" },
+    { id: "username", label: "User", width: "9rem", grow: true, sortable: true },
+    { id: "presence", label: "Presence", width: "5.5rem" },
     { id: "group", label: "Group", width: "8.5rem" },
     { id: "tags", label: "Tags", width: "8rem" },
-    { id: "lastSeen", label: "Last seen", width: "7.5rem", sortable: true, descFirst: true },
+    { id: "lastSeen", label: "Last seen", width: "7rem", sortable: true, descFirst: true },
     {
       id: "uploads",
       label: "Uploads",
-      width: "6.5rem",
+      width: "6rem",
       end: true,
       sortable: true,
       descFirst: true
@@ -319,10 +322,7 @@
     aria-activedescendant={list.activeId}
     tabindex="0"
     {@attach list.attach}>
-    <GridHeader
-      {grid}
-      all={list.allTick}
-      class="h-9 border-b bg-surface-muted text-fg-muted" />
+    <GridHeader {grid} all={list.allTick} class="h-9 border-b bg-surface-muted text-fg-muted" />
     <div role="rowgroup" {@attach freezesWhileUsed}>
       {#each shown as u, i (u.username)}
         <div
@@ -355,23 +355,34 @@
             {#if u.block}<Badge tone="danger">blocked</Badge>{/if}
           </span>
           <span role="gridcell" class="flex min-w-0 items-center gap-1.5 px-2 text-xs">
-            <Presence presence={u.presence} worded />{u.presence ?? "?"}
+            <Presence presence={u.presence} worded />{u.presence ?? "Unknown"}
           </span>
           {#if viewport.xxl}
             <span role="gridcell" class="min-w-0 px-2"><GroupBadge group={u.group} /></span>
           {/if}
           <span role="gridcell" class="flex min-w-0 flex-wrap gap-1 px-2">
-            {#each u.tags as t (t)}
+            {#each u.tags.slice(0, TAGS) as t (t)}
               <Tooltip text={`Show only users tagged ${t}`}>
                 {#snippet child({ props })}
                   <button
                     {...props}
                     type="button"
-                    class="rounded-badge border px-1 text-xs text-fg-muted hover:bg-hover"
+                    class="max-w-full truncate rounded-badge border px-1 text-xs text-fg-muted hover:bg-hover"
                     onclick={() => refilter(() => (tag = t))}>{t}</button>
                 {/snippet}
               </Tooltip>
             {/each}
+            {#if u.tags.length > TAGS}
+              <Tooltip text={u.tags.slice(TAGS).join("\n")}>
+                {#snippet child({ props })}
+                  <a
+                    {...props}
+                    href={userHref(u.username)}
+                    class="rounded-badge px-1 text-xs text-fg-muted hover:bg-hover"
+                    >+{formatCount(u.tags.length - TAGS)}</a>
+                {/snippet}
+              </Tooltip>
+            {/if}
           </span>
           <Tooltip text={u.lastSeenAt ? dateTime(u.lastSeenAt) : undefined} dense>
             {#snippet child({ props })}
@@ -381,11 +392,11 @@
             {/snippet}
           </Tooltip>
           <span role="gridcell" class="truncate px-2 text-right tabular-nums"
-            >{u.figures.uploads.succeeded}</span>
+            >{formatCount(u.figures.uploads.succeeded)}</span>
           <span role="gridcell" class="truncate px-2 text-right tabular-nums"
-            >{u.figures.downloads.succeeded}</span>
+            >{formatCount(u.figures.downloads.succeeded)}</span>
           <span role="gridcell" class="px-2 text-right tabular-nums">
-            {#if u.unreadMessages}<Badge tone="danger">{u.unreadMessages}</Badge>{/if}
+            {#if u.unreadMessages}<Badge tone="danger">{badgeCount(u.unreadMessages)}</Badge>{/if}
           </span>
           <span role="gridcell" class="flex justify-end px-1">
             {#each reach(u.username, { only: ["message", "shares"] }) as action (action.id)}
@@ -463,7 +474,7 @@
 
 {#if list.selected.size}
   <div class="selection-bar" role="toolbar" aria-label="Selected users">
-    <span class="text-sm">{picked.length} selected</span>
+    <span class="text-sm">{formatCount(picked.length)} selected</span>
     {#if blockable.length}
       <Button size="sm" variant="outline" onclick={() => blocking.ask(blockable)}>Block</Button>
       <Button size="sm" variant="outline" onclick={() => void unblockAll(blockable)}

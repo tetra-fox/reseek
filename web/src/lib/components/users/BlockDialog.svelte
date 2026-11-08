@@ -8,6 +8,7 @@
   import Notice from "#lib/components/ui/Notice.svelte";
   import Select from "#lib/components/ui/Select.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
+  import { plural } from "#lib/format.js";
   import {
     addressesIn,
     addressOf,
@@ -42,7 +43,7 @@
   let sending = $state(false);
 
   const names = $derived(blocking.asked?.usernames ?? []);
-  const title = $derived(names.length === 1 ? names[0] : `${names.length} users`);
+  const title = $derived(names.length === 1 ? names[0] : plural(names.length, "user", "users"));
 
   // each opening starts from the defaults, with what the caller adds ticked
   $effect(() => {
@@ -169,8 +170,7 @@
   {#snippet footer()}
     <Button variant="ghost" disabled={sending} onclick={() => (blocking.open = false)}
       >Cancel</Button>
-    <Button type="submit" form="block-form" variant="danger" disabled={!valid || sending}>
-      Block {title}
-    </Button>
+    <Button type="submit" form="block-form" variant="danger" disabled={!valid || sending}
+      >Block</Button>
   {/snippet}
 </Dialog>
