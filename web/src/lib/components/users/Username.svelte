@@ -171,63 +171,65 @@
       }}
       onkeydown={keydown}>{name}</a>
   {/if}
-</span>
 
-{#if active === "card"}
-  <Popover.Root open onOpenChange={(o) => !o && hide()}>
-    <Popover.Portal>
-      <Popover.Content
-        bind:ref={cardBox}
-        customAnchor={link}
-        hideWhenDetached
-        side="bottom"
-        align="start"
-        sideOffset={4}
-        collisionPadding={8}
-        trapFocus={keyboard}
-        onOpenAutoFocus={(e) => !keyboard && e.preventDefault()}
-        onCloseAutoFocus={(e) => e.preventDefault()}
-        onpointerenter={() => clearTimeout(timer)}
-        onpointerleave={(e: PointerEvent) =>
-          e.pointerType !== "touch" && !clicked && later(hide, CLOSE_DELAY_MS)}
-        onclick={(e: MouseEvent) => {
-          // following a link in the card closes it, opening one in another tab does not
-          const followed = e.target instanceof Element && e.target.closest("a[href]");
-          if (followed && !e.ctrlKey && !e.metaKey && !e.shiftKey) hide();
-        }}
-        role="dialog"
-        aria-label={`Profile of ${name}`}
-        class="z-50 w-80 max-w-[calc(100vw-1rem)] rounded-card border bg-overlay p-3 text-fg shadow-raised outline-none motion-safe:animate-popover-in">
-        <UserCard {name} {user} onblock={blockOrAsk} onmenu={() => show("menu", keyboard)} />
-      </Popover.Content>
-    </Popover.Portal>
-  </Popover.Root>
-{/if}
+  <!-- the card and the menu render elsewhere through portals; kept inside the flex box, whose
+       whitespace between children is not drawn, the name has no space after it -->
+  {#if active === "card"}
+    <Popover.Root open onOpenChange={(o) => !o && hide()}>
+      <Popover.Portal>
+        <Popover.Content
+          bind:ref={cardBox}
+          customAnchor={link}
+          hideWhenDetached
+          side="bottom"
+          align="start"
+          sideOffset={4}
+          collisionPadding={8}
+          trapFocus={keyboard}
+          onOpenAutoFocus={(e) => !keyboard && e.preventDefault()}
+          onCloseAutoFocus={(e) => e.preventDefault()}
+          onpointerenter={() => clearTimeout(timer)}
+          onpointerleave={(e: PointerEvent) =>
+            e.pointerType !== "touch" && !clicked && later(hide, CLOSE_DELAY_MS)}
+          onclick={(e: MouseEvent) => {
+            // following a link in the card closes it, opening one in another tab does not
+            const followed = e.target instanceof Element && e.target.closest("a[href]");
+            if (followed && !e.ctrlKey && !e.metaKey && !e.shiftKey) hide();
+          }}
+          role="dialog"
+          aria-label={`Profile of ${name}`}
+          class="z-50 w-80 max-w-[calc(100vw-1rem)] rounded-card border bg-overlay p-3 text-fg shadow-raised outline-none motion-safe:animate-popover-in">
+          <UserCard {name} {user} onblock={blockOrAsk} onmenu={() => show("menu", keyboard)} />
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  {/if}
 
-{#if active === "menu"}
-  <DropdownMenu.Root open onOpenChange={(o) => !o && hide()}>
-    <Menu.Content customAnchor={link} align="start" class="min-w-52">
-      <div class="flex items-center gap-2 px-2 py-1.5 text-xs">
-        <span
-          class={[
-            "size-2 rounded-full",
-            user?.presence === "Online"
-              ? "bg-success"
-              : user?.presence === "Away"
-                ? "bg-warning"
-                : "bg-fg-subtle/50"
-          ]}></span>
-        <span class="truncate font-mono font-medium" style:color={nameColor(name)}>{name}</span>
-        {#if user}<span class="ml-auto"><GroupBadge group={user.group} /></span>{/if}
-      </div>
-      <Menu.Separator />
-      <UserMenuItems {name} {folder} />
-      {#if canManage(name)}
+  {#if active === "menu"}
+    <DropdownMenu.Root open onOpenChange={(o) => !o && hide()}>
+      <Menu.Content customAnchor={link} align="start" class="min-w-52">
+        <div class="flex items-center gap-2 px-2 py-1.5 text-xs">
+          <span
+            class={[
+              "size-2 rounded-full",
+              user?.presence === "Online"
+                ? "bg-success"
+                : user?.presence === "Away"
+                  ? "bg-warning"
+                  : "bg-fg-subtle/50"
+            ]}></span>
+          <span class="truncate font-mono font-medium" style:color={nameColor(name)}>{name}</span>
+          {#if user}<span class="ml-auto"><GroupBadge group={user.group} /></span>{/if}
+        </div>
         <Menu.Separator />
-        <UserManageItems {name} />
-      {/if}
-      <Menu.Separator />
-      <Menu.Item onSelect={() => void copyText(name)}><CopyIcon />Copy username</Menu.Item>
-    </Menu.Content>
-  </DropdownMenu.Root>
-{/if}
+        <UserMenuItems {name} {folder} />
+        {#if canManage(name)}
+          <Menu.Separator />
+          <UserManageItems {name} />
+        {/if}
+        <Menu.Separator />
+        <Menu.Item onSelect={() => void copyText(name)}><CopyIcon />Copy username</Menu.Item>
+      </Menu.Content>
+    </DropdownMenu.Root>
+  {/if}
+</span>
