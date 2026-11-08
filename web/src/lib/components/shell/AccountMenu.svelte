@@ -54,7 +54,7 @@
               class="size-7 text-xs" />
             {#if !sidebar.collapsed}
               <span class="grid flex-1 leading-tight">
-                <span class="truncate font-medium">{name}</span>
+                <span class="truncate font-medium" dir="auto">{name}</span>
                 <span class="truncate text-xs text-fg-muted">{role}</span>
               </span>
               <EllipsisVerticalIcon class="size-4 shrink-0 text-fg-muted" />
@@ -68,6 +68,12 @@
     class="w-(--bits-dropdown-menu-anchor-width) min-w-56"
     side={sidebar.phone ? "bottom" : "right"}
     align="end">
+    <!-- the whole name, which the card beside the sidebar may cut -->
+    <Menu.Label class="flex flex-col wrap-anywhere">
+      <span class="text-sm text-fg" dir="auto">{name}</span>
+      <span class="font-normal">{role}</span>
+    </Menu.Label>
+    <Menu.Separator />
     <Menu.Item onSelect={() => goto(href("/profile"))}>
       <ContactIcon />
       Your profile

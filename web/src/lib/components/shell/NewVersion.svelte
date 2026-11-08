@@ -13,12 +13,12 @@
 {#if version?.isUpdateAvailable}
   <Button variant="ghost" size="sm" class="text-warning-soft-fg" onclick={() => (open = true)}>
     <MegaphoneIcon class="text-warning" />
-    <span class="hidden sm:inline">Update available</span>
+    <span class="max-sm:sr-only">Update available</span>
   </Button>
   <Dialog bind:open title="Update available">
     <p class="text-sm">
-      reseek <strong>{version.latest}</strong> is available. The current version is
-      <strong>{version.current}</strong>.
+      reseek <strong class="whitespace-nowrap">{version.latest}</strong> is available. The current
+      version is <strong class="whitespace-nowrap">{version.current}</strong>.
     </p>
     <a
       href={RELEASES}

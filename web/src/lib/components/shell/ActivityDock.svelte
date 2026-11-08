@@ -119,15 +119,17 @@
   <header class="flex flex-wrap items-center gap-2 border-b px-gutter py-1.5">
     <h2 class="text-sm font-medium">Activity</h2>
     <div class="ml-auto flex flex-wrap items-center gap-1">
-      <Filter.Group label="Show">
-        {#each KINDS as k (k.type)}
-          <Filter.Chip
-            pressed={!hidden.has(k.type)}
-            hides
-            class="h-6 pr-2 pl-1.5 text-xs"
-            onclick={() => toggle(k.type)}>{k.label}</Filter.Chip>
-        {/each}
-      </Filter.Group>
+      <Filter.Panel {filters}>
+        <Filter.Group label="Show">
+          {#each KINDS as k (k.type)}
+            <Filter.Chip
+              pressed={!hidden.has(k.type)}
+              hides
+              class="h-6 pr-2 pl-1.5 text-xs"
+              onclick={() => toggle(k.type)}>{k.label}</Filter.Chip>
+          {/each}
+        </Filter.Group>
+      </Filter.Panel>
       <Tooltip text="Clear the list">
         {#snippet child({ props })}
           <Button
@@ -198,7 +200,8 @@
                 : "text-fg-muted"
             ]} />
         </span>
-        <span role="gridcell" class="min-w-0 truncate">
+        <!-- up to two lines, so a long file name hides less of what follows it -->
+        <span role="gridcell" class="line-clamp-2 min-w-0 wrap-anywhere">
           {#each activityParts(e, formatBytes) as part, n (n)}{#if part.kind === "user"}<Username
                 name={part.name} />{:else if part.kind === "file"}<Tooltip text={part.path} dense
                 >{#snippet child({ props })}<span {...props} class="font-medium"

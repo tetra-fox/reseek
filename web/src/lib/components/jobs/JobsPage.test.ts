@@ -34,12 +34,15 @@ describe("the Jobs page", () => {
     page = null;
     jobs.rows.clear();
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
     document.body.innerHTML = "";
   });
 
   it("opens a job a link names and brings it into view once the list has come", async () => {
     const scrolled = vi.fn();
     Element.prototype.scrollIntoView = scrolled;
+    // the parts list draws the parts in view, so its box needs a height, which jsdom never lays out
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(24);
     fakeNetwork((url) => {
       if (url.pathname.endsWith("/api/v0/jobs")) return { jobs: [cleanup] };
       if (url.pathname.endsWith("/api/v0/jobs/schedules")) return [];

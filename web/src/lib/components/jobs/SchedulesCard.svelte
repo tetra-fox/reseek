@@ -93,7 +93,7 @@
             <span>Not run yet</span>
           {/if}
           {#if s.nextRunAt && !s.running}
-            <span class="text-fg-muted">Next <Time at={s.nextRunAt} /></span>
+            <span class="text-fg-muted">Next run <Time at={s.nextRunAt} /></span>
           {/if}
         </div>
         <div class="row-start-1 flex justify-end max-md:col-start-2 md:row-start-auto">

@@ -9,7 +9,7 @@
   import { app } from "#lib/app.svelte.js";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { Busy } from "#lib/feedback/busy.svelte.js";
-  import { formatSpeedPadded } from "#lib/format.js";
+  import { formatCount, formatSpeedPadded } from "#lib/format.js";
   import { failureUnseen, summaryText } from "#lib/jobs/jobs.js";
   import { jobsSeen } from "#lib/jobs/jobs.svelte.js";
   import { href } from "#lib/nav.js";
@@ -39,8 +39,8 @@
     const m = app.metrics?.[direction];
     return {
       speed: formatSpeedPadded(m?.inProgress.totalSpeed),
-      active: m?.inProgress.files ?? 0,
-      queued: m?.queued.files ?? 0
+      active: formatCount(m?.inProgress.files ?? 0),
+      queued: formatCount(m?.queued.files ?? 0)
     };
   };
   const downloads = $derived(figures("downloads"));
@@ -80,21 +80,21 @@
             "size-2 shrink-0 rounded-full",
             !connected ? "bg-danger" : away ? "bg-warning" : "bg-success"
           ]}></span>
-        <span class="truncate font-medium"
+        <span class="truncate font-medium" dir="auto"
           >{connected && username ? username : "Disconnected"}</span>
         {#if away}<span class="shrink-0 text-fg-muted">Away</span>{/if}
       </button>
     {/snippet}
   </Tooltip>
   <SpeedLimits>
-    <span class="flex shrink-0 items-center gap-1.5" aria-label="Downloads">
-      <ArrowDownIcon class="size-3.5 text-download" />
+    <span class="flex shrink-0 items-center gap-1.5">
+      <ArrowDownIcon class="size-3.5 text-download" /><span class="sr-only">Downloads</span>
       <span class="font-mono whitespace-pre tabular-nums">{downloads.speed}</span>
       <span class="text-fg-muted max-md:hidden"
         >{downloads.active} active · {downloads.queued} queued</span>
     </span>
-    <span class="flex shrink-0 items-center gap-1.5" aria-label="Uploads">
-      <ArrowUpIcon class="size-3.5 text-upload" />
+    <span class="flex shrink-0 items-center gap-1.5">
+      <ArrowUpIcon class="size-3.5 text-upload" /><span class="sr-only">Uploads</span>
       <span class="font-mono whitespace-pre tabular-nums">{uploads.speed}</span>
       <span class="text-fg-muted max-md:hidden"
         >{uploads.active} active · {uploads.queued} queued</span>
@@ -132,14 +132,20 @@
       </button>
     {/snippet}
   </Tooltip>
-  <a
-    href={REPOSITORY}
-    target="_blank"
-    rel="noreferrer"
-    class="ml-auto flex h-control-sm shrink-0 items-center gap-1.5 text-fg-muted hover:text-fg max-md:hidden">
-    <img src="./favicon.svg" width="18" height="18" alt="" />
-    <span class="font-medium">reseek</span>
-    <span class="font-mono opacity-70">{app.state?.version.current ?? ""}</span>
-    <span class="font-mono opacity-50">AGPL-3.0</span>
-  </a>
+  <!-- the project link takes the room the rest leaves, so it never wraps the footer: what does
+       not fit of it, the license first, wraps to a second line its height hides. The empty first
+       item holds the first line's height, so the logo can wrap away too -->
+  <div class="flex min-w-0 flex-1 basis-0 justify-end max-md:hidden">
+    <a
+      href={REPOSITORY}
+      target="_blank"
+      rel="noreferrer"
+      class="flex h-control-sm min-w-0 flex-wrap items-center justify-end gap-x-1.5 overflow-hidden text-fg-muted before:h-control-sm hover:text-fg">
+      <img src="./favicon.svg" width="18" height="18" alt="" class="h-control-sm object-contain" />
+      <span class="leading-(--spacing-control-sm) font-medium">reseek</span>
+      <span class="font-mono leading-(--spacing-control-sm) opacity-70"
+        >{app.state?.version.current ?? ""}</span>
+      <span class="font-mono leading-(--spacing-control-sm) opacity-50">AGPL-3.0</span>
+    </a>
+  </div>
 </footer>

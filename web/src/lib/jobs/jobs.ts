@@ -1,5 +1,5 @@
 import type { Schemas } from "#lib/api/client.js";
-import { parseDuration, plural, sayDuration } from "#lib/format.js";
+import { formatCount, parseDuration, plural, sayDuration } from "#lib/format.js";
 
 export type Job = Schemas["Job"];
 export type JobKind = Job["kind"];
@@ -90,10 +90,10 @@ export const progressText = (job: Job): string => {
   const head =
     job.state === "ended"
       ? plural(total, noun[0], noun[1])
-      : `${done.toLocaleString()} of ${plural(total, noun[0], noun[1])}`;
+      : `${formatCount(done)} of ${plural(total, noun[0], noun[1])}`;
   const tails = [
-    failed ? `${failed.toLocaleString()} failed` : "",
-    canceled && job.state === "ended" ? `${canceled.toLocaleString()} canceled` : ""
+    failed ? `${formatCount(failed)} failed` : "",
+    canceled && job.state === "ended" ? `${formatCount(canceled)} canceled` : ""
   ].filter(Boolean);
   return [head, ...tails].join(", ");
 };
@@ -147,11 +147,11 @@ export const summaryText = (
 ): string | null => {
   if (!summary) return null;
   const running = short
-    ? `${summary.running.toLocaleString()} running`
+    ? `${formatCount(summary.running)} running`
     : `${plural(summary.running, "job", "jobs")} running`;
   const parts = [
     summary.running ? running : "",
-    summary.paused ? `${summary.paused.toLocaleString()} paused` : ""
+    summary.paused ? `${formatCount(summary.paused)} paused` : ""
   ].filter(Boolean);
   return parts.length ? parts.join(", ") : null;
 };

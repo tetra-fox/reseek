@@ -6,6 +6,7 @@
   import EmptyRow from "#lib/components/ui/EmptyRow.svelte";
   import { axisPadding, tickLabel } from "#lib/dashboard/chart.js";
   import { outcomes } from "#lib/dashboard/reports.js";
+  import { formatCount } from "#lib/format.js";
   import { href } from "#lib/nav.js";
   import { chartMotion } from "#lib/ui/motion.js";
   import { rem } from "#lib/ui/viewport.svelte.js";
@@ -60,7 +61,7 @@
       aria-label={`Transfer outcomes: ${data
         .map(
           (d) =>
-            `${d.direction} ${SERIES.map((s) => `${d[s.key]} ${s.label.toLowerCase()}`).join(", ")}`
+            `${d.direction} ${SERIES.map((s) => `${formatCount(d[s.key])} ${s.label.toLowerCase()}`).join(", ")}`
         )
         .join("; ")}`}>
       <Chart
@@ -81,7 +82,7 @@
             <Axis placement="left" tickLabelProps={tickLabel} />
             <Axis
               placement="bottom"
-              format={(n: number) => n.toLocaleString()}
+              format={formatCount}
               tickSpacing={rem.px * 4}
               tickOcclusion
               tickLabelProps={tickLabel} />
@@ -107,7 +108,7 @@
               <Tooltip.Header value={d.direction} />
               <Tooltip.List>
                 {#each SERIES as s (s.key)}
-                  <Tooltip.Item label={s.label} color={s.color} value={d[s.key].toLocaleString()} />
+                  <Tooltip.Item label={s.label} color={s.color} value={formatCount(d[s.key])} />
                 {/each}
               </Tooltip.List>
             {/snippet}
@@ -119,7 +120,7 @@
     <EmptyRow text="No transfers finished in this range" />
   {/if}
   <!-- the same figures as links, for the keyboard and for reading exactly: a column for each
-       direction, each figure whole on a line of its own -->
+       direction, each figure on a line of its own, its word going under it in a narrow column -->
   <dl class="grid grid-cols-2 gap-x-4 text-sm">
     {#each data as d (d.direction)}
       <div class="flex flex-col gap-0.5">
@@ -127,11 +128,11 @@
         {#each SERIES as s (s.key)}
           <dd>
             <a
-              class="whitespace-nowrap tabular-nums underline-offset-2 hover:underline"
+              class="tabular-nums underline-offset-2 hover:underline"
               href={href(
                 `${d.direction === "Downloads" ? "/downloads" : "/uploads"}?state=${s.state}`
               )}
-              >{d[s.key].toLocaleString()}
+              ><span class="whitespace-nowrap">{formatCount(d[s.key])}</span>
               <span class="text-fg-muted">{s.label.toLowerCase()}</span></a>
           </dd>
         {/each}

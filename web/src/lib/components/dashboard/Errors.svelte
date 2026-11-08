@@ -2,10 +2,10 @@
   import { untrack } from "svelte";
 
   import type { Schemas } from "#lib/api/client.js";
-  import { api } from "#lib/api/client.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Dialog from "#lib/components/ui/Dialog.svelte";
   import EmptyRow from "#lib/components/ui/EmptyRow.svelte";
+  import MiddleTruncate from "#lib/components/ui/MiddleTruncate.svelte";
   import Segmented from "#lib/components/ui/Segmented.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import Username from "#lib/components/users/Username.svelte";
@@ -17,8 +17,16 @@
     type Window
   } from "#lib/dashboard/reports.js";
   import { ERRORS } from "#lib/dashboard/series.js";
-  import { formatBytes, formatDate, formatSpeed, getFileName, truncate } from "#lib/format.js";
-  import { call } from "#lib/request.js";
+  import {
+    columnWidth,
+    dateTime,
+    formatBytes,
+    formatCount,
+    formatDate,
+    formatSpeed,
+    getFileName,
+    truncate
+  } from "#lib/format.js";
   import { endingText } from "#lib/transfers/states.js";
 
   import AreaChart from "./AreaChart.svelte";
@@ -95,6 +103,8 @@
 
   /** how much of an error message a table line shows */
   const CUT = 80;
+  /** the widest time the recent errors write, one from another year */
+  const TIME_WIDTH = columnWidth(dateTime("2000-12-28T12:49:00Z", 0));
 </script>
 
 {#snippet which(value: Which, set: (w: Which) => void, label: string)}
@@ -129,24 +139,28 @@
       </thead>
       <tbody>
         {#each pareto as row (`${row.direction}-${row.exception}`)}
-          <tr class={[exception === row.exception && "bg-accent-soft/60"]}>
+          <tr class={[exception !== null && exception === row.exception && "bg-accent-soft/60"]}>
             <td>{row.direction}</td>
             <td class="whitespace-normal">
-              <!-- the whole message where it is cut, which a click also shows in recent errors -->
-              <Tooltip
-                text={(row.exception?.length ?? 0) > CUT
-                  ? (row.exception ?? undefined)
-                  : "Show only this error in recent errors"}>
-                {#snippet child({ props })}
-                  <button
-                    {...props}
-                    type="button"
-                    class="text-left hover:underline"
-                    onclick={() =>
-                      (exception = exception === row.exception ? null : (row.exception ?? null))}
-                    >{truncate(row.exception ?? "(no message)", CUT)}</button>
-                {/snippet}
-              </Tooltip>
+              <!-- the reports can ask for one message but not for none, so an error without a
+                   message is no filter -->
+              {#if typeof row.exception !== "string"}
+                <span class="text-fg-muted">(no message)</span>
+              {:else}
+                {@const message = row.exception}
+                <!-- the whole message where it is cut, which a click also shows in recent errors -->
+                <Tooltip
+                  text={message.length > CUT ? message : "Show only this error in recent errors"}>
+                  {#snippet child({ props })}
+                    <button
+                      {...props}
+                      type="button"
+                      class="text-left hover:underline"
+                      onclick={() => (exception = exception === message ? null : message)}
+                      >{truncate(message, CUT)}</button>
+                  {/snippet}
+                </Tooltip>
+              {/if}
             </td>
             <td>
               <div class="h-1.5 rounded-full bg-surface-muted">
@@ -156,8 +170,8 @@
                 </div>
               </div>
             </td>
-            <td class="text-right font-medium tabular-nums">{row.count.toLocaleString()}</td>
-            <td class="text-right tabular-nums">{row.distinctUsers.toLocaleString()}</td>
+            <td class="text-right font-medium tabular-nums">{formatCount(row.count)}</td>
+            <td class="text-right tabular-nums">{formatCount(row.distinctUsers)}</td>
           </tr>
         {:else}
           <EmptyRow colspan={5} text="No errors in this range" />
@@ -179,7 +193,17 @@
       Could not load recent errors: {recentError}
     </p>{/if}
   <div class="overflow-x-auto">
-    <table class="data-table dense w-full min-w-[36rem] text-sm">
+    <!-- the user and the file take set shares and cut their text, the error has the rest and
+         wraps, which on a phone is room for a few words; the widths are set here, where the
+         font is the cells' -->
+    <table class="data-table dense w-full min-w-[50rem] table-fixed text-sm">
+      <colgroup>
+        <col style:width={TIME_WIDTH} />
+        <col style:width={columnWidth("Download")} />
+        <col class="w-1/6" />
+        <col class="w-1/5" />
+        <col />
+      </colgroup>
       <thead>
         <tr>
           <th>Time</th>
@@ -192,21 +216,22 @@
       <tbody>
         {#each recent as row (row.id)}
           <tr>
-            <td>{formatDate(row.endedAt)}</td>
+            <td>{dateTime(row.endedAt)}</td>
             <td>{row.direction}</td>
-            <td><Username name={row.username} /></td>
-            <td class="whitespace-normal">
+            <td class="overflow-hidden"><Username name={row.username} /></td>
+            <td>
               <Tooltip text={row.filename} dense>
                 {#snippet child({ props })}
                   <button
                     {...props}
                     type="button"
-                    class="text-left hover:underline"
-                    onclick={() => (detail = row)}>{getFileName(row.filename)}</button>
+                    class="flex max-w-full text-left hover:underline"
+                    onclick={() => (detail = row)}
+                    ><MiddleTruncate text={getFileName(row.filename)} /></button>
                 {/snippet}
               </Tooltip>
             </td>
-            <td class="whitespace-normal">
+            <td class="wrap-anywhere whitespace-normal">
               <span class="font-medium">{endingWord(row.state)}</span>
               {#if row.exception}
                 <Tooltip text={row.exception.length > CUT ? row.exception : undefined} dense spoken>
@@ -252,8 +277,8 @@
       <dd>{formatDate(d.endedAt)}</dd>
       <dt class="text-fg-muted">Speed</dt>
       <dd>{formatSpeed(d.averageSpeed)}</dd>
-      <dt class="text-fg-muted">Error</dt>
-      <dd class="cursor-text font-mono text-xs wrap-anywhere">{d.exception ?? ""}</dd>
+      {#if d.exception}<dt class="text-fg-muted">Error</dt>
+        <dd class="cursor-text font-mono text-xs wrap-anywhere">{d.exception}</dd>{/if}
     </dl>
   {/if}
 </Dialog>

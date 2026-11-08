@@ -25,7 +25,6 @@
     fraction,
     type Job,
     type JobKind,
-    type JobPart,
     KIND_LABELS,
     progressText,
     starterText,
@@ -37,6 +36,8 @@
   import { session } from "#lib/session.svelte.js";
   import { PAUSE_WARNING } from "#lib/transfers/bulk.js";
   import { disclose } from "#lib/ui/motion.js";
+
+  import JobParts from "./JobParts.svelte";
 
   // one job: what it is, where it is and how far, who started it, its controls, and its parts
   // once opened
@@ -80,41 +81,6 @@
       dismiss: "Keep going",
       run: () => void busy.run(() => jobs.control(job.id, "cancel"))
     });
-
-  // the parts, read when the row opens and again as the job changes while it is open
-  let parts = $state.raw<JobPart[] | null>(null);
-  let partsError = $state<string | null>(null);
-  $effect(() => {
-    if (!open || !job.counts.total) return;
-    void job.counts;
-    void job.state;
-    let current = true;
-    void jobs.detail(job.id).then((outcome) => {
-      if (!current) return;
-      if (outcome.ok) {
-        parts = outcome.data.parts;
-        partsError = null;
-      } else partsError = outcome.error;
-    });
-    return () => (current = false);
-  });
-
-  const partTone = (p: JobPart) =>
-    p.state === "succeeded"
-      ? "success"
-      : p.state === "failed"
-        ? "danger"
-        : p.state === "running"
-          ? "accent"
-          : "neutral";
-  const PART_STATES: Record<JobPart["state"], string> = {
-    waiting: "Waiting",
-    running: "Running",
-    paused: "Paused",
-    succeeded: "Succeeded",
-    failed: "Failed",
-    canceled: "Canceled"
-  };
 </script>
 
 <!-- the columns are the job list's, taken through subgrids -->
@@ -269,47 +235,11 @@
       {/if}
     </div>
   </div>
-  {#if open}
+  {#if open && job.counts.total}
     <div
       class="col-span-full border-t bg-surface-muted/50 px-4 py-2 pl-14 text-xs"
       transition:disclose>
-      {#if partsError}
-        <span class="text-danger">{partsError}</span>
-      {:else if parts === null}
-        <Spinner class="size-4" />
-      {:else if !parts.length}
-        <span class="text-fg-muted">This job has no parts</span>
-      {:else}
-        <ul class="flex max-h-80 flex-col gap-0.5 overflow-y-auto">
-          {#each parts as p, i (`${i}:${p.name}`)}
-            <li class="flex min-w-0 items-center gap-2">
-              <Badge tone={partTone(p)}>{PART_STATES[p.state]}</Badge>
-              {#if p.transferId}
-                <Tooltip text={p.name} clipped>
-                  {#snippet child({ props })}
-                    <a
-                      {...props}
-                      class="truncate hover:underline"
-                      href={href(`/downloads?job=${job.id}&transfer=${p.transferId}`)}>{p.name}</a>
-                  {/snippet}
-                </Tooltip>
-              {:else}
-                <Tooltip text={p.name} clipped>
-                  {#snippet child({ props })}<span {...props} class="truncate">{p.name}</span
-                    >{/snippet}
-                </Tooltip>
-              {/if}
-              {#if p.error}
-                <Tooltip text={p.error} clipped>
-                  {#snippet child({ props })}
-                    <span {...props} class="truncate text-danger">{p.error}</span>
-                  {/snippet}
-                </Tooltip>
-              {/if}
-            </li>
-          {/each}
-        </ul>
-      {/if}
+      <JobParts {job} />
     </div>
   {/if}
 </div>

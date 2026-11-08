@@ -8,7 +8,7 @@
 
   import { app } from "#lib/app.svelte.js";
   import { chat } from "#lib/chat/chat.svelte.js";
-  import { formatSpeed, plural } from "#lib/format.js";
+  import { formatCount, formatSpeed, plural } from "#lib/format.js";
   import { href } from "#lib/nav.js";
   import { SOULSEEK_SETTINGS } from "#lib/reachability.js";
 
@@ -63,8 +63,8 @@
     "text-download",
     "Downloading",
     [
-      { text: `${down.active} active`, to: "/downloads?state=active", strong: true },
-      { text: `${down.queued} queued`, to: "/downloads?state=queued" }
+      { text: `${formatCount(down.active)} active`, to: "/downloads?state=active", strong: true },
+      { text: `${formatCount(down.queued)} queued`, to: "/downloads?state=queued" }
     ],
     down.active ? formatSpeed(down.speed) : undefined
   )}
@@ -73,13 +73,13 @@
     "text-upload",
     "Uploading",
     [
-      { text: `${up.active} active`, to: "/uploads?state=active", strong: true },
-      { text: `${up.queued} queued`, to: "/uploads?state=queued" }
+      { text: `${formatCount(up.active)} active`, to: "/uploads?state=active", strong: true },
+      { text: `${formatCount(up.queued)} queued`, to: "/uploads?state=queued" }
     ],
     up.active ? formatSpeed(up.speed) : undefined
   )}
   {@render tile(MessageSquareIcon, chat.totalMentions ? "text-accent" : "text-fg-muted", "Chat", [
-    { text: `${chat.total} unread`, to: "/chat", strong: true },
+    { text: `${formatCount(chat.total)} unread`, to: "/chat", strong: true },
     { text: plural(chat.rooms.size, "room", "rooms"), to: "/chat" }
   ])}
   {@render tile(

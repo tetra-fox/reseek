@@ -11,7 +11,14 @@
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import Username from "#lib/components/users/Username.svelte";
   import { type RangeLabel, reports, type Window } from "#lib/dashboard/reports.js";
-  import { columnWidth, formatBytes, formatSpeed, plural, WIDEST } from "#lib/format.js";
+  import {
+    columnWidth,
+    formatBytes,
+    formatCount,
+    formatSpeed,
+    plural,
+    WIDEST
+  } from "#lib/format.js";
   import { reach, USER_ACTIONS } from "#lib/users/actions.js";
 
   // who moved the most with us each way, by count, bytes or speed
@@ -69,7 +76,7 @@
       by: "Count",
       label: "Files",
       widest: WIDEST.count,
-      value: (e) => e.count.toLocaleString(),
+      value: (e) => formatCount(e.count),
       brief: (e) => plural(e.count, "file", "files")
     },
     {

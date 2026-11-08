@@ -1,6 +1,6 @@
 import { curveMonotoneX } from "d3-shape";
 
-import { formatBytes, formatSpeed, formatWait } from "#lib/format.js";
+import { formatBytes, formatCount, formatSpeed, formatWait } from "#lib/format.js";
 
 /** What a series measures, which decides how its values read */
 export type Unit = "bytes" | "count" | "rate" | "ratio" | "seconds" | "speed";
@@ -60,7 +60,7 @@ export const valueLabel = (unit: Unit) => {
     case "bytes":
       return (n: number) => formatBytes(n, 1);
     case "count":
-      return (n: number) => n.toLocaleString();
+      return formatCount;
     case "rate":
       return (n: number) => `${n.toFixed(1)}%`;
     case "ratio":
