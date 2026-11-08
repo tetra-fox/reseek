@@ -1,5 +1,5 @@
 import type { Schemas } from "#lib/api/client.js";
-import { formatCount, parseDuration, plural, sayDuration } from "#lib/format.js";
+import { formatCount, formatDuration, parseDuration, plural, sayDuration } from "#lib/format.js";
 
 export type Job = Schemas["Job"];
 export type JobKind = Job["kind"];
@@ -55,6 +55,12 @@ export const starterText = (job: Job, schedules: Schedule[] = []): string => {
   if (kind === "download") return "Started by its download";
   if (kind === "resumed") return "Started when reseek started";
   return "Started by you";
+};
+
+/** How long a run took from its start to its end: "12s", "1h 5m", or "under 1s" */
+export const tookText = (startedAt: string, endedAt: string): string => {
+  const seconds = (Date.parse(endedAt) - Date.parse(startedAt)) / 1000;
+  return seconds < 1 ? "under 1s" : formatDuration(seconds);
 };
 
 /** Whether a job is in the filter's state or ended that way */

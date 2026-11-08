@@ -120,9 +120,9 @@ fn entries(app: &AppState, options: &Options, started: DateTime<Utc>) -> Vec<Ent
       option: None,
       schedule: wishlist.map_or(Schedule::Off, Schedule::every),
       note: Some(if wishlist.is_some() {
-        "The Soulseek server sets how often it runs".to_string()
+        "Set by the Soulseek server".to_string()
       } else {
-        "Waiting for the Soulseek server to say how often it runs".to_string()
+        "Waiting for the Soulseek server".to_string()
       }),
       never_ran_from: Some(started),
       // the server sets how often a wishlist search may go out
@@ -187,6 +187,7 @@ async fn cards_with(app: &AppState, last_runs: &HashMap<String, LastRun>) -> Vec
       runnable: entry.runnable,
       running,
       last_run_at: last.and_then(|l| l.run_at),
+      last_ended_at: last.and_then(|l| l.ended_at),
       last_ending: last.and_then(|l| l.ending),
       last_summary: last.and_then(|l| l.summary.clone()),
       last_error: last.and_then(|l| l.error.clone()),
@@ -311,11 +312,13 @@ async fn start(app: &AppState, name: &'static str, starter: JobStarter) {
   tokio::spawn(
     async move {
       let outcome = work(&app, name, starter).await;
+      let ended_at = Utc::now();
       lock(&app.jobs.running_schedules).remove(name);
       app
         .jobs
         .update_last_run(name, move |last| {
           last.run_at = Some(started_at);
+          last.ended_at = Some(ended_at);
           last.ending = Some(outcome.ending);
           last.error = outcome.error;
           last.summary = outcome.summary;

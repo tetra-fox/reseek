@@ -29,7 +29,8 @@
     progressText,
     starterText,
     stateText,
-    toneOf
+    toneOf,
+    tookText
   } from "#lib/jobs/jobs.js";
   import { jobs } from "#lib/jobs/jobs.svelte.js";
   import { href } from "#lib/nav.js";
@@ -73,10 +74,7 @@
   const cancel = () =>
     confirmation.ask({
       title: `Cancel ${job.name}?`,
-      body:
-        job.kind === "download"
-          ? "Unfinished files stop. Finished files stay."
-          : "The work stops where it is",
+      body: job.kind === "download" ? "Unfinished files stop. Finished files stay." : undefined,
       confirm: "Cancel job",
       dismiss: "Keep going",
       run: () => void busy.run(() => jobs.control(job.id, "cancel"))
@@ -88,14 +86,14 @@
   <div class="col-span-full grid grid-cols-subgrid items-center gap-y-1 px-4 py-2.5">
     <!-- a phone gives the name the row's width, with the state, the time and the actions under it -->
     {#if job.counts.total}
-      <Tooltip text={open ? "Hide the parts" : "Show the parts"}>
+      <Tooltip text={open ? "Hide parts" : "Show parts"}>
         {#snippet child({ props })}
           <button
             {...props}
             type="button"
             class="flex size-control-sm items-center justify-center rounded-control text-fg-muted hover:bg-hover hover:text-fg"
             aria-expanded={open}
-            aria-label={open ? `Hide the parts of ${job.name}` : `Show the parts of ${job.name}`}
+            aria-label={open ? `Hide parts of ${job.name}` : `Show parts of ${job.name}`}
             onclick={ontoggle}>
             <ChevronRightIcon
               class={[
@@ -149,7 +147,9 @@
     </div>
     <div class="flex flex-col gap-0.5 text-xs text-fg-muted max-md:col-start-2">
       {#if job.endedAt}
-        <span>Ended <Time at={job.endedAt} /></span>
+        <span
+          >Ended <Time at={job.endedAt} />{#if job.startedAt}
+            (took {tookText(job.startedAt, job.endedAt)}){/if}</span>
       {:else if job.startedAt}
         <span>Started <Time at={job.startedAt} /></span>
       {:else}
@@ -204,10 +204,10 @@
           {#if endedBadly(job)}
             <Tooltip
               text={job.kind === "download"
-                ? "Queue the missing files again as a new job"
+                ? "Queue missing files again"
                 : job.kind === "analysis"
-                  ? "Analyze the failed files again as a new job"
-                  : "Run again as a new job"}>
+                  ? "Analyze failed files again"
+                  : "Run again"}>
               {#snippet child({ props })}
                 <Button
                   {...props}
@@ -220,13 +220,13 @@
               {/snippet}
             </Tooltip>
           {/if}
-          <Tooltip text="Remove from the list">
+          <Tooltip text="Remove from list">
             {#snippet child({ props })}
               <Button
                 {...props}
                 variant="ghost"
                 size="icon-sm"
-                aria-label="Remove from the list"
+                aria-label="Remove from list"
                 disabled={busy.running}
                 onclick={() => void busy.run(() => jobs.remove(job.id))}><Trash2Icon /></Button>
             {/snippet}

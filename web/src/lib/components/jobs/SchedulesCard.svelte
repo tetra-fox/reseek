@@ -9,7 +9,7 @@
   import Time from "#lib/components/ui/Time.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { Busy } from "#lib/feedback/busy.svelte.js";
-  import { ENDING_LABELS, everyText, type Schedule } from "#lib/jobs/jobs.js";
+  import { ENDING_LABELS, everyText, type Schedule, tookText } from "#lib/jobs/jobs.js";
   import { jobs } from "#lib/jobs/jobs.svelte.js";
   import { href } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
@@ -65,7 +65,9 @@
             <span class="flex items-center gap-1.5 text-fg"><Spinner class="size-3" />Running</span>
           {:else if s.lastRunAt}
             <span class="flex flex-wrap items-center gap-1.5">
-              Last run <Time at={s.lastRunAt} />
+              <span
+                >Last run <Time at={s.lastRunAt} />{#if s.lastEndedAt}
+                  (took {tookText(s.lastRunAt, s.lastEndedAt)}){/if}</span>
               {#if s.lastEnding && s.lastEnding !== "succeeded"}
                 <Badge tone={tone(s)}>{ENDING_LABELS[s.lastEnding]}</Badge>
               {/if}
@@ -87,7 +89,7 @@
               <button
                 type="button"
                 class="w-fit text-accent hover:underline"
-                onclick={() => onshow(s.lastJobId!)}>Show the job</button>
+                onclick={() => onshow(s.lastJobId!)}>Show job</button>
             {/if}
           {:else}
             <span>Not run yet</span>

@@ -5489,6 +5489,11 @@ export interface components {
              * @example 7d at 04:00
              */
             every?: string | null;
+            /**
+             * Format: date-time
+             * @description when its last run ended
+             */
+            lastEndedAt?: string | null;
             lastEnding?: components["schemas"]["JobEnding"] | null;
             /** @description why its last run failed */
             lastError?: string | null;

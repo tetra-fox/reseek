@@ -20405,6 +20405,14 @@
             "description": "how often it runs, as written in its option, such as `5m` or `7d at 04:00`; null when it\nis off",
             "example": "7d at 04:00"
           },
+          "lastEndedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "when its last run ended"
+          },
           "lastEnding": {
             "oneOf": [
               {

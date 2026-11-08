@@ -13,7 +13,7 @@ use uuid::Uuid;
 use crate::db::{self, Schema, read_timestamp, timestamp};
 
 /// `jobs.db`: jobs, their parts and the schedules' last runs.
-pub static SCHEMA: Schema = db::schema!("jobs", ["0001_initial"]);
+pub static SCHEMA: Schema = db::schema!("jobs", ["0001_initial", "0002_schedule_ended_at"]);
 
 /// The columns [`job`] reads, in its order.
 const COLUMNS: &str = "id, kind, name, starter, starter_name, state, ending, error, summary, \
@@ -457,6 +457,8 @@ pub struct LastRun {
   pub scheduled_at: Option<DateTime<Utc>>,
   /// the last run of any starter
   pub run_at: Option<DateTime<Utc>>,
+  /// when that run ended
+  pub ended_at: Option<DateTime<Utc>>,
   /// how it ended
   pub ending: Option<JobEnding>,
   /// why it failed
@@ -479,13 +481,16 @@ fn last_run_row(row: &Row) -> rusqlite::Result<LastRun> {
     error: row.get(4)?,
     summary: row.get(5)?,
     job_id: optional_id_at(row, 6)?,
+    ended_at: time_at(row, 7)?,
   })
 }
 
 /// The last run of every schedule that ran, by name.
 pub fn last_runs(conn: &Connection) -> rusqlite::Result<Vec<(String, LastRun)>> {
   conn
-    .prepare("SELECT name, scheduled_at, run_at, ending, error, summary, job_id FROM schedules")?
+    .prepare(
+      "SELECT name, scheduled_at, run_at, ending, error, summary, job_id, ended_at FROM schedules",
+    )?
     .query_map([], |row| Ok((row.get(0)?, last_run_row(row)?)))?
     .collect()
 }
@@ -494,7 +499,7 @@ pub fn last_runs(conn: &Connection) -> rusqlite::Result<Vec<(String, LastRun)>> 
 pub fn last_run(conn: &Connection, name: &str) -> rusqlite::Result<Option<LastRun>> {
   conn
     .query_row(
-      "SELECT name, scheduled_at, run_at, ending, error, summary, job_id FROM schedules \
+      "SELECT name, scheduled_at, run_at, ending, error, summary, job_id, ended_at FROM schedules \
        WHERE name = ?1",
       [name],
       last_run_row,
@@ -505,10 +510,11 @@ pub fn last_run(conn: &Connection, name: &str) -> rusqlite::Result<Option<LastRu
 /// Writes the last run of the schedule `name`.
 pub fn set_last_run(conn: &Connection, name: &str, last: &LastRun) -> rusqlite::Result<()> {
   conn.execute(
-    "INSERT INTO schedules (name, scheduled_at, run_at, ending, error, summary, job_id) \
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) ON CONFLICT(name) DO UPDATE SET \
+    "INSERT INTO schedules (name, scheduled_at, run_at, ending, error, summary, job_id, ended_at) \
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) ON CONFLICT(name) DO UPDATE SET \
      scheduled_at = excluded.scheduled_at, run_at = excluded.run_at, ending = excluded.ending, \
-     error = excluded.error, summary = excluded.summary, job_id = excluded.job_id",
+     error = excluded.error, summary = excluded.summary, job_id = excluded.job_id, \
+     ended_at = excluded.ended_at",
     params![
       name,
       last.scheduled_at.map(timestamp),
@@ -517,6 +523,7 @@ pub fn set_last_run(conn: &Connection, name: &str, last: &LastRun) -> rusqlite::
       last.error,
       last.summary,
       last.job_id.map(|id| id.to_string()),
+      last.ended_at.map(timestamp),
     ],
   )?;
   Ok(())

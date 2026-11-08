@@ -287,6 +287,8 @@ pub struct JobSchedule {
   pub running: bool,
   /// when it last ran, null when it never did
   pub last_run_at: Option<DateTime<Utc>>,
+  /// when its last run ended
+  pub last_ended_at: Option<DateTime<Utc>>,
   /// how its last run ended
   pub last_ending: Option<JobEnding>,
   /// what its last run came to in words

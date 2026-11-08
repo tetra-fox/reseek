@@ -110,6 +110,7 @@ fn outcome(ended: &ScanEnded) -> (JobEnding, Option<String>, Option<String>) {
 
 async fn finished(jobs: &Jobs, scan: Running, ended: ScanEnded) {
   let (ending, error, summary) = outcome(&ended);
+  let now = super::now();
   let mut job_id = scan.job;
   match scan.job {
     Some(id) => {
@@ -125,7 +126,6 @@ async fn finished(jobs: &Jobs, scan: Running, ended: ScanEnded) {
       }
     }
     None if ending != JobEnding::Succeeded => {
-      let now = super::now();
       let job = Job {
         id: Uuid::new_v4(),
         kind: JobKind::Scan,
@@ -159,6 +159,7 @@ async fn finished(jobs: &Jobs, scan: Running, ended: ScanEnded) {
         last.scheduled_at = Some(started_at);
       }
       last.run_at = Some(started_at);
+      last.ended_at = Some(now);
       last.ending = Some(ending);
       last.error = error;
       last.summary = summary;
