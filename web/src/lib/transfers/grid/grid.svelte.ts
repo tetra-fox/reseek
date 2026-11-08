@@ -2,9 +2,13 @@ import { Grid } from "#lib/lists/table.svelte.js";
 import type { Direction, Transfer } from "#lib/transfers/states.js";
 import { viewport } from "#lib/ui/viewport.svelte.js";
 
-import { type ColumnId, columnsFor, PHONE_COLUMNS } from "./columns";
+import { type Column, type ColumnId, columnsFor, PHONE_COLUMNS } from "./columns";
 import type { ViewSettings } from "./settings.svelte";
 import { groupingOf, type SortKey } from "./view";
+
+/** A column as the window shows it: a phone gives the columns it keeps fixed widths of its own */
+export const onScreen = (c: Column): Column =>
+  viewport.phone && PHONE_COLUMNS[c.id] ? { ...c, width: PHONE_COLUMNS[c.id]!, fixed: true } : c;
 
 /**
  * A transfers screen's grid: `transfers` in the screen's sort, ties by file name, with the
@@ -18,12 +22,7 @@ export const transferGrid = (
   transfers: () => Transfer[]
 ): Grid<Transfer> =>
   new Grid<Transfer>({
-    columns: () =>
-      columnsFor(direction).map((c) =>
-        viewport.phone && PHONE_COLUMNS[c.id]
-          ? { ...c, width: PHONE_COLUMNS[c.id]!, fixed: true }
-          : c
-      ),
+    columns: () => columnsFor(direction).map(onScreen),
     data: transfers,
     sort: () => view.sort,
     setSort: (sort) => {

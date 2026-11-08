@@ -1,3 +1,13 @@
+<script lang="ts" module>
+  import { gridView } from "#lib/lists/table.svelte.js";
+
+  /** the buddy list's sort and column widths, kept in this browser */
+  const view = gridView("reseek.users.buddies", ["user", "presence", "speed", "files"], {
+    id: "user",
+    dir: "asc"
+  });
+</script>
+
 <script lang="ts">
   import { goto } from "$app/navigation";
   import UserMinusIcon from "@lucide/svelte/icons/user-minus";
@@ -10,15 +20,17 @@
   import Button from "#lib/components/ui/Button.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
   import Flag from "#lib/components/ui/Flag.svelte";
+  import GridHeader from "#lib/components/ui/GridHeader.svelte";
   import Input from "#lib/components/ui/Input.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Switch from "#lib/components/ui/Switch.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
-  import { chatTime, dateTime, formatSpeed, plural } from "#lib/format.js";
+  import { chatTime, columnWidth, dateTime, formatSpeed, plural, WIDEST } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { Keyed } from "#lib/lists/keyed.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
+  import { Grid, keptIn } from "#lib/lists/table.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
   import { userHref } from "#lib/nav.js";
@@ -79,7 +91,49 @@
   );
   $effect(() => live.on("users.removed", ({ username }) => rows.remove(username)));
 
-  const shown = $derived(rows.rows.toSorted((a, b) => a.username.localeCompare(b.username)));
+  /** online first, then away, then offline or not known */
+  const PRESENCE_ORDER: Record<string, number> = { Online: 0, Away: 1 };
+  const grid = new Grid<UserSummary>({
+    columns: () => [
+      {
+        id: "user",
+        label: "User",
+        width: "11rem",
+        grow: true,
+        value: (u) => u.username.toLowerCase()
+      },
+      {
+        id: "presence",
+        label: "Presence",
+        width: "14rem",
+        value: (u) => PRESENCE_ORDER[u.presence ?? ""] ?? 2
+      },
+      {
+        id: "speed",
+        label: "Speed",
+        width: columnWidth(WIDEST.speed),
+        end: true,
+        descFirst: true,
+        value: (u) => u.statistics?.averageSpeed ?? -1
+      },
+      {
+        id: "files",
+        label: "Files",
+        width: columnWidth(WIDEST.count),
+        end: true,
+        descFirst: true,
+        value: (u) => u.statistics?.fileCount ?? -1
+      },
+      { id: "note", label: "Note", width: "8rem", grow: true },
+      { id: "trusted", label: BUDDY.trusted, width: "5rem", hint: BUDDY.trustedHint },
+      { id: "notify", label: "Notify", width: "5rem", hint: BUDDY.notifyHint },
+      { id: "actions", label: "Actions", width: "6rem", quiet: true, fixed: true }
+    ],
+    data: () => rows.rows,
+    ...keptIn(view),
+    ties: "user"
+  });
+  const shown = $derived(grid.rows);
   const online = $derived(shown.filter((u) => u.presence && u.presence !== "Offline").length);
   const write = $derived(session.can("ReadWrite"));
 
@@ -111,8 +165,6 @@
     u.presence && u.presenceAt
       ? `${u.presence} since ${chatTime(u.presenceAt, clock.now)}`
       : "Unknown";
-
-  const COLUMNS = "minmax(11rem,1fr) 14rem 6rem 6rem minmax(8rem,1fr) 5rem 5rem 6rem";
 </script>
 
 <div class="flex flex-wrap items-center gap-inline">
@@ -157,33 +209,16 @@
     aria-activedescendant={list.activeId}
     tabindex="0"
     {@attach list.attach}>
-    <div
-      role="row"
-      class="grid h-9 min-w-max items-center gap-2 border-b bg-surface-muted px-2 text-xs font-medium text-fg-muted"
-      style:grid-template-columns={COLUMNS}>
-      <span role="columnheader">User</span>
-      <span role="columnheader">Presence</span>
-      <span role="columnheader">Speed</span>
-      <span role="columnheader">Files</span>
-      <span role="columnheader">Note</span>
-      <Tooltip text={BUDDY.trustedHint}>
-        {#snippet child({ props })}<span {...props} role="columnheader">{BUDDY.trusted}</span
-          >{/snippet}
-      </Tooltip>
-      <Tooltip text={BUDDY.notifyHint}>
-        {#snippet child({ props })}<span {...props} role="columnheader">Notify</span>{/snippet}
-      </Tooltip>
-      <span role="columnheader" class="sr-only">Actions</span>
-    </div>
+    <GridHeader {grid} class="h-9 border-b bg-surface-muted text-fg-muted" />
     <div role="rowgroup" {@attach freezesWhileUsed}>
       {#each shown as u, i (u.username)}
         {@const buddy = u.buddy ?? { trusted: false, notifyPresence: false }}
         <div
           role="row"
           {...list.line(u, i)}
-          class="grid min-w-max items-center gap-2 list-row px-2 py-1.5"
-          style:grid-template-columns={COLUMNS}>
-          <span role="gridcell" class="flex w-0 min-w-full items-center gap-2">
+          class="grid items-center list-row py-1.5"
+          style={grid.row}>
+          <span role="gridcell" class="flex min-w-0 items-center gap-2 px-2">
             <Avatar
               name={u.username}
               pictureUrl={pictureOf(u.username, u)}
@@ -193,30 +228,33 @@
           </span>
           <Tooltip text={u.presenceAt ? dateTime(u.presenceAt) : undefined} dense>
             {#snippet child({ props })}
-              <span {...props} role="gridcell" class="flex items-center gap-1.5 text-xs">
+              <span
+                {...props}
+                role="gridcell"
+                class="flex min-w-0 items-center gap-1.5 px-2 text-xs">
                 <Presence presence={u.presence} worded />{since(u)}
                 <Flag code={u.countryCode} />
               </span>
             {/snippet}
           </Tooltip>
-          <span role="gridcell" class="text-xs tabular-nums"
+          <span role="gridcell" class="truncate px-2 text-right tabular-nums"
             >{u.statistics ? formatSpeed(u.statistics.averageSpeed) : ""}</span>
-          <span role="gridcell" class="text-xs tabular-nums"
+          <span role="gridcell" class="truncate px-2 text-right tabular-nums"
             >{u.statistics?.fileCount.toLocaleString() ?? ""}</span>
           <Tooltip text={u.notes ?? undefined} clipped>
             {#snippet child({ props })}
-              <span {...props} role="gridcell" class="truncate text-xs text-fg-muted"
+              <span {...props} role="gridcell" class="truncate px-2 text-xs text-fg-muted"
                 >{u.notes ?? ""}</span>
             {/snippet}
           </Tooltip>
-          <span role="gridcell">
+          <span role="gridcell" class="px-2">
             <Switch
               aria-label={`${BUDDY.trusted}: ${u.username}`}
               checked={buddy.trusted}
               disabled={!write}
               onCheckedChange={(on) => void change(() => befriend(u.username, { trusted: on }))} />
           </span>
-          <span role="gridcell">
+          <span role="gridcell" class="px-2">
             <Switch
               aria-label={`${BUDDY.notify}: ${u.username}`}
               checked={buddy.notifyPresence}
@@ -224,7 +262,7 @@
               onCheckedChange={(on) =>
                 void change(() => befriend(u.username, { notifyPresence: on }))} />
           </span>
-          <span role="gridcell" class="flex justify-end">
+          <span role="gridcell" class="flex justify-end px-1">
             {#each reach(u.username, { only: ["message", "shares"] }) as action (action.id)}
               <Tooltip text={action.label}>
                 {#snippet child({ props })}

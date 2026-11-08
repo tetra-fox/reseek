@@ -1,3 +1,10 @@
+<script lang="ts" module>
+  import { gridView } from "#lib/lists/table.svelte.js";
+
+  /** the event log's column widths, kept in this browser; the daemon orders it, newest first */
+  const view = gridView("reseek.system.events", [], null);
+</script>
+
 <script lang="ts">
   import { goto } from "$app/navigation";
   import CalendarCheckIcon from "@lucide/svelte/icons/calendar-check";
@@ -12,6 +19,7 @@
   import Dialog from "#lib/components/ui/Dialog.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
   import * as Filter from "#lib/components/ui/filter/filter.js";
+  import GridHeader from "#lib/components/ui/GridHeader.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Pagination from "#lib/components/ui/Pagination.svelte";
   import Select from "#lib/components/ui/Select.svelte";
@@ -23,6 +31,7 @@
   import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { Keyed } from "#lib/lists/keyed.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
+  import { Grid, keptIn } from "#lib/lists/table.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
   import { Loader } from "#lib/loader.svelte.js";
@@ -81,6 +90,16 @@
   );
 
   const events = $derived((listed.data?.events ?? []).flatMap((e) => rows.get(e.id) ?? []));
+  const grid = new Grid<Record>({
+    columns: () => [
+      { id: "id", label: "Id", width: "2.5rem", quiet: true, fixed: true },
+      { id: "timestamp", label: "Timestamp", width: "10rem" },
+      { id: "type", label: "Type", width: "13.5rem" },
+      { id: "data", label: "Data", width: "16rem", grow: true }
+    ],
+    data: () => events,
+    ...keptIn(view)
+  });
   const pages = $derived(Math.max(1, Math.ceil((listed.data?.total ?? 0) / perPage)));
   const list = new ListControl<Record>({
     lines: () => events,
@@ -180,21 +199,15 @@
     tabindex="0"
     {@attach list.attach}
     {@attach freezesWhileUsed}>
-    <div
-      role="row"
-      class="grid min-w-max grid-cols-[2rem_9rem_13rem_minmax(16rem,1fr)] gap-2 border-b bg-surface-muted px-2 py-1.5 text-xs font-medium text-fg-muted">
-      <span role="columnheader">Id</span>
-      <span role="columnheader">Timestamp</span>
-      <span role="columnheader">Type</span>
-      <span role="columnheader">Data</span>
-    </div>
+    <GridHeader {grid} class="h-8 border-b bg-surface-muted text-fg-muted" />
     {#each events as e, i (e.id)}
       {@const user = userOf(e)}
       <div
         role="row"
         {...list.line(e, i)}
-        class="grid min-w-max grid-cols-[2rem_9rem_13rem_minmax(16rem,1fr)] items-center gap-2 list-row px-2 py-1 font-mono text-xs">
-        <span role="gridcell">
+        class="grid items-center list-row py-1 font-mono text-xs"
+        style={grid.row}>
+        <span role="gridcell" class="flex px-2">
           <Tooltip text={e.id} dense>
             {#snippet child({ props })}
               <InfoIcon {...props} class="size-4 text-fg-muted" aria-label={e.id} />
@@ -203,11 +216,15 @@
         </span>
         <Tooltip text={e.timestamp} dense>
           {#snippet child({ props })}
-            <span {...props} role="gridcell">{dateTime(e.timestamp)}</span>
+            <span {...props} role="gridcell" class="truncate px-2">{dateTime(e.timestamp)}</span>
           {/snippet}
         </Tooltip>
-        <span role="gridcell" class="truncate">{e.type}</span>
-        <span role="gridcell" class="flex min-w-0 items-center gap-2">
+        <Tooltip text={e.type} clipped>
+          {#snippet child({ props })}
+            <span {...props} role="gridcell" class="truncate px-2">{e.type}</span>
+          {/snippet}
+        </Tooltip>
+        <span role="gridcell" class="flex min-w-0 items-center gap-2 pr-1 pl-2">
           {#if user}<span class="font-sans"><Username name={user} /></span>{/if}
           <span class="min-w-0 flex-1 truncate text-fg-muted">{JSON.stringify(e.data)}</span>
           <Tooltip text="Show full payload">

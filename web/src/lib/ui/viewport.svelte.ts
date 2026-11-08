@@ -4,6 +4,7 @@ import { createSubscriber, MediaQuery } from "svelte/reactivity";
 const narrow = new MediaQuery("max-width: 767px");
 const sm = new MediaQuery("min-width: 640px");
 const lg = new MediaQuery("min-width: 1024px");
+const xxl = new MediaQuery("min-width: 1536px");
 
 /** What the window's width allows, decided here once for every screen */
 export const viewport = {
@@ -17,6 +18,10 @@ export const viewport = {
   /** at least Tailwind's `lg` */
   get lg() {
     return lg.current;
+  },
+  /** at least Tailwind's `2xl` */
+  get xxl() {
+    return xxl.current;
   }
 };
 

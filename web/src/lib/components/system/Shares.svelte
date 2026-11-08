@@ -1,3 +1,14 @@
+<script lang="ts" module>
+  import { gridView } from "#lib/lists/table.svelte.js";
+
+  /** the shares table's sort and column widths, kept in this browser */
+  const sharesView = gridView(
+    "reseek.system.shares",
+    ["host", "path", "folders", "files", "alias", "remote", "visible"],
+    null
+  );
+</script>
+
 <script lang="ts">
   import CopyIcon from "@lucide/svelte/icons/copy";
   import FolderIcon from "@lucide/svelte/icons/folder";
@@ -12,20 +23,23 @@
   import Card from "#lib/components/ui/Card.svelte";
   import Dialog from "#lib/components/ui/Dialog.svelte";
   import EmptyRow from "#lib/components/ui/EmptyRow.svelte";
+  import GridHeader from "#lib/components/ui/GridHeader.svelte";
   import Notice from "#lib/components/ui/Notice.svelte";
   import Progress from "#lib/components/ui/Progress.svelte";
   import Select from "#lib/components/ui/Select.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { editability, fileOf } from "#lib/config/editability.js";
   import { valueAt } from "#lib/config/sections.js";
   import { Busy } from "#lib/feedback/busy.svelte.js";
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
-  import { plural } from "#lib/format.js";
+  import { columnWidth, plural, WIDEST } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { Keyed } from "#lib/lists/keyed.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
+  import { Grid, keptIn } from "#lib/lists/table.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
   import { Loader } from "#lib/loader.svelte.js";
@@ -67,7 +81,54 @@
     return () => clearTimeout(timer);
   });
 
-  const shared = $derived(rows.rows.filter((r) => !r.isExcluded));
+  const grid = new Grid<Row>({
+    columns: () => [
+      { id: "host", label: "Host", width: "6rem", value: (r) => r.host.toLowerCase() },
+      {
+        id: "path",
+        label: "Local path",
+        width: "12rem",
+        grow: true,
+        value: (r) => r.localPath.toLowerCase()
+      },
+      {
+        id: "folders",
+        label: "Folders",
+        width: columnWidth(WIDEST.count),
+        end: true,
+        descFirst: true,
+        value: (r) => r.directories ?? -1
+      },
+      {
+        id: "files",
+        label: "Files",
+        width: columnWidth(WIDEST.count),
+        end: true,
+        descFirst: true,
+        value: (r) => r.files ?? -1
+      },
+      {
+        id: "alias",
+        label: "Alias",
+        width: "6rem",
+        grow: true,
+        value: (r) => r.alias.toLowerCase()
+      },
+      {
+        id: "remote",
+        label: "Remote path",
+        width: "6rem",
+        grow: true,
+        value: (r) => r.remotePath.toLowerCase()
+      },
+      { id: "visible", label: "Visible to", width: "10rem", value: (r) => VISIBILITY[r.visibility] }
+    ],
+    data: () => rows.rows.filter((r) => !r.isExcluded),
+    ...keptIn(sharesView),
+    clearable: true,
+    ties: "path"
+  });
+  const shared = $derived(grid.rows);
   const excluded = $derived(rows.rows.filter((r) => r.isExcluded));
   const write = $derived(session.can("ReadWrite"));
   const busy = new Busy();
@@ -161,9 +222,6 @@
         rows.upsert({ ...row, visibility: to });
     void view.load();
   };
-
-  const COLUMNS =
-    "6rem minmax(12rem,2fr) 6rem 6rem minmax(6rem,1fr) minmax(6rem,1fr) minmax(9rem,10rem)";
 </script>
 
 <div class="flex flex-wrap items-center gap-inline">
@@ -228,31 +286,25 @@
         tabindex="0"
         {@attach sharedList.attach}
         {@attach freezesWhileUsed}>
-        <div
-          role="row"
-          class="grid min-w-max gap-2 border-b bg-surface-muted px-4 py-1.5 text-xs font-medium text-fg-muted"
-          style:grid-template-columns={COLUMNS}>
-          {#each ["Host", "Local path", "Folders", "Files", "Alias", "Remote path", "Visible to"] as h (h)}
-            <span role="columnheader">{h}</span>
-          {/each}
-        </div>
+        <GridHeader {grid} class="h-8 border-b bg-surface-muted text-fg-muted" />
         {#each shared as r, i (key(r))}
           <div
             role="row"
             {...sharedList.line(r, i)}
-            class={[
-              "grid min-w-max items-center gap-2 list-row px-4 py-1.5",
-              r.derivedFrom && "text-fg-muted"
-            ]}
-            style:grid-template-columns={COLUMNS}>
-            <span role="gridcell">{r.host}</span>
-            <span role="gridcell" class="min-w-0">
+            class={["grid items-center list-row py-1.5", r.derivedFrom && "text-fg-muted"]}
+            style={grid.row}>
+            <span role="gridcell" class="truncate px-2">{r.host}</span>
+            <span role="gridcell" class="min-w-0 px-2">
               <button
                 type="button"
-                class="flex items-center gap-1.5 text-left text-accent hover:underline"
+                class="flex max-w-full items-center gap-1.5 text-left text-accent hover:underline"
                 onclick={() => (open = r)}>
-                <FolderIcon class="size-4 shrink-0" /><span class="truncate font-mono text-xs"
-                  >{r.localPath}</span>
+                <FolderIcon class="size-4 shrink-0" />
+                <Tooltip text={r.localPath} clipped>
+                  {#snippet child({ props })}
+                    <span {...props} class="truncate font-mono text-xs">{r.localPath}</span>
+                  {/snippet}
+                </Tooltip>
               </button>
               {#if r.derivedFrom}
                 <span class="text-xs">
@@ -263,12 +315,22 @@
                 </span>
               {/if}
             </span>
-            <span role="gridcell" class="tabular-nums"
+            <span role="gridcell" class="truncate px-2 text-right tabular-nums"
               >{r.directories?.toLocaleString() ?? "?"}</span>
-            <span role="gridcell" class="tabular-nums">{r.files?.toLocaleString() ?? "?"}</span>
-            <span role="gridcell" class="truncate">{r.alias}</span>
-            <span role="gridcell" class="truncate font-mono text-xs">{r.remotePath}</span>
-            <span role="gridcell">
+            <span role="gridcell" class="truncate px-2 text-right tabular-nums"
+              >{r.files?.toLocaleString() ?? "?"}</span>
+            <Tooltip text={r.alias} clipped>
+              {#snippet child({ props })}
+                <span {...props} role="gridcell" class="truncate px-2">{r.alias}</span>
+              {/snippet}
+            </Tooltip>
+            <Tooltip text={r.remotePath} clipped>
+              {#snippet child({ props })}
+                <span {...props} role="gridcell" class="truncate px-2 font-mono text-xs"
+                  >{r.remotePath}</span>
+              {/snippet}
+            </Tooltip>
+            <span role="gridcell" class="px-2">
               {#if settable}
                 <Select
                   class="h-control-sm w-full"

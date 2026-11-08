@@ -1,3 +1,10 @@
+<script lang="ts" module>
+  import { gridView } from "#lib/lists/table.svelte.js";
+
+  /** the blocked list's sort and column widths, kept in this browser */
+  const view = gridView("reseek.users.blocked", ["user", "reason", "ends", "since"], null);
+</script>
+
 <script lang="ts">
   import DownloadIcon from "@lucide/svelte/icons/download";
   import ShieldCheckIcon from "@lucide/svelte/icons/shield-check";
@@ -10,6 +17,7 @@
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
   import Dialog from "#lib/components/ui/Dialog.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
+  import GridHeader from "#lib/components/ui/GridHeader.svelte";
   import Notice from "#lib/components/ui/Notice.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Textarea from "#lib/components/ui/Textarea.svelte";
@@ -18,6 +26,7 @@
   import { ago, dateTime, listText, plural } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
+  import { Grid, keptIn } from "#lib/lists/table.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
   import { Loader } from "#lib/loader.svelte.js";
@@ -43,7 +52,46 @@
     })
   );
 
-  const entries = $derived(blocked.data?.users ?? []);
+  const time = (iso: string | null | undefined, none: number) => (iso ? Date.parse(iso) : none);
+  const grid = new Grid<Schemas["Block"]>({
+    columns: () => [
+      { id: "select", label: "Select", width: "2.5rem", quiet: true, fixed: true },
+      {
+        id: "user",
+        label: "User",
+        width: "10rem",
+        grow: true,
+        value: (b) => b.username.toLowerCase()
+      },
+      {
+        id: "reason",
+        label: "Reason",
+        width: "8rem",
+        grow: true,
+        value: (b) => b.reason.toLowerCase()
+      },
+      { id: "stops", label: "Stops", width: "14rem" },
+      {
+        id: "ends",
+        label: "Ends",
+        width: "8rem",
+        value: (b) => time(b.expiresAt, Number.MAX_SAFE_INTEGER)
+      },
+      {
+        id: "since",
+        label: "Since",
+        width: "8rem",
+        descFirst: true,
+        value: (b) => time(b.createdAt, 0)
+      },
+      { id: "actions", label: "Actions", width: "3rem", quiet: true, fixed: true }
+    ],
+    data: () => blocked.data?.users ?? [],
+    ...keptIn(view),
+    clearable: true,
+    ties: "user"
+  });
+  const entries = $derived(grid.rows);
   const rules = $derived(blocked.data?.rules);
   const list = new ListControl<Schemas["Block"]>({
     lines: () => entries,
@@ -88,8 +136,6 @@
     toast(`${outcome.data.added} imported, ${outcome.data.skipped} skipped`);
     void blocked.load();
   };
-
-  const COLUMNS = "2rem minmax(10rem,1fr) minmax(8rem,1fr) 14rem 8rem 8rem 3rem";
 </script>
 
 <div class="flex flex-wrap items-center gap-inline">
@@ -147,26 +193,18 @@
     aria-activedescendant={list.activeId}
     tabindex="0"
     {@attach list.attach}>
-    <div
-      role="row"
-      class="grid h-9 min-w-max items-center gap-2 border-b bg-surface-muted px-2 text-xs font-medium text-fg-muted"
-      style:grid-template-columns={COLUMNS}>
-      <span role="columnheader"></span>
-      <span role="columnheader">User</span>
-      <span role="columnheader">Reason</span>
-      <span role="columnheader">Stops</span>
-      <span role="columnheader">Ends</span>
-      <span role="columnheader">Since</span>
-      <span role="columnheader" class="sr-only">Actions</span>
-    </div>
+    <GridHeader
+      {grid}
+      all={list.allTick}
+      class="h-9 border-b bg-surface-muted text-fg-muted" />
     <div role="rowgroup" {@attach freezesWhileUsed}>
       {#each entries as b, i (b.username)}
         <div
           role="row"
           {...list.line(b, i)}
-          class="grid min-w-max items-center gap-2 list-row px-2 py-1.5"
-          style:grid-template-columns={COLUMNS}>
-          <span role="gridcell">
+          class="grid items-center list-row py-1.5"
+          style={grid.row}>
+          <span role="gridcell" class="flex px-2">
             {#if !configBlocked(b)}
               <Checkbox
                 aria-label={`Select ${b.username}`}
@@ -179,7 +217,7 @@
                   on !== list.selected.has(b.username) && list.toggle(b.username)} />
             {/if}
           </span>
-          <span role="gridcell" class="flex min-w-0 items-center gap-1.5">
+          <span role="gridcell" class="flex min-w-0 items-center gap-1.5 px-2">
             <Username name={b.username} />
             {#if b.source === "config"}<Badge tone="outline">configuration</Badge>{/if}
             {#if b.addresses.length}
@@ -193,25 +231,26 @@
           </span>
           <Tooltip text={b.reason} clipped>
             {#snippet child({ props })}
-              <span {...props} role="gridcell" class="truncate">{b.reason}</span>
+              <span {...props} role="gridcell" class="truncate px-2">{b.reason}</span>
             {/snippet}
           </Tooltip>
-          <span role="gridcell" class="truncate text-xs text-fg-muted">{b.scopes.join(", ")}</span>
+          <span role="gridcell" class="truncate px-2 text-xs text-fg-muted"
+            >{b.scopes.join(", ")}</span>
           <Tooltip text={b.expiresAt ? dateTime(b.expiresAt) : undefined} dense>
             {#snippet child({ props })}
-              <span {...props} role="gridcell" class="text-xs">
+              <span {...props} role="gridcell" class="truncate px-2 text-xs">
                 {b.expiresAt ? ago(b.expiresAt, clock.now) : "never"}
               </span>
             {/snippet}
           </Tooltip>
           <Tooltip text={b.createdAt ? dateTime(b.createdAt) : undefined} dense>
             {#snippet child({ props })}
-              <span {...props} role="gridcell" class="text-xs text-fg-muted">
+              <span {...props} role="gridcell" class="truncate px-2 text-xs text-fg-muted">
                 {b.createdAt ? ago(b.createdAt, clock.now) : ""}
               </span>
             {/snippet}
           </Tooltip>
-          <span role="gridcell" class="flex justify-end">
+          <span role="gridcell" class="flex justify-end px-1">
             {#if write && !configBlocked(b)}
               <Tooltip text="Unblock">
                 {#snippet child({ props })}

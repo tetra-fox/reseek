@@ -1,7 +1,16 @@
+<script lang="ts" module>
+  import { gridView } from "#lib/lists/table.svelte.js";
+
+  /** the directory's sort and column widths, kept in this browser */
+  const view = gridView(
+    "reseek.users.directory",
+    ["username", "lastSeen", "uploads", "downloads"],
+    { id: "lastSeen", dir: "desc" }
+  );
+</script>
+
 <script lang="ts">
   import { goto } from "$app/navigation";
-  import ArrowDownIcon from "@lucide/svelte/icons/arrow-down";
-  import ArrowUpIcon from "@lucide/svelte/icons/arrow-up";
   import BanIcon from "@lucide/svelte/icons/ban";
   import CopyIcon from "@lucide/svelte/icons/copy";
   import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
@@ -18,6 +27,7 @@
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
   import * as Filter from "#lib/components/ui/filter/filter.js";
+  import GridHeader from "#lib/components/ui/GridHeader.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Select from "#lib/components/ui/Select.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
@@ -29,12 +39,14 @@
   import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { Keyed } from "#lib/lists/keyed.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
+  import { Grid, type GridColumn } from "#lib/lists/table.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
   import { userHref } from "#lib/nav.js";
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
   import { clock } from "#lib/ui/clock.svelte.js";
+  import { viewport } from "#lib/ui/viewport.svelte.js";
   import { canManage, configBlocked, reach, setBuddy, userGroups } from "#lib/users/actions.js";
   import { blocking, toggleBlock, unblockMany } from "#lib/users/block.svelte.js";
   import { pictureOf } from "#lib/users/profile.svelte.js";
@@ -78,10 +90,8 @@
   let group = $state("");
   // svelte-ignore state_referenced_locally
   let tag = $state(startTag ?? "");
-  let sort = $state<{ by: Schemas["UserSort"]; order: Schemas["SortOrder"] }>({
-    by: "lastSeen",
-    order: "desc"
-  });
+  /** the daemon sorts the users, by the column the header sets */
+  const sort = $derived(view.sort ?? { id: "lastSeen", dir: "desc" as const });
   let assigning = $state(false);
 
   const query = $derived({
@@ -92,8 +102,8 @@
     presence: presence || undefined,
     group: group || undefined,
     tag: tag || undefined,
-    sort: sort.by,
-    order: sort.order
+    sort: sort.id as Schemas["UserSort"],
+    order: sort.dir
   });
 
   const load = async () => {
@@ -157,8 +167,6 @@
     onopen: (u) => void goto(userHref(u.username))
   });
 
-  /** the shown users selected, for the header's box */
-  const chosen = $derived(shown.filter((u) => list.selected.has(u.username)));
   /** every user selected, those a filter now hides too, as the transfers grid counts them */
   const picked = $derived([...list.selected]);
   /** what is known of a user, shown here or loaded elsewhere */
@@ -172,8 +180,8 @@
   const admin = $derived(session.can("Administrator"));
   /** what is typed in the search box, which sets `q` a moment after typing stops */
   let typed = $state("");
-  let grid = $state<HTMLElement | null>(null);
-  const refocus = () => grid?.focus();
+  let box = $state<HTMLElement | null>(null);
+  const refocus = () => box?.focus();
   const USERS = ["user", "users"] as const;
   /** a filter that is on while `on` holds, which `off` turns off */
   const when = (on: unknown, id: string, label: string, off: () => void): ActiveFilter[] =>
@@ -193,14 +201,6 @@
     ...when(tag, "tag", `Tagged ${tag}`, () => (tag = ""))
   ]);
 
-  const sortBy = (by: Schemas["UserSort"]) => {
-    const first = by === "username" ? "asc" : "desc";
-    sort = {
-      by,
-      order: sort.by === by ? (sort.order === "asc" ? "desc" : "asc") : first
-    };
-    wanted = PAGE;
-  };
   const refilter = (change: () => void) => {
     change();
     wanted = PAGE;
@@ -215,26 +215,49 @@
   };
   const unblockAll = (names: string[]) => unblockMany(names.filter((name) => known(name)?.block));
 
-  // the columns; below a very wide screen the group column is left out, so the table fits
-  // beside the sidebar without a sideways scroll. The group shows on the user's card
-  // every row is a grid of its own, so the user's cell has no say in its width, and the last
-  // track holds all five of a row's buttons
-  const COLUMNS =
-    "grid-cols-[2rem_minmax(11rem,1fr)_5rem_7rem_7rem_6rem_6rem_4rem_9rem] 2xl:grid-cols-[2rem_minmax(11rem,1fr)_5rem_8rem_7rem_7rem_6rem_6rem_4rem_9rem]";
+  // below a very wide screen the group column is left out, so the table fits beside the sidebar
+  // without a sideways scroll. The group shows on the user's card
+  const COLUMNS: GridColumn<UserSummary>[] = [
+    { id: "select", label: "Select", width: "2.5rem", quiet: true, fixed: true },
+    { id: "username", label: "User", width: "11rem", grow: true, sortable: true },
+    { id: "presence", label: "Presence", width: "6rem" },
+    { id: "group", label: "Group", width: "8.5rem" },
+    { id: "tags", label: "Tags", width: "8rem" },
+    { id: "lastSeen", label: "Last seen", width: "7.5rem", sortable: true, descFirst: true },
+    {
+      id: "uploads",
+      label: "Uploads",
+      width: "6.5rem",
+      end: true,
+      sortable: true,
+      descFirst: true
+    },
+    {
+      id: "downloads",
+      label: "Downloads",
+      width: "7rem",
+      end: true,
+      sortable: true,
+      descFirst: true
+    },
+    { id: "unread", label: "Unread", width: "4.5rem", end: true },
+    // all five of a row's buttons
+    { id: "actions", label: "Actions", width: "9.5rem", quiet: true, fixed: true }
+  ];
+  const grid = new Grid<UserSummary>({
+    columns: () => COLUMNS,
+    data: () => shown,
+    sort: () => sort,
+    setSort: (next) => {
+      view.sort = next;
+      wanted = PAGE;
+    },
+    dragged: () => view.dragged,
+    drag: (id, width) => (view.dragged[id] = width),
+    shown: () => COLUMNS.flatMap((c) => (c.id !== "group" || viewport.xxl ? [c.id] : [])),
+    presorted: true
+  });
 </script>
-
-{#snippet sortHeader(label: string, by: Schemas["UserSort"])}
-  <button
-    type="button"
-    class="-my-2.5 flex items-center gap-1 truncate py-2.5 hover:text-fg"
-    onclick={() => sortBy(by)}>
-    {label}
-    {#if sort.by === by}
-      {#if sort.order === "asc"}<ArrowUpIcon class="size-3" />{:else}<ArrowDownIcon
-          class="size-3" />{/if}
-    {/if}
-  </button>
-{/snippet}
 
 <div class="flex flex-wrap items-center gap-inline">
   <UserSearch onsearch={search} bind:typed />
@@ -287,7 +310,7 @@
     description="Users you transfer with, message or browse appear here" />
 {:else}
   <div
-    bind:this={grid}
+    bind:this={box}
     class="overflow-x-auto rounded-card border bg-surface text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent"
     role="grid"
     aria-label="Users"
@@ -296,45 +319,22 @@
     aria-activedescendant={list.activeId}
     tabindex="0"
     {@attach list.attach}>
-    <div
-      role="row"
-      class={[
-        "grid h-9 min-w-max items-center gap-2 border-b bg-surface-muted px-2 text-xs font-medium text-fg-muted",
-        COLUMNS
-      ]}>
-      <span role="columnheader">
-        <Checkbox
-          aria-label="Select every user shown"
-          checked={chosen.length === shown.length}
-          indeterminate={chosen.length > 0 && chosen.length < shown.length}
-          onCheckedChange={(on) =>
-            list.setAll(
-              shown.map((u) => u.username),
-              on
-            )} />
-      </span>
-      <span role="columnheader">{@render sortHeader("User", "username")}</span>
-      <span role="columnheader">Presence</span>
-      <span role="columnheader" class="max-2xl:hidden">Group</span>
-      <span role="columnheader">Tags</span>
-      <span role="columnheader">{@render sortHeader("Last seen", "lastSeen")}</span>
-      <span role="columnheader">{@render sortHeader("Uploads", "uploads")}</span>
-      <span role="columnheader">{@render sortHeader("Downloads", "downloads")}</span>
-      <span role="columnheader">Unread</span>
-      <span role="columnheader" class="sr-only">Actions</span>
-    </div>
+    <GridHeader
+      {grid}
+      all={list.allTick}
+      class="h-9 border-b bg-surface-muted text-fg-muted" />
     <div role="rowgroup" {@attach freezesWhileUsed}>
       {#each shown as u, i (u.username)}
         <div
           role="row"
           {...list.line(u, i)}
           class={[
-            "grid min-w-max items-center gap-2 list-row px-2 py-1.5",
-            COLUMNS,
+            "grid items-center list-row py-1.5",
             u.block && "bg-danger-soft/40",
             rows.removed.has(u.username) && "opacity-40"
-          ]}>
-          <span role="gridcell">
+          ]}
+          style={grid.row}>
+          <span role="gridcell" class="flex px-2">
             <Checkbox
               aria-label={`Select ${u.username}`}
               checked={list.selected.has(u.username)}
@@ -345,7 +345,7 @@
               onCheckedChange={(on) =>
                 on !== list.selected.has(u.username) && list.toggle(u.username)} />
           </span>
-          <span role="gridcell" class="flex w-0 min-w-full items-center gap-2">
+          <span role="gridcell" class="flex min-w-0 items-center gap-2 px-2">
             <Avatar
               name={u.username}
               pictureUrl={pictureOf(u.username, u)}
@@ -354,11 +354,13 @@
             {#if u.buddy}<Badge tone="info">{BUDDY.badge}</Badge>{/if}
             {#if u.block}<Badge tone="danger">blocked</Badge>{/if}
           </span>
-          <span role="gridcell" class="flex items-center gap-1.5 text-xs">
+          <span role="gridcell" class="flex min-w-0 items-center gap-1.5 px-2 text-xs">
             <Presence presence={u.presence} worded />{u.presence ?? "?"}
           </span>
-          <span role="gridcell" class="max-2xl:hidden"><GroupBadge group={u.group} /></span>
-          <span role="gridcell" class="flex min-w-0 flex-wrap gap-1">
+          {#if viewport.xxl}
+            <span role="gridcell" class="min-w-0 px-2"><GroupBadge group={u.group} /></span>
+          {/if}
+          <span role="gridcell" class="flex min-w-0 flex-wrap gap-1 px-2">
             {#each u.tags as t (t)}
               <Tooltip text={`Show only users tagged ${t}`}>
                 {#snippet child({ props })}
@@ -373,18 +375,19 @@
           </span>
           <Tooltip text={u.lastSeenAt ? dateTime(u.lastSeenAt) : undefined} dense>
             {#snippet child({ props })}
-              <span {...props} role="gridcell" class="text-xs">
+              <span {...props} role="gridcell" class="truncate px-2 text-xs">
                 {u.lastSeenAt ? ago(u.lastSeenAt, clock.now) : "never"}
               </span>
             {/snippet}
           </Tooltip>
-          <span role="gridcell" class="text-right tabular-nums">{u.figures.uploads.succeeded}</span>
-          <span role="gridcell" class="text-right tabular-nums"
+          <span role="gridcell" class="truncate px-2 text-right tabular-nums"
+            >{u.figures.uploads.succeeded}</span>
+          <span role="gridcell" class="truncate px-2 text-right tabular-nums"
             >{u.figures.downloads.succeeded}</span>
-          <span role="gridcell" class="text-right tabular-nums">
+          <span role="gridcell" class="px-2 text-right tabular-nums">
             {#if u.unreadMessages}<Badge tone="danger">{u.unreadMessages}</Badge>{/if}
           </span>
-          <span role="gridcell" class="flex justify-end">
+          <span role="gridcell" class="flex justify-end px-1">
             {#each reach(u.username, { only: ["message", "shares"] }) as action (action.id)}
               <Tooltip text={action.label}>
                 {#snippet child({ props })}

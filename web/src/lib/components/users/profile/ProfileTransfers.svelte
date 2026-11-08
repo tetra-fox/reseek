@@ -1,3 +1,13 @@
+<script lang="ts" module>
+  import { gridView } from "#lib/lists/table.svelte.js";
+
+  /**
+   * the sort and column widths of a user's transfers, kept in this browser; unsorted, they are
+   * newest first
+   */
+  const view = gridView("reseek.users.transfers", ["file", "size", "progress", "requested"], null);
+</script>
+
 <script lang="ts">
   import ArrowDownIcon from "@lucide/svelte/icons/arrow-down";
   import ArrowUpIcon from "@lucide/svelte/icons/arrow-up";
@@ -10,6 +20,7 @@
   import Button from "#lib/components/ui/Button.svelte";
   import ConfirmDialog from "#lib/components/ui/ConfirmDialog.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
+  import GridHeader from "#lib/components/ui/GridHeader.svelte";
   import Segmented from "#lib/components/ui/Segmented.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
@@ -17,12 +28,14 @@
   import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { Keyed } from "#lib/lists/keyed.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
+  import { Grid, type GridColumn, keptIn } from "#lib/lists/table.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
   import { Loader } from "#lib/loader.svelte.js";
   import { call } from "#lib/request.js";
   import { act, storeOf } from "#lib/transfers/actions.js";
-  import { type ColumnId, templateOf } from "#lib/transfers/grid/columns.js";
+  import { type ColumnId, COLUMNS, PHONE_COLUMNS } from "#lib/transfers/grid/columns.js";
+  import { onScreen } from "#lib/transfers/grid/grid.svelte.js";
   import { isActive, isCancelable, type Transfer } from "#lib/transfers/states.js";
   import { uploads } from "#lib/transfers/transfers.svelte.js";
   import { viewport } from "#lib/ui/viewport.svelte.js";
@@ -82,7 +95,23 @@
     })
   );
 
-  const shown = $derived((listed.data?.transfers ?? []).flatMap((t) => rows.get(t.id) ?? []));
+  /** the transfers screen's cells for the file, its size, its state and when it was asked for */
+  const CELLS: ColumnId[] = ["file", "size", "progress", "requested", "actions"];
+  const grid = new Grid<Transfer>({
+    columns: (): GridColumn<Transfer>[] => [
+      { id: "direction", label: "Direction", width: "2rem", quiet: true, fixed: true },
+      ...COLUMNS.filter((c) => CELLS.includes(c.id)).map(onScreen)
+    ],
+    data: () => (listed.data?.transfers ?? []).flatMap((t) => rows.get(t.id) ?? []),
+    ...keptIn(view),
+    shown: () => ["direction", ...CELLS.filter((id) => !viewport.phone || id in PHONE_COLUMNS)],
+    clearable: true
+  });
+  const shown = $derived(grid.rows);
+  /** the cells the transfer's own row draws, after its direction */
+  const columns = $derived(
+    grid.columns.flatMap((c) => (c.id === "direction" ? [] : [c.id as ColumnId]))
+  );
   const total = $derived(listed.data?.total ?? 0);
   const list = new ListControl<Transfer>({
     lines: () => shown,
@@ -105,12 +134,6 @@
     await act(uploads, "cancel", ids);
     blocking.ask(username, ["uploads"]);
   };
-
-  /** the transfers screen's cells for the file, its size, its state and when it was asked for */
-  const columns: ColumnId[] = $derived(
-    viewport.phone ? ["file", "actions"] : ["file", "size", "progress", "requested", "actions"]
-  );
-  const template = $derived(`1.5rem ${templateOf(columns)}`);
 </script>
 
 <div class="flex flex-wrap items-center gap-inline">
@@ -140,24 +163,25 @@
   <EmptyState icon={RepeatIcon} title="No transfers with this user" />
 {:else}
   <div
-    class="overflow-x-auto rounded-card border bg-surface text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent"
+    class="overflow-x-auto rounded-card border bg-surface text-sm tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-accent"
     role="grid"
     aria-label={`Transfers with ${username}`}
     aria-multiselectable="true"
     aria-activedescendant={list.activeId}
     tabindex="0"
     {@attach list.attach}>
+    <GridHeader {grid} class="h-9 border-b bg-surface-muted text-fg-muted" />
     <div role="rowgroup" {@attach freezesWhileUsed}>
       {#each shown as t, i (t.id)}
         <div
           role="row"
           {...list.line(t, i)}
           class={[
-            "group relative isolate grid min-w-max items-center list-row py-1 pl-2",
+            "group relative isolate grid items-center list-row py-1",
             rows.removed.has(t.id) && "opacity-40"
           ]}
-          style:grid-template-columns={template}>
-          <span role="gridcell">
+          style={grid.row}>
+          <span role="gridcell" class="flex px-2">
             <Tooltip text={t.direction} dense spoken>
               {#snippet child({ props })}
                 <span {...props} class="inline-flex">
