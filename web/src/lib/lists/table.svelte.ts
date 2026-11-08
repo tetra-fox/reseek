@@ -44,6 +44,8 @@ export type GridColumn<T> = {
   grow?: boolean;
   /** what sorting by it orders by; a column without one doesn't sort */
   value?: (row: T) => number | string;
+  /** sorts with no `value`, in a grid whose rows come in the order its sort asks for */
+  sortable?: boolean;
   /** sorts largest first on its first click */
   descFirst?: boolean;
   /** sorts as another column does, whose order its header shows and sets */
@@ -56,6 +58,8 @@ export type GridColumn<T> = {
   fixed?: boolean;
   /** always shown, never offered in the Columns menu */
   always?: boolean;
+  /** what its header says on hover, in place of its label */
+  hint?: string;
 };
 
 /** A grid's sort: the column and the direction, or none */
@@ -76,6 +80,8 @@ type Spec<T extends object> = {
   clearable?: boolean;
   /** the column ties are ordered by, ascending */
   ties?: string;
+  /** the rows come in the sort's order, as a daemon sorts a list a page at a time */
+  presorted?: boolean;
 };
 
 /** A grid's sort and the widths its columns were dragged to, as a screen keeps them */
@@ -163,6 +169,7 @@ export class Grid<T extends object> {
         return rows();
       },
       enableMultiSort: false,
+      manualSorting: !!spec.presorted,
       sortDescFirst: false,
       get enableSortingRemoval() {
         return !!spec.clearable;
@@ -227,6 +234,15 @@ export class Grid<T extends object> {
   /** the narrowest a row gets, its columns' widths together */
   readonly width: string = $derived.by(() => sumWidths(this.columns.map((c) => this.widthOf(c))));
 
+  /**
+   * A row's style: the columns, and the narrowest it gets. Every row of the grid, its header too,
+   * takes both, so each is as wide as the widest of the box and the columns, whatever its cells
+   * hold, and the columns line up from row to row. A cell's content never widens its column
+   */
+  readonly row: string = $derived(
+    `grid-template-columns: ${this.template}; min-width: ${this.width}`
+  );
+
   /** A column's width: the pixels it was dragged to, else its default */
   widthOf(column: GridColumn<T>): number | string {
     return (!column.fixed && this.table.atoms.columnSizing.get()[column.id]) || column.width;
@@ -240,7 +256,7 @@ export class Grid<T extends object> {
 
   /** Whether a click on the column's header sorts */
   sorts(column: GridColumn<T>): boolean {
-    return !!(column.value || column.sortsAs);
+    return !!(column.value || column.sortable || column.sortsAs);
   }
 
   /** A header click: sorts by the column, or turns its order around */
@@ -275,7 +291,7 @@ export class Grid<T extends object> {
     this.#spec.columns().map((c): ColumnDef<typeof features, T> => ({
       id: c.id,
       accessorFn: c.value ?? (() => 0),
-      enableSorting: !!c.value,
+      enableSorting: !!(c.value || c.sortable),
       sortDescFirst: !!c.descFirst,
       sortFn: (a, b, id) => compare(a.getValue(id), b.getValue(id)),
       enableResizing: !c.fixed,

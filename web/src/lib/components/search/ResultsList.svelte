@@ -206,7 +206,7 @@
     <GridHeader
       {grid}
       {all}
-      class="h-8 border-b bg-surface-muted text-sm font-medium text-fg-muted" />
+      class="h-8 border-b bg-surface-muted text-sm text-fg-muted" />
   {/snippet}
   <!-- a right-click, a long press or the menu key opens what the row's ... button offers -->
   {#snippet menu(line)}

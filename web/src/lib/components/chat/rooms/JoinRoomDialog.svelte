@@ -198,16 +198,16 @@
       {@attach lines.attach}
       {@attach list.attach}>
       <div class="sticky top-0 z-10" bind:offsetHeight={headerHeight}>
-        <GridHeader {grid} class="h-7 border-b bg-surface-muted font-medium text-fg-muted" />
+        <GridHeader {grid} class="h-7 border-b bg-surface-muted text-fg-muted" />
       </div>
       <div class="relative" style:height={`${lines.total}px`}>
         {#each lines.drawn as { line: room, index, start, size } (room.name)}
           <div
             role="row"
             {...list.line(room, index)}
+            style={grid.row}
             style:transform={`translateY(${start - headerHeight}px)`}
             style:height={`${size}px`}
-            style:grid-template-columns={grid.template}
             class="group absolute inset-x-0 top-0 grid items-center line-tint">
             <span role="gridcell" class="flex min-w-0 items-center gap-1.5 px-2">
               {#if room.isPrivate}<LockIcon

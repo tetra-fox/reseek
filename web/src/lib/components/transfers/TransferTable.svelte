@@ -178,7 +178,7 @@
     <GridHeader
       {grid}
       {all}
-      class="h-9 border-b bg-surface-muted text-sm font-medium text-fg-muted" />
+      class="h-9 border-b bg-surface-muted text-sm text-fg-muted" />
   {/snippet}
   {#snippet folder(node)}
     {@const group = tree.groups.get(node.key)}

@@ -10,10 +10,13 @@
   import Tooltip from "./Tooltip.svelte";
 
   // a grid's header row: a label per column, a click on one sorts by it, and its right edge
-  // drags the column's width. A label that doesn't fit is cut, with the whole of it on hover
+  // drags the column's width
   type Props = {
     grid: Grid<T>;
-    /** the row's own classes: its height, border and background */
+    /**
+     * the row's own classes: its height, border and background. Its font stays the rows', so a
+     * column width in ch measures the same in the header as in the cells
+     */
     class?: string;
     /** what a quiet column's header holds instead of its label alone */
     cell?: Snippet<[GridColumn<T>]>;
@@ -24,17 +27,27 @@
   let { grid, class: className, cell, all }: Props = $props();
 </script>
 
-<div
-  role="row"
-  class={["group/head grid items-center", className]}
-  style:grid-template-columns={grid.template}>
+<!-- a label that doesn't fit is cut, with the whole of it on hover. A column's hint shows on hover
+     and, outside a sort button, on focus -->
+{#snippet label(column: GridColumn<T>)}
+  <Tooltip
+    text={column.hint ?? column.label}
+    clipped={!column.hint}
+    dense={!!column.hint && grid.sorts(column)}>
+    {#snippet child({ props })}
+      <span {...props} class="truncate">{column.label}</span>
+    {/snippet}
+  </Tooltip>
+{/snippet}
+
+<div role="row" class={["group/head grid items-center", className]} style={grid.row}>
   {#each grid.columns as column (column.id)}
     {@const sort = grid.sortOf(column)}
     <div
       role="columnheader"
       aria-sort={sort === "asc" ? "ascending" : sort === "desc" ? "descending" : undefined}
       class={[
-        "relative flex min-w-0 items-center self-stretch px-2 text-xs",
+        "relative flex min-w-0 items-center self-stretch px-2 text-xs font-medium",
         column.end && "justify-end"
       ]}>
       {#if column.id === "select" && all}
@@ -47,21 +60,13 @@
           type="button"
           class="flex min-w-0 items-center gap-1 self-stretch hover:text-fg"
           onclick={() => grid.toggle(column)}>
-          <Tooltip text={column.label} clipped>
-            {#snippet child({ props })}
-              <span {...props} class="truncate">{column.label}</span>
-            {/snippet}
-          </Tooltip>
+          {@render label(column)}
           {#if sort === "asc"}<ArrowUpIcon
               class="size-3 shrink-0" />{:else if sort === "desc"}<ArrowDownIcon
               class="size-3 shrink-0" />{/if}
         </button>
       {:else}
-        <Tooltip text={column.label} clipped>
-          {#snippet child({ props })}
-            <span {...props} class="truncate">{column.label}</span>
-          {/snippet}
-        </Tooltip>
+        {@render label(column)}
       {/if}
       {#if !column.fixed}
         <!-- dragging the edge sets the column's width, which is kept. TanStack's drag follows mouse

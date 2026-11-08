@@ -80,16 +80,9 @@
     tabindex="0"
     bind:this={box}
     {@attach list.attach}>
-    <div style:min-width={grid.width}>
-      <GridHeader {grid} class="h-8 border-b bg-surface-muted font-medium text-fg-muted" />
-    </div>
+    <GridHeader {grid} class="h-8 border-b bg-surface-muted text-fg-muted" />
     {#each rows as f, i (f.name)}
-      <div
-        role="row"
-        {...list.line(f, i)}
-        class="grid items-center list-row py-1"
-        style:grid-template-columns={grid.template}
-        style:min-width={grid.width}>
+      <div role="row" {...list.line(f, i)} class="grid items-center list-row py-1" style={grid.row}>
         <span role="gridcell" class="flex min-w-0 items-center gap-1.5 px-2"
           ><FileIcon class="size-4 shrink-0 text-fg-muted" /><span class="truncate">{f.name}</span
           ></span>

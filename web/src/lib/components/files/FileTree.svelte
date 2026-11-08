@@ -457,7 +457,7 @@
     {:else if header}
       <div
         role="row"
-        class="grid items-center border-b bg-surface-muted py-1.5 text-xs font-medium text-fg-muted"
+        class="grid items-center border-b bg-surface-muted py-1.5 text-fg-muted *:text-xs *:font-medium"
         style:grid-template-columns={columns}
         style:padding-left={inset(0, "item")}>
         {@render header(selected ? list.allTick : undefined)}
