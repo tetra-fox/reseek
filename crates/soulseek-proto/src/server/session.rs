@@ -21,7 +21,7 @@ pub(crate) fn login_hash(username: &str, password: &str) -> String {
   let mut md5 = Md5::new();
   md5.update(username.as_bytes());
   md5.update(password.as_bytes());
-  format!("{:x}", md5.finalize())
+  md5.finalize().iter().map(|b| format!("{b:02x}")).collect()
 }
 
 wire_struct! {

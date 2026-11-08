@@ -33,6 +33,8 @@ use crate::app::AppState;
 /// The OpenAPI document's description of the API as a whole.
 #[derive(OpenApi)]
 #[openapi(
+  // utoipa leaves out empty response descriptions, which 3.1 requires and 3.2 does not
+  version = "3.2.0",
   info(
     title = "reseek",
     description = "A Soulseek client daemon: its configuration, transfers, searches, chat and \

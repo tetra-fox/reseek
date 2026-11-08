@@ -17,7 +17,7 @@ percent-encoding = "2"
 reqwest = { workspace = true, features = ["cookies", "json", "stream"] }
 rustls.workspace = true
 serde.workspace = true
-serde_html_form = "0.2"
+serde_html_form = "0.4"
 serde_json.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["time"] }

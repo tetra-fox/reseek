@@ -2,7 +2,6 @@
 
 use std::net::IpAddr;
 
-use rand::RngCore;
 use rcgen::{
   CertificateParams, DistinguishedName, DnType, ExtendedKeyUsagePurpose, KeyPair, KeyUsagePurpose,
   PKCS_RSA_SHA256, SanType,
@@ -17,7 +16,7 @@ const CERTIFICATE_DAYS: i64 = 825;
 /// `n` bytes from a cryptographically secure generator seeded by the operating system.
 pub fn random_bytes(n: usize) -> Vec<u8> {
   let mut bytes = vec![0; n];
-  rand::rng().fill_bytes(&mut bytes);
+  rand::fill(&mut bytes[..]);
   bytes
 }
 

@@ -14,8 +14,8 @@ reseek-shares.workspace = true
 soulseek-client.workspace = true
 soulseek-proto.workspace = true
 
-aes-gcm = { version = "0.10", default-features = false, features = ["aes", "alloc"] }
-argon2 = { version = "0.5", default-features = false, features = ["alloc", "password-hash"] }
+aes-gcm = { version = "0.11", default-features = false, features = ["aes", "alloc"] }
+argon2 = { version = "0.6", default-features = false, features = ["alloc", "password-hash"] }
 async-trait = "0.1"
 axum = { version = "0.8", features = ["multipart", "ws"] }
 base64.workspace = true
@@ -40,7 +40,7 @@ netdev = { version = "0.47", default-features = false, features = ["gateway"] }
 image = { version = "0.25", default-features = false, features = ["bmp", "jpeg", "png", "gif", "webp"] }
 mime_guess = "2"
 notify.workspace = true
-openidconnect = { version = "4", default-features = false, features = ["reqwest"] }
+openidconnect = { version = "4", default-features = false }
 p12-keystore = "0.4"
 percent-encoding = "2"
 rand.workspace = true
@@ -52,7 +52,7 @@ rpassword = "7"
 rusqlite.workspace = true
 rustls.workspace = true
 serde.workspace = true
-serde_html_form = "0.2"
+serde_html_form = "0.4"
 serde_json.workspace = true
 serde_path_to_error.workspace = true
 serde_plain.workspace = true
@@ -61,7 +61,7 @@ subtle.workspace = true
 # decodes every audio format the analyzer reads, streamed
 symphonia = { version = "0.6", features = ["all"] }
 symphonia-common = "0.6"
-sysinfo = { version = "0.39", default-features = false, features = ["disk", "network", "system"] }
+sysinfo = { version = "0.40", default-features = false, features = ["disk", "network", "system"] }
 thiserror.workspace = true
 time = "0.3"
 tokio = { workspace = true, features = ["process", "rt-multi-thread", "signal"] }
@@ -69,14 +69,14 @@ tokio-rustls.workspace = true
 tokio-util = { workspace = true, features = ["io", "rt"] }
 toml.workspace = true
 tower = { version = "0.5", features = ["util"] }
-tower-http = { version = "0.6", features = ["catch-panic", "cors"] }
+tower-http = { version = "0.7", features = ["catch-panic", "cors"] }
 tracing.workspace = true
 tracing-appender = "0.2"
 tracing-subscriber = { workspace = true, features = ["ansi", "env-filter", "registry"] }
 url.workspace = true
 utoipa.workspace = true
-utoipa-axum = "0.2"
-utoipa-swagger-ui = { version = "9", features = ["axum", "vendored"] }
+utoipa-axum = "0.3"
+utoipa-swagger-ui = { version = "10", features = ["axum", "vendored"] }
 uuid.workspace = true
 webpki-roots.workspace = true
 
@@ -95,7 +95,7 @@ reseek-shares = { workspace = true, features = ["testing"] }
 flacenc = { version = "0.5", default-features = false }
 # builds the LAME source it carries with autotools (`configure`, `make`, a C compiler), for
 # the test fixtures only; nothing of it is in the program
-mp3lame-encoder = "0.2"
+mp3lame-encoder = "0.3"
 proptest.workspace = true
 # turns a generated key into the PKCS#1 form the test identity provider signs with
 rsa = "0.9"

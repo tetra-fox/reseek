@@ -10,8 +10,7 @@ use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use api_types::auth::Role;
-use argon2::Argon2;
-use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
+use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use sha2::{Digest, Sha256};
 use subtle::ConstantTimeEq;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
@@ -215,9 +214,8 @@ fn stand_in() -> &'static str {
 
 /// `password` as an argon2id PHC string with a random salt.
 pub fn hash(password: &str) -> String {
-  let salt = SaltString::encode_b64(&crypto::random_bytes(16)).expect("16 bytes make a valid salt");
   Argon2::default()
-    .hash_password(password.as_bytes(), &salt)
+    .hash_password_with_salt(password.as_bytes(), &crypto::random_bytes(16))
     .expect("argon2 hashes any password with the default parameters")
     .to_string()
 }
@@ -280,5 +278,13 @@ mod tests {
     assert!(check("nobody", "hunter2").await.is_none());
     assert!(parses(&hash("x")).is_ok());
     assert!(parses("$2b$12$abcdefghijklmnopqrstuv").is_err());
+  }
+
+  #[test]
+  fn a_hash_kept_in_a_configuration_still_verifies() {
+    let kept = "$argon2id$v=19$m=19456,t=2,p=1$kLdrr3uy97NYudM9/FyoWQ$gUIA9n3yH7b4kwnQh6FPHk0VSQ2T1NcV+mY+3R9I/o4";
+    assert!(parses(kept).is_ok());
+    assert!(verify(kept, "correct horse"));
+    assert!(!verify(kept, "correct horses"));
   }
 }

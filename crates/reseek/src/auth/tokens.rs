@@ -7,7 +7,7 @@ use std::net::IpAddr;
 use api_types::auth::tokens::Token;
 use api_types::auth::{Principal, Role, Via};
 use chrono::{DateTime, Duration, Utc};
-use rand::Rng;
+use rand::RngExt;
 use rand::distr::Alphanumeric;
 use rusqlite::{OptionalExtension, Row, params};
 use sha2::{Digest, Sha256};

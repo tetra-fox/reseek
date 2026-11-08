@@ -78,7 +78,7 @@ impl HubState {
   /// A hub with nothing published, whose sequence starts at a random number, so an id kept
   /// from an earlier run is not in its ring.
   fn new() -> Self {
-    let start = rand::Rng::random_range(&mut rand::rng(), FIRST_SEQ);
+    let start = rand::random_range(FIRST_SEQ);
     Self {
       last: start,
       evicted_through: start,

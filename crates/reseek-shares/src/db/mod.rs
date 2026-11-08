@@ -155,8 +155,8 @@ struct Source {
 
 impl Source {
   fn open(&self) -> Result<Connection, DbError> {
-    let conn = Connection::open_with_flags(&self.target, self.flags)?;
-    configure(&conn, self.log_sql)?;
+    let mut conn = Connection::open_with_flags(&self.target, self.flags)?;
+    configure(&mut conn, self.log_sql)?;
     Ok(conn)
   }
 }
@@ -388,7 +388,7 @@ fn open_blocking(
     }
     Connection::open_with_flags(&path, flags)?
   };
-  configure(&writer, location.log_sql)?;
+  configure(&mut writer, location.log_sql)?;
   if !location.volatile {
     writer.pragma_update(None, "journal_mode", "WAL")?;
     check_pragmas(schema.name, &writer)?;
@@ -447,7 +447,7 @@ fn create_private(path: &std::path::Path) -> Result<(), DbError> {
 }
 
 /// The settings every connection takes when it opens.
-fn configure(conn: &Connection, log_sql: bool) -> rusqlite::Result<()> {
+fn configure(conn: &mut Connection, log_sql: bool) -> rusqlite::Result<()> {
   conn.busy_timeout(BUSY_TIMEOUT)?;
   conn.execute_batch(
     "PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = OFF; PRAGMA temp_store = MEMORY;",
@@ -457,8 +457,7 @@ fn configure(conn: &Connection, log_sql: bool) -> rusqlite::Result<()> {
   } else {
     statement
   };
-  conn.trace_v2(TraceEventCodes::SQLITE_TRACE_PROFILE, Some(log));
-  Ok(())
+  conn.trace_v2(TraceEventCodes::SQLITE_TRACE_PROFILE, Some(log))
 }
 
 /// Warns when the journal mode or the synchronous setting did not take.

@@ -3,7 +3,7 @@
 //! each token the controller hands it with a keyed hash of the token and what the token is
 //! for, which the controller computes again and compares in constant time.
 
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
 use subtle::ConstantTimeEq;
 

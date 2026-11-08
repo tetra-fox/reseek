@@ -2,8 +2,8 @@
 //! made with it: the MAC on session cookies and on file links, and sealed state the browser
 //! carries.
 
-use aes_gcm::aead::{Aead, KeyInit};
-use aes_gcm::{Aes256Gcm, Nonce};
+use aes_gcm::Aes256Gcm;
+use aes_gcm::aead::{Aead, KeyInit, Nonce};
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use chrono::Utc;
@@ -68,7 +68,7 @@ impl Secret {
   fn from_master(master: &[u8]) -> Self {
     let derive = |label: &[u8]| -> [u8; 32] {
       let mut mac =
-        <HmacSha256 as Mac>::new_from_slice(master).expect("HMAC takes a key of any length");
+        <HmacSha256 as KeyInit>::new_from_slice(master).expect("HMAC takes a key of any length");
       mac.update(label);
       mac.finalize().into_bytes().into()
     };
@@ -116,7 +116,7 @@ impl Secret {
     let nonce = crypto::random_bytes(NONCE_BYTES);
     let sealed = self
       .sealer
-      .encrypt(Nonce::from_slice(&nonce), plain)
+      .encrypt(nonce_of(&nonce), plain)
       .expect("AES-GCM encrypts any length this daemon seals");
     let mut bytes = nonce;
     bytes.extend(sealed);
@@ -130,13 +130,18 @@ impl Secret {
       return None;
     }
     let (nonce, sealed) = bytes.split_at(NONCE_BYTES);
-    self.sealer.decrypt(Nonce::from_slice(nonce), sealed).ok()
+    self.sealer.decrypt(nonce_of(nonce), sealed).ok()
   }
+}
+
+/// `bytes`, [`NONCE_BYTES`] long, as the cipher's nonce.
+fn nonce_of(bytes: &[u8]) -> &Nonce<Aes256Gcm> {
+  bytes.try_into().expect("a nonce is NONCE_BYTES long")
 }
 
 /// An HMAC-SHA256 of `data` under `key`, ready to finish or verify.
 fn keyed(key: &[u8; 32], data: &str) -> HmacSha256 {
-  let mut mac = <HmacSha256 as Mac>::new_from_slice(key).expect("HMAC takes a 32-byte key");
+  let mut mac = <HmacSha256 as KeyInit>::new_from_slice(key).expect("HMAC takes a 32-byte key");
   mac.update(data.as_bytes());
   mac
 }

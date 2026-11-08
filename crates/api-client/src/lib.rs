@@ -150,7 +150,7 @@ impl Client {
     );
     let tls = Arc::new(tls);
     let http = reqwest::Client::builder()
-      .use_preconfigured_tls((*tls).clone())
+      .tls_backend_preconfigured((*tls).clone())
       .default_headers(headers)
       .cookie_store(true)
       .redirect(reqwest::redirect::Policy::none())

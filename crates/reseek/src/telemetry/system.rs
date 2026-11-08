@@ -32,9 +32,10 @@ impl Default for SystemProbe {
   fn default() -> Self {
     Self {
       state: Mutex::new(Probed {
-        system: System::new(),
-        disks: Disks::new_with_refreshed_list(),
-        networks: Networks::new_with_refreshed_list(),
+        // sysinfo fails these only on platforms it does not support, and reseek builds for none
+        system: System::new().expect("sysinfo supports this platform"),
+        disks: Disks::new_with_refreshed_list().expect("sysinfo supports this platform"),
+        networks: Networks::new_with_refreshed_list().expect("sysinfo supports this platform"),
         pid: sysinfo::get_current_pid().ok(),
       }),
       runtime: Handle::try_current().ok(),
@@ -117,7 +118,7 @@ impl SystemProbe {
     disks.refresh(true);
     let mut available = Vec::new();
     let mut size = Vec::new();
-    for disk in disks.list() {
+    for disk in &*disks {
       let fstype = disk.file_system().to_string_lossy().into_owned();
       if disk.is_removable() || NOT_FIXED.contains(&fstype.as_str()) {
         continue;
@@ -149,8 +150,8 @@ impl SystemProbe {
     networks.refresh(true);
     let mut received = Vec::new();
     let mut transmitted = Vec::new();
-    for (device, data) in networks.list() {
-      let labels = Labels::from([("device".to_string(), device.clone())]);
+    for (device, data) in &*networks {
+      let labels = Labels::from([("device".to_string(), device.to_string_lossy().into_owned())]);
       received.push((labels.clone(), data.total_received() as f64));
       transmitted.push((labels, data.total_transmitted() as f64));
     }

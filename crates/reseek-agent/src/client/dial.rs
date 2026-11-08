@@ -59,7 +59,7 @@ impl Settings {
       Url::parse(text.trim_end_matches('/')).map_err(|e| format!("controller address: {e}"))?;
     let tls = Arc::new(tls(controller.ignore_certificate_errors)?);
     let http = reqwest::Client::builder()
-      .use_preconfigured_tls((*tls).clone())
+      .tls_backend_preconfigured((*tls).clone())
       .redirect(reqwest::redirect::Policy::none())
       .connect_timeout(DIAL)
       .build()

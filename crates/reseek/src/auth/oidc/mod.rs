@@ -8,6 +8,8 @@ pub mod flow;
 pub mod logout;
 
 use std::collections::HashMap;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -17,9 +19,10 @@ use openidconnect::core::{
   CoreRevocationErrorResponse, CoreTokenIntrospectionResponse, CoreTokenType,
 };
 use openidconnect::{
-  AdditionalClaims, ClientId, ClientSecret, EmptyExtraTokenFields, EndpointMaybeSet,
-  EndpointNotSet, EndpointSet, IdToken, IdTokenFields, IssuerUrl, JsonWebKeySet,
-  ProviderMetadataWithLogout, RedirectUrl, StandardErrorResponse, StandardTokenResponse,
+  AdditionalClaims, AsyncHttpClient, ClientId, ClientSecret, EmptyExtraTokenFields,
+  EndpointMaybeSet, EndpointNotSet, EndpointSet, HttpClientError, HttpRequest, HttpResponse,
+  IdToken, IdTokenFields, IssuerUrl, JsonWebKeySet, ProviderMetadataWithLogout, RedirectUrl,
+  StandardErrorResponse, StandardTokenResponse,
 };
 use serde::{Deserialize, Serialize};
 use tokio::time::Instant;
@@ -103,7 +106,7 @@ pub struct Provider {
   pub name: String,
   /// its options
   pub options: Oidc,
-  http: openidconnect::reqwest::Client,
+  http: ProviderHttp,
   discovery: tokio::sync::Mutex<Discovery>,
 }
 
@@ -154,7 +157,9 @@ impl Provider {
   fn new(name: &str, options: Oidc) -> Result<Self, String> {
     Ok(Self {
       name: name.to_string(),
-      http: crate::http::outbound::client(options.ca_certificate.as_deref())?,
+      http: ProviderHttp(crate::http::outbound::client(
+        options.ca_certificate.as_deref(),
+      )?),
       options,
       discovery: tokio::sync::Mutex::new(Discovery {
         document: Document::Unread { failed_at: None },
@@ -276,8 +281,34 @@ impl Provider {
   }
 
   /// The HTTP client calls to the provider go through.
-  pub fn http(&self) -> &openidconnect::reqwest::Client {
+  pub fn http(&self) -> &ProviderHttp {
     &self.http
+  }
+}
+
+/// The daemon's outbound client in the form the OpenID Connect library sends requests with.
+pub struct ProviderHttp(reqwest::Client);
+
+impl<'c> AsyncHttpClient<'c> for ProviderHttp {
+  type Error = HttpClientError<reqwest::Error>;
+  type Future = Pin<Box<dyn Future<Output = Result<HttpResponse, Self::Error>> + Send + 'c>>;
+
+  fn call(&'c self, request: HttpRequest) -> Self::Future {
+    Box::pin(async move {
+      let response = self
+        .0
+        .execute(request.try_into().map_err(Box::new)?)
+        .await
+        .map_err(Box::new)?;
+      let mut answer = openidconnect::http::Response::builder()
+        .status(response.status())
+        .version(response.version());
+      for (name, value) in response.headers() {
+        answer = answer.header(name, value);
+      }
+      let body = response.bytes().await.map_err(Box::new)?;
+      answer.body(body.to_vec()).map_err(HttpClientError::Http)
+    })
   }
 }
 

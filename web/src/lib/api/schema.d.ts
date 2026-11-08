@@ -3746,14 +3746,14 @@ export interface components {
              * @description how long the audio is, in seconds
              */
             durationSeconds: number;
-            encoderGuess?: null | components["schemas"]["EncoderGuess"];
+            encoderGuess?: components["schemas"]["EncoderGuess"] | null;
             /** @description findings independent of the verdict, empty when there are none */
             flags: components["schemas"]["AnalysisFlag"][];
             /** @description what made this analysis less reliable, such as few windows or a decoder error */
             limitations: string[];
             /** @description the aggregate measures over the non-silent windows */
             measures: components["schemas"]["AnalysisMeasures"];
-            override?: null | components["schemas"]["AnalysisOverride"];
+            override?: components["schemas"]["AnalysisOverride"] | null;
             /** @description the file's local path */
             path: string;
             /** @description the file's path under its root, `/`-separated, as the files endpoints take it */
@@ -3765,7 +3765,7 @@ export interface components {
              * @description the file's size in bytes when it was analyzed
              */
             size: number;
-            spectrogram?: null | components["schemas"]["SpectrogramLayout"];
+            spectrogram?: components["schemas"]["SpectrogramLayout"] | null;
             /** @description where the overview of this report's spectrogram is served */
             spectrogramUrl: string;
             /**
@@ -3799,7 +3799,7 @@ export interface components {
         };
         /** @description The configuration's rules that block users by pattern, address or file. */
         BlacklistRules: {
-            blocklistFile?: null | components["schemas"]["BlocklistFile"];
+            blocklistFile?: components["schemas"]["BlocklistFile"] | null;
             /**
              * @description networks whose addresses are blocked
              * @example [
@@ -4046,8 +4046,8 @@ export interface components {
         CachedUser: {
             /** @description the user-defined group the configuration lists the user in, null when none */
             group?: string | null;
-            statistics?: null | components["schemas"]["StatisticsSnapshot"];
-            status?: null | components["schemas"]["UserStatus"];
+            statistics?: components["schemas"]["StatisticsSnapshot"] | null;
+            status?: components["schemas"]["UserStatus"] | null;
             /** @description the user */
             username: string;
         };
@@ -4258,7 +4258,7 @@ export interface components {
              *     count as unread
              */
             isServerNotice: boolean;
-            lastMessage?: null | components["schemas"]["PrivateMessage"];
+            lastMessage?: components["schemas"]["PrivateMessage"] | null;
             /** @description the newest messages, oldest first; null in lists and frames and unless asked for */
             messages?: components["schemas"]["PrivateMessage"][] | null;
             /** @description which messages notify */
@@ -4351,7 +4351,7 @@ export interface components {
              * @example authentik
              */
             provider?: string | null;
-            session?: null | components["schemas"]["CurrentSession"];
+            session?: components["schemas"]["CurrentSession"] | null;
         };
         /** @description The browser session a request came with. */
         CurrentSession: {
@@ -4716,7 +4716,7 @@ export interface components {
         EnqueuedDownloadGroup: {
             /** @description the downloads made */
             enqueued: components["schemas"]["Transfer"][];
-            error?: null | components["schemas"]["ErrorBody"];
+            error?: components["schemas"]["ErrorBody"] | null;
             /** @description the files of the group that were not enqueued, and why */
             failures: components["schemas"]["EnqueueFailure"][];
             /** @description the user the group's files come from */
@@ -4963,7 +4963,7 @@ export interface components {
             file?: string | null;
             /** @description what kind of value the key holds */
             kind: components["schemas"]["OptionKind"];
-            notApplied?: null | components["schemas"]["NotApplied"];
+            notApplied?: components["schemas"]["NotApplied"] | null;
             /** @description whether the value is shown as `*****` */
             secret: boolean;
             /** @description the layer whose value is in effect */
@@ -5023,7 +5023,7 @@ export interface components {
              * @description in bytes
              */
             size: number;
-            suspect?: null | components["schemas"]["SuspectHint"];
+            suspect?: components["schemas"]["SuspectHint"] | null;
         };
         /** @description The data of `FileAnalysisComplete`: the report without its per-window measures. */
         FileAnalysisComplete: components["schemas"]["AudioAnalysis"] & {
@@ -5326,7 +5326,7 @@ export interface components {
              * @description when it ended, null until it does
              */
             endedAt?: string | null;
-            ending?: null | components["schemas"]["JobEnding"];
+            ending?: components["schemas"]["JobEnding"] | null;
             /** @description why it failed, when the job itself did */
             error?: string | null;
             /**
@@ -5489,7 +5489,7 @@ export interface components {
              * @example 7d at 04:00
              */
             every?: string | null;
-            lastEnding?: null | components["schemas"]["JobEnding"];
+            lastEnding?: components["schemas"]["JobEnding"] | null;
             /** @description why its last run failed */
             lastError?: string | null;
             /**
@@ -5598,7 +5598,7 @@ export interface components {
         };
         /** @description A room we are in, as `GET /rooms/joined` lists it and `rooms.list` frames carry it. */
         JoinedRoom: {
-            lastMessage?: null | components["schemas"]["RoomMessage"];
+            lastMessage?: components["schemas"]["RoomMessage"] | null;
             /**
              * Format: date-time
              * @description when the latest stored message arrived, null when none is stored
@@ -5639,15 +5639,15 @@ export interface components {
         Judgment: "legit" | "fake";
         /** @description What the known-users directory holds about a user, shared by the summary and the profile. */
         KnownUser: {
-            block?: null | components["schemas"]["Block"];
-            buddy?: null | components["schemas"]["Buddy"];
-            conversation?: null | components["schemas"]["ConversationSummary"];
+            block?: components["schemas"]["Block"] | null;
+            buddy?: components["schemas"]["Buddy"] | null;
+            conversation?: components["schemas"]["ConversationSummary"] | null;
             /**
              * @description the user's country as ISO 3166-1 alpha-2, from a room member list; null when never seen
              * @example DE
              */
             countryCode?: string | null;
-            endpoint?: null | components["schemas"]["UserEndpoint"];
+            endpoint?: components["schemas"]["UserEndpoint"] | null;
             /**
              * Format: date-time
              * @description when we first interacted with the user, null when not known
@@ -5674,14 +5674,14 @@ export interface components {
             lastSeenAt?: string | null;
             /** @description chat notifications for the user are off */
             muted: boolean;
-            presence?: null | components["schemas"]["UserPresence"];
+            presence?: components["schemas"]["UserPresence"] | null;
             /**
              * Format: date-time
              * @description when `presence` was first observed after another one, null when never: the time it was
              *     last seen to change, which cannot reach back past a time we were not connected
              */
             presenceAt?: string | null;
-            statistics?: null | components["schemas"]["StoredStatistics"];
+            statistics?: components["schemas"]["StoredStatistics"] | null;
             /** @description our labels for the user, lower case */
             tags: string[];
             /**
@@ -6208,7 +6208,7 @@ export interface components {
          *     `POST /auth/oidc/{name}/test` returns it.
          */
         OidcTestResult: {
-            endpoints?: null | components["schemas"]["OidcEndpoints"];
+            endpoints?: components["schemas"]["OidcEndpoints"] | null;
             /** @description why the test failed, null when it passed */
             error?: string | null;
             /**
@@ -6505,7 +6505,7 @@ export interface components {
              * @description the port the router forwards to us, null until a mapping holds
              */
             externalPort?: number | null;
-            method?: null | components["schemas"]["PortMappingMethod"];
+            method?: components["schemas"]["PortMappingMethod"] | null;
             /** @description where asking the router stands */
             state: components["schemas"]["PortMappingStatus"];
         };
@@ -7632,7 +7632,7 @@ export interface components {
         SortOrder: "asc" | "desc";
         /** @description The data of `SoulseekClientDisconnected`. */
         SoulseekClientDisconnected: {
-            exception?: null | components["schemas"]["EventError"];
+            exception?: components["schemas"]["EventError"] | null;
             /**
              * @description why the connection ended, as the client reports it
              * @example disconnected by the user
@@ -8359,7 +8359,7 @@ export interface components {
         UploadLimitWindow: {
             /** @description bytes, the limit converted from megabytes of 1 000 000 bytes */
             bytes: components["schemas"]["UploadLimitUsage"];
-            failures?: null | components["schemas"]["UploadLimitUsage"];
+            failures?: components["schemas"]["UploadLimitUsage"] | null;
             /** @description files */
             files: components["schemas"]["UploadLimitUsage"];
         };
@@ -8566,7 +8566,7 @@ export interface components {
         UserProfile: components["schemas"]["KnownUser"] & {
             /** @description what we did with the user */
             figures: components["schemas"]["UserFigures"];
-            info?: null | components["schemas"]["StoredInfo"];
+            info?: components["schemas"]["StoredInfo"] | null;
             /** @description our private notes about the user */
             notes: string;
         };
@@ -8665,7 +8665,7 @@ export interface components {
             description?: string | null;
             /** @description what we did with the user */
             figures: components["schemas"]["SummaryFigures"];
-            info?: null | components["schemas"]["StoredInfoSummary"];
+            info?: components["schemas"]["StoredInfoSummary"] | null;
             /** @description the first two lines of our private notes about the user, null when there are none */
             notes?: string | null;
             /**
@@ -15992,7 +15992,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/json": null | components["schemas"]["DisconnectReason"];
+                "application/json": components["schemas"]["DisconnectReason"] | null;
             };
         };
         responses: {
@@ -19976,7 +19976,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/json": null | components["schemas"]["BuddyChange"];
+                "application/json": components["schemas"]["BuddyChange"] | null;
             };
         };
         responses: {

@@ -91,7 +91,8 @@ fn read_json<T: DeserializeOwned>(bytes: &[u8]) -> Result<T, ApiError> {
     .map_err(|e| ApiError::invalid("Invalid request body", described(e.path(), e.inner())))
 }
 
-/// A query read as `T`. A parameter may be repeated for a list.
+/// A query read as `T`. A parameter may be repeated for a list, and one with an empty value,
+/// as a cleared form field sends, counts as not given.
 pub struct Query<T>(pub T);
 
 impl<S: Send + Sync, T: DeserializeOwned> FromRequestParts<S> for Query<T> {
@@ -103,7 +104,18 @@ impl<S: Send + Sync, T: DeserializeOwned> FromRequestParts<S> for Query<T> {
 }
 
 fn read_query<T: DeserializeOwned>(query: &str) -> Result<T, ApiError> {
-  let reader = serde_html_form::Deserializer::from_bytes(query.as_bytes());
+  // serde_html_form reads an empty value as `Some("")`, or as an error for any type but a
+  // number or bool, so empty parameters are dropped before it sees them
+  let given = query
+    .split('&')
+    .filter(|pair| {
+      pair
+        .split_once('=')
+        .is_some_and(|(_, value)| !value.is_empty())
+    })
+    .collect::<Vec<_>>()
+    .join("&");
+  let reader = serde_html_form::Deserializer::from_bytes(given.as_bytes());
   serde_path_to_error::deserialize(reader)
     .map_err(|e| ApiError::invalid("Invalid query", described(e.path(), e.inner())))
 }
@@ -205,6 +217,7 @@ async fn named<S: Send + Sync>(
 mod tests {
   use super::*;
   use api_types::transfers::{TransferListQuery, TransferStateCategory, TransferStateFilter};
+  use api_types::users::UserListQuery;
 
   #[test]
   fn json_content_types_are_recognized_with_parameters_and_suffixes() {
@@ -232,5 +245,19 @@ mod tests {
       error.detail().unwrap_or_default().starts_with("offset: "),
       "{error:?}"
     );
+  }
+
+  #[test]
+  fn empty_query_parameters_count_as_not_given() {
+    let query: UserListQuery =
+      read_query("q=&presence=&limit=5&tag=").unwrap_or_else(|e| panic!("{e:?}"));
+    assert_eq!(query.q, None);
+    assert_eq!(query.presence, None);
+    assert_eq!(query.tag, None);
+    assert_eq!(query.limit, 5);
+    let query: TransferListQuery =
+      read_query("since=&state=&state=Failed").unwrap_or_else(|e| panic!("{e:?}"));
+    assert_eq!(query.since, None);
+    assert_eq!(query.state.len(), 1);
   }
 }

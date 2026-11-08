@@ -35,7 +35,7 @@ pub fn client(ca: Option<&Path>) -> Result<reqwest::Client, String> {
   .with_root_certificates(roots)
   .with_no_client_auth();
   reqwest::Client::builder()
-    .use_preconfigured_tls(tls)
+    .tls_backend_preconfigured(tls)
     .redirect(reqwest::redirect::Policy::none())
     .timeout(TIMEOUT)
     .build()
