@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ago,
+  dateTime,
   formatAttributes,
   formatBytes,
   formatBytesTransferred,
@@ -25,6 +27,9 @@ describe("sizes and speeds", () => {
     expect(formatBytes(1536)).toBe("1.5 KB");
     expect(formatBytes(1234567)).toBe("1.18 MB");
     expect(formatBytes(1024 ** 3)).toBe("1 GB");
+    // the unit follows the rounding
+    expect(formatBytes(1023.999 * 1024 ** 3)).toBe("1 TB");
+    expect(formatBytes(1023.97 * 1024 ** 3, 1)).toBe("1 TB");
   });
 
   it("formats bytes moved of a size in the size's unit", () => {
@@ -96,7 +101,27 @@ describe("files", () => {
     expect(getDirectoryName("a\\b\\c.mp3")).toBe("a\\b");
     expect(getDirectoryName("a/b/c.mp3")).toBe("a/b");
     expect(getDirectoryName("\\foo")).toBe("\\foo");
-    expect(getDirectoryName("c.mp3")).toBe("c.mp3");
+    expect(getDirectoryName("c.mp3")).toBe("");
+  });
+});
+
+describe("instants", () => {
+  const now = Date.parse("2026-11-07T12:00:00Z");
+  const at = (days: number) => new Date(now - days * 86_400_000).toISOString();
+
+  it("says a recent instant relative to now and an older one as its date", () => {
+    expect(ago(at(3), now)).toBe("3 days ago");
+    expect(ago(at(0), now)).toBe("just now");
+    expect(ago(at(-2), now)).toBe("in 2 days");
+    expect(ago(at(30), now)).toBe(
+      new Date(at(30)).toLocaleDateString([], { month: "short", day: "numeric" })
+    );
+    expect(ago(at(3 * 365), now)).toContain("2023");
+  });
+
+  it("writes the year of an instant from another year", () => {
+    expect(dateTime(at(1), now)).not.toContain("2026");
+    expect(dateTime(at(3 * 365), now)).toContain("2023");
   });
 });
 

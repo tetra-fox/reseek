@@ -6,9 +6,12 @@ const UNITS = ["B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"] as const;
  */
 export const formatBytes = (bytes: number, decimals = 2, padding = 0, padChar = " "): string => {
   if (!Number.isFinite(bytes) || bytes < 1) return "0 B".padStart(padding + 2, padChar);
-  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), UNITS.length - 1);
-  const n = parseFloat((bytes / 1024 ** i).toFixed(Math.max(decimals, 0)));
-  return `${String(n).padStart(padding, padChar)} ${UNITS[i]}`;
+  let i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), UNITS.length - 1);
+  const rounded = (unit: number) =>
+    parseFloat((bytes / 1024 ** unit).toFixed(Math.max(decimals, 0)));
+  // rounding can reach the next unit: 1023.999 GB is "1 TB", not "1024 GB"
+  if (rounded(i) >= 1024 && i < UNITS.length - 1) i++;
+  return `${String(rounded(i)).padStart(padding, padChar)} ${UNITS[i]}`;
 };
 
 /**
@@ -136,9 +139,19 @@ export const sayDuration = (ms: number): string => {
 
 const relative = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
 
-/** "3 hours ago", relative to `now`, for an instant from the API */
+/** How far from now an instant is still said relative to it; past that, its date is clearer */
+const RELATIVE_MS = 7 * DAY_MS;
+
+/**
+ * "3 hours ago" or "in 2 days", relative to `now`, for an instant from the API; a week or more
+ * away, its date: "Mar 14", "Mar 14, 2023"
+ */
 export const ago = (iso: string, now = Date.now()): string => {
-  const secs = Math.round((Date.parse(iso) - now) / 1000);
+  const ms = Date.parse(iso) - now;
+  if (Math.abs(ms) >= RELATIVE_MS) return shortDate(iso, now);
+  const secs = Math.round(ms / 1000);
+  // Intl says "now", which reads wrong after a verb: "Last run now"
+  if (secs === 0) return "just now";
   const [unit, size] = SPANS.find(([, s]) => Math.abs(secs) >= s) ?? ["second", 1];
   return relative.format(Math.round(secs / size), unit);
 };
@@ -154,6 +167,15 @@ const DATE_TIME = new Intl.DateTimeFormat([], {
   hour: "2-digit",
   minute: "2-digit"
 });
+const DATE_TIME_YEAR = new Intl.DateTimeFormat([], {
+  year: "numeric",
+  month: "short",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit"
+});
+const DATE = new Intl.DateTimeFormat([], { month: "short", day: "numeric" });
+const DATE_YEAR = new Intl.DateTimeFormat([], { year: "numeric", month: "short", day: "numeric" });
 const TIME = new Intl.DateTimeFormat([], { hour: "2-digit", minute: "2-digit" });
 const DAY = new Intl.DateTimeFormat([], {
   weekday: "long",
@@ -166,8 +188,25 @@ const NUMBER = new Intl.NumberFormat();
 /** A count with the browser's digit grouping: "1,200" */
 export const formatCount = (n: number): string => NUMBER.format(n);
 
-/** An instant in the browser's time zone, short, for tables: "Mar 14, 09:05" */
-export const dateTime = (iso: string): string => DATE_TIME.format(new Date(iso));
+/** A count on a badge, which keeps one width: "999+" past 999 */
+export const badgeCount = (n: number): string => (n > 999 ? "999+" : formatCount(n));
+
+const thisYear = (date: Date, now: number) => date.getFullYear() === new Date(now).getFullYear();
+
+/**
+ * An instant in the browser's time zone, short, for tables: "Mar 14, 09:05", with the year when
+ * it is not this year's
+ */
+export const dateTime = (iso: string, now = Date.now()): string => {
+  const date = new Date(iso);
+  return (thisYear(date, now) ? DATE_TIME : DATE_TIME_YEAR).format(date);
+};
+
+/** The day of an instant, short: "Mar 14", with the year when it is not this year's */
+export const shortDate = (iso: string, now = Date.now()): string => {
+  const date = new Date(iso);
+  return (thisYear(date, now) ? DATE : DATE_YEAR).format(date);
+};
 
 /** The time of day of an instant in the browser's time zone: "09:05" */
 export const shortTime = (iso: string): string => TIME.format(new Date(iso));
@@ -177,7 +216,9 @@ export const formatDay = (iso: string): string => DAY.format(new Date(iso));
 
 /** A chat message's time: the time of day for today, with the date before today */
 export const chatTime = (iso: string, now = Date.now()): string =>
-  new Date(iso).toDateString() === new Date(now).toDateString() ? shortTime(iso) : dateTime(iso);
+  new Date(iso).toDateString() === new Date(now).toDateString()
+    ? shortTime(iso)
+    : dateTime(iso, now);
 
 /** What a file's attributes say about its quality: "16/44.1kHz", "320 kbps", "245 kbps, VBR" */
 export const formatAttributes = (file: {
@@ -204,11 +245,13 @@ export const fromWhom = (usernames: string[]) =>
 
 /**
  * The directory part of a remote path, by the separator it uses: `/` when it has one, else `\`.
- * A separator at the very start is not a cut, so "\\foo" stays as it is
+ * A separator at the very start is not a cut, so "\\foo" stays as it is; a bare file name, which
+ * some peers send, has no directory
  */
 export const getDirectoryName = (path: string): string => {
   const separator = path.includes("/") ? "/" : "\\";
   const cut = path.lastIndexOf(separator);
+  if (cut === -1) return "";
   return cut > 0 ? path.slice(0, cut) : path;
 };
 
@@ -261,9 +304,11 @@ export const downloadFile = (
 export const WIDEST = {
   size: formatBytes(1023.99 * 1024 ** 3),
   speed: formatSpeed(1023.9 * 1024 ** 2),
-  count: (99_999).toLocaleString(),
+  // a large library shares a few million files
+  count: (9_999_999).toLocaleString(),
   length: formatSeconds(99 * 3600 + 59 * 60 + 59),
-  duration: formatDuration(23 * 3600 + 59 * 60),
+  // a stalled transfer can be thousands of days from done
+  duration: formatDuration(9999 * 86_400 + 23 * 3600),
   transferred: formatBytesTransferred(1023.9 * 1024 ** 3, 1023.9 * 1024 ** 3)
 };
 

@@ -32,7 +32,7 @@
   class={["flex items-start gap-2 rounded-control border px-3 py-2 text-sm text-fg", box]}
   role={kind === "error" ? "alert" : undefined}>
   <Icon class={["mt-0.5 size-4 shrink-0", tint]} />
-  <div class="min-w-0 flex-1">{@render children()}</div>
+  <div class="min-w-0 flex-1 wrap-anywhere">{@render children()}</div>
   {#if action}
     <div class="-my-1 shrink-0">{@render action()}</div>
   {/if}

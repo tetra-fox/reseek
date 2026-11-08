@@ -1,3 +1,13 @@
+<script lang="ts" module>
+  const graphemes = new Intl.Segmenter();
+
+  /** The first character a reader sees in a name, a whole emoji or accented letter, upper-cased */
+  const initial = (name: string) => {
+    const first = graphemes.segment(name.trim())[Symbol.iterator]().next();
+    return first.done ? "?" : first.value.segment.toUpperCase();
+  };
+</script>
+
 <script lang="ts">
   import { Avatar } from "bits-ui";
 
@@ -58,7 +68,7 @@
           role={alt ? "img" : undefined}
           aria-label={alt || undefined}
           aria-hidden={alt ? undefined : "true"}>
-          {[...name][0]?.toUpperCase() ?? "?"}
+          {initial(name)}
         </Avatar.Fallback>
       </span>
     {/snippet}

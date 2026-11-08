@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { linkify, snippetParts } from "./text";
+import { linkify, pathParts, snippetParts, splitTail } from "./text";
 
 describe("links in text", () => {
   it("makes http and https runs links and keeps the rest as text", () => {
@@ -44,5 +44,35 @@ describe("search snippets", () => {
       ["floyd", true],
       ['"', false]
     ]);
+  });
+});
+
+describe("cutting in the middle", () => {
+  it("keeps a path's last part whole", () => {
+    expect(splitTail("@@music\\Artist\\2000 - Album\\CD1", true)).toEqual([
+      "@@music\\Artist\\2000 - Album",
+      "\\CD1"
+    ]);
+    expect(splitTail("/home/ryu/Music", true)).toEqual(["/home/ryu", "/Music"]);
+  });
+
+  it("keeps the end of a text with no separator, or with a last part too long to keep", () => {
+    expect(splitTail("01 - Storm - Lift Yr. Skinny Fists.flac")).toEqual([
+      "01 - Storm - Lift Yr. Skinn",
+      "y Fists.flac"
+    ]);
+    expect(splitTail("x\\" + "a".repeat(60), true)[1]).toHaveLength(12);
+    expect(splitTail("short")).toEqual(["", "short"]);
+  });
+
+  it("splits a path into its parts and separators", () => {
+    expect(pathParts("@@abd\\موسيقى\\أم كلثوم")).toEqual([
+      "@@abd",
+      "\\",
+      "موسيقى",
+      "\\",
+      "أم كلثوم"
+    ]);
+    expect(pathParts("/home/ryu")).toEqual(["/", "home", "/", "ryu"]);
   });
 });

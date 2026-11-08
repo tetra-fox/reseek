@@ -21,9 +21,11 @@
   };
 </script>
 
+<!-- a block of one line rather than a flex box, whose text would be an anonymous item that
+     cannot be cut with an ellipsis: a badge never grows past its container -->
 <span
   class={cn(
-    "inline-flex w-fit shrink-0 items-center gap-1 rounded-badge border px-1.5 py-0.5 text-xs font-medium whitespace-nowrap [&>svg]:size-3",
+    "inline-block max-w-full shrink-0 truncate rounded-badge border px-1.5 py-0.5 align-middle text-xs font-medium [&>svg]:mr-1 [&>svg]:inline [&>svg]:size-3 [&>svg]:align-[-0.125em]",
     tones[tone],
     className
   )}

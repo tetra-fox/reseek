@@ -190,6 +190,9 @@
   --font-mono:
     "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
     "Liberation Mono", "Courier New", monospace;
+  /* mono text is paths, filters and code, which must read as typed: JetBrains Mono's contextual
+     alternates would draw `|=` as one symbol and change `->`, `!=` and `..` */
+  --font-mono--font-feature-settings: "calt" 0, "liga" 0;
 }
 
 /* the raised shadow refers to this so dark mode can swap it, tailwind inlines theme shadows otherwise.

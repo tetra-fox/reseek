@@ -17,6 +17,7 @@
   import { users } from "#lib/users/users.svelte.js";
 
   import GroupBadge from "./GroupBadge.svelte";
+  import NameText from "./NameText.svelte";
   import UserCard from "./UserCard.svelte";
   import UserManageItems from "./UserManageItems.svelte";
   import UserMenuItems from "./UserMenuItems.svelte";
@@ -135,7 +136,7 @@
 
 <!-- a name takes only its text's width: its menu opens from a right-click, a long press,
      Shift+F10 or the card's More button, never from a control beside it -->
-<span class={cn("inline-flex max-w-full items-center align-baseline", className)}>
+<span class={cn("inline-flex max-w-full min-w-0 items-center align-baseline", className)}>
   {#if name === SERVER}
     <!-- where the name the server's notices come from turns up, as in the events: no user -->
     <span class="truncate font-medium">{name}</span>
@@ -143,6 +144,8 @@
     <a
       bind:this={link}
       href={userHref(name)}
+      dir="auto"
+      aria-label={name.trim() === name ? undefined : name}
       class="truncate font-medium underline-offset-2 hover:underline"
       style:color={nameColor(name)}
       onpointerenter={enter}
@@ -169,7 +172,7 @@
         e.preventDefault();
         show("menu");
       }}
-      onkeydown={keydown}>{name}</a>
+      onkeydown={keydown}><NameText {name} /></a>
   {/if}
 
   <!-- the card and the menu render elsewhere through portals; kept inside the flex box, whose

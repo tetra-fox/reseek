@@ -38,14 +38,21 @@ api.use({
   }
 });
 
+/**
+ * A path segment for `name`: the browser resolves a segment of dots alone, `.` or `..`, even
+ * percent-encoded, so `/users/../profile` would become `/profile`. Such a name is written as `_`,
+ * and the query parameter beside it carries the real one
+ */
+const pathSafe = (name: string) => (/^\.+$/.test(name) ? "_" : name);
+
 /** A username in a path, plus the query parameter that carries usernames a path can't, like `..` */
 export const byUser = (username: string) => ({
-  path: { username },
+  path: { username: pathSafe(username) },
   query: { username }
 });
 
 /** A room's name in a path, plus the query parameter that carries names a path can't */
 export const byRoom = (roomName: string) => ({
-  path: { roomName },
+  path: { roomName: pathSafe(roomName) },
   query: { roomName }
 });

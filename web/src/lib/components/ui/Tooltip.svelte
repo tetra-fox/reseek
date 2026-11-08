@@ -37,11 +37,14 @@
 
   let cut = $state(false);
 
+  const cuts = (e: Element) => e.scrollWidth > e.clientWidth || e.scrollHeight > e.clientHeight;
+
   // measured as the pointer or focus arrives, in the capture phase so it is known before the
-  // trigger's own handlers decide whether to open
+  // trigger's own handlers decide whether to open. The text may be cut by a part inside the
+  // element rather than the element itself, as a text cut in the middle is
   const measure = (node: HTMLElement) => {
     const check = () => {
-      cut = node.scrollWidth > node.clientWidth || node.scrollHeight > node.clientHeight;
+      cut = cuts(node) || [...node.querySelectorAll("*")].some(cuts);
     };
     node.addEventListener("pointerenter", check, { capture: true });
     node.addEventListener("focus", check, { capture: true });

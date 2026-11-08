@@ -63,3 +63,32 @@ export const snippetParts = (snippet: string): SnippetPart[] => {
   }
   return parts;
 };
+
+/** How many characters a text keeps whole at its end when it is cut in the middle */
+const TAIL = 12;
+/** A path's last part is kept whole up to this long; a longer one keeps its last `TAIL` */
+const PATH_TAIL = 48;
+
+/**
+ * Where a text cut in the middle splits: the head, which gives way first, and the tail, which
+ * stays. A path keeps its last part with the separator before it; other text, such as a file
+ * name, keeps its last few characters, where names that share a start differ
+ */
+export const splitTail = (text: string, path = false): [string, string] => {
+  if (path) {
+    const cut = Math.max(text.lastIndexOf("\\"), text.lastIndexOf("/"));
+    if (cut > 0 && text.length - cut <= PATH_TAIL) return [text.slice(0, cut), text.slice(cut)];
+  }
+  const cut = Math.max(0, text.length - TAIL);
+  return [text.slice(0, cut), text.slice(cut)];
+};
+
+/** Whether a text holds letters of a right-to-left script, Hebrew, Arabic, Syriac, Thaana or N'Ko */
+export const hasRtl = (text: string): boolean =>
+  /[\u0590-\u08ff\ufb1d-\ufdff\ufe70-\ufeff]/.test(text);
+
+/**
+ * A path's parts and separators in order, each to be drawn as a run of its own, so a part in a
+ * right-to-left script does not swap places with the parts around it
+ */
+export const pathParts = (text: string): string[] => text.split(/([\\/])/).filter(Boolean);

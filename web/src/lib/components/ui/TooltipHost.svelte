@@ -20,7 +20,7 @@
           side={payload?.side}
           sideOffset={4}
           collisionPadding={8}
-          class="z-50 max-w-sm origin-(--bits-tooltip-content-transform-origin) rounded-control border bg-overlay px-2 py-1 text-xs wrap-anywhere text-fg shadow-raised data-[state=closed]:animate-popover-out data-[state=delayed-open]:animate-popover-in">
+          class="z-50 max-w-[min(24rem,calc(100vw-1rem))] origin-(--bits-tooltip-content-transform-origin) rounded-control border bg-overlay px-2 py-1 text-xs wrap-anywhere whitespace-pre-line text-fg shadow-raised data-[state=closed]:animate-popover-out data-[state=delayed-open]:animate-popover-in">
           {payload?.text}
         </Tooltip.Content>
       </Tooltip.Portal>
