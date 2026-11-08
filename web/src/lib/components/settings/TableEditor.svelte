@@ -339,8 +339,12 @@
                 {/each}
               </div>
               {#if !disabled}
-                <Button variant="ghost" size="sm" class="self-start" onclick={() => remove(row)}>
-                  <Trash2Icon />Remove {nameOf(row, i)}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  class="max-w-full self-start"
+                  onclick={() => remove(row)}>
+                  <Trash2Icon /><span class="truncate">Remove {nameOf(row, i)}</span>
                 </Button>
               {/if}
             </div>

@@ -18,6 +18,7 @@
   import { call } from "#lib/request.js";
 
   import CodeEditor from "./CodeEditor.svelte";
+  import ErrorText from "./ErrorText.svelte";
 
   // a configuration file edited as text: checked as it is typed, saved against the revision read
   let { view }: { view: Schemas["ConfigView"] } = $props();
@@ -215,8 +216,8 @@
       <ul class="flex flex-col gap-0.5">
         {#each validation.errors as e, i (`${i}:${e.key}`)}
           <li>
-            {#if e.key}<code>{e.key}</code>:
-            {/if}{e.message}
+            {#if e.key}<code class="wrap-anywhere">{e.key}</code>:{" "}{/if}<ErrorText
+              text={e.message} />
           </li>
         {/each}
       </ul>

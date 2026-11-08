@@ -8,18 +8,21 @@
   import Button from "#lib/components/ui/Button.svelte";
   import Card from "#lib/components/ui/Card.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
+  import MiddleTruncate from "#lib/components/ui/MiddleTruncate.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { sections, valueAt } from "#lib/config/sections.js";
   import { Busy } from "#lib/feedback/busy.svelte.js";
   import { confirmation } from "#lib/feedback/confirm.svelte.js";
-  import { formatBytes, parseDuration, sayDuration } from "#lib/format.js";
+  import { formatBytes, formatCount, parseDuration, plural, sayDuration } from "#lib/format.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { Loader } from "#lib/loader.svelte.js";
   import { href } from "#lib/nav.js";
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
+
+  import InfoList from "./InfoList.svelte";
 
   // the databases on disk with their sizes, the retention in force, and the transfer lists' upkeep
   const databases = new Loader(() => call(() => api.GET("/api/v0/application/data")));
@@ -50,7 +53,9 @@
         void databases.load();
         return last;
       },
-      names.length === 1 ? `${names[0]} vacuumed` : `${names.length} databases vacuumed`
+      names.length === 1
+        ? `${names[0]} vacuumed`
+        : `${plural(names.length, "database", "databases")} vacuumed`
     );
 
   const clearCompleted = (direction: "uploads" | "downloads") =>
@@ -79,7 +84,7 @@
   /** a retention option's value as people say it: an age, a count, or kept forever */
   const retentionText = (value: unknown) => {
     if (value === null || value === undefined) return "Kept forever";
-    if (typeof value === "number") return value.toLocaleString();
+    if (typeof value === "number") return formatCount(value);
     if (typeof value === "boolean") return value ? "Yes" : "No";
     const ms = parseDuration(value);
     return ms === null ? String(value) : sayDuration(ms);
@@ -121,13 +126,15 @@
             "grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-2 gap-y-0.5 list-row px-5 py-1.5 md:grid-cols-[10rem_minmax(0,1fr)_6rem_6rem_6rem]"
           ]}>
           <span role="gridcell" class="truncate font-medium">{d.name}</span>
-          <Tooltip text={d.path} clipped>
+          <!-- the databases share a folder, so their paths are cut in the middle, keeping the file -->
+          <Tooltip text={d.path} dense>
             {#snippet child({ props })}
               <span
                 {...props}
                 role="gridcell"
-                class="truncate font-mono text-xs text-fg-muted max-md:col-span-3 max-md:row-start-2"
-                >{d.path}</span>
+                class="flex min-w-0 font-mono text-xs text-fg-muted max-md:col-span-3 max-md:row-start-2">
+                <MiddleTruncate text={d.path} path />
+              </span>
             {/snippet}
           </Tooltip>
           <span role="gridcell" class="text-right tabular-nums">{formatBytes(d.sizeBytes)}</span>
@@ -149,15 +156,14 @@
 </Card>
 
 <Card title="Retention">
-  <dl
-    class="grid grid-cols-[minmax(0,1fr)] gap-x-6 gap-y-1 text-sm md:grid-cols-[auto_minmax(0,1fr)]">
+  <InfoList>
     {#each retention as r (r.key)}
       <Tooltip text={r.key}>
-        {#snippet child({ props })}<dt {...props} class="text-fg-muted">{r.label}</dt>{/snippet}
+        {#snippet child({ props })}<dt {...props}>{r.label}</dt>{/snippet}
       </Tooltip>
-      <dd class="max-md:mb-1">{retentionText(r.value)}</dd>
+      <dd>{retentionText(r.value)}</dd>
     {/each}
-  </dl>
+  </InfoList>
   <a href={href("/system/settings")} class="text-sm text-accent hover:underline"
     >Edit in Settings</a>
 </Card>

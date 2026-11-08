@@ -15,6 +15,7 @@
   import type { Control, Field } from "#lib/config/sections.js";
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
 
+  import ErrorText from "./ErrorText.svelte";
   import FieldControl from "./FieldControl.svelte";
   import SourceBadge from "./SourceBadge.svelte";
 
@@ -136,12 +137,14 @@
       <p class="font-mono text-xs wrap-anywhere text-fg-subtle">{entry}</p>
       <p class="text-xs text-fg-subtle">{field.derived?.note}</p>
     {/if}
-    {#if error && !tabular}<p class="text-xs text-danger" role="alert">{error}</p>{/if}
+    {#if error && !tabular}<p class="text-xs text-danger" role="alert">
+        <ErrorText text={error} />
+      </p>{/if}
     {#if edit.notice}<p class="text-xs text-fg-muted">{edit.notice}</p>{/if}
     {#if notApplied}
       <p class="text-xs text-danger">
         The value <code class="wrap-anywhere">{JSON.stringify(notApplied.value)}</code> in the file
-        is not in effect: {notApplied.reason}
+        is not in effect: <ErrorText text={notApplied.reason} />
       </p>
     {/if}
     {@render extra?.()}

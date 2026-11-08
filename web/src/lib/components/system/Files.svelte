@@ -54,7 +54,7 @@
   import { Expansion } from "#lib/tree/expansion.svelte.js";
   import { type FolderNode, folderNode, type TreeLine, treeLines } from "#lib/tree/folders.js";
   import { TICK_REM } from "#lib/tree/indent.js";
-  import { viewport } from "#lib/ui/viewport.svelte.js";
+  import { rem, viewport } from "#lib/ui/viewport.svelte.js";
 
   // the downloads or incomplete directory as a file explorer: browse, open, delete
   let { root, path }: { root: Root; path: string } = $props();
@@ -308,13 +308,30 @@
   const sortBy = (by: SortBy) => {
     sort = { by, dir: sort.by === by && sort.dir === "asc" ? "desc" : "asc" };
   };
-  // a phone leaves out the modified date and puts a file's size under its name, so a name keeps
-  // the room it needs
-  const COLUMNS = $derived(
-    viewport.phone
-      ? `${TICK_REM}rem minmax(0,1fr) 2.5rem`
-      : `${TICK_REM}rem minmax(14rem,1fr) 10rem 7rem 3rem`
+  /** the tree's width, which an open inspector narrows */
+  let paneWidth = $state(0);
+  // a phone leaves out the modified date and puts a file's size under its name, and a pane too
+  // narrow for every column, as beside the inspector, leaves out the date, so a name keeps the
+  // room it needs
+  const layout = $derived(
+    viewport.phone ? "phone" : paneWidth && paneWidth < 44 * rem.px ? "narrow" : "wide"
   );
+  const COLUMNS = $derived(
+    layout === "phone"
+      ? `${TICK_REM}rem minmax(0,1fr) 2.5rem`
+      : layout === "narrow"
+        ? `${TICK_REM}rem minmax(0,1fr) 7rem 3rem`
+        : `${TICK_REM}rem minmax(14rem,1fr) 10rem 7rem 3rem`
+  );
+  /** the tree shows no files and no folders, only the way up if anything */
+  const empty = $derived(
+    lines.every((l) => l.kind === "item" && l.item.kind === "up") && !allFiles
+  );
+
+  /** past this many folders the path folds the ones between the first and the last two */
+  const MAX_PARTS = 4;
+  const steps = $derived(parts.map((part, i) => ({ part, to: parts.slice(0, i + 1) })));
+  const folded = $derived(steps.length > MAX_PARTS ? steps.slice(1, -2) : []);
 </script>
 
 {#snippet inspected()}
@@ -359,15 +376,36 @@
 
 <div class="flex flex-wrap items-center gap-inline">
   <FolderOpenIcon class="size-4 text-fg-muted" />
-  <nav aria-label="Path" class="flex flex-wrap items-center gap-0.5 font-mono text-sm">
+  <nav aria-label="Path" class="flex min-w-0 flex-wrap items-center gap-0.5 font-mono text-sm">
     <a href={href(`/system/files?root=${root}`)} class="hover:underline">/{root}</a>
-    {#each parts as part, i (`${i}/${part}`)}
-      <span class="text-fg-subtle">/</span>
-      <a
-        href={href(
-          `/system/files?root=${root}&path=${encodeURIComponent(joinPath(parts.slice(0, i + 1)))}`
-        )}
-        class="hover:underline">{part}</a>
+    {#each steps as step, i (`${i}/${step.part}`)}
+      {#if !folded.includes(step)}
+        <span class="text-fg-subtle">/</span>
+        <a
+          href={href(`/system/files?root=${root}&path=${encodeURIComponent(joinPath(step.to))}`)}
+          class="min-w-0 wrap-anywhere hover:underline"
+          dir="auto">{step.part}</a>
+      {:else if step === folded[0]}
+        <span class="text-fg-subtle">/</span>
+        <Menu.Root>
+          <Menu.Trigger>
+            {#snippet child({ props })}
+              <Button
+                {...props}
+                variant="ghost"
+                size="icon-sm"
+                class="size-6"
+                aria-label={`${folded.length} more folders`}><EllipsisIcon /></Button>
+            {/snippet}
+          </Menu.Trigger>
+          <Menu.Content align="start" class="max-w-[min(32rem,calc(100vw-1rem))]">
+            {#each folded as f (f.to.length)}
+              <Menu.Item onSelect={() => go(f.to)}
+                ><span class="truncate">{f.part}</span></Menu.Item>
+            {/each}
+          </Menu.Content>
+        </Menu.Root>
+      {/if}
     {/each}
   </nav>
   <div class="ml-auto flex max-w-full flex-wrap justify-end gap-inline">
@@ -483,102 +521,121 @@
       refocus={() => tree?.focus()}
       class="py-4" />
   {/if}
-  <FileTree
-    bind:this={tree}
-    class={[loading && "opacity-60"]}
-    {lines}
-    {expansion}
-    label={`Files in /${root}/${path}`}
-    columns={COLUMNS}
-    {selected}
-    idOf={(e) => e.key}
-    tickable={(e) => e.kind !== "up"}
-    menuable={(line) => (line.kind === "folder" ? !!dirEntry(line.node) : line.item.kind !== "up")}
-    folderId={(node) => `d:${node.path}`}
-    onopen={(e) => void open(e)}
-    onopenfolder={(node) => go(node.path.split("/"))}
-    {onkey}
-    inspect={(e) => {
-      if (e.kind === "file") shownKey = e.key;
-    }}
-    nameOf={(line) => (line.kind === "folder" ? line.node.label : line.item.name)}
-    ontoggle={(opened, keys) => {
-      // a folder's key is its path
-      if (!opened) return;
-      for (const at of keys) if (!listings.has(at)) void read(at);
-    }}>
-    {#snippet header(all)}
-      <span role="columnheader" class="flex"
-        >{#if all}<SelectAll {all} />{/if}</span>
-      <span role="columnheader">{@render sortable("name")}</span>
-      <span role="columnheader" class="max-md:hidden">{@render sortable("date")}</span>
-      {#if !viewport.phone}<span role="columnheader" class="pr-3 text-right">Size</span>{/if}
-      <span role="columnheader" class="sr-only">Actions</span>
-    {/snippet}
-    {#snippet menu(line)}
-      {@const e = line.kind === "folder" ? dirEntry(line.node) : line.item}
-      {#if e}{@render entryItems(e)}{/if}
-    {/snippet}
-    {#snippet folder(node)}
-      {@const e = dirEntry(node)}
-      {#if e}{@render tick(e)}{/if}
-      <FolderIcon class="size-4 shrink-0 text-fg-muted" />
-      <Tooltip text={node.path} dense>
-        {#snippet child({ props })}
-          <button
-            {...props}
-            type="button"
-            class="min-w-0 truncate text-left hover:underline"
-            onclick={() => go(node.path.split("/"))}>{node.label}</button>
+  <!-- an empty folder says so in a line, rather than under a tree box of nothing -->
+  {#if empty}
+    <div class="rounded-card border bg-surface">
+      <EmptyRow
+        text={root === "downloads" && !path
+          ? "No finished downloads yet"
+          : "This folder is empty"} />
+    </div>
+  {:else}
+    <div class="min-w-0" bind:clientWidth={paneWidth}>
+      <FileTree
+        bind:this={tree}
+        class={[loading && "opacity-60"]}
+        {lines}
+        {expansion}
+        label={`Files in /${root}/${path}`}
+        columns={COLUMNS}
+        {selected}
+        idOf={(e) => e.key}
+        tickable={(e) => e.kind !== "up"}
+        menuable={(line) =>
+          line.kind === "folder" ? !!dirEntry(line.node) : line.item.kind !== "up"}
+        folderId={(node) => `d:${node.path}`}
+        onopen={(e) => void open(e)}
+        onopenfolder={(node) => go(node.path.split("/"))}
+        {onkey}
+        inspect={(e) => {
+          if (e.kind === "file") shownKey = e.key;
+        }}
+        nameOf={(line) => (line.kind === "folder" ? line.node.label : line.item.name)}
+        ontoggle={(opened, keys) => {
+          // a folder's key is its path
+          if (!opened) return;
+          for (const at of keys) if (!listings.has(at)) void read(at);
+        }}>
+        {#snippet header(all)}
+          <span role="columnheader" class="flex"
+            >{#if all}<SelectAll {all} />{/if}</span>
+          <span role="columnheader">{@render sortable("name")}</span>
+          {#if layout === "wide"}<span role="columnheader">{@render sortable("date")}</span>{/if}
+          {#if layout !== "phone"}<span role="columnheader" class="pr-3 text-right">Size</span>{/if}
+          <span role="columnheader" class="sr-only">Actions</span>
         {/snippet}
-      </Tooltip>
-      {#if listings.has(node.path)}
-        <span class="shrink-0 text-xs text-fg-subtle tabular-nums">{folderCaption(node)}</span>
-      {/if}
-      <span class="ml-auto w-40 shrink-0 text-xs text-fg-muted max-md:hidden">
-        {e?.modifiedAt ? dateTime(e.modifiedAt) : ""}
-      </span>
-      <span class="w-28 shrink-0 max-md:hidden"></span>
-      <!-- the width that leaves the columns above under the file lines' columns -->
-      {#if e}<span class="flex w-8 justify-end row-action max-md:ml-auto"
-          >{@render entryMenu(e)}</span>
-      {/if}
-    {/snippet}
-    {#snippet item(e)}
-      <span role="gridcell" class="flex">
-        {#if e.kind !== "up"}{@render tick(e)}{/if}
-      </span>
-      <span role="gridcell" class="flex min-w-0 items-center gap-1.5">
-        {#if e.kind === "file"}
-          <FileIcon class="size-4 shrink-0 text-fg-muted" />
-          {#if viewport.phone}
-            <span class="flex min-w-0 flex-col py-1">
-              {@render entryName(e)}
-              <span class="text-xs whitespace-nowrap text-fg-muted tabular-nums"
-                >{e.size ? formatBytes(e.size) : ""}</span>
-            </span>
-          {:else}
-            {@render entryName(e)}
-          {/if}
-          <AnalysisMark mark={marks.file(root, e.path)} />
-        {:else}
+        {#snippet menu(line)}
+          {@const e = line.kind === "folder" ? dirEntry(line.node) : line.item}
+          {#if e}{@render entryItems(e)}{/if}
+        {/snippet}
+        {#snippet folder(node)}
+          {@const e = dirEntry(node)}
+          {#if e}{@render tick(e)}{/if}
           <FolderIcon class="size-4 shrink-0 text-fg-muted" />
-          <button
-            type="button"
-            class="truncate text-left hover:underline"
-            onclick={() => void open(e)}>{e.name}</button>
-        {/if}
-      </span>
-      <span role="gridcell" class="text-xs text-fg-muted max-md:hidden"
-        >{e.modifiedAt ? dateTime(e.modifiedAt) : ""}</span>
-      {#if !viewport.phone}
-        <span role="gridcell" class="pr-3 text-right tabular-nums"
-          >{e.size ? formatBytes(e.size) : ""}</span>
-      {/if}
-      <span role="gridcell" class="flex justify-end pr-1"
-        >{#if e.kind !== "up"}{@render entryMenu(e)}{/if}</span>
-    {/snippet}
-  </FileTree>
+          <Tooltip text={node.path} dense>
+            {#snippet child({ props })}
+              <button
+                {...props}
+                type="button"
+                class="min-w-0 truncate text-left hover:underline"
+                onclick={() => go(node.path.split("/"))}>{node.label}</button>
+            {/snippet}
+          </Tooltip>
+          {#if listings.has(node.path)}
+            <span class="shrink-0 text-xs text-fg-subtle tabular-nums">{folderCaption(node)}</span>
+          {/if}
+          {#if layout === "wide"}
+            <span class="ml-auto w-40 shrink-0 text-xs text-fg-muted">
+              {e?.modifiedAt ? dateTime(e.modifiedAt) : ""}
+            </span>
+          {/if}
+          {#if layout !== "phone"}
+            <span class={["w-28 shrink-0", layout === "narrow" && "ml-auto"]}></span>
+          {/if}
+          <!-- the width that leaves the columns above under the file lines' columns -->
+          {#if e}<span class={["flex w-8 justify-end row-action", layout === "phone" && "ml-auto"]}
+              >{@render entryMenu(e)}</span>
+          {/if}
+        {/snippet}
+        {#snippet item(e)}
+          <span role="gridcell" class="flex">
+            {#if e.kind !== "up"}{@render tick(e)}{/if}
+          </span>
+          <span role="gridcell" class="flex min-w-0 items-center gap-1.5">
+            {#if e.kind === "file"}
+              <FileIcon class="size-4 shrink-0 text-fg-muted" />
+              {#if layout === "phone"}
+                <span class="flex min-w-0 flex-col py-1">
+                  {@render entryName(e)}
+                  <span class="text-xs whitespace-nowrap text-fg-muted tabular-nums"
+                    >{e.size == null ? "" : formatBytes(e.size)}</span>
+                </span>
+              {:else}
+                {@render entryName(e)}
+              {/if}
+              <AnalysisMark mark={marks.file(root, e.path)} />
+            {:else}
+              <FolderIcon class="size-4 shrink-0 text-fg-muted" />
+              <button
+                type="button"
+                class="truncate text-left hover:underline"
+                onclick={() => void open(e)}>{e.name}</button>
+            {/if}
+          </span>
+          {#if layout === "wide"}
+            <span role="gridcell" class="text-xs text-fg-muted"
+              >{e.modifiedAt ? dateTime(e.modifiedAt) : ""}</span>
+          {/if}
+          {#if layout !== "phone"}
+            <span role="gridcell" class="pr-3 text-right tabular-nums"
+              >{e.size == null ? "" : formatBytes(e.size)}</span>
+          {/if}
+          <span role="gridcell" class="flex justify-end pr-1"
+            >{#if e.kind !== "up"}{@render entryMenu(e)}{/if}</span>
+        {/snippet}
+      </FileTree>
+    </div>
+  {/if}
   {#if chosen.length}
     <SelectionBar files={chosen} noun={["item", "items"]} onclear={() => selected.clear()}>
       {#snippet actions()}
@@ -588,9 +645,5 @@
         {/if}
       {/snippet}
     </SelectionBar>
-  {/if}
-  {#if lines.every((l) => l.kind === "item" && l.item.kind === "up") && !allFiles}
-    <EmptyRow
-      text={root === "downloads" && !path ? "No finished downloads yet" : "This folder is empty"} />
   {/if}
 {/if}

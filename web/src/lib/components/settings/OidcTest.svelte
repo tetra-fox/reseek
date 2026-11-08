@@ -23,20 +23,29 @@
 {#each names as name (name)}
   {@const result = results[name]}
   <div class="flex flex-col gap-1 text-xs">
-    <div class="flex items-center gap-inline">
-      <Button variant="outline" size="sm" disabled={busy.running} onclick={() => test(name)}>
-        Test discovery: {name}
+    <div class="flex flex-wrap items-center gap-inline">
+      <Button
+        variant="outline"
+        size="sm"
+        class="max-w-full"
+        disabled={busy.running}
+        onclick={() => test(name)}>
+        <span class="truncate">Test discovery: {name}</span>
       </Button>
       {#if result}
-        <span class={result.ok ? "text-success-soft-fg" : "text-danger"} role="status">
+        <span
+          class={["min-w-0 wrap-anywhere", result.ok ? "text-success-soft-fg" : "text-danger"]}
+          role="status">
           {result.ok ? "Passed" : `Failed: ${result.error ?? "unknown error"}`}
         </span>
       {/if}
     </div>
-    {#if result?.issuer}<p class="text-fg-muted">Issuer <code>{result.issuer}</code></p>{/if}
+    {#if result?.issuer}<p class="wrap-anywhere text-fg-muted">
+        Issuer <code>{result.issuer}</code>
+      </p>{/if}
     {#if result?.endpoints}
       {@const e = result.endpoints}
-      <ul class="font-mono text-fg-subtle">
+      <ul class="font-mono wrap-anywhere text-fg-subtle">
         <li>authorization {e.authorization}</li>
         <li>token {e.token}</li>
         <li>jwks {e.jwks}</li>

@@ -4,6 +4,7 @@
   import EraserIcon from "@lucide/svelte/icons/eraser";
   import PauseIcon from "@lucide/svelte/icons/pause";
   import PlayIcon from "@lucide/svelte/icons/play";
+  import { SvelteSet } from "svelte/reactivity";
 
   import { api, type Schemas } from "#lib/api/client.js";
   import Button from "#lib/components/ui/Button.svelte";
@@ -14,6 +15,7 @@
   import Notice from "#lib/components/ui/Notice.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
+  import { formatCount } from "#lib/format.js";
   import { type ActiveFilter, typedFilter } from "#lib/lists/filtered.js";
   import { freezesWhileUsed, interaction } from "#lib/lists/interaction.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
@@ -21,6 +23,7 @@
   import { live } from "#lib/live/live.svelte.js";
   import { call } from "#lib/request.js";
   import { LEVELS, type Line, logLine, logTime, numbered } from "#lib/system/logs.js";
+  import { clock } from "#lib/ui/clock.svelte.js";
 
   // the daemon's newest log records as they are written, newest first
   const MAX = 500;
@@ -115,6 +118,21 @@
   /** Copies the newest `n` lines the filters show, oldest first, as a log file reads */
   const copyLast = (n: number) => void copyText(asText(shown.slice(0, n).toReversed()));
   let grid = $state<HTMLElement | null>(null);
+
+  /** the lines whose record is cut at six lines, and those shown whole since */
+  const cut = new SvelteSet<number>();
+  const opened = new SvelteSet<number>();
+  const clamp = (seq: number) => (el: HTMLElement) => {
+    const observer = new ResizeObserver(() => {
+      if (el.scrollHeight > el.clientHeight) cut.add(seq);
+      else cut.delete(seq);
+    });
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+      cut.delete(seq);
+    };
+  };
   /** the levels hidden, then the text */
   const filters = $derived<ActiveFilter[]>([
     ...LEVELS.filter((l) => !levels.includes(l.level)).map((l) => ({
@@ -136,7 +154,7 @@
 <div class="flex flex-wrap items-center gap-inline">
   {#if paused}
     <Button size="sm" onclick={resume}
-      ><PlayIcon />Resume{waiting.length ? ` (${waiting.length} new)` : ""}</Button>
+      ><PlayIcon />Resume{waiting.length ? ` (${formatCount(waiting.length)} new)` : ""}</Button>
   {:else}
     <Button size="sm" variant="outline" onclick={() => (paused = true)}><PauseIcon />Pause</Button>
   {/if}
@@ -172,7 +190,7 @@
   <div class="ml-auto flex gap-inline">
     {#if chosen.length}
       <Button size="sm" variant="outline" onclick={copyChosen}
-        ><CopyIcon />Copy {chosen.length}</Button>
+        ><CopyIcon />Copy {formatCount(chosen.length)}</Button>
     {/if}
     <Menu.Root>
       <Menu.Trigger disabled={!shown.length}>
@@ -208,9 +226,11 @@
   noun={["line", "lines"]}
   refocus={() => grid?.focus()} />
 
+<!-- the rows share the container's columns, so the time column is as wide as the widest time,
+     which has a date before today -->
 <div
   bind:this={grid}
-  class="max-h-[65svh] overflow-auto rounded-card border bg-surface font-mono text-xs outline-none focus-visible:ring-2 focus-visible:ring-accent"
+  class="grid max-h-[65svh] grid-cols-[auto_2.5rem_minmax(0,1fr)] content-start gap-x-2 overflow-auto rounded-card border bg-surface font-mono text-xs outline-none focus-visible:ring-2 focus-visible:ring-accent"
   role="grid"
   aria-label="Live log"
   aria-multiselectable="true"
@@ -220,20 +240,32 @@
   {@attach freezesWhileUsed}>
   {#each shown as l, i (l.seq)}
     {@const level = LEVELS.find((x) => x.level === l.record.level)}
+    {@const whole = opened.has(l.seq)}
     <div
       role="row"
       {...list.line(l, i)}
-      class={["grid grid-cols-[4.5rem_2.5rem_1fr] gap-2 list-row px-2 py-0.5", level?.row]}>
-      <span role="gridcell" class="text-fg-muted">{logTime(l.record.timestamp)}</span>
+      class={["col-span-3 grid grid-cols-subgrid list-row px-2 py-0.5", level?.row]}>
+      <span role="gridcell" class="whitespace-nowrap text-fg-muted"
+        >{logTime(l.record.timestamp, clock.now)}</span>
       <span role="gridcell">{level?.short ?? l.record.level}</span>
-      <span role="gridcell" class="break-all whitespace-pre-wrap">
-        <Tooltip text={l.record.context} dense
-          >{#snippet child({ props })}<span {...props} class="text-fg-subtle"
-              >{l.record.context.split("::").pop()}{l.record.subContext
-                ? `[${l.record.subContext}]`
-                : ""}</span
-            >{/snippet}</Tooltip>
-        {l.record.message}
+      <span role="gridcell" class="flex min-w-0 flex-col items-start">
+        <span
+          class={["max-w-full wrap-anywhere whitespace-pre-wrap", !whole && "line-clamp-6"]}
+          {@attach !whole && clamp(l.seq)}>
+          <Tooltip text={l.record.context} dense
+            >{#snippet child({ props })}<span {...props} class="text-fg-subtle"
+                >{l.record.context.split("::").pop()}{l.record.subContext
+                  ? `[${l.record.subContext}]`
+                  : ""}</span
+              >{/snippet}</Tooltip>
+          <span dir="auto">{l.record.message}</span>
+        </span>
+        {#if !whole && cut.has(l.seq)}
+          <button
+            type="button"
+            class="font-sans text-accent hover:underline"
+            onclick={() => opened.add(l.seq)}>Show all</button>
+        {/if}
       </span>
     </div>
   {:else}
@@ -242,9 +274,10 @@
         {filters}
         total={lines.length}
         noun={["line", "lines"]}
-        refocus={() => grid?.focus()} />
+        refocus={() => grid?.focus()}
+        class="col-span-full" />
     {:else}
-      <EmptyRow text="No log lines" />
+      <EmptyRow text="No log lines" class="col-span-full" />
     {/if}
   {/each}
 </div>

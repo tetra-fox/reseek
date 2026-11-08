@@ -1,4 +1,5 @@
 <script lang="ts">
+  import InfoList from "#lib/components/system/InfoList.svelte";
   import Card from "#lib/components/ui/Card.svelte";
   import { dateTime } from "#lib/format.js";
   import { session } from "#lib/session.svelte.js";
@@ -19,19 +20,19 @@
 <!-- who this browser is signed in as -->
 {#if principal}
   <Card title={principal.name} description={`${principal.role}, via ${via}`}>
-    <dl class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-sm">
-      <dt class="text-fg-muted">Subject</dt>
+    <InfoList>
+      <dt>Subject</dt>
       <dd><code>{principal.subject}</code></dd>
       {#if principal.provider}
-        <dt class="text-fg-muted">Provider</dt>
+        <dt>Provider</dt>
         <dd>{principal.provider}</dd>
       {/if}
       {#if principal.session}
-        <dt class="text-fg-muted">Since</dt>
+        <dt>Since</dt>
         <dd>{dateTime(principal.session.createdAt)}</dd>
-        <dt class="text-fg-muted">Session ends</dt>
+        <dt>Session ends</dt>
         <dd>{dateTime(principal.session.expiresAt)}</dd>
       {/if}
-    </dl>
+    </InfoList>
   </Card>
 {/if}

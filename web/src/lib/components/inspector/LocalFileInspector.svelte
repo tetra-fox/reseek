@@ -58,7 +58,7 @@
   name={entry.name}
   path={entry.path}
   chips={mark ? chips : undefined}
-  size={entry.size ? formatBytes(entry.size) : null}
+  size={entry.size == null ? null : formatBytes(entry.size)}
   {actions}
   {menu}
   details={[

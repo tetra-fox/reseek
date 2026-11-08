@@ -24,6 +24,7 @@
   import Dialog from "#lib/components/ui/Dialog.svelte";
   import EmptyRow from "#lib/components/ui/EmptyRow.svelte";
   import GridHeader from "#lib/components/ui/GridHeader.svelte";
+  import MiddleTruncate from "#lib/components/ui/MiddleTruncate.svelte";
   import Notice from "#lib/components/ui/Notice.svelte";
   import Progress from "#lib/components/ui/Progress.svelte";
   import Select from "#lib/components/ui/Select.svelte";
@@ -35,7 +36,7 @@
   import { Busy } from "#lib/feedback/busy.svelte.js";
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
-  import { columnWidth, plural, WIDEST } from "#lib/format.js";
+  import { columnWidth, formatCount, plural, WIDEST } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { Keyed } from "#lib/lists/keyed.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
@@ -121,7 +122,12 @@
         grow: true,
         value: (r) => r.remotePath.toLowerCase()
       },
-      { id: "visible", label: "Visible to", width: "10rem", value: (r) => VISIBILITY[r.visibility] }
+      {
+        id: "visible",
+        label: "Visible to",
+        width: "11.5rem",
+        value: (r) => VISIBILITY[r.visibility]
+      }
     ],
     data: () => rows.rows.filter((r) => !r.isExcluded),
     ...keptIn(sharesView),
@@ -293,19 +299,25 @@
             {...sharedList.line(r, i)}
             class={["grid items-center list-row py-1.5", r.derivedFrom && "text-fg-muted"]}
             style={grid.row}>
-            <span role="gridcell" class="truncate px-2">{r.host}</span>
+            <Tooltip text={r.host} clipped>
+              {#snippet child({ props })}
+                <span {...props} role="gridcell" class="truncate px-2">{r.host}</span>
+              {/snippet}
+            </Tooltip>
             <span role="gridcell" class="min-w-0 px-2">
-              <button
-                type="button"
-                class="flex max-w-full items-center gap-1.5 text-left text-accent hover:underline"
-                onclick={() => (open = r)}>
-                <FolderIcon class="size-4 shrink-0" />
-                <Tooltip text={r.localPath} clipped>
-                  {#snippet child({ props })}
-                    <span {...props} class="truncate font-mono text-xs">{r.localPath}</span>
-                  {/snippet}
-                </Tooltip>
-              </button>
+              <!-- shares often sit side by side in one folder, so a path is cut in the middle -->
+              <Tooltip text={r.localPath} dense>
+                {#snippet child({ props })}
+                  <button
+                    {...props}
+                    type="button"
+                    class="flex max-w-full items-center gap-1.5 text-left font-mono text-xs text-accent hover:underline"
+                    onclick={() => (open = r)}>
+                    <FolderIcon class="size-4 shrink-0" />
+                    <MiddleTruncate text={r.localPath} path />
+                  </button>
+                {/snippet}
+              </Tooltip>
               {#if r.derivedFrom}
                 <span class="text-xs">
                   Shared because
@@ -315,19 +327,25 @@
                 </span>
               {/if}
             </span>
-            <span role="gridcell" class="truncate px-2 text-right tabular-nums"
-              >{r.directories?.toLocaleString() ?? "?"}</span>
-            <span role="gridcell" class="truncate px-2 text-right tabular-nums"
-              >{r.files?.toLocaleString() ?? "?"}</span>
+            {#each [r.directories, r.files] as count, at (at)}
+              {@const text = count == null ? "?" : formatCount(count)}
+              <Tooltip {text} clipped>
+                {#snippet child({ props })}
+                  <span {...props} role="gridcell" class="truncate px-2 text-right tabular-nums"
+                    >{text}</span>
+                {/snippet}
+              </Tooltip>
+            {/each}
             <Tooltip text={r.alias} clipped>
               {#snippet child({ props })}
                 <span {...props} role="gridcell" class="truncate px-2">{r.alias}</span>
               {/snippet}
             </Tooltip>
-            <Tooltip text={r.remotePath} clipped>
+            <Tooltip text={r.remotePath} dense>
               {#snippet child({ props })}
-                <span {...props} role="gridcell" class="truncate px-2 font-mono text-xs"
-                  >{r.remotePath}</span>
+                <span {...props} role="gridcell" class="flex min-w-0 px-2 font-mono text-xs">
+                  <MiddleTruncate text={r.remotePath} path />
+                </span>
               {/snippet}
             </Tooltip>
             <span role="gridcell" class="px-2">
@@ -364,8 +382,9 @@
             role="row"
             {...excludedList.line(r, i)}
             class="flex items-center gap-2 list-row px-4 py-1.5">
-            <XIcon class="size-4 text-danger" />
-            <span role="gridcell" class="font-mono text-xs">{r.localPath}</span>
+            <XIcon class="size-4 shrink-0 text-danger" />
+            <span role="gridcell" class="min-w-0 font-mono text-xs wrap-anywhere"
+              >{r.localPath}</span>
           </div>
         {:else}
           <EmptyRow text="No exclusions" />

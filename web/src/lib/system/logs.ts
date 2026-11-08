@@ -1,4 +1,5 @@
 import type { Schemas } from "#lib/api/client.js";
+import { shortDate } from "#lib/format.js";
 
 export type LogRecord = Schemas["LogRecord"];
 
@@ -35,10 +36,16 @@ export const numbered = (records: LogRecord[], shown: Line[] = []): Line[] => {
   return records.map((record) => kept.get(identity(record))?.shift() ?? logLine(record));
 };
 
-/** The time of day of a record, `HH:mm:ss` in the browser's time zone */
-export const logTime = (iso: string) => {
+/**
+ * The time of a record, `HH:mm:ss` in the browser's time zone, after the day when it is not
+ * today's: "Mar 14 09:05:01"
+ */
+export const logTime = (iso: string, now = Date.now()) => {
   const d = new Date(iso);
-  return [d.getHours(), d.getMinutes(), d.getSeconds()]
+  const time = [d.getHours(), d.getMinutes(), d.getSeconds()]
     .map((n) => String(n).padStart(2, "0"))
     .join(":");
+  return d.toDateString() === new Date(now).toDateString()
+    ? time
+    : `${shortDate(iso, now)} ${time}`;
 };

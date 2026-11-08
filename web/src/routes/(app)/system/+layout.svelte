@@ -21,8 +21,8 @@
     (tab === "shares" && !!app.state?.shares.scanPending);
 </script>
 
-<!-- the padding gives the current tab's ring and shadow room inside the scrolling strip -->
-<nav aria-label="System" class="flex gap-1 overflow-x-auto">
+<!-- the tabs wrap onto a second line on a narrow screen, so every one stays in view -->
+<nav aria-label="System" class="flex flex-wrap gap-1">
   {#each systemTabs as { tab, title } (tab)}
     {@const current = path === `/system/${tab}` || path.startsWith(`/system/${tab}/`)}
     <a href={href(`/system/${tab}`)} aria-current={current ? "page" : undefined} class="nav-tab">

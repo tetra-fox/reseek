@@ -54,17 +54,23 @@ describe("the event log", () => {
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain("b at");
   });
 
-  it("selects a row clicked on its payload, and opens it from the payload's control", async () => {
-    fakeNetwork(() => [{ ...event("a", 1), data: { path: "Music" } }]);
+  it("selects a row clicked on its summary, and opens it from the payload's control", async () => {
+    fakeNetwork(() => [
+      {
+        ...event("a", 1),
+        type: "RelayAgentConnected",
+        data: { version: 0, agent: "nas", ipAddress: "10.0.0.2" }
+      }
+    ]);
     component = mount(Events, {
       target: document.body,
       props: { page: 1, perPage: 25, types: [] }
     });
     await flush();
-    const payload = [...document.querySelectorAll('[data-line="a"] span')].find(
-      (s) => s.textContent === '{"path":"Music"}'
+    const summary = [...document.querySelectorAll('[data-line="a"] span')].find(
+      (s) => s.textContent === "nas from 10.0.0.2"
     )!;
-    payload.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    summary.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await flush();
     expect(ticked()).toEqual(["a"]);
     expect(document.querySelector('[role="dialog"]')).toBeNull();

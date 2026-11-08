@@ -10,6 +10,7 @@
 
   import { api } from "#lib/api/client.js";
   import { app } from "#lib/app.svelte.js";
+  import ErrorText from "#lib/components/settings/ErrorText.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Card from "#lib/components/ui/Card.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
@@ -19,7 +20,14 @@
   import { CopyButton, copyText } from "#lib/feedback/clipboard.svelte.js";
   import { confirmation } from "#lib/feedback/confirm.svelte.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
-  import { ago, formatBytes, formatDuration, formatSpeed, plural } from "#lib/format.js";
+  import {
+    ago,
+    formatBytes,
+    formatCount,
+    formatDuration,
+    formatSpeed,
+    plural
+  } from "#lib/format.js";
   import { serverStateText } from "#lib/reachability.js";
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
@@ -27,6 +35,7 @@
   import { clock } from "#lib/ui/clock.svelte.js";
   import { RESTART } from "#lib/wording.js";
 
+  import InfoList from "./InfoList.svelte";
   import Uptime from "./Uptime.svelte";
 
   // the daemon's state at a glance, its whole state document, and the process controls
@@ -138,7 +147,7 @@
 {:else}
   <div class="grid grid-cols-[minmax(0,1fr)] gap-section md:grid-cols-2 xl:grid-cols-3">
     <Card title="Version">
-      <dl class="info">
+      <InfoList>
         <dt>Running</dt>
         <dd class="font-mono">{s.version.full}</dd>
         <dt>Latest</dt>
@@ -162,12 +171,12 @@
         {/if}
         {#if s.configuration.lastReloadError}
           <dt>Last reload error</dt>
-          <dd class="text-danger">{s.configuration.lastReloadError}</dd>
+          <dd class="text-danger"><ErrorText text={s.configuration.lastReloadError} /></dd>
         {/if}
-      </dl>
+      </InfoList>
     </Card>
     <Card title="Process">
-      <dl class="info">
+      <InfoList>
         <dt>Running for</dt>
         <dd><Uptime since={s.startedAt} /></dd>
         <dt>Process ID</dt>
@@ -180,10 +189,10 @@
         <dd class="font-mono">
           {#each s.listeners as url (url)}<span class="block">{url}</span>{:else}None{/each}
         </dd>
-      </dl>
+      </InfoList>
     </Card>
     <Card title="Soulseek">
-      <dl class="info">
+      <InfoList>
         <dt>State</dt>
         <dd>{serverStateText(s.server)}</dd>
         <dt>Server</dt>
@@ -209,10 +218,10 @@
               clock.now
             )}{/if}
         </dd>
-      </dl>
+      </InfoList>
     </Card>
     <Card title="Sharing">
-      <dl class="info">
+      <InfoList>
         <dt>Shares</dt>
         <dd>
           {plural(s.shares.files, "file", "files")} in {plural(
@@ -226,19 +235,19 @@
           {plural(s.user.statistics.fileCount, "file", "files")}, {formatSpeed(
             s.user.statistics.averageSpeed
           )},
-          {s.user.statistics.uploadCount.toLocaleString()} uploads
+          {plural(s.user.statistics.uploadCount, "upload", "uploads")}
         </dd>
         <dt>Incoming searches</dt>
         <dd>
-          {s.health.search.incoming.queueDepth} queued, {Math.round(
-            s.health.search.incoming.latency
+          {formatCount(s.health.search.incoming.queueDepth)} queued, {formatCount(
+            Math.round(s.health.search.incoming.latency)
           )} ms response time,
-          {s.health.search.incoming.dropRate} dropped this minute
+          {formatCount(s.health.search.incoming.dropRate)} dropped this minute
         </dd>
-      </dl>
+      </InfoList>
     </Card>
     <Card title="Distributed network">
-      <dl class="info">
+      <InfoList>
         <dt>Parent</dt>
         <dd>
           {#if s.distributedNetwork.parent}
@@ -255,21 +264,24 @@
         </dd>
         <dt>Children</dt>
         <dd>
-          {s.distributedNetwork.children.length} of {s.distributedNetwork.childLimit}, {s
-            .distributedNetwork.canAcceptChildren
-            ? "accepting more"
-            : "not accepting more"}
+          {formatCount(s.distributedNetwork.children.length)} of {formatCount(
+            s.distributedNetwork.childLimit
+          )}, {s.distributedNetwork.canAcceptChildren ? "accepting more" : "not accepting more"}
           {#if s.distributedNetwork.children.length}
+            <!-- a name keeps its comma, so no line starts with one -->
             <span class="block">
-              {#each s.distributedNetwork.children as child, i (child)}{#if i},
-                {/if}<Username name={child} />{/each}
+              {#each s.distributedNetwork.children as child, i (child)}{#if i}{" "}{/if}<span
+                  class="inline-flex max-w-full"
+                  ><Username
+                    name={child} />{#if i < s.distributedNetwork.children.length - 1},{/if}</span
+                >{/each}
             </span>
           {/if}
         </dd>
-      </dl>
+      </InfoList>
     </Card>
     <Card title="Relay">
-      <dl class="info">
+      <InfoList>
         <dt>Mode</dt>
         <dd>{s.relay.enabled ? "Controller" : "Off"}</dd>
         {#if s.relay.enabled}
@@ -281,7 +293,7 @@
                   {#snippet child({ props })}<span {...props}>{agent.name}</span>{/snippet}
                 </Tooltip>
                 <span class="text-fg-muted">
-                  {agent.ipAddress}, since {ago(agent.connectedAt, clock.now)},
+                  {agent.ipAddress}, connected {ago(agent.connectedAt, clock.now)},
                   {agent.ready
                     ? `shares from ${agent.sharesUpdatedAt ? ago(agent.sharesUpdatedAt, clock.now) : "?"}`
                     : "sending shares"}
@@ -297,7 +309,7 @@
             {:else}None connected{/each}
           </dd>
         {/if}
-      </dl>
+      </InfoList>
     </Card>
   </div>
 
@@ -310,20 +322,3 @@
       class="max-h-[50svh] overflow-auto rounded-control bg-surface-muted p-3 font-mono text-xs">{dump}</pre>
   </Card>
 {/if}
-
-<style>
-  /* a value too long for its card, an address or a version, wraps rather than being cut or
-     widening the card */
-  .info {
-    display: grid;
-    grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
-    gap: 0.25rem 1rem;
-    font-size: 0.875rem;
-  }
-  .info :global(dd) {
-    overflow-wrap: anywhere;
-  }
-  .info :global(dt) {
-    color: var(--color-fg-muted);
-  }
-</style>

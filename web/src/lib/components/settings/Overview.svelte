@@ -14,7 +14,10 @@
   import { valueAt } from "#lib/config/sections.js";
   import { Busy } from "#lib/feedback/busy.svelte.js";
   import { call } from "#lib/request.js";
+  import { session } from "#lib/session.svelte.js";
   import { RESTART } from "#lib/wording.js";
+
+  import ErrorText from "./ErrorText.svelte";
 
   // what the configuration as a whole says: its files, what was ignored or failed, what waits on
   // a reconnect or a restart, and the runtime overrides in effect
@@ -25,6 +28,9 @@
   const remote = $derived(valueAt(view.values, "remote_configuration") === true);
   const manager = $derived(managerOfFiles(view));
   let restarting = $state(false);
+  // the daemon records who set an override by their subject; ours is shown by our name
+  const setBy = (subject: string) =>
+    subject === session.principal?.subject ? session.principal.name : subject;
 
   const reconnect = () =>
     busy.run(async () => {
@@ -59,7 +65,8 @@
 {/if}
 {#if view.loadError}
   <Notice kind="error"
-    >Could not reload the configuration, so the previous values still apply: {view.loadError}</Notice>
+    >Could not reload the configuration, so the previous values still apply: <ErrorText
+      text={view.loadError} /></Notice>
 {/if}
 {#each view.warnings as warning (warning)}
   <Notice kind="warning">{warning}</Notice>
@@ -124,8 +131,8 @@
         <li class="flex flex-wrap items-center gap-inline px-5 py-2 text-sm">
           <code class="min-w-0 font-medium wrap-anywhere">{key}</code>
           <code class="min-w-0 wrap-anywhere text-fg-muted">{JSON.stringify(override.value)}</code>
-          <span class="text-xs text-fg-subtle">
-            by {override.setBy}, {lasting(override)}
+          <span class="min-w-0 text-xs wrap-anywhere text-fg-subtle">
+            by {setBy(override.setBy)}, {lasting(override)}
           </span>
           <Tooltip text={`Remove the override of ${key}`}>
             {#snippet child({ props })}

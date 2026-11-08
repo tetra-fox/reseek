@@ -161,7 +161,7 @@
           bind:value={typed} />
         <nav
           aria-label="Settings sections"
-          class="flex gap-1 overflow-x-auto lg:min-h-0 lg:flex-col lg:gap-5 lg:overflow-y-auto">
+          class="sections flex gap-1 overflow-x-auto lg:min-h-0 lg:flex-col lg:gap-5 lg:overflow-y-auto">
           {#each groups as { group, members } (group)}
             <!-- one line of tabs on a phone, where the headings have no place -->
             <div role="group" aria-label={group} class="contents lg:flex lg:flex-col lg:gap-0.5">
@@ -259,3 +259,47 @@
 {:else}
   <LoadError loader={view} />
 {/if}
+
+<style>
+  /* below lg the sections are one line of tabs that scrolls sideways: an edge with more tabs past
+     it fades out. Where the browser can't tie an animation to scrolling, the edges stay sharp */
+  @property --fade-start {
+    syntax: "<length>";
+    inherits: false;
+    initial-value: 0px;
+  }
+  @property --fade-end {
+    syntax: "<length>";
+    inherits: false;
+    initial-value: 0px;
+  }
+  @keyframes fade-edges {
+    0% {
+      --fade-start: 0px;
+      --fade-end: 2rem;
+    }
+    10% {
+      --fade-start: 2rem;
+    }
+    90% {
+      --fade-end: 2rem;
+    }
+    100% {
+      --fade-start: 2rem;
+      --fade-end: 0px;
+    }
+  }
+  @supports (animation-timeline: scroll()) {
+    .sections {
+      mask-image: linear-gradient(
+        to right,
+        transparent,
+        black var(--fade-start),
+        black calc(100% - var(--fade-end)),
+        transparent
+      );
+      animation: fade-edges linear both;
+      animation-timeline: scroll(self inline);
+    }
+  }
+</style>
