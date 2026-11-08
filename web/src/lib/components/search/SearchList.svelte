@@ -17,7 +17,7 @@
   import Time from "#lib/components/ui/Time.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
-  import { NONE } from "#lib/format.js";
+  import { formatCount, NONE, plural } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { href } from "#lib/nav.js";
@@ -85,10 +85,10 @@
             <tr>
               <th class="w-10"><span class="sr-only">State</span></th>
               <th>Search</th>
-              <th class="text-right">Files</th>
-              <th class="text-right">Locked</th>
-              <th class="text-right">Users</th>
-              <th>Ended</th>
+              <th class="text-right max-md:hidden">Files</th>
+              <th class="text-right max-md:hidden">Locked</th>
+              <th class="text-right max-md:hidden">Users</th>
+              <th class="max-md:hidden">Ended</th>
               <th class="w-20"><span class="sr-only">Actions</span></th>
             </tr>
           </thead>
@@ -100,19 +100,35 @@
                 class={["group", working.has(search.id) && "cursor-wait opacity-60"]}
                 data-id={search.id}>
                 <td><StatusIcon state={search.state} /></td>
-                <td class="max-w-0 min-w-48 whitespace-normal">
+                <td class="max-w-0 min-w-32 whitespace-normal md:min-w-48">
                   <a
                     href={href(`/searches/${search.id}`)}
+                    dir="auto"
                     class="font-medium wrap-anywhere hover:underline">{search.searchText}</a>
-                  {#if scope}<Badge tone="accent" class="ml-1">{scope}</Badge>{/if}
+                  {#if scope}
+                    <Tooltip text={scope} clipped>
+                      {#snippet child({ props })}
+                        <Badge {...props} tone="accent" class="ml-1">{scope}</Badge>
+                      {/snippet}
+                    </Tooltip>
+                  {/if}
+                  <!-- a phone has no room for the figures' columns -->
+                  <span class="block text-xs text-fg-muted md:hidden">
+                    {plural(search.fileCount, "file", "files")}{#if search.endedAt}{" · "}<Time
+                        at={search.endedAt} />{/if}
+                  </span>
                 </td>
-                <td class="text-right tabular-nums">{search.fileCount.toLocaleString()}</td>
-                <td class="text-right text-fg-muted tabular-nums">
+                <td class="text-right tabular-nums max-md:hidden">
+                  {formatCount(search.fileCount)}
+                </td>
+                <td class="text-right text-fg-muted tabular-nums max-md:hidden">
                   <LockIcon class="inline size-3 text-warning" />
-                  {search.lockedFileCount.toLocaleString()}
+                  {formatCount(search.lockedFileCount)}
                 </td>
-                <td class="text-right tabular-nums">{search.responseCount.toLocaleString()}</td>
-                <td class="text-fg-muted tabular-nums">
+                <td class="text-right tabular-nums max-md:hidden">
+                  {formatCount(search.responseCount)}
+                </td>
+                <td class="text-fg-muted tabular-nums max-md:hidden">
                   {#if search.endedAt}<Time at={search.endedAt} />{:else}{NONE}{/if}
                 </td>
                 <td class="text-right">
@@ -158,7 +174,9 @@
       {#if rows.length > shown}
         <div class="border-t p-3 text-center">
           <Button variant="outline" onclick={() => (shown += PAGE)}>
-            Show {Math.min(PAGE, rows.length - shown)} more ({rows.length - shown} not shown)
+            Show {formatCount(Math.min(PAGE, rows.length - shown))} more ({formatCount(
+              rows.length - shown
+            )} not shown)
           </Button>
           <Button variant="ghost" onclick={() => (shown = rows.length)}>Show all</Button>
         </div>

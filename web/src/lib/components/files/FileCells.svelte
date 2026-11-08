@@ -10,6 +10,7 @@
   import type { Schemas } from "#lib/api/client.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
+  import MiddleTruncate from "#lib/components/ui/MiddleTruncate.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import type { FileColumn } from "#lib/files/columns.js";
   import { downloadOf, starting } from "#lib/files/downloads.js";
@@ -69,9 +70,12 @@
     {/if}
   </span>
 {/if}
+<!-- the name is cut in the middle, where names that share a start keep their ends in view -->
 {#snippet nameText()}
   <Tooltip text={file.filename} dense>
-    {#snippet child({ props })}<span {...props} class="truncate">{name}</span>{/snippet}
+    {#snippet child({ props })}<span {...props} class="flex min-w-0"
+        ><MiddleTruncate text={name} /></span
+      >{/snippet}
   </Tooltip>
 {/snippet}
 

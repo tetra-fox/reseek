@@ -11,6 +11,7 @@ import {
   listingTree,
   type RemoteDirectory,
   tickedCounts,
+  treeAt,
   treeLines
 } from "./folders";
 
@@ -42,10 +43,55 @@ describe("folder trees", () => {
     expect([top.count, top.bytes]).toEqual([4, 15]);
   });
 
-  it("take forward slashes, and a file with no folder as its own root", () => {
-    const roots = tree([file("music/a/1.mp3"), file("music/b/2.mp3"), file("loose.mp3")]);
-    expect(roots.map((r) => r.label)).toEqual(["music", "loose.mp3"]);
+  it("take forward slashes, and put files with no folder in a node with no path, last", () => {
+    const roots = tree([file("loose.mp3"), file("music/a/1.mp3"), file("music/b/2.mp3")]);
+    expect(roots.map((r) => [r.label, r.path])).toEqual([
+      ["music", "music"],
+      ["", ""]
+    ]);
     expect(roots[0].children.map((c) => c.path)).toEqual(["music/a", "music/b"]);
+    expect(roots[1].items.map((f) => f.filename)).toEqual(["loose.mp3"]);
+  });
+
+  it("keep a Unix or macOS path's leading slash in its folders' paths and labels", () => {
+    const [unix] = tree([file("/home/ryu/Music/a.flac"), file("/home/ryu/Music/b.flac")]);
+    expect([unix.label, unix.path]).toEqual(["/home/ryu/Music", "/home/ryu/Music"]);
+    const [mac] = tree([
+      file("/Volumes/Untitled 2/Music/Sigur Rós/( )/1.m4a"),
+      file("/Volumes/Untitled 2/Music/Sigur Rós/Takk/2.m4a")
+    ]);
+    expect([mac.label, mac.path]).toEqual([
+      "/Volumes/Untitled 2/Music/Sigur Rós",
+      "/Volumes/Untitled 2/Music/Sigur Rós"
+    ]);
+    expect(mac.children.map((c) => [c.label, c.path])).toEqual([
+      ["( )", "/Volumes/Untitled 2/Music/Sigur Rós/( )"],
+      ["Takk", "/Volumes/Untitled 2/Music/Sigur Rós/Takk"]
+    ]);
+    // the top level's folders sit side by side, and a file at the root is in "/"
+    const roots = tree([file("/home/a/1"), file("/mnt/b/2"), file("/3")]);
+    expect(roots.map((r) => r.path)).toEqual(["/home/a", "/mnt/b", "/"]);
+  });
+
+  it("take Windows drive and network paths whole", () => {
+    const [drive] = tree([file("C:\\Users\\Bart\\x\\1.mp3"), file("C:\\Users\\Bart\\y\\2.mp3")]);
+    expect([drive.label, drive.path]).toEqual(["C:\\Users\\Bart", "C:\\Users\\Bart"]);
+    expect(drive.children.map((c) => c.path)).toEqual(["C:\\Users\\Bart\\x", "C:\\Users\\Bart\\y"]);
+    const [unc] = tree([file("\\\\nas\\music\\a\\1.flac")]);
+    expect([unc.label, unc.path]).toEqual(["\\\\nas\\music\\a", "\\\\nas\\music\\a"]);
+  });
+
+  it("put files with no folder in the line above the tree, at the user's level", () => {
+    const at = { key: "user:0:jo", path: "jo", label: "jo" };
+    const user = treeAt(
+      at,
+      [file("@@jo\\Music\\1.flac", 1), file("bare name.flac", 2), file("/srv/x/2.flac", 4)],
+      (f) => f.filename,
+      (f) => f.size
+    );
+    expect(user.items.map((f) => f.filename)).toEqual(["bare name.flac"]);
+    expect(user.children.map((c) => c.path)).toEqual(["@@jo\\Music", "/srv/x"]);
+    expect([user.key, user.count, user.bytes, user.folders]).toEqual(["user:0:jo", 3, 7, 2]);
   });
 
   it("lay out open folders' files and folders, and only their headers when closed", () => {

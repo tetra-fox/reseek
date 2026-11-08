@@ -8,6 +8,7 @@
   import Button from "#lib/components/ui/Button.svelte";
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
+  import MiddleTruncate from "#lib/components/ui/MiddleTruncate.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { FILE_ACTIONS as A } from "#lib/files/actions.js";
   import { folderCaption } from "#lib/files/summary.js";
@@ -53,13 +54,14 @@
   {:else}
     <FolderIcon class="size-4 shrink-0 text-fg-muted" />
   {/if}
-  <span class="name-count gap-1.5">
+  <span class="name-count flex-1 gap-1.5">
+    <!-- cut in the middle, so the end that tells deep folders apart stays in view -->
     <Tooltip text={node.locked ? undefined : node.path} dense>
       {#snippet child({ props })}
         <span
           {...props}
-          class={["truncate font-mono text-xs", depth === 0 ? "text-fg" : "text-fg-muted"]}
-          >{node.label}</span>
+          class={["flex min-w-0 font-mono text-xs", depth === 0 ? "text-fg" : "text-fg-muted"]}
+          ><MiddleTruncate text={node.label} path /></span>
       {/snippet}
     </Tooltip>
     <span class="text-xs text-fg-subtle"><span>{folderCaption(node)}</span></span>

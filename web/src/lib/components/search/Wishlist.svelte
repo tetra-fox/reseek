@@ -64,31 +64,36 @@
   {#if wishlist.error && !items.length}
     <p class="px-5 text-sm text-danger">{wishlist.error}</p>
   {:else if wishlist.loaded && !items.length}
-    <p class="px-5 text-sm text-fg-muted">Nothing on the wishlist yet.</p>
+    <p class="px-5 text-sm text-fg-muted">Nothing on the wishlist yet</p>
   {:else if items.length}
     <ul class="divide-y border-t text-sm">
       {#each items as w (w.id)}
         <li class="flex min-w-0 items-center gap-3 px-5 py-2">
-          <Tooltip text={w.searchText} clipped>
-            {#snippet child({ props })}
-              <span {...props} class="min-w-0 flex-1 truncate font-medium">{w.searchText}</span>
-            {/snippet}
-          </Tooltip>
-          {#if w.lastSearchedAt}
-            <span class="flex shrink-0 items-center gap-1.5 text-xs text-fg-muted">
-              {#if w.lastNewFiles}
-                <Badge tone="success">{plural(w.lastNewFiles, "new file", "new files")}</Badge>
-              {/if}
-              {#if w.lastSearchId}
-                <a class="hover:underline" href={href(`/searches/${w.lastSearchId}`)}
-                  >Searched <Time at={w.lastSearchedAt} /></a>
-              {:else}
-                <span>Searched <Time at={w.lastSearchedAt} /></span>
-              {/if}
-            </span>
-          {:else}
-            <span class="shrink-0 text-xs text-fg-muted">Not searched yet</span>
-          {/if}
+          <!-- a phone puts when it was searched under the text, which keeps the row's width -->
+          <div class="flex min-w-0 flex-1 flex-col gap-x-3 gap-y-0.5 md:flex-row md:items-center">
+            <Tooltip text={w.searchText} clipped>
+              {#snippet child({ props })}
+                <span {...props} dir="auto" class="min-w-0 flex-1 truncate font-medium"
+                  >{w.searchText}</span>
+              {/snippet}
+            </Tooltip>
+            {#if w.lastSearchedAt}
+              <span
+                class="flex shrink-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs whitespace-nowrap text-fg-muted">
+                {#if w.lastNewFiles}
+                  <Badge tone="success">{plural(w.lastNewFiles, "new file", "new files")}</Badge>
+                {/if}
+                {#if w.lastSearchId}
+                  <a class="hover:underline" href={href(`/searches/${w.lastSearchId}`)}
+                    >Searched <Time at={w.lastSearchedAt} /></a>
+                {:else}
+                  <span>Searched <Time at={w.lastSearchedAt} /></span>
+                {/if}
+              </span>
+            {:else}
+              <span class="shrink-0 text-xs text-fg-muted">Not searched yet</span>
+            {/if}
+          </div>
           {#if write}
             <Tooltip text="Remove from the wishlist">
               {#snippet child({ props })}

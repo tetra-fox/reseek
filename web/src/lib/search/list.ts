@@ -1,5 +1,5 @@
 import { FILE_COLUMNS } from "#lib/files/columns.js";
-import { columnWidth, getDirectoryName, getFileName, WIDEST } from "#lib/format.js";
+import { columnWidth, formatCount, getDirectoryName, getFileName, WIDEST } from "#lib/format.js";
 import type { GridColumn } from "#lib/lists/table.svelte.js";
 import { fields, stored } from "#lib/stored.svelte.js";
 import { scopedKey } from "#lib/tree/folders.js";
@@ -19,6 +19,7 @@ export type ResultRow = {
   queue: number;
   free: boolean;
   file: ResultFile;
+  /** the folder the file is in, "" for a bare file name, which some peers send */
   folder: string;
 };
 
@@ -50,9 +51,11 @@ export type ResultColumn =
 
 /**
  * The list layout's columns in order, with their default widths as CSS lengths that grow with the
- * text: a column of figures holds its widest value, the others are in rem. The checkbox and the
- * actions sit either side. The user, the file and its size always show: a file's cells put its
- * size under its name when there is no size column, which a line of the list has no room for
+ * text: a column of figures holds its widest value, the others are in rem. The file and its
+ * folder take what the row has left, from a narrow least width, so the row fits a wide screen
+ * with the actions in view. The checkbox and the actions sit either side. The user, the file and
+ * its size always show: a file's cells put its size under its name when there is no size column,
+ * which a line of the list has no room for
  */
 export const RESULT_COLUMNS: (GridColumn<ResultRow> & {
   id: ResultColumn | "select" | "actions";
@@ -76,15 +79,17 @@ export const RESULT_COLUMNS: (GridColumn<ResultRow> & {
   {
     id: "queue",
     label: "Queue",
-    width: columnWidth(WIDEST.count),
+    // a user's queue runs to thousands, not the millions a count of files can
+    width: columnWidth(formatCount(99_999)),
     end: true,
     value: (r) => r.queue
   },
-  { id: "free", label: "Free slot", width: "5.5rem", value: (r) => (r.free ? 1 : 0) },
+  { id: "free", label: "Free slot", width: "4.5rem", value: (r) => (r.free ? 1 : 0) },
   {
     id: "file",
     label: "File",
-    width: "17.5rem",
+    width: "8rem",
+    grow: true,
     always: true,
     value: (r) => getFileName(r.file.filename).toLowerCase()
   },
@@ -109,17 +114,26 @@ export const RESULT_COLUMNS: (GridColumn<ResultRow> & {
     end: true,
     value: (r) => r.file.length ?? -1
   },
-  { id: "folder", label: "Folder", width: "16.25rem", value: (r) => r.folder.toLowerCase() },
+  {
+    id: "folder",
+    label: "Folder",
+    width: "8rem",
+    grow: true,
+    value: (r) => r.folder.toLowerCase()
+  },
   { id: "actions", label: "Actions", width: "4.5rem", quiet: true, fixed: true, always: true }
 ];
 
 export type ResultListSort = { id: ResultColumn; dir: "asc" | "desc" } | null;
 
+/** The columns hidden until the user shows them: the folder, which the tree layout shows */
+const HIDDEN: ResultColumn[] = ["folder"];
+
 const readResultList = (saved: unknown) => {
   const s = fields(saved);
   const sort = fields(s.sort);
   const dragged = fields(s.dragged);
-  const hidden = Array.isArray(s.hidden) ? s.hidden : [];
+  const hidden = Array.isArray(s.hidden) ? s.hidden : HIDDEN;
   const known = RESULT_COLUMNS.find((c) => c.value && c.id === sort.id);
   return {
     sort: (known

@@ -33,11 +33,10 @@
   import type { Expansion } from "#lib/tree/expansion.svelte.js";
   import {
     type FolderNode,
-    folderNode,
-    folderTree,
     itemsUnder,
     scopedKey,
     tickedCounts,
+    treeAt,
     treeLines
   } from "#lib/tree/folders.js";
   import { viewport } from "#lib/ui/viewport.svelte.js";
@@ -85,7 +84,10 @@
   followDownloads();
 
   const idOf = (f: Item) => scopedKey(f.result, f.filename);
-  /** each response as a line for its user with its files' folders under it */
+  /**
+   * each response as a line for its user with its files' folders under it, and in it the files a
+   * peer sent with no folder
+   */
   const roots = $derived(
     view.map((r) => {
       const files: Item[] = resultFiles(r.response).map((f) => ({
@@ -93,11 +95,15 @@
         owner: r.response.username,
         result: r.key
       }));
-      const size = (f: Item) => f.size;
-      const locked = (f: Item) => f.locked;
-      const folders = folderTree(files, (f) => f.filename, size, locked, r.key);
       const at = { key: `user:${r.key}`, path: r.response.username, label: r.response.username };
-      return folderNode(at, [], folders, size, locked);
+      return treeAt(
+        at,
+        files,
+        (f) => f.filename,
+        (f) => f.size,
+        (f) => f.locked,
+        r.key
+      );
     })
   );
   const results = $derived(new Map(view.map((r) => [`user:${r.key}`, r])));
@@ -221,14 +227,17 @@
         ]}></span>
     {/snippet}
   </Tooltip>
-  <span class="flex min-w-0 flex-1 items-center gap-2">
-    <Username {name} />
-    {#if user}<Presence presence={user.presence} />{/if}
-    {#if user?.group.color}<GroupBadge group={user.group} />{/if}
-    <Flag code={response.country} />
-    {#if user?.block}<Badge tone="danger">blocked</Badge>{/if}
-    <span class="truncate text-xs text-fg-muted max-md:hidden">
-      {userFacts(response)} · {plural(node.count, "file", "files")}
+  <!-- the facts give way before the name does -->
+  <span class="name-count flex-1 gap-2">
+    <span class="flex min-w-0 items-center gap-2">
+      <Username {name} />
+      {#if user}<Presence presence={user.presence} />{/if}
+      {#if user?.group.color}<GroupBadge group={user.group} />{/if}
+      <Flag code={response.country} />
+      {#if user?.block}<Badge tone="danger">blocked</Badge>{/if}
+    </span>
+    <span class="text-xs text-fg-muted max-md:hidden">
+      <span>{plural(node.count, "file", "files")} · {userFacts(response)}</span>
     </span>
   </span>
   <span class="flex shrink-0 items-center gap-0.5 row-action">

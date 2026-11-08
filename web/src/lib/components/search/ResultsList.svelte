@@ -12,6 +12,7 @@
   import Flag from "#lib/components/ui/Flag.svelte";
   import GridHeader from "#lib/components/ui/GridHeader.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
+  import MiddleTruncate from "#lib/components/ui/MiddleTruncate.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import Username from "#lib/components/users/Username.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
@@ -19,7 +20,7 @@
   import type { AllFiles } from "#lib/files/allfiles.svelte.js";
   import type { FileColumn } from "#lib/files/columns.js";
   import { asItem, type Enqueued, enqueueJob, followDownloads } from "#lib/files/downloads.js";
-  import { formatBytes, formatSpeed, getFileName, plural } from "#lib/format.js";
+  import { formatBytes, formatCount, formatSpeed, getFileName, plural } from "#lib/format.js";
   import { inspector } from "#lib/inspector/inspector.svelte.js";
   import { heldOrder } from "#lib/lists/interaction.svelte.js";
   import { Grid } from "#lib/lists/table.svelte.js";
@@ -157,7 +158,8 @@
   export const focus = () => tree?.focus();
 </script>
 
-<!-- a file row's whole menu: the file, its folder and its user, which the list has no lines for -->
+<!-- a file row's whole menu: the file, its folder and its user, which the list has no lines for.
+     A bare file name has no folder -->
 {#snippet rowItems(row: ResultRow)}
   {@const folder = folderOf(row)}
   <RemoteFileItems
@@ -166,15 +168,17 @@
     ondownload={canDownload ? () => void downloadNow([row]) : undefined}
     ondetails={() => details(row)} />
   <Menu.Separator />
-  <!-- the whole path, which a menu has no room to cut and show on hover -->
-  <Menu.Label class="wrap-anywhere">{row.folder}</Menu.Label>
-  <RemoteFolderItems
-    folder={row.folder}
-    username={row.username}
-    ondownload={canDownload ? () => void downloadNow(folder) : undefined}
-    onallfiles={() => void allFiles.show(row.username, row.folder)}
-    browse={false} />
-  <Menu.Separator />
+  {#if row.folder}
+    <!-- the whole path, which a menu has no room to cut and show on hover -->
+    <Menu.Label class="wrap-anywhere">{row.folder}</Menu.Label>
+    <RemoteFolderItems
+      folder={row.folder}
+      username={row.username}
+      ondownload={canDownload ? () => void downloadNow(folder) : undefined}
+      onallfiles={() => void allFiles.show(row.username, row.folder)}
+      browse={false} />
+    <Menu.Separator />
+  {/if}
   <ResultUserItems
     name={row.username}
     named
@@ -203,10 +207,7 @@
   onmiddleclick={canDownload ? (r) => void downloadNow([r]) : undefined}
   inspect={(r) => inspect(pick(r))}>
   {#snippet header(all)}
-    <GridHeader
-      {grid}
-      {all}
-      class="h-8 border-b bg-surface-muted text-sm text-fg-muted" />
+    <GridHeader {grid} {all} class="h-8 border-b bg-surface-muted text-sm text-fg-muted" />
   {/snippet}
   <!-- a right-click, a long press or the menu key opens what the row's ... button offers -->
   {#snippet menu(line)}
@@ -235,7 +236,8 @@
         >{formatSpeed(row.speed)}</span>
     {/if}
     {#if shows.has("queue")}
-      <span role="gridcell" class="truncate px-2 text-right tabular-nums">{row.queue}</span>
+      <span role="gridcell" class="truncate px-2 text-right tabular-nums"
+        >{formatCount(row.queue)}</span>
     {/if}
     {#if shows.has("free")}
       <span role="gridcell" class={["px-2", row.free ? "text-success" : "text-fg-muted"]}>
@@ -249,16 +251,19 @@
       selected={selected.has(row.key)}
       ontick={tick} />
     {#if shows.has("folder")}
-      <Tooltip text={row.folder} clipped>
+      <Tooltip text={row.folder || undefined} dense>
         {#snippet child({ props })}
-          <span {...props} role="gridcell" class="truncate px-2 font-mono text-xs text-fg-muted">
-            {row.folder}
+          <span
+            {...props}
+            role="gridcell"
+            class="flex min-w-0 px-2 font-mono text-xs text-fg-muted">
+            <MiddleTruncate text={row.folder} path />
           </span>
         {/snippet}
       </Tooltip>
     {/if}
     <span role="gridcell" class="flex items-center justify-end gap-0.5 pr-1 row-action">
-      {#if canDownload}
+      {#if canDownload && row.folder}
         <Tooltip text={`${A.downloadFolder.label}: ${folderText(folder)}`}>
           {#snippet child({ props })}
             <Button

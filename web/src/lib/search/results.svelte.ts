@@ -3,7 +3,7 @@ import { sleep } from "#lib/format.js";
 import { live } from "#lib/live/live.svelte.js";
 import { call } from "#lib/request.js";
 
-import { type Result, ResultKeys, type SearchResponse } from "./results";
+import { readResponse, type Result, ResultKeys, type SearchResponse } from "./results";
 
 /** How long to wait before asking once more for the responses of a search that had some */
 export const RETRY_EMPTY_MS = 1_000;
@@ -39,7 +39,7 @@ export class Results {
 
   /** Adds one streamed response at the end, with the others that come within `STREAM_MS` */
   add(response: SearchResponse) {
-    this.#waiting.push(this.#keys.next(response));
+    this.#waiting.push(this.#keys.next(readResponse(response)));
     this.#timer ??= setTimeout(this.#flush, STREAM_MS);
   }
 
@@ -80,7 +80,7 @@ export class Results {
     }
     this.#drop();
     const keys = new ResultKeys();
-    this.results = outcome.data.map((response) => keys.next(response));
+    this.results = outcome.data.map((response) => keys.next(readResponse(response)));
     this.#keys = keys;
     this.stored = true;
     this.error = "";

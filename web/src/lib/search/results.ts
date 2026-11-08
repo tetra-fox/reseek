@@ -1,5 +1,6 @@
 import type { Schemas } from "#lib/api/client.js";
 import { filterResponse, type Filters } from "#lib/files/filters.js";
+import { withKnownLength } from "#lib/files/remote.js";
 import { HIDE_DEFAULTS, LONG_QUEUE, type ResultSort } from "#lib/settings.svelte.js";
 
 export type SearchResponse = Schemas["SearchResponse"];
@@ -7,6 +8,16 @@ export type SearchFile = Schemas["File"];
 
 /** One response with the key its card is rendered by */
 export type Result = { key: string; response: SearchResponse };
+
+/**
+ * A response as the page keeps it, every file's length that says more than a week unknown, so
+ * the files show, sort and filter as files with no length
+ */
+export const readResponse = (response: SearchResponse): SearchResponse => ({
+  ...response,
+  files: response.files.map(withKnownLength),
+  lockedFiles: response.lockedFiles.map(withKnownLength)
+});
 
 /**
  * Keys responses in the order they came: the username, then how many responses that user gave
@@ -105,6 +116,3 @@ export const resultFiles = (response: SearchResponse): ResultFile[] => {
   for (const file of response.lockedFiles) add(file, true);
   return files;
 };
-
-/** The separator a remote path uses: `/` when it has one, else `\` */
-export const separatorOf = (path: string) => (path.includes("/") ? "/" : "\\");

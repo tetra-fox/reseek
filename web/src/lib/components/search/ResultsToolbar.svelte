@@ -12,7 +12,7 @@
   import Switch from "#lib/components/ui/Switch.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { FILTER_PLACEHOLDER } from "#lib/files/filters.js";
-  import { plural } from "#lib/format.js";
+  import { formatCount, plural } from "#lib/format.js";
   import type { ActiveFilter } from "#lib/lists/filtered.js";
   import {
     RESULT_COLUMNS,
@@ -103,7 +103,7 @@
         {plural(counts.files, "file", "files")} from {plural(counts.users, "user", "users")}
         {#if counts.users !== counts.allUsers}
           <span class="text-fg-subtle">
-            (of {counts.allFiles.toLocaleString()} from {counts.allUsers.toLocaleString()})
+            (of {formatCount(counts.allFiles)} from {formatCount(counts.allUsers)})
           </span>
         {/if}
       {/if}

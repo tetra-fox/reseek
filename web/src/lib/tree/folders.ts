@@ -97,15 +97,83 @@ export const NO_FOLDER: FolderNode<never> = folderNode(
 /** A path's key in a list that holds several trees, unique to the tree `scope` names */
 export const scopedKey = (scope: string, path: string) => `${scope}\u0000${path}`;
 
-type Trie<T> = { path: string; segment: string; items: T[]; children: Map<string, Trie<T>> };
+type Trie<T> = {
+  path: string;
+  segment: string;
+  separator: Separator;
+  items: T[];
+  children: Map<string, Trie<T>>;
+};
+
+/**
+ * The folders a file's path is in, outermost first: everything before its last separator, a
+ * folder per part. Separators at the start stay with the first part, so a Unix path's first
+ * folder is "/home" and the root itself "/". A bare file name, which some peers send, is in none
+ */
+const foldersOf = (path: string, separator: Separator): string[] => {
+  const cut = path.lastIndexOf(separator);
+  if (cut === -1) return [];
+  let start = 0;
+  while (path[start] === separator) start++;
+  if (cut < start) return [path.slice(0, start)];
+  const [first, ...rest] = path.slice(start, cut).split(separator);
+  return [path.slice(0, start) + first, ...rest];
+};
+
+/**
+ * The trie of the folders the items are in, folders and items in the order they first appear,
+ * and the items with no folder at its root
+ */
+const trieOf = <T>(items: T[], pathOf: (item: T) => string): Trie<T> => {
+  const root: Trie<T> = { path: "", segment: "", separator: "\\", items: [], children: new Map() };
+  for (const item of items) {
+    const path = pathOf(item);
+    const separator = separatorOf(path);
+    let at = root;
+    for (const segment of foldersOf(path, separator)) {
+      let next = at.children.get(segment);
+      if (!next) {
+        const walked = at === root ? segment : at.path + separator + segment;
+        next = { path: walked, segment, separator, items: [], children: new Map() };
+        at.children.set(segment, next);
+      }
+      at = next;
+    }
+    at.items.push(item);
+  }
+  return root;
+};
+
+/**
+ * The trie's folders as nodes. A folder holding nothing but one folder is one node with it,
+ * labeled with the chain, so a share's `@@abc\Music\Artist` doesn't take three levels before
+ * anything shows. With a `scope`, their keys are unique to it
+ */
+const nodesOf = <T>(
+  root: Trie<T>,
+  sizeOf: (item: T) => number,
+  lockedOf?: (item: T) => boolean,
+  scope?: string
+): FolderNode<T>[] => {
+  const build = (trie: Trie<T>, label: string): FolderNode<T> => {
+    if (!trie.items.length && trie.children.size === 1) {
+      const [only] = trie.children.values();
+      return build(only, label + only.separator + only.segment);
+    }
+    const children = [...trie.children.values()].map((child) => build(child, child.segment));
+    const key = scope === undefined ? trie.path : scopedKey(scope, trie.path);
+    return folderNode({ key, path: trie.path, label }, trie.items, children, sizeOf, lockedOf);
+  };
+  return [...root.children.values()].map((top) => build(top, top.segment));
+};
 
 /**
  * The folders the items are in, as a tree, folders and items in the order they first appear.
  * `pathOf` gives an item's full path, its folder being everything before the last separator. A
- * chain of folders that hold nothing but the next one is one node, labeled with the whole chain,
- * so a share's `@@abc\Music\Artist` doesn't take three levels before anything shows. A folder is
- * locked when every item under it is, by `lockedOf`. With a `scope`, the folders' keys are unique
- * to it, for a list that holds several trees
+ * folder is locked when every item under it is, by `lockedOf`. With a `scope`, the folders' keys
+ * are unique to it, for a list that holds several trees. Items with no folder, bare file names,
+ * are in a node of their own with an empty path and label, the last; `treeAt` puts them in the
+ * line above the tree instead
  */
 export const folderTree = <T>(
   items: T[],
@@ -114,35 +182,27 @@ export const folderTree = <T>(
   lockedOf?: (item: T) => boolean,
   scope?: string
 ): FolderNode<T>[] => {
-  const root: Trie<T> = { path: "", segment: "", items: [], children: new Map() };
-  for (const item of items) {
-    const path = pathOf(item);
-    const folder = getDirectoryName(path);
-    const separator = separatorOf(path);
-    let at = root;
-    let walked = "";
-    for (const segment of folder === path ? [folder] : folder.split(separator)) {
-      walked = walked ? walked + separator + segment : segment;
-      let next = at.children.get(segment);
-      if (!next) {
-        next = { path: walked, segment, items: [], children: new Map() };
-        at.children.set(segment, next);
-      }
-      at = next;
-    }
-    at.items.push(item);
-  }
-  const build = (trie: Trie<T>, label: string): FolderNode<T> => {
-    // a folder holding only one folder is the same node as that folder
-    if (!trie.items.length && trie.children.size === 1) {
-      const [only] = trie.children.values();
-      return build(only, label + separatorOf(only.path) + only.segment);
-    }
-    const children = [...trie.children.values()].map((child) => build(child, child.segment));
-    const key = scope === undefined ? trie.path : scopedKey(scope, trie.path);
-    return folderNode({ key, path: trie.path, label }, trie.items, children, sizeOf, lockedOf);
-  };
-  return [...root.children.values()].map((top) => build(top, top.segment));
+  const root = trieOf(items, pathOf);
+  const folders = nodesOf(root, sizeOf, lockedOf, scope);
+  if (!root.items.length) return folders;
+  const key = scope === undefined ? "" : scopedKey(scope, "");
+  return [...folders, folderNode({ key, path: "", label: "" }, root.items, [], sizeOf, lockedOf)];
+};
+
+/**
+ * A line for the top of a tree, such as a user's, with the items' folders under it as
+ * `folderTree` makes them and the items that have no folder directly in it
+ */
+export const treeAt = <T>(
+  at: { key: string; path: string; label: string },
+  items: T[],
+  pathOf: (item: T) => string,
+  sizeOf: (item: T) => number,
+  lockedOf?: (item: T) => boolean,
+  scope?: string
+): FolderNode<T> => {
+  const root = trieOf(items, pathOf);
+  return folderNode(at, root.items, nodesOf(root, sizeOf, lockedOf, scope), sizeOf, lockedOf);
 };
 
 export type RemoteDirectory = Schemas["Directory"] & { locked?: boolean };

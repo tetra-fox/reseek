@@ -13,7 +13,7 @@
   import { settings } from "#lib/settings.svelte.js";
   import { type Expansion, withInside, withSiblings } from "#lib/tree/expansion.svelte.js";
   import { type FolderNode, foldersUnder, itemsUnder, type TreeLine } from "#lib/tree/folders.js";
-  import { GAP_REM, itemStart, lineStart } from "#lib/tree/indent.js";
+  import { GAP_REM, insetCss, itemStart, stepRem } from "#lib/tree/indent.js";
   import { nesting, pins } from "#lib/tree/pins.js";
   import { inControl } from "#lib/ui/keys.js";
   import { rem, viewport } from "#lib/ui/viewport.svelte.js";
@@ -161,9 +161,20 @@
   const arrivals = new Arrivals();
   $effect(() => arrivals.see(lines.map((line) => line.key)));
 
+  /**
+   * How far each level sets a line in: the usual step, or in a box too narrow for the deepest item
+   * at that, the step that fits it, down to a quarter rem. The box is its lines' container, so the
+   * step follows the box's width
+   */
+  const step = $derived(
+    width && framed
+      ? `clamp(0.25rem, (100cqw - ${width} - ${itemStart(0)}rem) / ${nest.deepest + 1}, ${stepRem()}rem)`
+      : `${stepRem()}rem`
+  );
+
   /** How far a line at `depth` is set in */
   const inset = (depth: number, kind: "folder" | "item") =>
-    framed ? `${kind === "item" ? itemStart(depth) : lineStart(depth)}rem` : undefined;
+    framed ? insetCss(depth, kind, "var(--step)") : undefined;
 
   /** Opens or closes a folder from the keys, as its toggle would, with `deep` every folder inside */
   const show = (node: FolderNode<T>, open: boolean, deep = false) => {
@@ -425,11 +436,12 @@
      stack by it -->
 <div
   class={[
-    "relative overflow-auto rounded-card border bg-surface text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent",
+    "@container relative overflow-auto rounded-card border bg-surface text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent",
     className
   ]}
   style:height
   style:--line-h={`${row}px`}
+  style:--step={step}
   role="treegrid"
   aria-label={label}
   aria-rowcount={lines.length}

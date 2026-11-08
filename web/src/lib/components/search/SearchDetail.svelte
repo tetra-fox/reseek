@@ -25,7 +25,7 @@
   import { AllFiles } from "#lib/files/allfiles.svelte.js";
   import { asItem, enqueue } from "#lib/files/downloads.js";
   import { parseFilters } from "#lib/files/filters.js";
-  import { listText, plural } from "#lib/format.js";
+  import { formatCount, listText, plural } from "#lib/format.js";
   import { useInspector } from "#lib/inspector/inspector.svelte.js";
   import { type ActiveFilter, clearThen, TEXT_FILTER, typedFilter } from "#lib/lists/filtered.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
@@ -279,6 +279,12 @@
   {/if}
 {/snippet}
 
+{#snippet searchAgain()}
+  <Button variant="outline" disabled={!connected} onclick={again}>
+    <RefreshCwIcon />Search again
+  </Button>
+{/snippet}
+
 <!-- what is out of view and how to bring each part back -->
 {#snippet hiddenLine()}
   <p class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-sm text-fg-muted">
@@ -291,7 +297,7 @@
     {/if}
     {#if dismissedCount}
       <span
-        >{dismissedCount} dismissed
+        >{formatCount(dismissedCount)} dismissed
         <Button variant="link" onclick={() => dismissed.clear()}>Show again</Button></span>
     {/if}
     {#if byDefaults}
@@ -306,7 +312,7 @@
     {/if}
     {#if fromBlocked}
       <span
-        >{fromBlocked} from blocked users
+        >{formatCount(fromBlocked)} from blocked users
         <Button variant="link" onclick={() => (showBlocked = true)}>Show</Button></span>
     {/if}
   </p>
@@ -335,12 +341,20 @@
       {#snippet child({ props })}
         <h2
           {...props}
-          class="min-w-0 flex-1 basis-40 truncate text-2xl font-semibold tracking-tight">
+          dir="auto"
+          class="line-clamp-2 min-w-0 flex-1 basis-40 text-2xl font-semibold tracking-tight wrap-anywhere">
           {search.searchText}
         </h2>
       {/snippet}
     </Tooltip>
-    {#if scopeLabel(search.scope)}<Badge tone="accent">{scopeLabel(search.scope)}</Badge>{/if}
+    {#if scopeLabel(search.scope)}
+      {@const scope = scopeLabel(search.scope)}
+      <Tooltip text={scope ?? undefined} clipped>
+        {#snippet child({ props })}
+          <Badge {...props} tone="accent">{scope}</Badge>
+        {/snippet}
+      </Tooltip>
+    {/if}
     <div class="flex flex-wrap gap-inline">
       <Tooltip text={pinned ? "Unpin this search" : "Pin this search under the search box"}>
         {#snippet child({ props })}
@@ -448,7 +462,11 @@
   {:else if !complete}
     <div class="flex items-center gap-2 text-sm text-fg-muted" role="status">
       <Spinner class="size-4" />
-      {search.state === "InProgress" ? "Searching..." : "Starting search..."}
+      {search.state === "InProgress"
+        ? "Searching..."
+        : search.state.includes("Queued")
+          ? "Waiting for another search to finish"
+          : "Starting search..."}
     </div>
     {#each [0, 1, 2] as n (n)}
       <div class="flex flex-col gap-2 rounded-card border bg-surface p-3" aria-hidden="true">
@@ -459,6 +477,11 @@
     {/each}
   {:else if results.loading}
     <Skeleton class="h-28" />
+  {:else if search.state.includes("Errored")}
+    <EmptyState
+      icon={SearchXIcon}
+      title="The search failed"
+      action={canWrite ? searchAgain : undefined} />
   {:else if !results.error}
     <EmptyState
       icon={SearchXIcon}
