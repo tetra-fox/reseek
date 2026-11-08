@@ -28,23 +28,22 @@
 </script>
 
 <div class="overflow-x-auto">
-  <table class="w-full text-sm tabular-nums">
+  <table class="data-table dense w-full text-sm tabular-nums">
     <caption class="sr-only">Figures of the files in slots A and B; differences are marked</caption>
     <thead>
-      <tr class="border-b text-left text-xs text-fg-muted">
-        <th scope="col" class="px-3 py-1.5 font-medium">Figure</th>
-        <th scope="col" class="px-3 py-1.5 font-medium">A</th>
-        <th scope="col" class="px-3 py-1.5 font-medium">B</th>
+      <tr>
+        <th scope="col">Figure</th>
+        <th scope="col">A</th>
+        <th scope="col">B</th>
       </tr>
     </thead>
     <tbody>
       {#each ROWS as [label, value] (label)}
         {@const [first, second] = [value(a), value(b)]}
-        <tr class="border-b last:border-b-0" data-differs={first !== second || undefined}>
-          <th scope="row" class="px-3 py-1.5 text-left font-normal text-fg-muted">{label}</th>
+        <tr data-differs={first !== second || undefined}>
+          <th scope="row" class="text-sm font-normal">{label}</th>
           {#each [first, second] as cell, at (at)}
-            <td class={["px-3 py-1.5", first !== second && "bg-accent-soft text-accent-soft-fg"]}
-              >{cell}</td>
+            <td class={[first !== second && "bg-accent-soft text-accent-soft-fg"]}>{cell}</td>
           {/each}
         </tr>
       {/each}

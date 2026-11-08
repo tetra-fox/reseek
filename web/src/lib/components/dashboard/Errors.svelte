@@ -117,25 +117,21 @@
     </p>{/if}
   <!-- a phone scrolls the table sideways rather than squeeze the messages into slivers -->
   <div class="overflow-x-auto">
-    <table class="w-full min-w-[36rem] text-sm">
-      <thead class="text-xs text-fg-muted">
-        <tr class="border-b">
-          <th class="px-2 py-1 text-left font-medium">Direction</th>
-          <th class="px-2 py-1 text-left font-medium">Error</th>
+    <table class="data-table dense w-full min-w-[36rem] text-sm">
+      <thead>
+        <tr>
+          <th>Direction</th>
+          <th>Error</th>
           <th class="w-24"></th>
-          <th class="px-2 py-1 text-right font-medium">Count</th>
-          <th class="px-2 py-1 text-right font-medium">Users</th>
+          <th class="text-right">Count</th>
+          <th class="text-right">Users</th>
         </tr>
       </thead>
       <tbody>
         {#each pareto as row (`${row.direction}-${row.exception}`)}
-          <tr
-            class={[
-              "border-b last:border-b-0",
-              exception === row.exception ? "bg-accent-soft/60" : "hover:bg-hover"
-            ]}>
-            <td class="px-2 py-1">{row.direction}</td>
-            <td class="px-2 py-1">
+          <tr class={[exception === row.exception && "bg-accent-soft/60"]}>
+            <td>{row.direction}</td>
+            <td class="whitespace-normal">
               <!-- the whole message where it is cut, which a click also shows in recent errors -->
               <Tooltip
                 text={(row.exception?.length ?? 0) > CUT
@@ -152,7 +148,7 @@
                 {/snippet}
               </Tooltip>
             </td>
-            <td class="px-2">
+            <td>
               <div class="h-1.5 rounded-full bg-surface-muted">
                 <div
                   class="h-full rounded-full bg-danger/60"
@@ -160,9 +156,8 @@
                 </div>
               </div>
             </td>
-            <td class="px-2 py-1 text-right font-medium tabular-nums"
-              >{row.count.toLocaleString()}</td>
-            <td class="px-2 py-1 text-right tabular-nums">{row.distinctUsers.toLocaleString()}</td>
+            <td class="text-right font-medium tabular-nums">{row.count.toLocaleString()}</td>
+            <td class="text-right tabular-nums">{row.distinctUsers.toLocaleString()}</td>
           </tr>
         {:else}
           <EmptyRow colspan={5} text="No errors in this range" />
@@ -184,23 +179,23 @@
       Could not load recent errors: {recentError}
     </p>{/if}
   <div class="overflow-x-auto">
-    <table class="w-full min-w-[36rem] text-sm">
-      <thead class="text-xs text-fg-muted">
-        <tr class="border-b">
-          <th class="px-2 py-1 text-left font-medium">Time</th>
-          <th class="px-2 py-1 text-left font-medium">Direction</th>
-          <th class="px-2 py-1 text-left font-medium">Username</th>
-          <th class="px-2 py-1 text-left font-medium">Filename</th>
-          <th class="px-2 py-1 text-left font-medium">Error</th>
+    <table class="data-table dense w-full min-w-[36rem] text-sm">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Direction</th>
+          <th>Username</th>
+          <th>Filename</th>
+          <th>Error</th>
         </tr>
       </thead>
       <tbody>
         {#each recent as row (row.id)}
-          <tr class="border-b last:border-b-0 hover:bg-hover">
-            <td class="px-2 py-1 whitespace-nowrap">{formatDate(row.endedAt)}</td>
-            <td class="px-2 py-1">{row.direction}</td>
-            <td class="px-2 py-1"><Username name={row.username} /></td>
-            <td class="px-2 py-1">
+          <tr>
+            <td>{formatDate(row.endedAt)}</td>
+            <td>{row.direction}</td>
+            <td><Username name={row.username} /></td>
+            <td class="whitespace-normal">
               <Tooltip text={row.filename} dense>
                 {#snippet child({ props })}
                   <button
@@ -211,7 +206,7 @@
                 {/snippet}
               </Tooltip>
             </td>
-            <td class="px-2 py-1">
+            <td class="whitespace-normal">
               <span class="font-medium">{endingWord(row.state)}</span>
               {#if row.exception}
                 <Tooltip text={row.exception.length > CUT ? row.exception : undefined} dense spoken>

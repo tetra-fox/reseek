@@ -685,7 +685,7 @@
   }
 }
 
-/* Table.svelte's cells. in the components layer so a class on a cell, like text-right or py-6, still
+/* a data table's cells. in the components layer so a class on a cell, like text-right or py-6, still
    wins */
 @layer components {
   .data-table {
@@ -723,6 +723,23 @@
     }
     tr > :last-child {
       padding-right: 1.25rem;
+    }
+    /* a table inside a card's padding: shorter rows, and the outer columns against that padding */
+    &.dense {
+      th {
+        height: 2rem;
+        padding-inline: 0.5rem;
+      }
+      td {
+        height: auto;
+        padding: 0.25rem 0.5rem;
+      }
+      tr > :first-child {
+        padding-left: 0.5rem;
+      }
+      tr > :last-child {
+        padding-right: 0.5rem;
+      }
     }
     /* data-stripe overrides the position-based stripe for rows that move, and :where keeps hover above both */
     tbody tr:where(:nth-child(even):not([data-stripe]), [data-stripe="even"]) {

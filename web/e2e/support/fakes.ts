@@ -478,6 +478,37 @@ export const fakeFiles = async (page: Page) => {
   );
 };
 
+/** What the daemon knows of `username`, someone we transferred with and messaged once */
+export const user = (username: string, rest: Partial<Schemas["UserSummary"]> = {}) => {
+  const counts = { succeeded: 2, failed: 0, active: 0, queued: 0, bytes: 0 };
+  return {
+    username,
+    known: true,
+    firstSeenAt: "2026-10-01T10:00:00Z",
+    lastSeenAt: "2026-10-27T10:00:00Z",
+    presence: "Offline",
+    presenceAt: "2026-10-27T09:00:00Z",
+    isPrivileged: false,
+    statistics: null,
+    info: null,
+    countryCode: "NL",
+    group: { name: "default", source: "builtin", priority: 1, color: null },
+    groupOverride: null,
+    block: null,
+    notes: null,
+    description: null,
+    tags: ["jazz"],
+    muted: false,
+    buddy: null,
+    conversation: null,
+    endpoint: null,
+    figures: { downloads: counts, uploads: counts, messages: { in: 1, out: 1, unread: 0 } },
+    unreadMessages: 0,
+    activeTransfers: 0,
+    ...rest
+  } satisfies Schemas["UserSummary"];
+};
+
 /** A download of `filename` from `username`, finished unless `state` says otherwise */
 export const transfer = (
   filename: string,

@@ -13,27 +13,27 @@
 <h3 class="flex items-center gap-1.5 text-sm font-medium">
   <FolderOpenIcon class="size-4" />Most uploaded folders
 </h3>
-<table class="w-full text-sm">
-  <thead class="text-xs text-fg-muted">
-    <tr class="border-b">
-      <th class="w-8 py-1 text-right font-medium">#</th>
-      <th class="px-2 py-1 text-left font-medium">Folder</th>
-      <th class="px-2 py-1 text-right font-medium"> Uploads </th>
-      <th class="px-2 py-1 text-right font-medium">Users</th>
+<table class="data-table dense w-full text-sm">
+  <thead>
+    <tr>
+      <th class="w-8 text-right">#</th>
+      <th>Folder</th>
+      <th class="text-right">Uploads</th>
+      <th class="text-right">Users</th>
     </tr>
   </thead>
   <tbody>
     {#each rows as row, i (row.directory)}
-      <tr class="border-b last:border-b-0">
-        <td class="py-1 text-right text-fg-muted tabular-nums">{i + 1}</td>
+      <tr>
+        <td class="text-right text-fg-muted tabular-nums">{i + 1}</td>
         <Tooltip text={row.directory} dense>
           {#snippet child({ props })}
-            <td {...props} class="px-2 py-1 font-mono text-xs wrap-anywhere"
+            <td {...props} class="font-mono text-xs wrap-anywhere whitespace-normal"
               >{shortDirectory(row.directory)}</td>
           {/snippet}
         </Tooltip>
-        <td class="px-2 py-1 text-right tabular-nums">{row.count.toLocaleString()}</td>
-        <td class="px-2 py-1 text-right tabular-nums">{row.distinctUsers.toLocaleString()}</td>
+        <td class="text-right tabular-nums">{row.count.toLocaleString()}</td>
+        <td class="text-right tabular-nums">{row.distinctUsers.toLocaleString()}</td>
       </tr>
     {:else}
       <EmptyRow colspan={4} text="No uploads in this range" />

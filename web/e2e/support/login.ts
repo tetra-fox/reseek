@@ -14,7 +14,7 @@ export const visit = async (page: Page, route: string) => {
   await page.goto(`./#${route}`);
   // the shell's main area shows only once the session is checked; without one the login takes it
   await expect(page.getByRole("main")).toBeVisible();
-  await expect(page).toHaveURL(new RegExp(`#${route}$`));
+  await expect(page).toHaveURL(new RegExp(`#${route.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`));
 };
 
 /**

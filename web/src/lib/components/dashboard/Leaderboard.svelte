@@ -111,28 +111,28 @@
           label={`Sort ${table.title.toLowerCase()} by`}
           class="ml-auto @min-[19rem]:hidden" />
       </div>
-      <table class="w-full table-fixed text-sm tabular-nums">
+      <table class="data-table dense w-full table-fixed text-sm tabular-nums">
         <!-- the widths are set here, where the font is the cells', so a width in ch is theirs and
              not the smaller header's; a phone leaves out the speed and the browse button, the
              name's menu having Browse shares, so the name keeps room -->
         <colgroup>
-          <col class="w-6" />
+          <col class="w-8" />
           <col />
           {#each COLUMNS as c (c.by)}
             <col
               class={[c.phone === false && "max-md:hidden", "@max-[19rem]:hidden"]}
               style:width={columnWidth(c.widest)} />
           {/each}
-          <col class="w-10 max-md:hidden" />
+          <col class="w-12 max-md:hidden" />
         </colgroup>
-        <thead class="text-xs text-fg-muted">
-          <tr class="border-b">
-            <th class="py-1 text-right font-medium">#</th>
-            <th class="truncate px-2 py-1 text-left font-medium">Username</th>
+        <thead>
+          <tr>
+            <th class="text-right">#</th>
+            <th class="truncate">Username</th>
             {#each COLUMNS as c (c.by)}
               <th
                 class={[
-                  "overflow-hidden px-2 py-1 text-right font-medium @max-[19rem]:hidden",
+                  "overflow-hidden text-right @max-[19rem]:hidden",
                   c.phone === false && "max-md:hidden"
                 ]}
                 aria-sort={sortBy === c.by ? "descending" : "none"}>
@@ -155,9 +155,9 @@
         </thead>
         <tbody>
           {#each rows[table.direction] as entry, i (entry.username)}
-            <tr class="border-b last:border-b-0">
-              <td class="py-1 text-right text-fg-muted tabular-nums">{i + 1}</td>
-              <td class="overflow-hidden px-2 py-1">
+            <tr>
+              <td class="text-right text-fg-muted tabular-nums">{i + 1}</td>
+              <td class="overflow-hidden">
                 <Username name={entry.username} />
                 <div class="truncate text-xs text-fg-muted @min-[19rem]:hidden">
                   {COLUMNS.filter((c) => c.phone !== false)
@@ -168,7 +168,7 @@
               {#each COLUMNS as c (c.by)}
                 <td
                   class={[
-                    "px-2 py-1 text-right whitespace-nowrap tabular-nums @max-[19rem]:hidden",
+                    "text-right tabular-nums @max-[19rem]:hidden",
                     c.phone === false && "max-md:hidden"
                   ]}>{c.value(entry)}</td>
               {/each}

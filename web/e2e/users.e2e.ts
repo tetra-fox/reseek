@@ -1,34 +1,9 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 
-import { fakeConnected } from "./support/fakes";
+import { fakeConnected, user } from "./support/fakes";
 import { textSize, visit } from "./support/login";
 
-const counts = { succeeded: 2, failed: 0, active: 0, queued: 0, bytes: 0 };
-const alice = {
-  username: "alice",
-  known: true,
-  firstSeenAt: "2026-10-01T10:00:00Z",
-  lastSeenAt: "2026-10-27T10:00:00Z",
-  presence: "Offline",
-  presenceAt: "2026-10-27T09:00:00Z",
-  isPrivileged: false,
-  statistics: null,
-  info: null,
-  countryCode: "NL",
-  group: { name: "default", source: "builtin", priority: 1, color: null },
-  groupOverride: null,
-  block: null,
-  notes: null,
-  description: null,
-  tags: ["jazz"],
-  muted: false,
-  buddy: null,
-  conversation: null,
-  endpoint: null,
-  figures: { downloads: counts, uploads: counts, messages: { in: 1, out: 1, unread: 0 } },
-  unreadMessages: 0,
-  activeTransfers: 0
-};
+const alice = user("alice");
 
 const searchBox = (page: Page) => page.getByRole("combobox", { name: "Search users" });
 const options = (page: Page) => page.getByRole("option");
@@ -169,7 +144,7 @@ test("the dropdown fits a phone at the largest text size", async ({ page }) => {
     {
       ...alice,
       username: long,
-      group: { name: "a group with a long name", source: "user", priority: 1, color: null }
+      group: { name: "a group with a long name", source: "config", priority: 1, color: null }
     }
   ]);
   await visit(page, "/users");
