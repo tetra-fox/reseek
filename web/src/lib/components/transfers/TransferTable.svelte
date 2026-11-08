@@ -2,6 +2,7 @@
   import type { SvelteSet } from "svelte/reactivity";
 
   import { rowAnalysis } from "#lib/analysis/batch.js";
+  import { marks } from "#lib/analysis/marks.svelte.js";
   import { app } from "#lib/app.svelte.js";
   import FileTree from "#lib/components/files/FileTree.svelte";
   import GridHeader from "#lib/components/ui/GridHeader.svelte";
@@ -11,7 +12,7 @@
   import type { Grid } from "#lib/lists/table.svelte.js";
   import { session } from "#lib/session.svelte.js";
   import { fields } from "#lib/stored.svelte.js";
-  import type { ColumnId } from "#lib/transfers/grid/columns.js";
+  import { type ColumnId, fileInset, MARK_REM } from "#lib/transfers/grid/columns.js";
   import type { ViewSettings } from "#lib/transfers/grid/settings.svelte.js";
   import { type Group, groupingOf, type Item, treeOf } from "#lib/transfers/grid/view.js";
   import { type GroupHandlers, groupActions } from "#lib/transfers/groupActions.js";
@@ -94,6 +95,19 @@
    */
   const slot = (depth: number) => (viewport.phone ? Math.min(depth, 1) : depth);
   const tree = $derived(treeOf(items));
+  /**
+   * what the File column's least width adds to its own: the inset of the deepest row, and room
+   * for an analysis mark when a row shows one
+   */
+  const fileRoom = $derived.by(() => {
+    let deepest = 0;
+    let marked = false;
+    for (const i of items) {
+      if (i.type === "group") deepest = Math.max(deepest, i.group.depth + 1);
+      else if (direction === "download" && marks.download(i.transfer.id)) marked = true;
+    }
+    return fileInset(deepest) + (marked ? MARK_REM : 0);
+  });
   /** rows that no folder line is over show their folder */
   const flat = $derived(groupingOf(view) === null || groupingOf(view) === "job");
   const ids = (group: Group) => group.transfers.map((t) => t.id);
@@ -155,79 +169,78 @@
 
 <!-- every row, the header too, has the cells' font with tabular figures, so a column width in ch
      measures the same in each; the header's labels are smaller inside it -->
-<FileTree
-  bind:this={table}
-  lines={tree.lines}
-  {expansion}
-  label={direction === "download" ? "Downloads" : "Uploads"}
-  columns={grid.template}
-  width={grid.width}
-  {selected}
-  idOf={(t) => t.id}
-  nameOf={(line) => (line.kind === "folder" ? line.node.label : getFileName(line.item.filename))}
-  {menuable}
-  {slot}
-  framed={false}
-  class="tabular-nums"
-  {inspect}
-  onopen={(t) => ondetails(t)}
-  onkey={actOnKey}
-  lineClass={(line) =>
-    line.kind === "item" && store.list.removed.has(line.item.id) ? "opacity-40" : []}>
-  {#snippet header(all)}
-    <GridHeader
-      {grid}
-      {all}
-      class="h-9 border-b bg-surface-muted text-sm text-fg-muted" />
-  {/snippet}
-  {#snippet folder(node)}
-    {@const group = tree.groups.get(node.key)}
-    {#if group}
-      <GroupHeader
-        {group}
-        {store}
-        {direction}
-        {expansion}
-        ticked={ticked(group)}
-        onselect={(on) => {
-          for (const id of ids(group)) {
-            if (on) selected.add(id);
-            else selected.delete(id);
-          }
-        }}
-        {...groupHandlers(group)} />
-    {/if}
-  {/snippet}
-  {#snippet item(t, depth, tick)}
-    <TransferRow
-      transfer={t}
-      {direction}
-      {columns}
-      {depth}
-      showFolder={flat}
-      selected={selected.has(t.id)}
-      speeds={store.speeds.get(t.id) ?? []}
-      onselect={tick}
-      {...rowHandlers(t)} />
-  {/snippet}
-  <!-- a right-click, a long press or the menu key opens what the line's buttons offer -->
-  {#snippet menu(line)}
-    {#if line.kind === "item"}
-      <TransferItems
-        transfer={line.item}
-        {direction}
-        {...rowHandlers(line.item)}
-        analysis={rowAnalysis(line.item, direction)} />
-    {:else}
-      {@const group = tree.groups.get(line.node.key)}
+<div class="contents" style:--file-room={`${fileRoom}rem`}>
+  <FileTree
+    bind:this={table}
+    lines={tree.lines}
+    {expansion}
+    label={direction === "download" ? "Downloads" : "Uploads"}
+    columns={grid.template}
+    width={grid.width}
+    {selected}
+    idOf={(t) => t.id}
+    nameOf={(line) => (line.kind === "folder" ? line.node.label : getFileName(line.item.filename))}
+    {menuable}
+    {slot}
+    framed={false}
+    class="tabular-nums"
+    {inspect}
+    onopen={(t) => ondetails(t)}
+    onkey={actOnKey}
+    lineClass={(line) =>
+      line.kind === "item" && store.list.removed.has(line.item.id) ? "opacity-40" : []}>
+    {#snippet header(all)}
+      <GridHeader {grid} {all} class="h-9 border-b bg-surface-muted text-sm text-fg-muted" />
+    {/snippet}
+    {#snippet folder(node)}
+      {@const group = tree.groups.get(node.key)}
       {#if group}
-        {@const actions = actionsOf(group)}
-        <GroupItems {actions} />
-        {#if group.kind !== "job"}
-          {#if actions.length}<Menu.Separator />{/if}
-          <UserMenuItems name={group.username} named />
+        <GroupHeader
+          {group}
+          {store}
+          {direction}
+          {expansion}
+          ticked={ticked(group)}
+          onselect={(on) => {
+            for (const id of ids(group)) {
+              if (on) selected.add(id);
+              else selected.delete(id);
+            }
+          }}
+          {...groupHandlers(group)} />
+      {/if}
+    {/snippet}
+    {#snippet item(t, depth, tick)}
+      <TransferRow
+        transfer={t}
+        {direction}
+        {columns}
+        {depth}
+        showFolder={flat}
+        selected={selected.has(t.id)}
+        speeds={store.speeds.get(t.id) ?? []}
+        onselect={tick}
+        {...rowHandlers(t)} />
+    {/snippet}
+    <!-- a right-click, a long press or the menu key opens what the line's buttons offer -->
+    {#snippet menu(line)}
+      {#if line.kind === "item"}
+        <TransferItems
+          transfer={line.item}
+          {direction}
+          {...rowHandlers(line.item)}
+          analysis={rowAnalysis(line.item, direction)} />
+      {:else}
+        {@const group = tree.groups.get(line.node.key)}
+        {#if group}
+          {@const actions = actionsOf(group)}
+          <GroupItems {actions} />
+          {#if group.kind !== "job"}
+            {#if actions.length}<Menu.Separator />{/if}
+            <UserMenuItems name={group.username} named />
+          {/if}
         {/if}
       {/if}
-    {/if}
-  {/snippet}
-</FileTree>
+    {/snippet}
+  </FileTree>
+</div>

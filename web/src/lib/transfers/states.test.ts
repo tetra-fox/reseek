@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { STATES, transfer } from "#lib/testing/fixtures.js";
 
-import { fillOf, rowActions, stateChip } from "./states";
+import { fillOf, rowActions, stateChip, stateName } from "./states";
 
 describe("the row menu", () => {
   it("offers per state what the download can take", () => {
@@ -64,7 +64,34 @@ describe("state chips", () => {
       title: "Connection refused"
     });
     expect(stateChip(transfer({ state: "Completed, TimedOut" })).text).toBe("Timed out");
-    expect(stateChip(transfer({ state: "InProgress", percentComplete: 41.6 })).text).toBe("42%");
+    // rounded down, so a file a hair short of done never reads 100%
+    expect(stateChip(transfer({ state: "InProgress", percentComplete: 99.6 })).text).toBe("99%");
+  });
+
+  it("say the outcome once when the reason names it too", () => {
+    const failed = (state: string, exception: string) =>
+      stateChip(transfer({ state, exception })).text;
+    expect(failed("Completed, Rejected", "transfer rejected: Too many megabytes")).toBe(
+      "Rejected: Too many megabytes"
+    );
+    expect(failed("Completed, TimedOut", "Timed out waiting for the peer")).toBe(
+      "Timed out waiting for the peer"
+    );
+    expect(failed("Completed, Errored", "I/O error: disk full")).toBe(
+      "Failed: I/O error: disk full"
+    );
+  });
+
+  it("name a past state from the state alone", () => {
+    expect(
+      [
+        "Requested",
+        "Queued, Remotely",
+        "InProgress",
+        "Completed, TimedOut",
+        "Completed, Aborted"
+      ].map(stateName)
+    ).toEqual(["Requested", "Queued", "In progress", "Timed out", "Aborted"]);
   });
 });
 

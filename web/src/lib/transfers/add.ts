@@ -31,25 +31,32 @@ const fromJson = (wanted: Wanted, value: unknown) => {
   }
 };
 
+/** What the paste box names, and how many of its lines name no file: not a link, or a folder's */
+export type Pasted = { wanted: Wanted; unread: number };
+
 /**
  * What the Add dialog's paste box names: `slsk://user/path/to/file` links, one per line, whose
  * slashes stand for the share's backslashes, or the JSON of files or search responses. Sizes
  * not given are 0, which the daemon takes as unknown
  */
-export const parsePaste = (text: string): Wanted => {
+export const parsePaste = (text: string): Pasted => {
   const wanted: Wanted = new Map();
   const trimmed = text.trim();
+  const lines = trimmed.split(/\r?\n/).filter((line) => line.trim());
   if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
     try {
       fromJson(wanted, JSON.parse(trimmed));
     } catch {
-      // not JSON after all: nothing is read from it
+      // not JSON after all: none of it is read
+      return { wanted, unread: lines.length };
     }
-    return wanted;
+    return { wanted, unread: 0 };
   }
-  for (const line of trimmed.split(/\r?\n/)) {
+  let unread = 0;
+  for (const line of lines) {
     const link = parseSlsk(line);
     if (link && !link.folder) add(wanted, link.username, link.path);
+    else unread++;
   }
-  return wanted;
+  return { wanted, unread };
 };

@@ -16,13 +16,20 @@ class Sending {
 
 export const sending = new Sending();
 
+/**
+ * Text set apart from the sentence around it, so a name in a right-to-left script keeps its
+ * place in it: between the first-strong isolate and the pop directional isolate characters
+ */
+const isolated = (text: string) => `\u2068${text}\u2069`;
+
 /** What sending files came to, in one line */
 export const sentText = (username: string, queued: string[], failed: { message: string }[]) => {
+  const to = isolated(username);
   const head = queued.length
     ? queued.length === 1
-      ? `${getFileName(queued[0])} will be offered to ${username}`
-      : `${plural(queued.length, "file", "files")} will be offered to ${username}`
-    : `Nothing was sent to ${username}`;
+      ? `${isolated(getFileName(queued[0]))} will be offered to ${to}`
+      : `${plural(queued.length, "file", "files")} will be offered to ${to}`
+    : `Nothing was sent to ${to}`;
   return failed.length
     ? `${head}. ${plural(failed.length, "file", "files")} not sent: ${failed[0].message}`
     : head;

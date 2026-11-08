@@ -13,6 +13,7 @@ import {
   itemsUnder,
   NO_FOLDER,
   separatorOf,
+  treeAt,
   type TreeLine
 } from "#lib/tree/folders.js";
 
@@ -195,8 +196,11 @@ export const layout = (
       (t) => t.filename,
       (t) => t.size
     );
+  /** a user's line with the user's folders under it and the files with no folder directly in it */
+  const userTree = (list: Transfer[]) =>
+    treeAt({ key: "", path: "", label: "" }, list, (t) => t.filename, size);
   /** a user's folders as nested groups, from `depth` down */
-  const folders = (username: string, list: Transfer[], depth: number) => {
+  const folders = (username: string, top: FolderNode<Transfer>[], depth: number) => {
     const key = folderKey(username);
     const walk = (nodes: FolderNode<Transfer>[], at: number) => {
       const siblings = nodes.map(key);
@@ -218,12 +222,13 @@ export const layout = (
         });
       }
     };
-    walk(tree(list), depth);
+    walk(top, depth);
   };
   if (groupBy === "user") {
     const byUser = [...bucket(sorted, (t) => t.username)];
     const siblings = byUser.map(([username]) => `user:${username}`);
     for (const [username, list] of byUser) {
+      const top = userTree(list);
       const user: Group = {
         kind: "user",
         key: `user:${username}`,
@@ -234,13 +239,18 @@ export const layout = (
         siblings,
         inside: () => {
           const key = folderKey(username);
-          return tree(list).flatMap((node) => [key(node), ...foldersUnder(node, key)]);
+          return top.children.flatMap((node) => [key(node), ...foldersUnder(node, key)]);
         }
       };
-      add(user, () => folders(username, list, 1));
+      add(user, () => {
+        folders(username, top.children, 1);
+        rows(user, top.items);
+      });
     }
   } else if (groupBy === "folder") {
-    for (const [username, list] of bucket(sorted, (t) => t.username)) folders(username, list, 0);
+    for (const [username, list] of bucket(sorted, (t) => t.username)) {
+      folders(username, tree(list), 0);
+    }
   } else {
     const jobs = [...bucket(sorted, (t) => t.jobId ?? null)];
     const siblings = jobs.map(([job]) => `job:${job ?? "none"}`);

@@ -4,7 +4,7 @@
   import { formatDate, formatDuration } from "#lib/format.js";
   import { SETTLE_MS } from "#lib/inspector/inspector.svelte.js";
   import { storeOf } from "#lib/transfers/actions.js";
-  import { stateChip, type Transfer } from "#lib/transfers/states.js";
+  import { stateName, type Transfer } from "#lib/transfers/states.js";
 
   // the states a transfer went through, each with when and how long after the one before
   let { transfer: t }: { transfer: Transfer } = $props();
@@ -53,7 +53,7 @@
     {#each history as change, i (`${change.at}:${change.state}`)}
       <li class="flex gap-2">
         <span class="text-fg-muted tabular-nums">{formatDate(change.at)}</span>
-        <span class="min-w-0 flex-1">{stateChip({ ...t, state: change.state }).text}</span>
+        <span class="min-w-0 flex-1">{stateName(change.state)}</span>
         {#if i > 0}
           <span class="text-xs text-fg-muted">
             +{formatDuration((Date.parse(change.at) - Date.parse(history[i - 1].at)) / 1000)}

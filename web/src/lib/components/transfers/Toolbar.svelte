@@ -1,5 +1,6 @@
 <script lang="ts">
   import BrushCleaningIcon from "@lucide/svelte/icons/brush-cleaning";
+  import GroupIcon from "@lucide/svelte/icons/group";
   import MessageSquareIcon from "@lucide/svelte/icons/message-square";
   import PlusIcon from "@lucide/svelte/icons/plus";
   import RotateCwIcon from "@lucide/svelte/icons/rotate-cw";
@@ -20,7 +21,7 @@
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Segmented from "#lib/components/ui/Segmented.svelte";
   import SplitButton from "#lib/components/ui/SplitButton.svelte";
-  import { formatBytes, formatSpeed, plural } from "#lib/format.js";
+  import { formatBytes, formatCount, formatSpeed, plural } from "#lib/format.js";
   import type { ActiveFilter } from "#lib/lists/filtered.js";
   import { session } from "#lib/session.svelte.js";
   import { type BulkAction, SCOPES } from "#lib/transfers/bulk.js";
@@ -147,7 +148,28 @@
   </div>
   <div class="flex flex-wrap items-center gap-inline">
     <LayoutToggle bind:value={view.layout} />
-    {#if view.layout === "tree"}
+    {#if view.layout === "tree" && viewport.phone}
+      <!-- a phone has no room for the groupings side by side; the values bits-ui gives back are
+           only their ids -->
+      <Menu.Root>
+        <Menu.Trigger>
+          {#snippet child({ props })}
+            <Button {...props} variant="outline" size="sm">
+              <GroupIcon />Group: {GROUPINGS.find((g) => g.id === view.groupBy)?.label}
+            </Button>
+          {/snippet}
+        </Menu.Trigger>
+        <Menu.Content align="start" class="min-w-48">
+          <Menu.RadioGroup
+            aria-label="Group by"
+            bind:value={() => view.groupBy, (id) => (view.groupBy = id as GroupBy)}>
+            {#each GROUPINGS as g (g.id)}
+              <Menu.RadioItem value={g.id}>{g.label}</Menu.RadioItem>
+            {/each}
+          </Menu.RadioGroup>
+        </Menu.Content>
+      </Menu.Root>
+    {:else if view.layout === "tree"}
       <Segmented options={GROUPINGS} bind:value={view.groupBy} label="Group by" size="sm" />
     {/if}
     <SortMenu
@@ -217,10 +239,12 @@
   </div>
   {#if metrics}
     <p class="text-xs text-fg-muted tabular-nums">
-      {metrics.inProgress.files} active · {formatSpeed(metrics.inProgress.totalSpeed)} ·
-      {metrics.queued.files} queued · {formatBytes(metrics.completed.bytes)}
-      {direction === "download" ? "downloaded" : "uploaded"}, {metrics.completed.failed} failed since
-      reseek started
+      {formatCount(metrics.inProgress.files)} active · {formatSpeed(metrics.inProgress.totalSpeed)} ·
+      {formatCount(metrics.queued.files)} queued · {formatBytes(metrics.completed.bytes)}
+      {direction === "download" ? "downloaded" : "uploaded"}, {formatCount(
+        metrics.completed.failed
+      )}
+      failed since reseek started
     </p>
   {/if}
 </div>

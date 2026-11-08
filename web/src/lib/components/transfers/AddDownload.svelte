@@ -5,6 +5,7 @@
   import Textarea from "#lib/components/ui/Textarea.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { enqueueJob } from "#lib/files/downloads.js";
+  import { formatCount, plural } from "#lib/format.js";
   import { parsePaste } from "#lib/transfers/add.js";
 
   // a download by hand: a user and a path, or links and search results pasted in
@@ -15,8 +16,10 @@
   let paste = $state("");
   let busy = $state(false);
 
+  const pasted = $derived(parsePaste(paste));
   const wanted = $derived.by(() => {
-    const found = parsePaste(paste);
+    // a copy, so the typed file is not added to what the paste was read as
+    const found = new Map(pasted.wanted);
     const user = username.trim();
     const file = path.trim();
     if (user && file) found.set(user, [...(found.get(user) ?? []), { filename: file, size: 0 }]);
@@ -63,13 +66,22 @@
     </label>
     <label class="flex flex-col gap-1 text-sm">
       Or paste
-      <Textarea bind:value={paste} rows={4} class="font-mono text-xs" />
+      <Textarea
+        bind:value={paste}
+        rows={4}
+        class="font-mono text-xs"
+        aria-describedby={pasted.unread ? "add-unread" : undefined} />
+      {#if pasted.unread}
+        <span id="add-unread" class="text-xs text-warning">
+          {plural(pasted.unread, "line", "lines")} could not be read
+        </span>
+      {/if}
     </label>
   </form>
   {#snippet footer()}
     <Button variant="ghost" disabled={busy} onclick={() => (open = false)}>Cancel</Button>
     <Button type="submit" form="add-download" disabled={busy || !count}>
-      Download {count || ""}
+      Download {count ? formatCount(count) : ""}
     </Button>
   {/snippet}
 </Dialog>

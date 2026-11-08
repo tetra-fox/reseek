@@ -1,4 +1,5 @@
 import type { Schemas } from "#lib/api/client.js";
+import { formatCount } from "#lib/format.js";
 
 import { ERRORED, isCancelable, isRemovable, isRetryable, type Transfer } from "./states";
 
@@ -69,7 +70,7 @@ const PAST = {
 
 /** One line for what a bulk call did: "12 removed, 1 failed: <why>" */
 export const summary = (action: BulkAction, result: Schemas["BulkResult"]): string => {
-  const done = `${result.ok.length} ${PAST[action]}`;
+  const done = `${formatCount(result.ok.length)} ${PAST[action]}`;
   if (!result.failed.length) return done;
-  return `${done}, ${result.failed.length} failed: ${result.failed[0].error}`;
+  return `${done}, ${formatCount(result.failed.length)} failed: ${result.failed[0].error}`;
 };

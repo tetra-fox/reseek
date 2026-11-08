@@ -7,10 +7,11 @@
   import Button from "#lib/components/ui/Button.svelte";
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
+  import MiddleTruncate from "#lib/components/ui/MiddleTruncate.svelte";
   import Progress from "#lib/components/ui/Progress.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import Username from "#lib/components/users/Username.svelte";
-  import { formatBytes, formatDuration, plural } from "#lib/format.js";
+  import { formatBytes, formatCount, formatDuration, plural } from "#lib/format.js";
   import { groupProgress } from "#lib/transfers/grid/progress.js";
   import type { Group } from "#lib/transfers/grid/view.js";
   import { type GroupHandlers, groupActions } from "#lib/transfers/groupActions.js";
@@ -80,9 +81,11 @@
     {#if group.kind === "user"}
       <Username name={group.username} />
     {:else if group.kind === "folder"}
-      <Tooltip text={group.label} clipped>
+      <Tooltip text={group.folder ?? group.label}>
         {#snippet child({ props })}
-          <span {...props} class="truncate font-mono text-xs">{group.label}</span>
+          <span {...props} class="flex min-w-0 font-mono text-xs">
+            <MiddleTruncate text={group.label} path />
+          </span>
         {/snippet}
       </Tooltip>
     {:else}
@@ -91,7 +94,7 @@
     <span class="text-xs text-fg-muted"
       ><span
         >{plural(list.length, "file", "files")} · {formatBytes(bytes)}{group.kind === "job"
-          ? ` · ${done} done, ${failed} failed`
+          ? ` · ${formatCount(done)} done, ${formatCount(failed)} failed`
           : ""}</span
       ></span>
   </div>
@@ -113,9 +116,18 @@
       {/snippet}
     </Tooltip>
   {/if}
+  <!-- the quota takes only the room the name leaves, from no width of its own -->
   {#if usage}
-    <span class={["shrink-0 text-xs", usage.exhausted ? "text-danger" : "text-fg-muted"]}
-      >{usage.text}</span>
+    <Tooltip text={usage.text} clipped>
+      {#snippet child({ props })}
+        <span
+          {...props}
+          class={[
+            "min-w-0 flex-1 basis-0 truncate text-xs",
+            usage.exhausted ? "text-danger" : "text-fg-muted"
+          ]}>{usage.text}</span>
+      {/snippet}
+    </Tooltip>
   {/if}
   <div class="ml-auto flex items-center row-action">
     {#if viewport.phone}

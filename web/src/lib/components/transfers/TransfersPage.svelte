@@ -16,7 +16,7 @@
   import * as Filter from "#lib/components/ui/filter/filter.js";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
-  import { formatBytes, getDirectoryName, getFileName, plural } from "#lib/format.js";
+  import { formatBytes, formatCount, getDirectoryName, getFileName, plural } from "#lib/format.js";
   import { inspector, useInspector } from "#lib/inspector/inspector.svelte.js";
   import { jobs } from "#lib/jobs/jobs.svelte.js";
   import type { Noun } from "#lib/lists/filtered.js";
@@ -394,7 +394,7 @@
 {#if selected.size}
   <div class="selection-bar" role="toolbar" aria-label="Selected transfers">
     <span class="text-sm">
-      {chosen.length} selected · {formatBytes(chosen.reduce((n, t) => n + t.size, 0))}
+      {formatCount(chosen.length)} selected · {formatBytes(chosen.reduce((n, t) => n + t.size, 0))}
     </span>
     {#if write}
       {#if direction === "download"}

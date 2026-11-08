@@ -1,6 +1,6 @@
 import type { Schemas } from "#lib/api/client.js";
 import { notifier, notifyOptions } from "#lib/chat/notify.svelte.js";
-import { fromWhom, getDirectoryName, getFileName, plural } from "#lib/format.js";
+import { formatCount, fromWhom, getDirectoryName, getFileName, plural } from "#lib/format.js";
 import { live } from "#lib/live/live.svelte.js";
 import { href } from "#lib/nav.js";
 
@@ -17,8 +17,8 @@ const jobNotice = (job: Schemas["DownloadJobFinished"]) => {
     return { title, body: `${getFileName(job.filename)} from ${who}` };
   }
   const outcomes = [
-    job.failedCount ? `${job.failedCount} failed` : "",
-    job.canceledCount ? `${job.canceledCount} canceled` : ""
+    job.failedCount ? `${formatCount(job.failedCount)} failed` : "",
+    job.canceledCount ? `${formatCount(job.canceledCount)} canceled` : ""
   ].filter(Boolean);
   // a folder at the top of a share names the share, not what was picked from it
   const name = /[\\/]/.test(job.folder) ? getFileName(job.folder) : "";

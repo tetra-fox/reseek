@@ -1,4 +1,5 @@
 import type { Schemas } from "#lib/api/client.js";
+import { formatCount } from "#lib/format.js";
 
 export type Transfer = Schemas["Transfer"];
 export type Direction = "download" | "upload";
@@ -34,17 +35,24 @@ export const isQueued = (state: string) => state.includes("Queued");
 
 export const isSucceeded = (state: string) => state === "Completed, Succeeded";
 
-const ENDINGS: Record<string, string> = {
-  Errored: "failed",
-  TimedOut: "timed out",
-  Cancelled: "canceled"
+/** How a state reads where the transfer's own figures don't belong, as in its history */
+const NAMES: Record<string, string> = {
+  "InProgress": "In progress",
+  "Initializing": "Initializing",
+  "Requested": "Requested",
+  "Completed, Succeeded": "Succeeded",
+  "Completed, Errored": "Failed",
+  "Completed, Rejected": "Rejected",
+  "Completed, TimedOut": "Timed out",
+  "Completed, Cancelled": "Canceled"
 };
 
+/** A state's name alone: "Queued", "Failed", "Timed out" */
+export const stateName = (state: string) =>
+  isQueued(state) ? "Queued" : (NAMES[state] ?? state.replace("Completed, ", ""));
+
 /** How an ended transfer's state reads in a sentence: "failed", "timed out", "canceled" */
-export const endingText = (state: string) => {
-  const word = state.replace("Completed, ", "");
-  return ENDINGS[word] ?? word.toLowerCase();
-};
+export const endingText = (state: string) => stateName(state).toLowerCase();
 
 export const isActive = (state: string) => state === "InProgress" || state === "Initializing";
 
@@ -77,39 +85,45 @@ export type ChipId = (typeof STATE_CHIPS)[number]["id"];
 /** The color a state is shown in */
 export type Tone = "accent" | "success" | "info" | "neutral" | "warning" | "danger";
 
+/**
+ * A failure's word with its reason: "Failed: Connection refused". A reason that names the outcome
+ * itself is not prefixed again: "transfer rejected: Too many megabytes" under Rejected gives
+ * "Rejected: Too many megabytes", and "Timed out waiting for the peer" stands alone
+ */
+const withReason = (word: string, why: string | null) => {
+  if (!why) return word;
+  const cut = (text: string) => (text.length > 40 ? `${text.slice(0, 40)}...` : text);
+  if (why.toLowerCase().startsWith(word.toLowerCase())) return cut(why);
+  const said = new RegExp(`^[^:]*\\b${word}: *`, "i");
+  return `${word}: ${cut(why.replace(said, ""))}`;
+};
+
 /** How a transfer's state reads in its chip, its color, and the full text for its tooltip */
 export const stateChip = (t: Transfer): { text: string; tone: Tone; title: string | null } => {
-  const tries = t.attempts > 1 ? ` ×${t.attempts}` : "";
+  const tries = t.attempts > 1 ? ` ×${formatCount(t.attempts)}` : "";
   const why = t.exception ?? null;
-  const short = why && why.length > 40 ? `${why.slice(0, 40)}...` : why;
-  const reason = (word: string) => (short ? `${word}: ${short}` : word);
   const s = t.state;
+  const name = stateName(s);
   if (t.paused && !s.includes("Completed")) return { text: "Paused", tone: "neutral", title: null };
+  // whole percents rounded down, as a group's are, so a file never reads 100% before it is done
   if (s === "InProgress")
-    return { text: `${Math.round(t.percentComplete)}%`, tone: "accent", title: null };
-  if (s === "Completed, Succeeded") return { text: "Succeeded", tone: "success", title: null };
-  if (s === "Initializing") return { text: `Initializing${tries}`, tone: "info", title: null };
+    return { text: `${Math.floor(t.percentComplete)}%`, tone: "accent", title: null };
+  if (s === "Completed, Succeeded") return { text: name, tone: "success", title: null };
+  if (s === "Initializing") return { text: name + tries, tone: "info", title: null };
   if (isQueued(s)) {
-    const place = t.placeInQueue ? ` (#${t.placeInQueue})` : "";
+    const place = t.placeInQueue ? ` (#${formatCount(t.placeInQueue)})` : "";
     return {
-      text: `Queued${place}${tries}`,
+      text: `${name}${place}${tries}`,
       tone: t.attempts > 1 ? "warning" : "neutral",
       title: s
     };
   }
   if (s === "Requested") {
-    return { text: `Requested${tries}`, tone: t.attempts > 1 ? "warning" : "neutral", title: null };
+    return { text: name + tries, tone: t.attempts > 1 ? "warning" : "neutral", title: null };
   }
-  if (s === "Completed, Errored")
-    return { text: reason("Failed") + tries, tone: "danger", title: why };
-  if (s === "Completed, Rejected")
-    return { text: reason("Rejected") + tries, tone: "danger", title: why };
-  if (s === "Completed, TimedOut")
-    return { text: reason("Timed out") + tries, tone: "danger", title: why };
-  if (s === "Completed, Cancelled") return { text: `Canceled${tries}`, tone: "danger", title: why };
-  if (s.startsWith("Completed, ")) {
-    return { text: s.slice("Completed, ".length) + tries, tone: "danger", title: why };
-  }
+  if (["Completed, Errored", "Completed, Rejected", "Completed, TimedOut"].includes(s))
+    return { text: withReason(name, why) + tries, tone: "danger", title: why };
+  if (s.startsWith("Completed, ")) return { text: name + tries, tone: "danger", title: why };
   return { text: s, tone: "neutral", title: why };
 };
 

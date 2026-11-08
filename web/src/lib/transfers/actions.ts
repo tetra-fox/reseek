@@ -15,11 +15,15 @@ import { bump, downloads, type Transfers, uploads } from "./transfers.svelte";
 /** The store of a transfer's direction */
 export const storeOf = (t: Transfer): Transfers => (t.direction === "Upload" ? uploads : downloads);
 
-/** Runs a bulk action on some transfers of one direction and toasts what it did */
+/**
+ * Runs a bulk action on some transfers of one direction and toasts what it did, as an error when
+ * any of them failed
+ */
 export const act = async (store: Transfers, action: BulkAction, ids: string[]) => {
   if (!ids.length) return;
   const outcome = await store.bulk(action, ids);
-  toast(outcome.ok ? outcome.data.text : outcome.error, outcome.ok ? "info" : "error");
+  if (!outcome.ok) toast(outcome.error, "error");
+  else toast(outcome.data.text, outcome.data.failed ? "error" : "info");
 };
 
 /** Opens a finished download in a new tab, where the browser shows, plays or saves it */

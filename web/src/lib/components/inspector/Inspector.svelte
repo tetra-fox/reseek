@@ -76,7 +76,7 @@
 <header class="flex items-center gap-2 px-4 pt-3">
   <Tooltip text={path}>
     {#snippet child({ props })}
-      <h2 {...props} class="min-w-0 flex-1 truncate font-medium">{name}</h2>
+      <h2 {...props} class="min-w-0 flex-1 truncate font-medium" dir="auto">{name}</h2>
     {/snippet}
   </Tooltip>
   {#if menu}

@@ -15,6 +15,7 @@
     ago,
     formatBytes,
     formatBytesTransferred,
+    formatCount,
     formatDuration,
     formatSpeed,
     getDirectoryName,
@@ -91,10 +92,10 @@
     { label: "Speed", value: t.averageSpeed > 0 ? formatSpeed(t.averageSpeed) : null },
     { label: "Time left", value: moving ? milliseconds(t.remainingTime) : null },
     { label: "Time taken", value: milliseconds(t.elapsedTime) },
-    { label: "Attempts", value: t.attempts > 1 ? String(t.attempts) : null },
+    { label: "Attempts", value: t.attempts > 1 ? formatCount(t.attempts) : null },
     {
       label: "Queue place",
-      value: wait ? placeText(wait) : t.placeInQueue ? String(t.placeInQueue) : null
+      value: wait ? placeText(wait) : t.placeInQueue ? formatCount(t.placeInQueue) : null
     },
     { label: "Next attempt", value: t.nextAttemptAt ? ago(t.nextAttemptAt) : null }
   ]);

@@ -4,7 +4,7 @@
   import Dialog from "#lib/components/ui/Dialog.svelte";
   import Textarea from "#lib/components/ui/Textarea.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
-  import { plural } from "#lib/format.js";
+  import { formatCount, plural } from "#lib/format.js";
   import { call } from "#lib/request.js";
 
   type Props = {
@@ -43,7 +43,7 @@
       else failed.push(`${username}: ${outcome.error}`);
     }
     sending = false;
-    const of = `Sent to ${sent} of ${plural(to.length, "user", "users")}`;
+    const of = `Sent to ${formatCount(sent)} of ${plural(to.length, "user", "users")}`;
     // a send that failed or was canceled part way keeps the text and the dialog, to send again
     if (failed.length) {
       toast(`${of}. Could not send to ${failed.join("; ")}`, "error");
@@ -78,7 +78,9 @@
     <Textarea bind:value={text} rows={4} aria-label="Message" required />
   </form>
   {#if sending}
-    <p class="text-sm text-fg-muted" role="status">Sent {sent} of {total}...</p>
+    <p class="text-sm text-fg-muted" role="status">
+      Sent {formatCount(sent)} of {formatCount(total)}...
+    </p>
   {/if}
   {#snippet footer()}
     <Button variant="outline" onclick={cancel}>Cancel</Button>

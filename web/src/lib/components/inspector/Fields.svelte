@@ -7,7 +7,8 @@
   import type { Field } from "#lib/inspector/inspector.svelte.js";
 
   // a section's lines, those without a value left out; `copy` is for raw values, each on its own
-  // line in monospace with a button that copies it
+  // line in monospace with a button that copies it. A raw value, mostly a path or an id, fills
+  // its lines and breaks at any character rather than at its spaces
   type Props = { fields: Field[]; copy?: boolean };
 
   let { fields, copy = false }: Props = $props();
@@ -21,8 +22,7 @@
       <div>
         <dt class="text-xs text-fg-muted">{field.label}</dt>
         <dd class="flex items-start gap-1">
-          <span
-            class="min-w-0 flex-1 cursor-text font-mono text-xs wrap-anywhere whitespace-pre-wrap"
+          <span class="min-w-0 flex-1 cursor-text font-mono text-xs break-all whitespace-pre-wrap"
             >{field.value}</span>
           <Tooltip text={`Copy ${field.label.toLowerCase()}`}>
             {#snippet child({ props })}

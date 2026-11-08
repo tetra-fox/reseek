@@ -1,6 +1,7 @@
-import { columnWidth, getFileName, WIDEST } from "#lib/format.js";
+import { columnWidth, dateTime, getFileName, WIDEST } from "#lib/format.js";
 import type { GridColumn } from "#lib/lists/table.svelte.js";
 import type { Direction, Transfer } from "#lib/transfers/states.js";
+import { itemStart, TICK_REM } from "#lib/tree/indent.js";
 
 import type { SortKey } from "./view";
 
@@ -36,10 +37,22 @@ export type Column = GridColumn<Transfer> & {
 /** How wide the select column is, in rem; a phone leaves it out */
 export const SELECT_REM = 2.5;
 
+/**
+ * How far a row's file cell sets its icon and name in at `depth` under group headers, past the
+ * tick and toggle of a header at that depth, the select column holding the row's own tick
+ */
+/** The room an analysis mark takes after a name: its word, at most "Analyzed", and the gap */
+export const MARK_REM = 5;
+
+export const fileInset = (depth: number) => (depth ? itemStart(depth) + TICK_REM - SELECT_REM : 0);
+
 /** How wide a transfer's speed sparkline is drawn, in pixels, which its column makes room for */
 export const SPARKLINE_WIDTH = 48;
 
 const time = (iso: string | null | undefined) => (iso ? Date.parse(iso) : 0);
+
+/** A requested, started or ended time at its widest: of another year, two digits each */
+const WHEN = columnWidth(dateTime("2000-12-28T22:58:00"));
 
 /** What each sort orders the transfers by */
 const VALUE: Record<SortKey, (t: Transfer) => number | string> = {
@@ -71,12 +84,15 @@ export const COLUMNS: Column[] = (
       id: "file",
       label: "File",
       visible: true,
-      width: "15rem",
+      // the least it is given: an icon and a few letters, plus what the table sets, the inset of
+      // its deepest row and room for an analysis mark when a row has one. It takes the rest of the
+      // row, so the default columns fit beside it in a window 1280 wide
+      width: "calc(5rem + var(--file-room, 0rem))",
       sort: "file",
       always: true,
       grow: true
     },
-    { id: "user", label: "User", visible: true, width: "9.5rem", sort: "user" },
+    { id: "user", label: "User", visible: true, width: "8rem", sort: "user" },
     {
       id: "size",
       label: "Size",
@@ -85,7 +101,7 @@ export const COLUMNS: Column[] = (
       sort: "size",
       end: true
     },
-    { id: "progress", label: "Progress", visible: true, width: "11.25rem", sort: "progress" },
+    { id: "progress", label: "Progress", visible: true, width: "10rem", sort: "progress" },
     {
       id: "speed",
       label: "Speed",
@@ -113,9 +129,9 @@ export const COLUMNS: Column[] = (
       end: true
     },
     { id: "queue", label: "Queue", visible: false, width: "7.5rem" },
-    { id: "requested", label: "Requested", visible: false, width: "8.25rem", sort: "requested" },
-    { id: "started", label: "Started", visible: false, width: "8.25rem", sort: "started" },
-    { id: "ended", label: "Ended", visible: false, width: "8.25rem", sort: "ended" },
+    { id: "requested", label: "Requested", visible: false, width: WHEN, sort: "requested" },
+    { id: "started", label: "Started", visible: false, width: WHEN, sort: "started" },
+    { id: "ended", label: "Ended", visible: false, width: WHEN, sort: "ended" },
     {
       id: "elapsed",
       label: "Elapsed",
@@ -137,7 +153,8 @@ export const COLUMNS: Column[] = (
       id: "actions",
       label: "Actions",
       visible: true,
-      width: "10rem",
+      // four buttons at most: remove, open, open folder and the menu
+      width: "7.5rem",
       always: true,
       quiet: true,
       fixed: true

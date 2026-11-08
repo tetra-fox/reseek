@@ -19,6 +19,7 @@
   import Button from "#lib/components/ui/Button.svelte";
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
+  import MiddleTruncate from "#lib/components/ui/MiddleTruncate.svelte";
   import Progress from "#lib/components/ui/Progress.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import Username from "#lib/components/users/Username.svelte";
@@ -28,6 +29,7 @@
     dateTime,
     formatBytes,
     formatBytesTransferred,
+    formatCount,
     formatDuration,
     formatSpeed,
     getDirectoryName,
@@ -44,11 +46,11 @@
     queuePosition,
     storeOf
   } from "#lib/transfers/actions.js";
-  import { type ColumnId, SELECT_REM } from "#lib/transfers/grid/columns.js";
+  import { type ColumnId, fileInset } from "#lib/transfers/grid/columns.js";
   import { type Direction, rowActions, stateChip, type Transfer } from "#lib/transfers/states.js";
   import { downloads } from "#lib/transfers/transfers.svelte.js";
   import { placeText, waits, whyText } from "#lib/transfers/why.svelte.js";
-  import { itemStart, lineStart, TICK_REM } from "#lib/tree/indent.js";
+  import { lineStart } from "#lib/tree/indent.js";
   import { viewport } from "#lib/ui/viewport.svelte.js";
   import { users } from "#lib/users/users.svelte.js";
 
@@ -119,38 +121,55 @@
   // under a group header the file's icon and name start where a header at the row's depth has its
   // own, past its tick and toggle, the select column holding the row's tick. A phone's row has no
   // tick or toggle to pass, so it starts under the header's tick and keeps its width for the name
-  const fileInset = $derived(
-    depth
-      ? `${viewport.phone ? lineStart(depth) : itemStart(depth) + TICK_REM - SELECT_REM}rem`
-      : undefined
+  /** the folder shown after the name, where no folder line above says it */
+  const folder = $derived(showFolder ? getDirectoryName(t.filename) : "");
+  const inset = $derived(
+    depth ? `${viewport.phone ? lineStart(depth) : fileInset(depth)}rem` : undefined
   );
 </script>
 
 {#snippet label()}
-  {getFileName(t.filename)}
-  {#if showFolder}
-    <span class="text-fg-muted"> {getDirectoryName(t.filename)}</span>
+  <!-- the folder after the name gives way first; a name alone is the control's own text -->
+  {#if folder}
+    <span class="max-w-full shrink-0 truncate" dir="auto">{getFileName(t.filename)}</span>
+    <MiddleTruncate text={folder} path class="text-fg-muted" />
+  {:else}
+    {getFileName(t.filename)}
   {/if}
 {/snippet}
 
 {#snippet name()}
-  <Icon class="size-4 shrink-0 text-fg-muted" />
-  <Tooltip text={t.filename} dense>
-    {#snippet child({ props })}
-      {#if ondetails}
-        <button
-          {...props}
-          type="button"
-          class="min-w-0 truncate text-left hover:underline"
-          onclick={() => ondetails()}>
-          {@render label()}
-        </button>
-      {:else}
-        <span {...props} class="min-w-0 truncate">{@render label()}</span>
+  <!-- the analysis mark keeps its word and the name gives way at its end; in a cell too narrow
+       for an icon, a few letters and the mark, the mark goes so the name keeps them -->
+  <span class="@container flex min-w-0 flex-1">
+    <span class="grid min-w-0 flex-1 grid-cols-[minmax(0,max-content)_auto] items-center gap-1.5">
+      <span class="flex min-w-0 items-center gap-1.5">
+        <Icon class="size-4 shrink-0 text-fg-muted" />
+        <Tooltip text={t.filename} dense>
+          {#snippet child({ props })}
+            {#if ondetails}
+              <button
+                {...props}
+                type="button"
+                class={["min-w-0 text-left hover:underline", folder ? "flex gap-1.5" : "truncate"]}
+                dir={folder ? undefined : "auto"}
+                onclick={() => ondetails()}>
+                {@render label()}
+              </button>
+            {:else}
+              <span
+                {...props}
+                class={["min-w-0", folder ? "flex gap-1.5" : "truncate"]}
+                dir={folder ? undefined : "auto"}>{@render label()}</span>
+            {/if}
+          {/snippet}
+        </Tooltip>
+      </span>
+      {#if direction === "download"}
+        <span class="flex @max-[10em]:hidden"><AnalysisMark mark={marks.download(t.id)} /></span>
       {/if}
-    {/snippet}
-  </Tooltip>
-  {#if direction === "download"}<AnalysisMark mark={marks.download(t.id)} />{/if}
+    </span>
+  </span>
 {/snippet}
 
 {#snippet progress()}
@@ -179,7 +198,8 @@
             ondragleave={() => (dropping = false)}
             ondrop={drop}>
             <GripVerticalIcon class="size-3.5" />
-            {#if localPlace}<span class="text-xs tabular-nums">#{localPlace} here</span>{/if}
+            {#if localPlace}<span class="text-xs tabular-nums">#{formatCount(localPlace)} here</span
+              >{/if}
           </span>
         {/snippet}
       </Tooltip>
@@ -206,7 +226,7 @@
         "justify-end font-mono text-xs whitespace-nowrap tabular-nums",
       column === "actions" && "pl-0"
     ]}
-    style:padding-left={column === "file" ? fileInset : undefined}>
+    style:padding-left={column === "file" ? inset : undefined}>
     {#if column === "select"}
       <Checkbox
         aria-label={`Select ${getFileName(t.filename)}`}
@@ -268,7 +288,7 @@
       {formatBytesTransferred(t.size, t.bytesTransferred)}
     {:else if column === "queue"}
       {#if direction === "download"}
-        {#if t.placeInQueue}<span class="tabular-nums">#{t.placeInQueue}</span>{/if}
+        {#if t.placeInQueue}<span class="tabular-nums">#{formatCount(t.placeInQueue)}</span>{/if}
         {#if can.queuePosition}
           {@const failed = storeOf(t).queueErrors.get(t.id)}
           <Tooltip text={failed === undefined ? "Check queue position" : queueFailure(failed)}>
@@ -298,7 +318,8 @@
         column === "requested" ? t.requestedAt : column === "started" ? t.startedAt : t.endedAt}
       {#if at}
         <Tooltip text={ago(at)} dense>
-          {#snippet child({ props })}<span {...props}>{dateTime(at)}</span>{/snippet}
+          {#snippet child({ props })}<span {...props} class="truncate">{dateTime(at)}</span
+            >{/snippet}
         </Tooltip>
       {/if}
     {:else if column === "elapsed"}
@@ -306,7 +327,7 @@
         ? formatDuration(t.elapsedTime / 1000)
         : ""}
     {:else if column === "attempts"}
-      {t.attempts}
+      {formatCount(t.attempts)}
     {:else if column === "job"}
       {#if t.jobId}
         {@const job = t.jobId}

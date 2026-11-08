@@ -8,9 +8,10 @@ export type Progress = {
   size: number;
   /** 0 to 100 */
   percent: number;
-  /** what the running transfers move together, bytes a second */
-  speed: number;
-  /** seconds until the rest is moved at that speed, null when nothing moves */
+  /**
+   * seconds until the rest is moved: the time left of its slowest file, while every file not yet
+   * done is moving. Null while one waits or has no time left to tell, as nothing says when it ends
+   */
   eta: number | null;
   /** some of it is running */
   running: boolean;
@@ -19,23 +20,27 @@ export type Progress = {
 export const groupProgress = (transfers: Transfer[]): Progress => {
   let moved = 0;
   let size = 0;
-  let speed = 0;
   let running = false;
+  let left = 0;
+  let known = true;
   for (const t of transfers) {
     if (isRetryable(t.state)) continue;
     size += t.size;
-    moved += isSucceeded(t.state) ? t.size : Math.min(t.bytesTransferred, t.size);
-    if (isActive(t.state)) {
-      running = true;
-      speed += t.averageSpeed;
+    if (isSucceeded(t.state)) {
+      moved += t.size;
+      continue;
     }
+    moved += Math.min(t.bytesTransferred, t.size);
+    if (isActive(t.state)) running = true;
+    if (t.state === "InProgress" && t.remainingTime !== null && t.remainingTime !== undefined)
+      left = Math.max(left, t.remainingTime);
+    else known = false;
   }
   return {
     moved,
     size,
     percent: size ? (moved / size) * 100 : 0,
-    speed,
-    eta: speed > 0 ? Math.ceil((size - moved) / speed) : null,
+    eta: known && left > 0 ? Math.ceil(left / 1000) : null,
     running
   };
 };
