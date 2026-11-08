@@ -122,3 +122,9 @@ opt-level = 3
 [profile.dev.package.mp3lame-sys]
 opt-level = 3
 
+# the shipped binaries: whole-program optimization makes them about 15% smaller and a few percent
+# faster, at about two and a half times the build time, so tests and local builds stay on release
+[profile.dist]
+inherits = "release"
+lto = "fat"
+codegen-units = 1

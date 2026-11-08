@@ -20,6 +20,10 @@ reseek.workspace = true
 reseek-agent.workspace = true
 reseek-ui-assets.workspace = true
 
+# musl's own malloc is slow when many threads allocate at once, as the runtime's workers do
+[target.'cfg(target_env = "musl")'.dependencies]
+mimalloc = "0.1"
+
 # the tests start the program and drive it through its API, against a local soulfind
 [dev-dependencies]
 api-client.workspace = true

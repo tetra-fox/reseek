@@ -69,11 +69,11 @@ release-macos: web-build
     mkdir -p dist
     for target in x86_64-apple-darwin aarch64-apple-darwin; do
       rustup target add "$target"
-      cargo build --release -p reseek-bin --target "$target"
+      cargo build --profile dist -p reseek-bin --target "$target"
     done
     for program in reseek reseek-agent; do
       lipo -create -output "dist/$program-macos-universal" \
-        "target/x86_64-apple-darwin/release/$program" "target/aarch64-apple-darwin/release/$program"
+        "target/x86_64-apple-darwin/dist/$program" "target/aarch64-apple-darwin/dist/$program"
     done
 
 # the container image `reseek` from the release binaries, with podman or docker

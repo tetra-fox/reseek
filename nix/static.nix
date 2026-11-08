@@ -41,7 +41,7 @@ rustPlatform.buildRustPackage {
     runHook preBuild
     # zig keeps its cache under the home directory
     export HOME=$TMPDIR
-    cargo zigbuild --offline --release --package reseek-bin --target ${target}
+    cargo zigbuild --offline --profile dist --package reseek-bin --target ${target}
     runHook postBuild
   '';
 
@@ -49,8 +49,8 @@ rustPlatform.buildRustPackage {
 
   installPhase = ''
     runHook preInstall
-    install -Dm755 target/${target}/release/reseek $out/bin/reseek
-    install -Dm755 target/${target}/release/reseek-agent $out/bin/reseek-agent
+    install -Dm755 target/${target}/dist/reseek $out/bin/reseek
+    install -Dm755 target/${target}/dist/reseek-agent $out/bin/reseek-agent
     runHook postInstall
   '';
 
