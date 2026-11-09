@@ -7,10 +7,8 @@ test("a room reads like a chat: names, actions, links, the wall and the activity
   page
 }) => {
   await fakeChat(page);
-  // the room is faked, so every stream that carries its frames is too: the daemon's own would
-  // list no joined rooms. The shell opens such a stream as the app starts, and a pane keeps only
-  // the joins made while it is open, so the streams are answered once the room's pane shows and
-  // the first one has a member join
+  // the daemon's own stream would list no joined rooms, and a pane keeps only the joins made
+  // while it is open: the streams wait for the pane, and the first has a member join
   let paneOpen!: () => void;
   const opened = new Promise<void>((resolve) => (paneOpen = resolve));
   let joinSent = false;

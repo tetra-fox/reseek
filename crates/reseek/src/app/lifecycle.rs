@@ -5,8 +5,8 @@
 //! anything can start new ones, and the process's health is sampled into the state; then, in
 //! the background, the client's events and the options are followed, whether other users can
 //! reach us is judged and the router is asked to forward our peer port while we are logged in,
-//! the shares are initialized, and the upkeep and the schedules start. Then the watchdog connects, unless connecting is turned off or there are
-//! no credentials.
+//! the shares are initialized, and the upkeep and the schedules start. Then the watchdog
+//! connects, unless connecting is turned off or there are no credentials.
 //!
 //! Stopping, once the HTTP host has stopped: the running searches end as canceled, the
 //! watchdog stops, the port mapping is removed, the client disconnects and is disposed, the

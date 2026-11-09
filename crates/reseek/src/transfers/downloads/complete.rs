@@ -80,7 +80,7 @@ impl Downloads {
       }),
       ended_at,
     );
-    // the options as they were before the record was saved as moved
+    // the options read when the completion began, before the move
     self
       .analysis
       .downloaded(

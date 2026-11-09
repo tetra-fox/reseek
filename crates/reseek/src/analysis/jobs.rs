@@ -330,8 +330,8 @@ impl Analysis {
   /// Queues the file the download `id` from `username` of the download job `job` finished into
   /// at `path`, when `analysis.on_download` is on and the file's extension is in
   /// `analysis.extensions`: a part of the one analysis job that follows the download job.
-  /// `analysis` is the options as read before the download was saved as moved, so a change made
-  /// once it shows as finished does not apply to it.
+  /// `analysis` is the options read when the download's completion began, before its move, so a
+  /// change made once it shows as finished does not apply to it.
   pub async fn downloaded(
     &self,
     analysis: &AnalysisOptions,
