@@ -250,6 +250,13 @@
     if (atBottom && !pane.hasNewer && document.visibilityState === "visible") onread();
   };
 
+  // a message unread again once the list is placed, as one the server delivered again, is read
+  // again while the view is at the newest; the first page's unread ones wait for their placing
+  const unreadHeld = $derived(pane.ordered.some((m) => m.unread));
+  $effect(() => {
+    if (unreadHeld && placed) untrack(readIfSeen);
+  });
+
   // the first page shows at the bottom, or at the message a link names; one no longer stored
   // shows where it was, at the first message after it
   $effect(() => {

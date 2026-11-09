@@ -129,6 +129,15 @@ export class MessagePane {
           if (username === name) this.#arrived(fromPrivate(message, this.#self()));
         })
       );
+      // a message the server delivers again, as when it lost our acknowledgement, is unread
+      // once more with no message frame; the newest page read again marks it so
+      $effect(() =>
+        live.on("conversations.update", ({ conversation }) => {
+          if (conversation.username !== name || !this.loaded || this.hasNewer) return;
+          const held = this.messages.rows.filter((m) => m.unread).length;
+          if (conversation.unAcknowledgedMessageCount > held) void this.load();
+        })
+      );
       return;
     }
     $effect(() =>

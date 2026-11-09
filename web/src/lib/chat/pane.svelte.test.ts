@@ -414,3 +414,44 @@ describe("a pane at the newest messages", () => {
     expect(pane.hasMore).toBe(false);
   });
 });
+
+describe("a conversation's pane", () => {
+  afterEach(() => {
+    live.stop();
+    chat.clear();
+    vi.unstubAllGlobals();
+  });
+
+  it("marks a message unread again when the server delivers it again", async () => {
+    let acknowledged = true;
+    const said = (localId: number) => ({
+      localId,
+      id: localId,
+      timestamp: new Date(Date.UTC(2026, 9, 27, 18, 0, localId)).toISOString(),
+      username: "alice",
+      direction: "In",
+      message: `line ${localId}`,
+      isAcknowledged: localId === 1 || acknowledged,
+      wasReplayed: false,
+      autoReply: false
+    });
+    const net = fakeNetwork((url) => {
+      if (url.pathname.endsWith("/conversations")) return [];
+      if (url.pathname.endsWith("/messages")) return [said(1), said(2)];
+      return undefined;
+    });
+    const pane = new MessagePane({ kind: "user", name: "alice" }, () => "me");
+    const stop = $effect.root(() => pane.follow());
+    live.start();
+    net.frame("hello", { principal: { name: "me", role: "Administrator" } } as never);
+    await pane.load();
+    expect(pane.ordered.map((m) => m.unread)).toEqual([false, false]);
+    // our acknowledgement was lost: message 2 comes again, and only the count says so
+    acknowledged = false;
+    net.frame("conversations.update", {
+      conversation: { username: "alice", unAcknowledgedMessageCount: 1 }
+    } as never);
+    await vi.waitFor(() => expect(pane.ordered.map((m) => m.unread)).toEqual([false, true]));
+    stop();
+  });
+});
