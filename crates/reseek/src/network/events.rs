@@ -367,12 +367,12 @@ async fn handle(app: &AppState, event: Event, session: &mut Session) {
         .statistics_received(&statistics.username, &statistics.stats);
     }
     Event::PrivilegedUserListReceived(usernames) => app.users.privileged_listed(&usernames),
+    Event::RoomListReceived(list) => app.messaging.room_list_received(list).await,
     // the transfer, search, room, user and distributed engines follow these themselves, and the
     // rest change nothing the daemon keeps
     Event::ServerInfoReceived(_)
     | Event::PrivilegeNotificationReceived { .. }
     | Event::UserCannotConnect { .. }
-    | Event::RoomListReceived(_)
     | Event::BrowseProgressUpdated(_)
     | Event::DistributedNetworkReset
     | Event::DistributedParentAdopted(_)

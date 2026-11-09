@@ -276,9 +276,7 @@ async fn the_room_list_is_asked_for_once_a_minute_at_most() {
   };
   let dir = tempfile::tempdir().unwrap();
   let name = soulfind::username("daemon");
-  let running = daemon(dir.path(), &server, &name, &[]);
-  let api = signed_in(&running).await;
-  until(&api, "logged in", logged_in).await;
+  // the room is there before the login, so the list the server sends at the login has it
   let peer = server.login("peer", quiet()).await;
   let early = soulfind::username("early");
   peer
@@ -286,6 +284,9 @@ async fn the_room_list_is_asked_for_once_a_minute_at_most() {
     .join_room(&early, RoomType::Public)
     .await
     .unwrap();
+  let running = daemon(dir.path(), &server, &name, &[]);
+  let api = signed_in(&running).await;
+  until(&api, "logged in", logged_in).await;
 
   let listed = api.available_rooms().await.unwrap();
   assert!(

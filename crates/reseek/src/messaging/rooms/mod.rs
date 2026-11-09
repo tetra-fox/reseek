@@ -41,7 +41,7 @@ const LIST_FOR: Duration = Duration::from_secs(60);
 /// How many of a room's latest messages a room is shown with.
 const LATEST: u32 = 250;
 
-/// The rooms we are in and the server's room list as last asked for.
+/// The rooms we are in and the server's room list as it last sent it.
 #[derive(Default)]
 pub struct Rooms {
   tracker: Mutex<Tracker>,
@@ -195,6 +195,19 @@ impl Messaging {
   /// at it asks the server.
   async fn forget_room_list(&self) {
     *self.rooms.available.lock().await = None;
+  }
+
+  /// Keeps the room list the server sent, asked for or not, as the list served for the next
+  /// while. The server sends one on its own after a login and after a change to our private
+  /// rooms, and that one lists the change already.
+  pub async fn room_list_received(&self, list: Arc<RoomList>) {
+    debug!(
+      public = list.public.len(),
+      owned = list.owned.len(),
+      member = list.private.len(),
+      "room list received"
+    );
+    *self.rooms.available.lock().await = Some((Instant::now(), list));
   }
 
   /// Pushes the rooms we are in.
@@ -464,13 +477,8 @@ impl Messaging {
       match cached.as_ref().filter(|(at, _)| at.elapsed() < LIST_FOR) {
         Some((_, list)) => list.clone(),
         None => {
+          // the answer is kept here at once, and once more as a list received
           let list = self.client().get_room_list().await.map_err(unsent)?;
-          debug!(
-            public = list.public.len(),
-            owned = list.owned.len(),
-            member = list.private.len(),
-            "room list asked of the server"
-          );
           *cached = Some((Instant::now(), list.clone()));
           list
         }
@@ -517,5 +525,36 @@ impl Messaging {
       .map_err(internal)?;
     self.push_rooms().await;
     Ok(())
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use soulseek_proto::server::{RoomInfo as Listed, RoomList};
+
+  use crate::testing::app;
+
+  #[tokio::test]
+  async fn a_room_list_the_server_sends_on_its_own_is_served_without_asking() {
+    // the daemon is not connected, so a list it had to ask for would be refused
+    let app = app("", &[]).await;
+    let messaging = &app.state.messaging;
+    let listed = |name: &str| Listed {
+      name: name.into(),
+      user_count: 1,
+    };
+    let list = RoomList {
+      public: vec![listed("indie")],
+      owned: vec![listed("ours")],
+      private: Vec::new(),
+      moderated_room_names: Vec::new(),
+    };
+    messaging.room_list_received(list.into()).await;
+    let rooms = messaging.available_rooms().await.unwrap();
+    let shown: Vec<(&str, bool)> = rooms
+      .iter()
+      .map(|room| (room.name.as_str(), room.is_owned))
+      .collect();
+    assert_eq!(shown, [("indie", false), ("ours", true)]);
   }
 }
