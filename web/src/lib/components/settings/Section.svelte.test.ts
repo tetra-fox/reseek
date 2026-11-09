@@ -241,6 +241,27 @@ describe("a settings section", () => {
     vi.unstubAllGlobals();
   });
 
+  it("names the drafts Copy as Nix leaves out as not valid", async () => {
+    const copied: string[] = [];
+    vi.stubGlobal("navigator", {
+      ...navigator,
+      clipboard: { writeText: async (text: string) => void copied.push(text) }
+    });
+    const web = render(sections.find((s) => s.id === "web")!);
+    const input = web.querySelector<HTMLInputElement>('[id="web.port"]')!;
+    input.value = "lots";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    flushSync();
+    [...web.querySelectorAll("button")]
+      .find((b) => b.textContent?.includes("Copy as Nix"))!
+      .click();
+    await flush();
+    expect(web.textContent).toContain("Left out as not valid: HTTP port");
+    expect(copied).toHaveLength(1);
+    expect(copied[0]).not.toContain("lots");
+    vi.unstubAllGlobals();
+  });
+
   it("shows only the options the search finds, keeping the others' edits", () => {
     const target = document.createElement("div");
     document.body.append(target);

@@ -26,7 +26,7 @@
   import { changedOnDisk, patchFile } from "#lib/config/write.js";
   import { CopyButton } from "#lib/feedback/clipboard.svelte.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
-  import { plural } from "#lib/format.js";
+  import { listText, plural } from "#lib/format.js";
   import { same } from "#lib/lists/keyed.svelte.js";
   import { href } from "#lib/nav.js";
   import { call, type Outcome } from "#lib/request.js";
@@ -322,12 +322,17 @@
   const copying = new CopyButton();
   // shown to copy by hand when the browser won't copy it, as over plain http
   let nix = $state<string | null>(null);
+  /** the options the last Copy as Nix left out, as their drafts don't parse */
+  let skipped = $state<string[]>([]);
   const copyNix = async () => {
+    const left: string[] = [];
     const entries = fields.flatMap((f): [string, unknown][] => {
       const parsed = fromDraft(f, controls[f.key], draft[f.key], view.fields[f.key]);
+      if ("error" in parsed) left.push(f.label);
       if (!("set" in parsed) || parsed.set === null) return [];
       return [[f.key, parsed.set]];
     });
+    skipped = left;
     const text = asNixSettings(entries);
     if (!(await copying.copy(text))) nix = text;
   };
@@ -348,6 +353,11 @@
       </Button>
     </div>
   {/snippet}
+  {#if skipped.length}
+    <p class="text-xs text-warning-soft-fg">
+      Left out as not valid: {listText(skipped)}
+    </p>
+  {/if}
   {#if section.extra}<section.extra />{/if}
   {#if wantsDesktop}<DesktopPermission />{/if}
   {#if nix}
