@@ -1,9 +1,11 @@
 //! The options routes: the options in effect and at startup, the settings page's view, runtime
 //! overrides, and reading, checking and writing the configuration files.
 //!
-//! Every route is for administrators. Changing anything, and reading the files' raw text,
-//! needs `remote_configuration`; touching the files, or the authentication options, also needs
-//! someone at the UI rather than a stored API key.
+//! Every route but the options in effect is for administrators. Those, with secrets hidden, are
+//! what the live stream's application topic sends to everyone signed in, so any principal may
+//! read them. Changing anything, and reading the files' raw text, needs `remote_configuration`;
+//! touching the files, or the authentication options, also needs someone at the UI rather than a
+//! stored API key.
 
 use std::collections::BTreeMap;
 
@@ -25,7 +27,7 @@ use utoipa_axum::routes;
 use super::error::ApiError;
 use crate::app::AppState;
 use crate::auth::sessions::lifetime;
-use crate::auth::{Administrator, Authorized, require_interactive};
+use crate::auth::{Administrator, AnyRole, Authorized, require_interactive};
 use crate::config::{Options, redact, view};
 use crate::db::shifted;
 
@@ -48,14 +50,15 @@ pub fn routes() -> OpenApiRouter<AppState> {
     .routes(routes!(validate_file))
 }
 
-/// The options in effect.
+/// The options in effect, secrets hidden: the stream's `application.options` frame, for a tab
+/// that has no stream.
 #[utoipa::path(
   get, path = "/options", tag = "options",
-  responses((status = 200, body = OptionsDocument), (status = 401), (status = 403))
+  responses((status = 200, body = OptionsDocument), (status = 401))
 )]
 async fn get_options(
   State(app): State<AppState>,
-  _admin: Authorized<Administrator>,
+  _caller: Authorized<AnyRole>,
 ) -> Json<OptionsDocument> {
   Json(OptionsDocument(redact::values(&app.config.current())))
 }

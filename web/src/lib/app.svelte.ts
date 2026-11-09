@@ -75,11 +75,15 @@ class App {
     this.phase = "app";
   };
 
-  /** Fetches the state document, for when frames don't arrive */
+  /** Fetches the state document and the options in effect, for when frames don't arrive */
   refresh = async () => {
-    const outcome = await call(() => api.GET("/api/v0/application"));
-    if (outcome.ok) this.state = outcome.data;
-    return outcome.ok;
+    const [state, options] = await Promise.all([
+      call(() => api.GET("/api/v0/application")),
+      call(() => api.GET("/api/v0/options"))
+    ]);
+    if (state.ok) this.state = state.data;
+    if (options.ok) this.options = options.data;
+    return state.ok;
   };
 
   /** The session is gone: everything kept for it goes, and the login shows */

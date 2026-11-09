@@ -26,4 +26,25 @@ describe("the app's bootstrap", () => {
     expect(app.phase).toBe("login");
     expect(live.status).toBe("off");
   });
+
+  it("reads the options beside the state when the stream can't open", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const request = input instanceof Request ? input : new Request(String(input), init);
+        const path = new URL(request.url).pathname;
+        if (path.endsWith("/api/v0/session")) {
+          return Response.json({ name: "editor", role: "ReadWrite", session: null });
+        }
+        if (path.endsWith("/api/v0/application")) return Response.json({ user: {} });
+        if (path.endsWith("/api/v0/options"))
+          return Response.json({ soulseek: { username: "me" } });
+        // more tabs than the daemon streams to
+        return Response.json({ error: "Too many streams" }, { status: 429 });
+      })
+    );
+    await app.bootstrap();
+    expect(app.phase).toBe("app");
+    expect(app.options).toEqual({ soulseek: { username: "me" } });
+  });
 });

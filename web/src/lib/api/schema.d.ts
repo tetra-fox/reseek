@@ -1178,7 +1178,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The options in effect. */
+        /**
+         * The options in effect, secrets hidden: the stream's `application.options` frame, for a tab
+         *     that has no stream.
+         */
         get: operations["get_options"];
         put?: never;
         post?: never;
@@ -13243,12 +13246,6 @@ export interface operations {
                 };
             };
             401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            403: {
                 headers: {
                     [name: string]: unknown;
                 };

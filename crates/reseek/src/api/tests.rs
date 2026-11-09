@@ -156,6 +156,8 @@ async fn each_route_takes_its_least_role() {
       "/api/v0/telemetry/reports/transfers/summary",
       read,
     ),
+    (Method::GET, "/api/v0/options", read),
+    (Method::GET, "/api/v0/options/view", admin),
     (Method::GET, "/api/v0/server", read),
     (Method::PUT, "/api/v0/server", write),
     (Method::GET, "/api/v0/logs/live", admin),

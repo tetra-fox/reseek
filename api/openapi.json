@@ -5309,7 +5309,7 @@
         "tags": [
           "options"
         ],
-        "summary": "The options in effect.",
+        "summary": "The options in effect, secrets hidden: the stream's `application.options` frame, for a tab\nthat has no stream.",
         "operationId": "get_options",
         "responses": {
           "200": {
@@ -5321,8 +5321,7 @@
               }
             }
           },
-          "401": {},
-          "403": {}
+          "401": {}
         }
       },
       "patch": {

@@ -479,7 +479,7 @@ mod tests {
     let options = app
       .send_from(
         "10.1.2.3:1",
-        bearer(request("GET", "/api/v0/options", None), &secret),
+        bearer(request("GET", "/api/v0/options/view", None), &secret),
       )
       .await;
     assert_eq!(options.status, 403, "a read-only token is no administrator");

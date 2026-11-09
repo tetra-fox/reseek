@@ -232,12 +232,13 @@ pub(crate) mod tests {
   pub(crate) const CONFIG: &str = "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n\
                         [web.authentication.api_keys.viewer]\nkey = \"viewer-key-0123456789\"\n";
 
-  /// A request for the options with the header `name` set to `value`.
+  /// A request for the options view, which takes an administrator, with the header `name` set
+  /// to `value`.
   pub(crate) fn with_header(
     name: &'static str,
     value: &str,
   ) -> axum::http::Request<axum::body::Body> {
-    let mut r = request("GET", "/api/v0/options", None);
+    let mut r = request("GET", "/api/v0/options/view", None);
     r.headers_mut().insert(name, value.parse().unwrap());
     r
   }
@@ -247,7 +248,7 @@ pub(crate) mod tests {
     let app = app(CONFIG, &[]).await;
     assert_eq!(
       app
-        .send(request("GET", "/api/v0/options", None))
+        .send(request("GET", "/api/v0/options/view", None))
         .await
         .status,
       200
@@ -352,10 +353,10 @@ pub(crate) mod tests {
       .await;
     assert_eq!(viewer.status, 403, "a read-only key is no administrator");
     let stranger = app
-      .send_from(OUTSIDE, request("GET", "/api/v0/options", None))
+      .send_from(OUTSIDE, request("GET", "/api/v0/options/view", None))
       .await;
     assert_eq!(stranger.status, 401);
-    let mut rebound = request("GET", "/api/v0/options", None);
+    let mut rebound = request("GET", "/api/v0/options/view", None);
     rebound
       .headers_mut()
       .insert("host", "attacker.example".parse().unwrap());
