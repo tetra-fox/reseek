@@ -241,7 +241,9 @@ async fn writes_push_the_users_summary_and_forgetting_pushes_the_removal() {
 
 #[tokio::test]
 async fn the_users_retention_sets_the_cutoff_of_forgetting() {
-  let app = app(&format!("[retention]\nusers = \"1d\"\n{CONFIG}"), &[]).await;
+  // the cleanup the schedule would run at the start is off, so only the test's call forgets
+  let config = format!("[schedules]\ncleanup = \"off\"\n[retention]\nusers = \"1d\"\n{CONFIG}");
+  let app = app(&config, &[]).await;
   let directory = &app.state.users;
   let seen = |days| touch::Pending {
     seen_at: Some(Utc::now() - chrono::Duration::days(days)),
