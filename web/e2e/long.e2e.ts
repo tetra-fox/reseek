@@ -3,15 +3,22 @@ import { expect, type Locator, type Page, test } from "@playwright/test";
 import { longRoom, manyDownloads, wideBrowse } from "./support/fakes";
 import { visit } from "./support/login";
 
-/** Scrolls `box` to its end a step at a time, as a held key or a fling would */
+/**
+ * Scrolls `box` to its end, as a drag of the scrollbar to the bottom would. The lines are sized by
+ * a guess until drawn, so the end moves as those in view are measured: the box goes to it again
+ * until a jump leaves its height as it was
+ */
 const toEnd = (box: Locator) =>
   box.evaluate(
     (e) =>
       new Promise<void>((done) => {
         const step = () => {
-          e.scrollTop += 3 * e.clientHeight;
-          if (e.scrollTop + e.clientHeight >= e.scrollHeight - 1) setTimeout(done, 300);
-          else requestAnimationFrame(step);
+          const height = e.scrollHeight;
+          e.scrollTop = height;
+          // a frame to draw the lines now in view, and one for their measured sizes
+          requestAnimationFrame(() =>
+            requestAnimationFrame(() => (e.scrollHeight === height ? done() : step()))
+          );
         };
         step();
       })
