@@ -12,7 +12,7 @@ use rusqlite::{Connection, params_from_iter};
 
 use super::Messaging;
 use crate::api::error::ApiError;
-use crate::db::read_timestamp;
+use crate::db::{enum_at, enum_text, read_timestamp};
 use crate::sync::lock;
 
 /// Where a snippet's match starts and ends before it is escaped; no message holds them.
@@ -52,9 +52,10 @@ fn statement(query: &MessageSearchQuery) -> Option<(String, Vec<Value>)> {
       filter = format!(" AND m.username = ?{}", values.len());
     }
     parts.push(format!(
-      "SELECT 'private', m.username, NULL, m.timestamp, m.message, m.local_id, {} \
+      "SELECT '{}', m.username, NULL, m.timestamp, m.message, m.local_id, {} \
        FROM private_messages_fts JOIN private_messages m ON m.local_id = private_messages_fts.rowid \
        WHERE private_messages_fts MATCH ?1{filter}",
+      enum_text(MessageHitKind::Private),
       snippet("private_messages_fts")
     ));
   }
@@ -69,9 +70,10 @@ fn statement(query: &MessageSearchQuery) -> Option<(String, Vec<Value>)> {
       filter.push_str(&format!(" AND m.username = ?{}", values.len()));
     }
     parts.push(format!(
-      "SELECT 'room', m.username, m.room_name, m.timestamp, m.message, m.local_id, {} \
+      "SELECT '{}', m.username, m.room_name, m.timestamp, m.message, m.local_id, {} \
        FROM room_messages_fts JOIN room_messages m ON m.local_id = room_messages_fts.rowid \
        WHERE room_messages_fts MATCH ?1{filter}",
+      enum_text(MessageHitKind::Room),
       snippet("room_messages_fts")
     ));
   }
@@ -101,12 +103,8 @@ fn search(conn: &Connection, query: &MessageSearchQuery) -> rusqlite::Result<Mes
   let hits = conn
     .prepare(&page)?
     .query_map(params_from_iter(&values), |row| {
-      let kind = match row.get_ref(0)?.as_str()? {
-        "room" => MessageHitKind::Room,
-        _ => MessageHitKind::Private,
-      };
       Ok(MessageHit {
-        kind,
+        kind: enum_at(row, 0)?,
         username: row.get(1)?,
         room: row.get(2)?,
         timestamp: read_timestamp(&row.get::<_, String>(3)?)?,

@@ -78,11 +78,19 @@ pub struct Inbound {
   pub replayed: bool,
 }
 
-fn direction(row: &Row, i: usize) -> rusqlite::Result<MessageDirection> {
-  Ok(match row.get::<_, i64>(i)? {
-    0 => MessageDirection::Out,
-    _ => MessageDirection::In,
-  })
+/// The direction in the column `i` of `row`, stored as 0 for out and 1 for in; another
+/// number is an error that names the message `local_id`.
+fn direction(row: &Row, i: usize, local_id: i64) -> rusqlite::Result<MessageDirection> {
+  match row.get::<_, i64>(i)? {
+    0 => Ok(MessageDirection::Out),
+    1 => Ok(MessageDirection::In),
+    other => Err(rusqlite::Error::FromSqlConversionFailure(
+      i,
+      rusqlite::types::Type::Integer,
+      format!("private message {local_id} has the direction {other}, which is neither 0 nor 1")
+        .into(),
+    )),
+  }
 }
 
 /// The message in `row`, read with [`MESSAGE`].
@@ -92,12 +100,13 @@ fn message(row: &Row) -> rusqlite::Result<PrivateMessage> {
 
 /// The message in `row` whose [`MESSAGE`] columns start at `at`.
 fn message_from(row: &Row, at: usize) -> rusqlite::Result<PrivateMessage> {
+  let local_id = row.get(at)?;
   Ok(PrivateMessage {
-    local_id: row.get(at)?,
+    local_id,
     id: row.get(at + 1)?,
     timestamp: read_timestamp(&row.get::<_, String>(at + 2)?)?,
     username: row.get(at + 3)?,
-    direction: direction(row, at + 4)?,
+    direction: direction(row, at + 4, local_id)?,
     message: row.get(at + 5)?,
     is_acknowledged: row.get(at + 6)?,
     // written once, at the first delivery: it came from the server's offline store, so it was

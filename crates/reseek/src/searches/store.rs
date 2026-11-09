@@ -15,7 +15,7 @@ use rusqlite::types::Type;
 use rusqlite::{Connection, OptionalExtension, Row, params};
 use uuid::Uuid;
 
-use crate::db::{self, Schema, read_timestamp, timestamp};
+use crate::db::{self, Schema, enum_at, enum_text, read_timestamp, timestamp};
 
 /// `search.db`: the `searches` table and the wishlist.
 pub static SCHEMA: Schema = db::schema!("search", ["0001_initial"]);
@@ -23,18 +23,6 @@ pub static SCHEMA: Schema = db::schema!("search", ["0001_initial"]);
 /// The columns [`search`] reads, in its order: every one but the responses.
 const COLUMNS: &str = "id, search_text, token, scope_type, scope_subjects, state, started_at, \
                        ended_at, response_count, file_count, locked_file_count, response_bytes";
-
-/// A scope type as stored.
-fn scope_text(scope: SearchScopeType) -> &'static str {
-  match scope {
-    SearchScopeType::Network => "network",
-    SearchScopeType::User => "user",
-    SearchScopeType::Room => "room",
-    SearchScopeType::Rooms => "rooms",
-    SearchScopeType::Buddies => "buddies",
-    SearchScopeType::Wishlist => "wishlist",
-  }
-}
 
 fn conversion(
   i: usize,
@@ -51,14 +39,8 @@ fn count(row: &Row, i: usize) -> rusqlite::Result<u32> {
 /// The search in `row`, read with [`COLUMNS`], without its responses.
 fn search(row: &Row) -> rusqlite::Result<Search> {
   let id: String = row.get(0)?;
-  let scope_type = match row.get_ref(3)?.as_str()? {
-    "user" => SearchScopeType::User,
-    "room" => SearchScopeType::Room,
-    "rooms" => SearchScopeType::Rooms,
-    "buddies" => SearchScopeType::Buddies,
-    "wishlist" => SearchScopeType::Wishlist,
-    _ => SearchScopeType::Network,
-  };
+  let scope_type: SearchScopeType =
+    enum_at(row, 3).map_err(|e| conversion(3, format!("search {id}: {e}")))?;
   let subjects: String = row.get(4)?;
   let state = SearchStates::from_bits_retain(row.get::<_, u32>(5)?);
   let ended_at: Option<String> = row.get(7)?;
@@ -93,7 +75,7 @@ pub fn insert(conn: &Connection, search: &Search) -> rusqlite::Result<bool> {
       search.id.to_string(),
       search.search_text,
       search.token,
-      scope_text(search.scope.scope_type),
+      enum_text(search.scope.scope_type),
       subjects,
       search.state.bits(),
       timestamp(search.started_at),
@@ -311,6 +293,21 @@ mod tests {
       .unwrap()
       .unwrap();
     assert!(decompress(&blob).unwrap().is_empty());
+  }
+
+  #[tokio::test]
+  async fn a_search_stored_with_a_scope_this_version_does_not_know_is_an_error_naming_it() {
+    let db = db().await;
+    let search = requested("2026-10-26T10:00:00Z");
+    let id = search.id;
+    db.write(move |conn| {
+      insert(conn, &search)?;
+      conn.execute("UPDATE searches SET scope_type = 'galaxy'", [])
+    })
+    .await
+    .unwrap();
+    let error = db.read(move |conn| get(conn, id)).await.unwrap_err();
+    assert!(error.to_string().contains(&id.to_string()), "{error}");
   }
 
   #[tokio::test]

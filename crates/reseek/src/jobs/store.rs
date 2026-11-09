@@ -6,11 +6,9 @@ use api_types::jobs::{
 };
 use chrono::{DateTime, Utc};
 use rusqlite::{Connection, OptionalExtension, Row, params};
-use serde::Serialize;
-use serde::de::DeserializeOwned;
 use uuid::Uuid;
 
-use crate::db::{self, Schema, read_timestamp, timestamp};
+use crate::db::{self, Schema, enum_at, enum_text, read_timestamp, timestamp};
 
 /// `jobs.db`: jobs, their parts and the schedules' last runs.
 pub static SCHEMA: Schema = db::schema!("jobs", ["0001_initial", "0002_schedule_ended_at"]);
@@ -19,22 +17,6 @@ pub static SCHEMA: Schema = db::schema!("jobs", ["0001_initial", "0002_schedule_
 const COLUMNS: &str = "id, kind, name, starter, starter_name, state, ending, error, summary, \
                        created_at, started_at, ended_at, total, succeeded, failed, canceled, \
                        paused, follows";
-
-/// A value of an API enum as it is spelled, which is how it is stored.
-pub fn text<T: Serialize>(value: T) -> String {
-  match serde_json::to_value(value) {
-    Ok(serde_json::Value::String(text)) => text,
-    other => unreachable!("an API enum is written as a string, not {other:?}"),
-  }
-}
-
-/// A stored API enum read back.
-fn read<T: DeserializeOwned>(row: &Row, at: usize) -> rusqlite::Result<T> {
-  let text: String = row.get(at)?;
-  serde_json::from_value(serde_json::Value::String(text)).map_err(|e| {
-    rusqlite::Error::FromSqlConversionFailure(at, rusqlite::types::Type::Text, e.into())
-  })
-}
 
 /// An id stored as text, read back.
 fn id_at(row: &Row, at: usize) -> rusqlite::Result<Uuid> {
@@ -66,20 +48,20 @@ pub fn pausable(kind: JobKind, state: JobState) -> bool {
 
 /// A job's row.
 fn job(row: &Row) -> rusqlite::Result<Job> {
-  let kind: JobKind = read(row, 1)?;
-  let state: JobState = read(row, 5)?;
+  let kind: JobKind = enum_at(row, 1)?;
+  let state: JobState = enum_at(row, 5)?;
   Ok(Job {
     id: id_at(row, 0)?,
     kind,
     name: row.get(2)?,
     starter: JobStarter {
-      kind: read::<JobStarterKind>(row, 3)?,
+      kind: enum_at::<JobStarterKind>(row, 3)?,
       name: row.get(4)?,
     },
     state,
     ending: row
       .get::<_, Option<String>>(6)?
-      .map(|_| read::<JobEnding>(row, 6))
+      .map(|_| enum_at::<JobEnding>(row, 6))
       .transpose()?,
     error: row.get(7)?,
     summary: row.get(8)?,
@@ -112,12 +94,12 @@ pub fn insert(
     ),
     params![
       job.id.to_string(),
-      text(job.kind),
+      enum_text(job.kind),
       job.name,
-      text(job.starter.kind),
+      enum_text(job.starter.kind),
       job.starter.name,
-      text(job.state),
-      job.ending.map(text),
+      enum_text(job.state),
+      job.ending.map(enum_text),
       job.error,
       job.summary,
       timestamp(job.created_at),
@@ -144,8 +126,8 @@ pub fn update(conn: &Connection, job: &Job) -> rusqlite::Result<bool> {
     params![
       job.id.to_string(),
       job.name,
-      text(job.state),
-      job.ending.map(text),
+      enum_text(job.state),
+      job.ending.map(enum_text),
       job.error,
       job.summary,
       job.started_at.map(timestamp),
@@ -207,7 +189,7 @@ pub fn unended(conn: &Connection, kind: Option<JobKind>) -> rusqlite::Result<Vec
       "SELECT {COLUMNS} FROM jobs WHERE state <> 'ended' AND (?1 IS NULL OR kind = ?1) \
        ORDER BY created_at, id"
     ))?
-    .query_map([kind.map(text)], job)?
+    .query_map([kind.map(enum_text)], job)?
     .collect()
 }
 
@@ -245,7 +227,7 @@ fn part(row: &Row) -> rusqlite::Result<StoredPart> {
     job: id_at(row, 1)?,
     part: JobPart {
       name: row.get(2)?,
-      state: read(row, 3)?,
+      state: enum_at(row, 3)?,
       error: row.get(4)?,
       transfer_id: None,
       username: None,
@@ -273,7 +255,7 @@ pub fn add_parts(conn: &Connection, job: Uuid, parts: &[NewPart]) -> rusqlite::R
       job.to_string(),
       position,
       new.name,
-      text(new.state),
+      enum_text(new.state),
       new.error,
       new.target,
       new.key,
@@ -312,7 +294,7 @@ pub fn parts_in(
 ) -> rusqlite::Result<Vec<StoredPart>> {
   let states: Vec<String> = job_states
     .iter()
-    .map(|s| format!("'{}'", text(*s)))
+    .map(|s| format!("'{}'", enum_text(*s)))
     .collect();
   conn
     .prepare_cached(&format!(
@@ -322,7 +304,7 @@ pub fn parts_in(
       states.join(", ")
     ))?
     .query_map(
-      params![text(state), i64::try_from(limit).unwrap_or(i64::MAX)],
+      params![enum_text(state), i64::try_from(limit).unwrap_or(i64::MAX)],
       part,
     )?
     .collect()
@@ -338,7 +320,7 @@ pub fn set_part(
   Ok(
     conn.execute(
       "UPDATE job_parts SET state = ?2, error = ?3 WHERE id = ?1",
-      params![id.to_string(), text(state), error],
+      params![id.to_string(), enum_text(state), error],
     )? > 0,
   )
 }
@@ -352,7 +334,7 @@ pub fn set_parts(
 ) -> rusqlite::Result<usize> {
   conn.execute(
     "UPDATE job_parts SET state = ?3 WHERE job_id = ?1 AND state = ?2",
-    params![job.to_string(), text(from), text(to)],
+    params![job.to_string(), enum_text(from), enum_text(to)],
   )
 }
 
@@ -476,7 +458,7 @@ fn last_run_row(row: &Row) -> rusqlite::Result<LastRun> {
     run_at: time_at(row, 2)?,
     ending: row
       .get::<_, Option<String>>(3)?
-      .map(|_| read::<JobEnding>(row, 3))
+      .map(|_| enum_at::<JobEnding>(row, 3))
       .transpose()?,
     error: row.get(4)?,
     summary: row.get(5)?,
@@ -519,7 +501,7 @@ pub fn set_last_run(conn: &Connection, name: &str, last: &LastRun) -> rusqlite::
       name,
       last.scheduled_at.map(timestamp),
       last.run_at.map(timestamp),
-      last.ending.map(text),
+      last.ending.map(enum_text),
       last.error,
       last.summary,
       last.job_id.map(|id| id.to_string()),

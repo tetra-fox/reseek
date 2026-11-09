@@ -534,6 +534,27 @@ pub fn shifted(start: DateTime<Utc>, by: chrono::Duration) -> DateTime<Utc> {
     .clamp(earliest(), latest())
 }
 
+/// A value of an enum of plain variants as serde spells it, which is how the databases store
+/// one.
+pub fn enum_text<T: serde::Serialize>(value: T) -> String {
+  match serde_json::to_value(value) {
+    Ok(serde_json::Value::String(text)) => text,
+    other => unreachable!("an enum of plain variants is written as a string, not {other:?}"),
+  }
+}
+
+/// The enum stored with [`enum_text`] in the column `at` of `row`. A spelling no variant has is
+/// an error that names it.
+pub fn enum_at<T: serde::de::DeserializeOwned>(
+  row: &rusqlite::Row,
+  at: usize,
+) -> rusqlite::Result<T> {
+  let text: String = row.get(at)?;
+  serde_json::from_value(serde_json::Value::String(text)).map_err(|e| {
+    rusqlite::Error::FromSqlConversionFailure(at, rusqlite::types::Type::Text, e.into())
+  })
+}
+
 /// A time the databases stored, read back.
 pub fn read_timestamp(text: &str) -> rusqlite::Result<DateTime<Utc>> {
   DateTime::parse_from_rfc3339(text)
