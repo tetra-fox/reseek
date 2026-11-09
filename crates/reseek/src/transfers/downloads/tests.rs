@@ -533,6 +533,53 @@ async fn a_resume_sent_while_the_download_stops_to_be_paused_waits_and_resumes_i
 }
 
 #[tokio::test]
+async fn a_reorder_of_the_local_queue_is_written_to_the_database() {
+  let app = app(TRUSTED, &[]).await;
+  let downloads = &app.state.downloads;
+  // no slot, so every resumed download waits in the queue
+  downloads.starts.set_limit(Some(0));
+  let mut ids = Vec::new();
+  for name in ["1.flac", "2.flac", "3.flac"] {
+    let mut held = Record::download("alice", &format!("@@a\\Album\\{name}"), 10);
+    held.paused = true;
+    insert(&app, &held).await;
+    ids.push(held.id);
+  }
+  let resume = json!({ "ids": ids, "action": "resume" });
+  app
+    .call("POST", "/api/v0/transfers/downloads/bulk", Some(resume))
+    .await;
+  for _ in 0..1000 {
+    if downloads.queue_order().len() == 3 {
+      break;
+    }
+    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+  }
+  assert_eq!(downloads.queue_order(), ids);
+
+  let last_first = json!({ "ids": [ids[2]], "before": ids[0] });
+  let (status, _) = app
+    .call(
+      "POST",
+      "/api/v0/transfers/downloads/queue",
+      Some(last_first),
+    )
+    .await;
+  assert_eq!(status, 200);
+  let mut stored = Vec::new();
+  for id in &ids {
+    stored.push((read(&app, *id).await.queue_position.unwrap(), *id));
+  }
+  stored.sort_by(|a, b| a.0.total_cmp(&b.0));
+  let order: Vec<Uuid> = stored.into_iter().map(|(_, id)| id).collect();
+  assert_eq!(
+    order,
+    [ids[2], ids[0], ids[1]],
+    "a restart reads the new order"
+  );
+}
+
+#[tokio::test]
 async fn a_download_job_that_never_had_a_download_ends_on_cancel_and_after_a_restart() {
   let app = app(TRUSTED, &[]).await;
   let (canceled, stranded) = (Uuid::new_v4(), Uuid::new_v4());
