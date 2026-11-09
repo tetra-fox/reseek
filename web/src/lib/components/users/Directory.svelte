@@ -72,18 +72,35 @@
     group?: string | null;
     /** the list starts with the users we transferred with, from the link that opened it */
     withTransfers?: boolean;
-    /** the page the list starts at and its size, from the address */
+    /** the page shown and its size, from the address */
     place: Place;
-    /** the page or its size changed, for the address to keep */
+    /** writes another page or page size into the address */
     onplace: (place: Place) => void;
   };
 
-  let { group: startGroup = null, withTransfers = false, place: start, onplace }: Props = $props();
+  let {
+    group: startGroup = null,
+    withTransfers = false,
+    place: address,
+    onplace
+  }: Props = $props();
 
-  /** the page shown and its size, which the address follows */
-  let place = $state(untrack(() => start));
+  /**
+   * a place asked for that the address has not taken yet: a filter's change and its return to
+   * page 1 then read once, together, rather than the old page under the new filter first
+   */
+  let asked = $state.raw<Place | null>(null);
+  // the address moved, by this list or by a link: it is the place again
+  $effect.pre(() => {
+    void address;
+    untrack(() => (asked = null));
+  });
+  // apart, so a new address with the same page and size reads nothing again
+  const page = $derived(asked?.page ?? address.page);
+  const size = $derived(asked?.size ?? address.size);
+  const place = $derived({ page, size });
   const moveTo = (next: Place) => {
-    place = next;
+    asked = next;
     onplace(next);
   };
 
@@ -121,10 +138,10 @@
   /** Reads the page shown; one past the end, as after a delete or a filter, goes to the last */
   const load = async () => {
     const turn = rows.reading();
-    const { page, size } = place;
-    const offset = (page - 1) * size;
+    const read = place;
+    const offset = (read.page - 1) * read.size;
     const outcome = await call(() =>
-      api.GET("/api/v0/users", { params: { query: { ...query, offset, limit: size } } })
+      api.GET("/api/v0/users", { params: { query: { ...query, offset, limit: read.size } } })
     );
     if (!outcome.ok) {
       if (!rows.abandon(turn)) return;
@@ -135,9 +152,9 @@
     // a newer load makes this one's answer moot
     if (!rows.latest(turn)) return;
     const { users, total: count } = outcome.data;
-    if (page > 1 && offset >= count) {
+    if (read.page > 1 && offset >= count) {
       rows.abandon(turn);
-      return moveTo({ page: pageCount(count, size), size });
+      return moveTo({ page: pageCount(count, read.size), size: read.size });
     }
     rows.reconcile(users, turn);
     order = users.map((u) => u.username);
@@ -152,8 +169,8 @@
   );
   $effect(() => {
     void query;
-    void place.page;
-    void place.size;
+    void page;
+    void size;
     untrack(() => void load());
   });
   /** Shows another page from its top */

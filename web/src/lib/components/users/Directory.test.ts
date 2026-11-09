@@ -8,6 +8,7 @@ import { session } from "#lib/session.svelte.js";
 import { userSummary } from "#lib/testing/fixtures.js";
 import { flushFaked } from "#lib/testing/flush.js";
 import { fakeNetwork } from "#lib/testing/network.js";
+import { box } from "#lib/testing/state.svelte.js";
 
 import Directory from "./Directory.svelte";
 
@@ -109,10 +110,20 @@ describe("the users directory", () => {
         return { users: users.slice(offset, offset + limit), total: users.length };
       });
       const places: { page: number; size: number }[] = [];
+      // the address, which the place written into it comes back from as the route does
+      const address = box(place);
       live.start();
       component = mount(Directory, {
         target: document.body,
-        props: { place, onplace: (p: { page: number; size: number }) => places.push(p) }
+        props: {
+          get place() {
+            return address.value;
+          },
+          onplace: (p: { page: number; size: number }) => {
+            places.push(p);
+            address.value = p;
+          }
+        }
       });
       await flushFaked();
       await flushFaked();
@@ -120,7 +131,7 @@ describe("the users directory", () => {
         net.requests
           .filter((r) => r.url.pathname.endsWith("/api/v0/users"))
           .map((r) => [r.url.searchParams.get("offset"), r.url.searchParams.get("limit")]);
-      return { asked, places };
+      return { asked, places, address };
     };
     const lines = () => document.querySelectorAll("[data-line]").length;
     const pressed = (label: string) =>
@@ -140,12 +151,27 @@ describe("the users directory", () => {
       expect(pressed("Next page").disabled).toBe(true);
     });
 
+    it("follows the address when a link moves it", async () => {
+      const { asked, address } = await paged({ page: 3, size: 50 });
+      expect(lines()).toBe(20);
+      // the sidebar's link to the directory, with no page in it
+      address.value = { page: 1, size: 50 };
+      await flushFaked();
+      expect(asked().at(-1)).toEqual(["0", "50"]);
+      expect(lines()).toBe(50);
+      expect(pressed("Page 1").getAttribute("aria-current")).toBe("page");
+    });
+
     it("starts again from the first page when a filter changes", async () => {
       const { asked, places } = await paged({ page: 2, size: 50 });
       expect(asked()).toEqual([["50", "50"]]);
       pressed("Blocked").click();
       await flushFaked();
-      expect(asked().at(-1)).toEqual(["0", "50"]);
+      // one read, of the first page: the old page is never read under the new filter
+      expect(asked()).toEqual([
+        ["50", "50"],
+        ["0", "50"]
+      ]);
       expect(places).toEqual([{ page: 1, size: 50 }]);
     });
 
