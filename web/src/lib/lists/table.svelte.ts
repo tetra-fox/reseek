@@ -138,7 +138,7 @@ const compare = (a: unknown, b: unknown) =>
 export class Grid<T extends object> {
   readonly table: SvelteTable<typeof features, T>;
   #spec: Spec<T>;
-  /** the width a drag started from, the table's until the drag ends */
+  /** the width a drag starts from, held only while the table reads it as the drag's start */
   #start = $state<{ id: string; width: number } | null>(null);
   #moved = false;
   #resizing = $state<columnResizingState>({
@@ -208,7 +208,6 @@ export class Grid<T extends object> {
       onColumnResizingChange: (updater: Updater<columnResizingState>) => {
         this.#resizing = functionalUpdate(updater, this.#resizing);
         if (this.#resizing.deltaOffset) this.#moved = true;
-        if (!this.#resizing.isResizingColumn) this.#start = null;
       }
     });
   }
@@ -282,6 +281,8 @@ export class Grid<T extends object> {
     // the table reads its options before the drag starts, so they must hold the start now
     flushSync();
     header.getResizeHandler()(e);
+    // the handler has taken its start sizes, so the widths each move commits show from here on
+    this.#start = null;
   }
 
   // the table's options, each kept as one value until what it is made from changes, so the

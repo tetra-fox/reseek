@@ -69,20 +69,33 @@ describe("a grid", () => {
     const cell = header("Size");
     cell.getBoundingClientRect = () => ({ width: 64 }) as DOMRect;
     const edge = cell.querySelector<HTMLElement>("[role=separator]")!;
-    const drag = (to: number) => {
+    const template = () => document.querySelector("[data-template]")!.getAttribute("data-template");
+    const press = () => {
       edge.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, clientX: 100 }));
       flushSync();
+    };
+    const move = (to: number) => {
       document.dispatchEvent(new MouseEvent("mousemove", { clientX: to }));
+      flushSync();
+    };
+    const release = (to: number) => {
       document.dispatchEvent(new MouseEvent("mouseup", { clientX: to }));
       flushSync();
     };
+    const drag = (to: number) => {
+      press();
+      move(to);
+      release(to);
+    };
     drag(100);
     expect(kept.dragged).toEqual({});
-    drag(130.4);
+    // the column follows the pointer before the button is let go
+    press();
+    move(130.4);
+    expect(template()).toBe("2rem minmax(10rem, 1fr) 94px");
+    release(130.4);
     expect(kept.dragged).toEqual({ size: 94 });
-    expect(document.querySelector("[data-template]")!.getAttribute("data-template")).toBe(
-      "2rem minmax(10rem, 1fr) 94px"
-    );
+    expect(template()).toBe("2rem minmax(10rem, 1fr) 94px");
     // never narrower than 40 pixels
     cell.getBoundingClientRect = () => ({ width: 94 }) as DOMRect;
     drag(0);
