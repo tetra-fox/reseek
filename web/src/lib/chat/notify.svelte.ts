@@ -5,6 +5,7 @@ import { app } from "#lib/app.svelte.js";
 import { toast } from "#lib/feedback/toast.svelte.js";
 import { chatHref, roomHref } from "#lib/nav.js";
 import { fields } from "#lib/stored.svelte.js";
+import { browserTabs } from "#lib/ui/tabs.js";
 import { users } from "#lib/users/users.svelte.js";
 
 import { isNotifyMode, type NotifyMode, playsSound, showsDesktop } from "./modes";
@@ -204,25 +205,15 @@ export const CHIME_GAP_MS = 1_000;
 /** when the sound last played, by performance.now */
 let chimed = -Infinity;
 
-/** The Web Lock the tabs of one browser take to play a sound */
-const CHIME_LOCK = "reseek-chime";
-
 /**
- * Plays the notification sound in one tab of the browser: every tab hears of the same message or
- * finished download, and the one that takes the lock plays it and holds the lock for the gap.
- * Web Locks need a secure context, so on plain http each tab plays its own
+ * Plays the notification sound in the one tab of the browser that leads: every tab hears of the
+ * same message or finished download, and a browser without BroadcastChannel has each tab play
  */
 const chime = () => {
+  if (!(browserTabs()?.leads() ?? true)) return;
   const now = performance.now();
   if (now - chimed < CHIME_GAP_MS) return;
   chimed = now;
   // a browser that refuses until the page is used stays silent
-  const play = () => void new Audio(notificationSound).play().catch(() => {});
-  if (!navigator.locks) return play();
-  void navigator.locks.request(CHIME_LOCK, { ifAvailable: true }, async (lock) => {
-    // another tab played it
-    if (!lock) return;
-    play();
-    await new Promise((done) => setTimeout(done, CHIME_GAP_MS));
-  });
+  new Audio(notificationSound).play().catch(() => {});
 };
