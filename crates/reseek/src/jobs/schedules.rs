@@ -6,20 +6,20 @@
 
 use std::collections::HashMap;
 use std::future::Future;
+use std::pin::Pin;
 use std::time::Duration;
 
 use api_types::jobs::{JobEnding, JobSchedule, JobStarter};
 use api_types::live::LiveFrame;
 use chrono::{DateTime, Local, Utc};
 use reseek_shares::ScanOrigin;
-use reseek_shares::schedule::Schedule;
+use reseek_shares::schedule::Schedule as Timing;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::time::MissedTickBehavior;
 use tracing::{Instrument, debug, info_span, warn};
 
 use super::RunOutcome;
 use super::maintenance;
-use super::scans::SHARE_RESCAN;
 use super::store::LastRun;
 use crate::api::error::ApiError;
 use crate::app::AppState;
@@ -29,24 +29,46 @@ use crate::sync::lock;
 /// How long the scheduler waits at most before it looks at the schedules again.
 const LOOK_AGAIN: Duration = Duration::from_secs(60);
 
-/// The cleanup schedule.
-pub const CLEANUP: &str = "cleanup";
-/// The database vacuum schedule.
-pub const VACUUM: &str = "vacuum";
-/// The release check schedule.
-pub const RELEASE_CHECK: &str = "release-check";
-/// The wishlist schedule.
-pub const WISHLIST: &str = "wishlist";
+/// The recurring work the schedules card shows.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Schedule {
+  /// rescans the shared folders
+  ShareRescan,
+  /// deletes old data as the retention options say
+  Cleanup,
+  /// vacuums every database
+  Vacuum,
+  /// checks for a new release
+  ReleaseCheck,
+  /// sends the next wishlist search
+  Wishlist,
+}
+
+impl Schedule {
+  /// The name the API, the jobs it starts and its kept last run know it by.
+  pub fn name(self) -> &'static str {
+    match self {
+      Self::ShareRescan => "share-rescan",
+      Self::Cleanup => "cleanup",
+      Self::Vacuum => "vacuum",
+      Self::ReleaseCheck => "release-check",
+      Self::Wishlist => "wishlist",
+    }
+  }
+}
+
+/// A run of a schedule, as it ends.
+type Work = Pin<Box<dyn Future<Output = RunOutcome> + Send>>;
 
 /// A schedule as the card shows it and the scheduler runs it.
 struct Entry {
-  name: &'static str,
+  schedule: Schedule,
   title: &'static str,
   description: &'static str,
   /// the option that sets it, none when it is fixed
   option: Option<&'static str>,
   /// how often it runs now, and why it is off or fixed when it is
-  schedule: Schedule,
+  timing: Timing,
   note: Option<String>,
   /// the run it counts from when it never ran: none to be due at once
   never_ran_from: Option<DateTime<Utc>>,
@@ -70,42 +92,42 @@ fn entries(app: &AppState, options: &Options, started: DateTime<Utc>) -> Vec<Ent
   let wishlist = app.searches.wishlist_interval();
   vec![
     Entry {
-      name: SHARE_RESCAN,
+      schedule: Schedule::ShareRescan,
       title: "Share rescan",
       description: "Finds changes in the shared folders",
       option: Some("shares.cache.retention"),
-      schedule: options.shares.cache.retention,
+      timing: options.shares.cache.retention,
       note: None,
       never_ran_from: Some(started),
       runnable: true,
     },
     Entry {
-      name: CLEANUP,
+      schedule: Schedule::Cleanup,
       title: "Cleanup",
       description: "Deletes old data, as set in Retention",
       option: Some("schedules.cleanup"),
-      schedule: options.schedules.cleanup,
+      timing: options.schedules.cleanup,
       note: None,
       never_ran_from: None,
       runnable: true,
     },
     Entry {
-      name: VACUUM,
+      schedule: Schedule::Vacuum,
       title: "Database vacuum",
       description: "Frees unused space in the databases",
       option: Some("schedules.vacuum"),
-      schedule: options.schedules.vacuum,
+      timing: options.schedules.vacuum,
       note: None,
       never_ran_from: Some(started),
       runnable: true,
     },
     Entry {
-      name: RELEASE_CHECK,
+      schedule: Schedule::ReleaseCheck,
       title: "Release check",
       description: "Checks for a new version of reseek",
       option: release_off.is_none().then_some("schedules.release_check"),
-      schedule: if release_off.is_some() {
-        Schedule::Off
+      timing: if release_off.is_some() {
+        Timing::Off
       } else {
         options.schedules.release_check
       },
@@ -114,11 +136,11 @@ fn entries(app: &AppState, options: &Options, started: DateTime<Utc>) -> Vec<Ent
       runnable: release_off.is_none(),
     },
     Entry {
-      name: WISHLIST,
+      schedule: Schedule::Wishlist,
       title: "Wishlist",
       description: "Searches for the next wishlist item",
       option: None,
-      schedule: wishlist.map_or(Schedule::Off, Schedule::every),
+      timing: wishlist.map_or(Timing::Off, Timing::every),
       note: Some(if wishlist.is_some() {
         "Set by the Soulseek server".to_string()
       } else {
@@ -139,10 +161,10 @@ async fn due(
   now: DateTime<Utc>,
 ) -> Option<DateTime<Utc>> {
   let scheduled = last.and_then(|last| last.scheduled_at);
-  let counted_from = match entry.name {
+  let counted_from = match entry.schedule {
     // the last complete scan counts, whatever started it, and so does a scheduled one that
     // failed or was canceled, which would else be due again at once
-    SHARE_RESCAN => match app.shares.last_trusted_scan().await {
+    Schedule::ShareRescan => match app.shares.last_trusted_scan().await {
       Ok(trusted) => trusted.max(scheduled),
       Err(e) => {
         warn!(error = %e, "the last share scan not read; the rescan waits");
@@ -151,11 +173,11 @@ async fn due(
     },
     // what a release check found is in the state, which a restart empties, so a check made
     // before this start does not count
-    RELEASE_CHECK => scheduled.filter(|at| *at >= app.jobs.scheduler_started),
-    _ => scheduled,
+    Schedule::ReleaseCheck => scheduled.filter(|at| *at >= app.jobs.scheduler_started),
+    Schedule::Cleanup | Schedule::Vacuum | Schedule::Wishlist => scheduled,
   };
   entry
-    .schedule
+    .timing
     .next(counted_from.or(entry.never_ran_from), now, &Local)
 }
 
@@ -170,18 +192,14 @@ async fn cards_with(app: &AppState, last_runs: &HashMap<String, LastRun>) -> Vec
   let now = Utc::now();
   let mut cards = Vec::new();
   for entry in entries(app, &options.values, app.jobs.scheduler_started) {
-    let last = last_runs.get(entry.name);
-    let running = if entry.name == SHARE_RESCAN {
-      app.state.current().shares.scanning
-    } else {
-      lock(&app.jobs.running_schedules).contains(entry.name)
-    };
+    let last = last_runs.get(entry.schedule.name());
+    let running = running(app, entry.schedule);
     let next_run_at = due(app, &entry, last, now).await;
     cards.push(JobSchedule {
-      name: entry.name.to_string(),
+      name: entry.schedule.name().to_string(),
       title: entry.title.to_string(),
       description: entry.description.to_string(),
-      every: (entry.schedule != Schedule::Off).then(|| entry.schedule.to_string()),
+      every: (entry.timing != Timing::Off).then(|| entry.timing.to_string()),
       option: entry.option.map(str::to_string),
       note: entry.note,
       runnable: entry.runnable,
@@ -219,16 +237,16 @@ pub async fn run(app: AppState) {
     let mut next: Option<DateTime<Utc>> = None;
     for entry in entries(&app, &options.values, app.jobs.scheduler_started) {
       // while any scan runs the rescan waits, and the scan's end wakes the loop
-      let busy = lock(&app.jobs.running_schedules).contains(entry.name)
-        || (entry.name == SHARE_RESCAN && app.shares.scanning());
-      if busy {
+      if running(&app, entry.schedule) {
         continue;
       }
-      let Some(due) = due(&app, &entry, last_runs.get(entry.name), now).await else {
+      let last = last_runs.get(entry.schedule.name());
+      let Some(due) = due(&app, &entry, last, now).await else {
         continue;
       };
       if due <= now {
-        start(&app, entry.name, JobStarter::schedule(entry.name)).await;
+        let starter = JobStarter::schedule(entry.schedule.name());
+        start(&app, entry.schedule, starter).await;
       } else {
         next = Some(next.map_or(due, |next| next.min(due)));
       }
@@ -262,7 +280,7 @@ pub async fn run_now(app: &AppState, name: &str) -> Result<(), ApiError> {
   let options = app.config.current();
   let entry = entries(app, &options.values, app.jobs.scheduler_started)
     .into_iter()
-    .find(|entry| entry.name == name)
+    .find(|entry| entry.schedule.name() == name)
     .ok_or_else(|| ApiError::not_found(format!("No schedule named {name}")))?;
   if !entry.runnable {
     return Err(ApiError::conflict(
@@ -270,40 +288,59 @@ pub async fn run_now(app: &AppState, name: &str) -> Result<(), ApiError> {
       entry.note,
     ));
   }
-  if entry.name == SHARE_RESCAN {
+  if entry.schedule == Schedule::ShareRescan {
     return app
       .shares
       .scan(false, ScanOrigin::Asked)
       .map_err(|_| ApiError::conflict("A share scan is already in progress", None));
   }
-  if lock(&app.jobs.running_schedules).contains(entry.name) {
+  if running(app, entry.schedule) {
     return Err(ApiError::conflict(
       format!("{} is running", entry.title),
       None,
     ));
   }
-  start(app, entry.name, JobStarter::you()).await;
+  start(app, entry.schedule, JobStarter::you()).await;
   Ok(())
 }
 
-/// Starts a run of the schedule `name` by `starter` in the background: a run the schedule
-/// started counts as its last scheduled one from its start.
-async fn start(app: &AppState, name: &'static str, starter: JobStarter) {
-  let scheduled = starter.kind == api_types::jobs::JobStarterKind::Schedule;
-  if name == SHARE_RESCAN {
-    if let Err(e) = app.shares.scan(false, ScanOrigin::Scheduled) {
-      debug!(?e, "scheduled share rescan left to the scan going on");
+/// Whether a run of `schedule` is going on: for the rescan, any scan of the shares.
+fn running(app: &AppState, schedule: Schedule) -> bool {
+  match schedule {
+    Schedule::ShareRescan => app.shares.scanning(),
+    Schedule::Cleanup | Schedule::Vacuum | Schedule::ReleaseCheck | Schedule::Wishlist => {
+      lock(&app.jobs.running_schedules).contains(&schedule)
     }
-    return;
   }
-  if !lock(&app.jobs.running_schedules).insert(name) {
+}
+
+/// Starts a run of `schedule` by `starter` in the background: a run the schedule started
+/// counts as its last scheduled one from its start. The rescan is a share scan, which keeps
+/// its own last run.
+async fn start(app: &AppState, schedule: Schedule, starter: JobStarter) {
+  let scheduled = starter.kind == api_types::jobs::JobStarterKind::Schedule;
+  let listed = starter.kind == api_types::jobs::JobStarterKind::You;
+  let run = app.clone();
+  let work: Work = match schedule {
+    Schedule::ShareRescan => {
+      if let Err(e) = app.shares.scan(false, ScanOrigin::Scheduled) {
+        debug!(?e, "scheduled share rescan left to the scan going on");
+      }
+      return;
+    }
+    Schedule::Cleanup => Box::pin(async move { maintenance::cleanup(&run, starter, listed).await }),
+    Schedule::Vacuum => Box::pin(async move { maintenance::vacuum(&run, starter, listed).await }),
+    Schedule::ReleaseCheck => Box::pin(async move { release_check(&run).await }),
+    Schedule::Wishlist => Box::pin(async move { run.searches.wishlist_turn().await }),
+  };
+  if !lock(&app.jobs.running_schedules).insert(schedule) {
     return;
   }
   let started_at = Utc::now();
   if scheduled {
     app
       .jobs
-      .update_last_run(name, move |last| last.scheduled_at = Some(started_at))
+      .update_last_run(schedule, move |last| last.scheduled_at = Some(started_at))
       .await;
   } else {
     app.jobs.schedules_changed.notify_one();
@@ -311,12 +348,12 @@ async fn start(app: &AppState, name: &'static str, starter: JobStarter) {
   let app = app.clone();
   tokio::spawn(
     async move {
-      let outcome = work(&app, name, starter).await;
+      let outcome = work.await;
       let ended_at = Utc::now();
-      lock(&app.jobs.running_schedules).remove(name);
+      lock(&app.jobs.running_schedules).remove(&schedule);
       app
         .jobs
-        .update_last_run(name, move |last| {
+        .update_last_run(schedule, move |last| {
           last.run_at = Some(started_at);
           last.ended_at = Some(ended_at);
           last.ending = Some(outcome.ending);
@@ -326,20 +363,8 @@ async fn start(app: &AppState, name: &'static str, starter: JobStarter) {
         })
         .await;
     }
-    .instrument(info_span!("schedule", schedule = name)),
+    .instrument(info_span!("schedule", schedule = schedule.name())),
   );
-}
-
-/// One run of the schedule `name` by `starter`, listed from its start when the user started it.
-async fn work(app: &AppState, name: &'static str, starter: JobStarter) -> RunOutcome {
-  let listed = starter.kind == api_types::jobs::JobStarterKind::You;
-  match name {
-    CLEANUP => maintenance::cleanup(app, starter, listed).await,
-    VACUUM => maintenance::vacuum(app, starter, listed).await,
-    RELEASE_CHECK => release_check(app).await,
-    WISHLIST => app.searches.wishlist_turn().await,
-    other => unreachable!("no schedule runs {other}"),
-  }
 }
 
 /// Reads the release feed and puts what it says into the state.
@@ -403,14 +428,14 @@ mod tests {
   use super::*;
   use crate::testing::{TRUSTED, app};
 
-  /// The entry `name` running every `every`, as if its option set that.
-  fn entry(name: &'static str, every: Duration) -> Entry {
+  /// The entry `schedule` running every `every`, as if its option set that.
+  fn entry(schedule: Schedule, every: Duration) -> Entry {
     Entry {
-      name,
-      title: name,
+      schedule,
+      title: schedule.name(),
       description: "",
       option: None,
-      schedule: Schedule::every(every),
+      timing: Timing::every(every),
       note: None,
       never_ran_from: None,
       runnable: true,
@@ -425,7 +450,7 @@ mod tests {
     let half_day = Duration::from_secs(12 * 3600);
 
     // a scheduled rescan failed now, after the startup scan that completed
-    let rescan = entry(SHARE_RESCAN, half_day);
+    let rescan = entry(Schedule::ShareRescan, half_day);
     let trusted = state.shares.last_trusted_scan().await.unwrap();
     let now = Utc::now();
     let failed_at = now;
@@ -442,7 +467,7 @@ mod tests {
     );
 
     // the release check's result lives in the state, so a run before this start does not count
-    let release = entry(RELEASE_CHECK, half_day);
+    let release = entry(Schedule::ReleaseCheck, half_day);
     let started = state.jobs.scheduler_started;
     let before = LastRun {
       scheduled_at: Some(started - chrono::Duration::hours(2)),

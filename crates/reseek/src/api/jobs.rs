@@ -272,7 +272,7 @@ async fn run_again(
       None
     }
     JobKind::Maintenance => {
-      crate::jobs::maintenance::run_again(&app, data.as_ref())?;
+      crate::jobs::maintenance::run_again(&app, data)?;
       None
     }
   };

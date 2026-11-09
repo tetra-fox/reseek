@@ -11,11 +11,9 @@ use reseek_shares::{ScanEnded, ScanHook, ScanNotice, ScanOrigin, SharedCounts};
 use tracing::warn;
 use uuid::Uuid;
 
+use super::schedules::Schedule;
 use super::{Ended, Jobs, NewJob};
 use crate::sync::lock;
-
-/// The schedule a share rescan runs on.
-pub const SHARE_RESCAN: &str = "share-rescan";
 
 /// The scan going on.
 struct Running {
@@ -60,7 +58,7 @@ fn name(force: bool) -> &'static str {
 fn starter(origin: ScanOrigin) -> JobStarter {
   match origin {
     ScanOrigin::Asked => JobStarter::you(),
-    ScanOrigin::Scheduled => JobStarter::schedule(SHARE_RESCAN),
+    ScanOrigin::Scheduled => JobStarter::schedule(Schedule::ShareRescan.name()),
     ScanOrigin::Startup => JobStarter::of(JobStarterKind::Resumed),
   }
 }
@@ -154,7 +152,7 @@ async fn finished(jobs: &Jobs, scan: Running, ended: ScanEnded) {
   let scheduled = scan.origin == ScanOrigin::Scheduled;
   let started_at = scan.started_at;
   jobs
-    .update_last_run(SHARE_RESCAN, move |last| {
+    .update_last_run(Schedule::ShareRescan, move |last| {
       if scheduled {
         last.scheduled_at = Some(started_at);
       }

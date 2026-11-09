@@ -157,7 +157,7 @@ pub struct Jobs {
   /// woken when a schedule's last run or what it shows changed, for the schedules to be pushed
   pub schedules_changed: tokio::sync::Notify,
   /// the schedules with a run going on
-  pub running_schedules: Mutex<std::collections::HashSet<&'static str>>,
+  pub running_schedules: Mutex<std::collections::HashSet<schedules::Schedule>>,
   /// when the scheduler started, which a schedule that never ran counts from
   pub scheduler_started: DateTime<Utc>,
 }
@@ -572,21 +572,21 @@ impl Jobs {
     Ok(self.db.read(store::last_runs).await?.into_iter().collect())
   }
 
-  /// Changes the last run of the schedule `name` as `change` says, in one write, and has the
-  /// schedules pushed again.
+  /// Changes the last run of `schedule` as `change` says, in one write, and has the schedules
+  /// pushed again.
   pub async fn update_last_run(
     &self,
-    name: &str,
+    schedule: schedules::Schedule,
     change: impl FnOnce(&mut store::LastRun) + Send + 'static,
   ) {
-    let schedule = name.to_string();
+    let name = schedule.name();
     let written = self
       .db
       .write(move |conn| {
         let tx = conn.transaction()?;
-        let mut last = store::last_run(&tx, &schedule)?.unwrap_or_default();
+        let mut last = store::last_run(&tx, name)?.unwrap_or_default();
         change(&mut last);
-        store::set_last_run(&tx, &schedule, &last)?;
+        store::set_last_run(&tx, name, &last)?;
         tx.commit()
       })
       .await;

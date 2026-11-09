@@ -7,6 +7,7 @@ use std::future::Future;
 use api_types::jobs::{Job, JobCounts, JobEnding, JobKind, JobPartState, JobStarter, JobState};
 use bytesize::ByteSize;
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 use uuid::Uuid;
@@ -16,6 +17,21 @@ use crate::api::error::ApiError;
 use crate::app::AppState;
 use crate::app::tasks;
 use crate::transfers::prune;
+
+/// What a maintenance job runs, kept with the job so it can be run again: `{"run": "cleanup"}`,
+/// `{"run": "vacuum"}` for every database, `{"run": "vacuum", "database": name}` for one.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "run", rename_all = "lowercase")]
+pub enum MaintenanceRun {
+  /// deletes what the retention options let go
+  Cleanup,
+  /// vacuums one database, or every one when none is named
+  Vacuum {
+    /// the database's name, as `transfers` for `transfers.db`
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    database: Option<String>,
+  },
+}
 
 /// One area of a run: its name and what came of it, a count of what it removed or why it
 /// failed.
@@ -30,7 +46,7 @@ struct Run<'a> {
   app: &'a AppState,
   name: String,
   /// what a run again repeats
-  data: serde_json::Value,
+  run: MaintenanceRun,
   starter: JobStarter,
   listed: Option<Uuid>,
   started_at: DateTime<Utc>,
@@ -42,7 +58,7 @@ impl<'a> Run<'a> {
   async fn start(
     app: &'a AppState,
     name: String,
-    data: serde_json::Value,
+    run: MaintenanceRun,
     starter: JobStarter,
     listed: bool,
   ) -> Self {
@@ -51,7 +67,7 @@ impl<'a> Run<'a> {
       match app
         .jobs
         .create(NewJob {
-          data: Some(data.clone()),
+          data: Some(run.data()),
           ..NewJob::running(JobKind::Maintenance, name.clone(), starter.clone())
         })
         .await
@@ -71,7 +87,7 @@ impl<'a> Run<'a> {
     Self {
       app,
       name,
-      data,
+      run,
       starter,
       listed: job,
       started_at: super::now(),
@@ -197,7 +213,7 @@ impl<'a> Run<'a> {
         if let Err(e) = self
           .app
           .jobs
-          .record(job, parts, Some(self.data.clone()))
+          .record(job, parts, Some(self.run.data()))
           .await
         {
           warn!(error = %e, job = self.name, "maintenance run not listed");
@@ -252,7 +268,7 @@ pub async fn cleanup(app: &AppState, starter: JobStarter, listed: bool) -> RunOu
   let mut run = Run::start(
     app,
     "Cleanup".to_string(),
-    serde_json::json!({ "run": "cleanup" }),
+    MaintenanceRun::Cleanup,
     starter,
     listed,
   )
@@ -351,7 +367,7 @@ pub async fn vacuum(app: &AppState, starter: JobStarter, listed: bool) -> RunOut
   let mut run = Run::start(
     app,
     "Database vacuum".to_string(),
-    serde_json::json!({ "run": "vacuum" }),
+    MaintenanceRun::Vacuum { database: None },
     starter,
     listed,
   )
@@ -380,11 +396,12 @@ pub async fn vacuum_one(app: &AppState, name: &str) -> Result<(), ApiError> {
   if !is_database(app, name) {
     return Err(ApiError::not_found(format!("No database named {name}")));
   }
-  let data = serde_json::json!({ "run": "vacuum", "database": name });
   let mut run = Run::start(
     app,
     format!("Vacuum {name}.db"),
-    data,
+    MaintenanceRun::Vacuum {
+      database: Some(name.to_string()),
+    },
     JobStarter::you(),
     true,
   )
@@ -414,40 +431,43 @@ fn is_database(app: &AppState, name: &str) -> bool {
 }
 
 /// Runs the maintenance run `data` describes again, started by the user, in the background.
-/// 409 when it cannot be: made by an older version, or of a database that is gone.
-pub fn run_again(app: &AppState, data: Option<&serde_json::Value>) -> Result<(), ApiError> {
-  let run = data.and_then(|data| data["run"].as_str());
-  let database = data
-    .and_then(|data| data["database"].as_str())
-    .map(str::to_string);
+/// 409 when it cannot be: kept in a shape this version does not read, or of a database that is
+/// gone.
+pub fn run_again(app: &AppState, data: Option<serde_json::Value>) -> Result<(), ApiError> {
+  let refused = |detail: String| ApiError::conflict("This job cannot be run again", Some(detail));
+  let older = || refused("It was made by an older version of reseek".to_string());
+  let run: MaintenanceRun = serde_json::from_value(data.ok_or_else(older)?).map_err(|e| {
+    debug!(error = %e, "maintenance job's run not read");
+    older()
+  })?;
   let app = app.clone();
-  match (run, database) {
-    (Some("cleanup"), _) => {
+  match run {
+    MaintenanceRun::Cleanup => {
       tokio::spawn(async move { cleanup(&app, JobStarter::you(), true).await });
     }
-    (Some("vacuum"), None) => {
+    MaintenanceRun::Vacuum { database: None } => {
       tokio::spawn(async move { vacuum(&app, JobStarter::you(), true).await });
     }
-    (Some("vacuum"), Some(name)) => {
+    MaintenanceRun::Vacuum {
+      database: Some(name),
+    } => {
       if !is_database(&app, &name) {
-        return Err(ApiError::conflict(
-          "This job cannot be run again",
-          Some(format!("The database {name}.db no longer exists")),
-        ));
+        return Err(refused(format!("The database {name}.db no longer exists")));
       }
       tokio::spawn(async move {
         // the database is known, so the vacuum makes a job, and its end says how it went
         let _ = vacuum_one(&app, &name).await;
       });
     }
-    _ => {
-      return Err(ApiError::conflict(
-        "This job cannot be run again",
-        Some("It was made by an older version of reseek".to_string()),
-      ));
-    }
   }
   Ok(())
+}
+
+impl MaintenanceRun {
+  /// The run as the job keeps it.
+  fn data(&self) -> serde_json::Value {
+    serde_json::to_value(self).expect("a maintenance run is written as a JSON object")
+  }
 }
 
 #[cfg(test)]
@@ -467,7 +487,7 @@ mod tests {
     );
     let app = app(&config, &[]).await;
     let state = &app.state;
-    let scheduled = || JobStarter::schedule("cleanup");
+    let scheduled = || JobStarter::schedule(crate::jobs::schedules::Schedule::Cleanup.name());
 
     let quiet = cleanup(state, scheduled(), false).await;
     assert_eq!(quiet.ending, JobEnding::Succeeded);
@@ -506,14 +526,35 @@ mod tests {
     );
   }
 
+  #[test]
+  fn a_maintenance_run_is_kept_in_the_shape_jobs_already_hold() {
+    let vacuum = |database: Option<&str>| MaintenanceRun::Vacuum {
+      database: database.map(str::to_string),
+    };
+    for (run, kept) in [
+      (
+        MaintenanceRun::Cleanup,
+        serde_json::json!({ "run": "cleanup" }),
+      ),
+      (vacuum(None), serde_json::json!({ "run": "vacuum" })),
+      (
+        vacuum(Some("transfers")),
+        serde_json::json!({ "run": "vacuum", "database": "transfers" }),
+      ),
+    ] {
+      assert_eq!(run.data(), kept);
+      assert_eq!(serde_json::from_value::<MaintenanceRun>(kept).unwrap(), run);
+    }
+  }
+
   #[tokio::test]
   async fn a_vacuum_of_a_database_that_is_gone_is_refused_rather_than_dropped() {
     let app = app(TRUSTED, &[]).await;
     let gone = serde_json::json!({ "run": "vacuum", "database": "old" });
-    let refused = run_again(&app.state, Some(&gone)).unwrap_err();
+    let refused = run_again(&app.state, Some(gone)).unwrap_err();
     assert_eq!(refused.status(), axum::http::StatusCode::CONFLICT);
     let name = app.state.databases.names().remove(0);
     let known = serde_json::json!({ "run": "vacuum", "database": name });
-    run_again(&app.state, Some(&known)).unwrap();
+    run_again(&app.state, Some(known)).unwrap();
   }
 }
