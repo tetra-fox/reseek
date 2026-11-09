@@ -34,7 +34,7 @@ describe("the event log", () => {
     live.start();
     component = mount(Events, {
       target: document.body,
-      props: { page: 1, perPage: 25, types: [] }
+      props: { place: { page: 1, size: 25 }, types: [] }
     });
     await flush();
     const first = document.querySelector('[data-line="b"]');
@@ -64,7 +64,7 @@ describe("the event log", () => {
     ]);
     component = mount(Events, {
       target: document.body,
-      props: { page: 1, perPage: 25, types: [] }
+      props: { place: { page: 1, size: 25 }, types: [] }
     });
     await flush();
     const summary = [...document.querySelectorAll('[data-line="a"] span')].find(
@@ -93,10 +93,9 @@ describe("the event log", () => {
     component = mount(Events, {
       target: document.body,
       props: {
-        get page() {
-          return shown.value;
+        get place() {
+          return { page: shown.value, size: 1 };
         },
-        perPage: 1,
         types: []
       }
     });

@@ -5,7 +5,7 @@
   import Crumbs from "#lib/components/shell/Crumbs.svelte";
   import BlockedList from "#lib/components/users/BlockedList.svelte";
   import BuddyList from "#lib/components/users/BuddyList.svelte";
-  import Directory from "#lib/components/users/Directory.svelte";
+  import Directory, { DIRECTORY_PAGES } from "#lib/components/users/Directory.svelte";
   import GroupsPage from "#lib/components/users/groups/GroupsPage.svelte";
   import InterestsPage from "#lib/components/users/interests/InterestsPage.svelte";
   import { placeIn, withPlace } from "#lib/lists/pages.js";
@@ -63,9 +63,9 @@
     <Directory
       group={query.get("group")}
       withTransfers={query.get("has") === "transfers"}
-      place={placeIn(query)}
+      place={placeIn(query, DIRECTORY_PAGES)}
       onplace={(place) => {
-        const next = withPlace(query, place).toString();
+        const next = withPlace(query, place, DIRECTORY_PAGES).toString();
         void goto(href(`/users${next ? `?${next}` : ""}`), { replace: true, reset: false });
       }} />
   {/key}

@@ -1,15 +1,13 @@
 <script lang="ts">
   import { page } from "$app/state";
 
-  import Events from "#lib/components/system/Events.svelte";
+  import Events, { EVENT_PAGES } from "#lib/components/system/Events.svelte";
+  import { placeIn } from "#lib/lists/pages.js";
   import { route } from "#lib/nav.js";
 
   const query = $derived(route(page.url).query);
-  const current = $derived(Math.max(1, Number(query.get("page")) || 1));
-  const perPage = $derived(
-    [10, 25, 50, 100].find((n) => n === Number(query.get("per_page"))) ?? 25
-  );
+  const place = $derived(placeIn(query, EVENT_PAGES));
   const types = $derived((query.get("type") ?? "").split(",").filter(Boolean));
 </script>
 
-<Events page={current} {perPage} {types} />
+<Events {place} {types} />

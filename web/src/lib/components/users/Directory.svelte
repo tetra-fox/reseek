@@ -1,5 +1,9 @@
 <script lang="ts" module>
+  import type { PageSizes } from "#lib/lists/pages.js";
   import { gridView } from "#lib/lists/table.svelte.js";
+
+  /** the page sizes the directory offers, and the one it starts at */
+  export const DIRECTORY_PAGES: PageSizes = { sizes: [25, 50, 100, 200], size: 50 };
 
   /** the directory's sort and column widths, kept in this browser */
   const view = gridView(
@@ -41,7 +45,7 @@
   import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { Keyed } from "#lib/lists/keyed.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
-  import { PAGE_SIZES, pageCount, type Place } from "#lib/lists/pages.js";
+  import { pageCount, type Place } from "#lib/lists/pages.js";
   import { Grid, type GridColumn } from "#lib/lists/table.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
@@ -547,7 +551,7 @@
       {/each}
     </div>
   </div>
-  {#if total > PAGE_SIZES[0]}
+  {#if total > DIRECTORY_PAGES.sizes[0]}
     <div class="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
       <Pagination
         page={place.page}
@@ -561,7 +565,7 @@
           () => place.size,
           (size) => goPlace({ page: Math.floor(((place.page - 1) * place.size) / size) + 1, size })
         }
-        options={PAGE_SIZES.map((n) => ({ value: n, label: `${n} per page` }))} />
+        options={DIRECTORY_PAGES.sizes.map((n) => ({ value: n, label: `${n} per page` }))} />
     </div>
   {/if}
 {/if}

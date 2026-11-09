@@ -1,27 +1,25 @@
 /** A page of a paged list, from 1, and how many rows a page holds */
 export type Place = { page: number; size: number };
 
-/** The page sizes a paged list offers */
-export const PAGE_SIZES = [25, 50, 100, 200];
-/** The page size where the address names none */
-const DEFAULT_SIZE = 50;
+/** The page sizes a paged list offers, and the one it shows where the address names none */
+export type PageSizes = { sizes: number[]; size: number };
 
-/** The place an address holds in `page` and `per_page`; page 1 and the default size without */
-export const placeIn = (query: URLSearchParams): Place => {
-  const size = Number(query.get("per_page"));
+/** The place an address holds in `page` and `per_page`: page 1 and the list's own size without */
+export const placeIn = (query: URLSearchParams, { sizes, size }: PageSizes): Place => {
+  const asked = Number(query.get("per_page"));
   const page = Math.floor(Number(query.get("page")));
   return {
     page: Number.isFinite(page) && page > 1 ? page : 1,
-    size: PAGE_SIZES.includes(size) ? size : DEFAULT_SIZE
+    size: sizes.includes(asked) ? asked : size
   };
 };
 
-/** `query` with `place` written into it, leaving out what is the default */
-export const withPlace = (query: URLSearchParams, place: Place) => {
+/** `query` with `place` written into it, leaving out page 1 and the list's own size */
+export const withPlace = (query: URLSearchParams, place: Place, { size }: PageSizes) => {
   const next = new URLSearchParams(query);
   if (place.page > 1) next.set("page", String(place.page));
   else next.delete("page");
-  if (place.size !== DEFAULT_SIZE) next.set("per_page", String(place.size));
+  if (place.size !== size) next.set("per_page", String(place.size));
   else next.delete("per_page");
   return next;
 };

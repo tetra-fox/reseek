@@ -13,12 +13,14 @@ describe("paged lists", () => {
   });
 
   it("reads and writes the place in the address, leaving the defaults out", () => {
-    expect(placeIn(new URLSearchParams("page=3&per_page=100"))).toEqual({ page: 3, size: 100 });
-    expect(placeIn(new URLSearchParams("page=-2&per_page=7"))).toEqual({ page: 1, size: 50 });
-    expect(placeIn(new URLSearchParams("page=x"))).toEqual({ page: 1, size: 50 });
+    const sizes = { sizes: [25, 50, 100], size: 50 };
+    const at = (text: string) => placeIn(new URLSearchParams(text), sizes);
+    expect(at("page=3&per_page=100")).toEqual({ page: 3, size: 100 });
+    expect(at("page=-2&per_page=7")).toEqual({ page: 1, size: 50 });
+    expect(at("page=x")).toEqual({ page: 1, size: 50 });
     const query = new URLSearchParams("group=jazz&page=4");
-    expect(withPlace(query, { page: 1, size: 50 }).toString()).toBe("group=jazz");
-    expect(withPlace(query, { page: 2, size: 25 }).toString()).toBe(
+    expect(withPlace(query, { page: 1, size: 50 }, sizes).toString()).toBe("group=jazz");
+    expect(withPlace(query, { page: 2, size: 25 }, sizes).toString()).toBe(
       "group=jazz&page=2&per_page=25"
     );
     expect(pageCount(0, 50)).toBe(1);

@@ -1,5 +1,9 @@
 <script lang="ts" module>
+  import type { PageSizes } from "#lib/lists/pages.js";
   import { gridView } from "#lib/lists/table.svelte.js";
+
+  /** the page sizes the event log offers, and the one it starts at */
+  export const EVENT_PAGES: PageSizes = { sizes: [10, 25, 50, 100], size: 25 };
 
   /** the event log's column widths, kept in this browser; the daemon orders it, newest first */
   const view = gridView("reseek.system.events", [], null);
@@ -31,6 +35,7 @@
   import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { Keyed } from "#lib/lists/keyed.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
+  import { pageCount, type Place, withPlace } from "#lib/lists/pages.js";
   import { Grid, keptIn } from "#lib/lists/table.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
@@ -41,11 +46,12 @@
   import { viewport } from "#lib/ui/viewport.svelte.js";
 
   // the event log, newest first, a page at a time, with its type filter and page size in the URL
-  type Props = { page: number; perPage: number; types: string[] };
-  let { page, perPage, types }: Props = $props();
+  type Props = { place: Place; types: string[] };
+  let { place, types }: Props = $props();
+  const page = $derived(place.page);
+  const perPage = $derived(place.size);
 
   type Record = Schemas["EventRecord"];
-  const SIZES = [10, 25, 50, 100];
 
   const rows = new Keyed<Record>((e) => e.id);
   let shown = $state<Record | null>(null);
@@ -103,7 +109,7 @@
     // a phone puts the type and the time above the data, in its one column
     shown: () => (viewport.phone ? ["data"] : ["id", "timestamp", "type", "data"])
   });
-  const pages = $derived(Math.max(1, Math.ceil((listed.data?.total ?? 0) / perPage)));
+  const pages = $derived(pageCount(listed.data?.total ?? 0, perPage));
   const list = new ListControl<Record>({
     lines: () => events,
     key: (e) => e.id,
@@ -111,11 +117,15 @@
     onopen: (e) => (shown = e)
   });
 
-  const to = (next: Partial<Props>) => {
+  /** Writes the page, its size and the types into the address, which the props follow */
+  const to = (next: Partial<{ page: number; perPage: number; types: string[] }>) => {
     const p = { page, perPage, types, ...next };
-    const q = new URLSearchParams({ page: String(p.page), per_page: String(p.perPage) });
-    if (p.types.length) q.set("type", p.types.join(","));
-    void goto(href(`/system/events?${q}`), { replace: true });
+    const q = withPlace(
+      new URLSearchParams(p.types.length ? { type: p.types.join(",") } : {}),
+      { page: p.page, size: p.perPage },
+      EVENT_PAGES
+    );
+    void goto(href(`/system/events${q.size ? `?${q}` : ""}`), { replace: true });
   };
   const toggle = (type: string) =>
     to({
@@ -163,7 +173,7 @@
       class="h-control-sm w-32"
       aria-label="Events per page"
       bind:value={() => perPage, (v) => to({ page: 1, perPage: v })}
-      options={SIZES.map((n) => ({ value: n, label: `${n} per page` }))} />
+      options={EVENT_PAGES.sizes.map((n) => ({ value: n, label: `${n} per page` }))} />
     <Pagination {page} {pages} onpage={(p) => to({ page: p })} />
   </div>
 </div>
