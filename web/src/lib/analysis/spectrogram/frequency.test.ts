@@ -95,19 +95,22 @@ describe("an axis between two scales", () => {
   });
 
   it("keeps higher frequencies higher all the way between", () => {
+    // the heights are compared in plain code: an expect for each of the 200 000 takes seconds
+    const risen: string[] = [];
     for (const [from, to] of PAIRS) {
       for (let step = 0; step <= 20; step++) {
         const curve = mix(pure(from), pure(to), step / 20);
         let last = Number.POSITIVE_INFINITY;
         for (let hz = 0; hz <= 22_050; hz += 7) {
           const height = heightOn(curve, 22_050, hz);
-          expect(height).toBeLessThanOrEqual(last);
+          if (height > last) risen.push(`${from} to ${to} at ${step}/20: ${hz} Hz`);
           last = height;
         }
         expect(heightOn(curve, 22_050, 0)).toBe(1);
         expect(heightOn(curve, 22_050, 22_050)).toBe(0);
       }
     }
+    expect(risen).toEqual([]);
   });
 
   it("finds the frequency at a height", () => {
