@@ -36,6 +36,7 @@ use tokio::sync::{Semaphore, watch};
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
+use tokio_util::task::task_tracker::TaskTrackerToken;
 use tracing::{Instrument, debug, info, warn};
 use uuid::Uuid;
 
@@ -60,8 +61,8 @@ use crate::users::Directory;
 pub use destination::incomplete_path;
 pub use enqueue::{Enqueued, FileRequest, Group};
 
-/// How long the tasks of running downloads get to end at shutdown before their records are
-/// ended anyway.
+/// How long the tasks of downloads still downloading get to end at shutdown before their
+/// records are ended anyway. A task moving its arrived file is waited for however long it takes.
 const STOPPING: Duration = Duration::from_secs(5);
 
 /// How many enqueue calls of the API run at once.
@@ -124,6 +125,11 @@ pub struct Downloads {
   shutdown: CancellationToken,
   /// every download task, so the stop waits for them
   tasks: TaskTracker,
+  /// the tasks moving an arrived file, which the stop waits for without a limit
+  moving: TaskTracker,
+  /// set once the stop's limit has passed: a download that arrives after it leaves its file
+  /// for the next start to take up, since the stop no longer waits for its move
+  moves_closed: Mutex<bool>,
   in_flight: Mutex<HashMap<Uuid, InFlight>>,
   /// one enqueue per user at a time
   turns: Turns,
@@ -183,6 +189,8 @@ impl Downloads {
       downloads: paths.downloads.clone(),
       shutdown,
       tasks: TaskTracker::new(),
+      moving: TaskTracker::new(),
+      moves_closed: Mutex::new(false),
       in_flight: Mutex::new(HashMap::new()),
       turns: Turns::default(),
       starts: starts::Starts::default(),
@@ -489,18 +497,35 @@ impl Downloads {
   }
 
   /// Waits, at shutdown and once the client is stopped, for the download tasks the shutdown
-  /// canceled to end; what they leave unfinished the stop ends after.
+  /// canceled to end; what they leave unfinished the stop ends after. A task still downloading
+  /// gets [`STOPPING`]; one moving its arrived file is waited for until the move is done, so
+  /// the file is never left half moved with its record unwritten.
   pub async fn stop(&self) {
     self.tasks.close();
+    self.moving.close();
     if tokio::time::timeout(STOPPING, self.tasks.wait())
       .await
-      .is_err()
+      .is_ok()
     {
-      warn!(
-        running = self.tasks.len(),
-        "download tasks still running at shutdown"
-      );
+      return;
     }
+    *lock(&self.moves_closed) = true;
+    let moving = self.moving.len();
+    if moving > 0 {
+      info!(moving, "waiting for downloads to move their files");
+      self.moving.wait().await;
+    }
+    let running = self.tasks.len();
+    if running > 0 {
+      warn!(running, "download tasks still running at shutdown");
+    }
+  }
+
+  /// Leave for a download whose file arrived to move it, held until the move is written; none
+  /// once the stop no longer waits for moves.
+  fn may_move(&self) -> Option<TaskTrackerToken> {
+    let closed = lock(&self.moves_closed);
+    (!*closed).then(|| self.moving.token())
   }
 }
 

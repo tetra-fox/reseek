@@ -491,15 +491,27 @@ async fn a_resume_sent_while_the_download_stops_to_be_paused_waits_and_resumes_i
   let id = held.id;
   let bulk = |action: &str| json!({ "ids": [id], "action": action });
   app
-    .call("POST", "/api/v0/transfers/downloads/bulk", Some(bulk("resume")))
+    .call(
+      "POST",
+      "/api/v0/transfers/downloads/bulk",
+      Some(bulk("resume")),
+    )
     .await;
   read_until(&app, id, |r| r.next_attempt_at.is_some()).await;
   // the pause answers once the task is told to stop, before the task has written it paused
   app
-    .call("POST", "/api/v0/transfers/downloads/bulk", Some(bulk("pause")))
+    .call(
+      "POST",
+      "/api/v0/transfers/downloads/bulk",
+      Some(bulk("pause")),
+    )
     .await;
   let (_, answer) = app
-    .call("POST", "/api/v0/transfers/downloads/bulk", Some(bulk("resume")))
+    .call(
+      "POST",
+      "/api/v0/transfers/downloads/bulk",
+      Some(bulk("resume")),
+    )
     .await;
   assert_eq!(answer["ok"][0], id.to_string(), "{answer}");
   assert!(!read(&app, id).await.paused);

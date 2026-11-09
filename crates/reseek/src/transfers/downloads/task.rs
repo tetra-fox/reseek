@@ -89,9 +89,14 @@ impl Downloads {
 
   async fn run(self: Arc<Self>, id: Uuid, request: (u64, usize), cancel: CancellationToken) {
     match self.download(id, request, &cancel).await {
-      Ended::Succeeded(record, incomplete, writing) => {
-        self.complete(record, incomplete, writing).await;
-      }
+      Ended::Succeeded(record, incomplete, writing) => match self.may_move() {
+        Some(_moving) => self.complete(record, incomplete, writing).await,
+        // the file stays whole in the incomplete directory, where the resume after the next
+        // start finds it arrived
+        None => {
+          info!("download arrived after the stop's limit; its move is left to the next start")
+        }
+      },
       Ended::Failed(failed) => self.fail(failed).await,
       Ended::Abandoned => debug!("download left for the stop to end"),
     }
