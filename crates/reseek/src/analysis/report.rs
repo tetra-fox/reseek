@@ -16,7 +16,7 @@ use sha2::{Digest, Sha256};
 use super::analyzer::engine::Measured;
 use super::analyzer::picture::{BINS, COLUMNS_PER_SECOND, PEAKS_PER_SECOND};
 use super::analyzer::reading::Reading;
-use super::analyzer::thresholds::GUIDES;
+use super::analyzer::thresholds::guides;
 use super::tiles::{TILE_SECONDS, tile_count};
 use crate::files::LocalFile;
 
@@ -68,12 +68,11 @@ pub(super) fn layout(
   cutoff_hz: Option<f64>,
   scale: SpectrogramScale,
 ) -> SpectrogramLayout {
-  let mut guides: Vec<GuideLine> = GUIDES
-    .iter()
+  let mut guides: Vec<GuideLine> = guides()
     .filter(|(hz, _)| *hz < max_hz)
     .map(|(hz, label)| GuideLine {
-      hz: *hz,
-      label: (*label).to_string(),
+      hz,
+      label: label.to_string(),
       kind: GuideKind::Encoder,
     })
     .collect();
@@ -160,5 +159,30 @@ pub(super) fn assemble(
     judgment: None,
     limitations: reading.limitations,
     stale: false,
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn the_encoder_guides_sit_at_the_cutoffs_the_analyzer_names() {
+    let sent = layout(60.0, 22_050.0, false, None, SpectrogramScale::Linear);
+    let encoders: Vec<(f64, &str)> = sent
+      .guides
+      .iter()
+      .filter(|guide| guide.kind == GuideKind::Encoder)
+      .map(|guide| (guide.hz, guide.label.as_str()))
+      .collect();
+    assert_eq!(
+      encoders,
+      [
+        (16_000.0, "MP3 128k"),
+        (18_600.0, "MP3 192k"),
+        (19_530.0, "MP3 224-256k"),
+        (20_000.0, "MP3 320k / AAC"),
+      ]
+    );
   }
 }

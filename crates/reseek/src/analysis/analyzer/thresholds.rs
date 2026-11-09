@@ -91,6 +91,8 @@ pub(in crate::analysis) struct Profile {
   pub name: &'static str,
   /// the highest nominal bitrate cut here, in kbit/s
   pub kbps: u32,
+  /// the label of the guide line drawn across a spectrogram here, none for no line
+  pub guide: Option<&'static str>,
 }
 
 /// Profiles at this bitrate and above cut where some recordings are filtered when they are
@@ -105,57 +107,68 @@ pub(in crate::analysis) const PROFILES: &[Profile] = &[
     hz: 11_000.0,
     name: "mp3 ~64 kbps",
     kbps: 64,
+    guide: None,
   },
   Profile {
     hz: 13_500.0,
     name: "mp3 ~80 kbps",
     kbps: 80,
+    guide: None,
   },
   Profile {
     hz: 15_100.0,
     name: "mp3 ~96 kbps",
     kbps: 96,
+    guide: None,
   },
   Profile {
     hz: 16_000.0,
     name: "mp3 ~128 kbps",
     kbps: 128,
+    guide: Some("MP3 128k"),
   },
   Profile {
     hz: 17_000.0,
     name: "mp3 ~128 kbps",
     kbps: 128,
+    guide: None,
   },
   Profile {
     hz: 17_500.0,
     name: "mp3 ~160 kbps",
     kbps: 160,
+    guide: None,
   },
   Profile {
     hz: 18_600.0,
     name: "mp3 ~192 kbps",
     kbps: 192,
+    guide: Some("MP3 192k"),
   },
   Profile {
     hz: 19_400.0,
     name: "mp3 ~224 kbps",
     kbps: 224,
+    guide: None,
   },
   // LAME 3.100 cuts 224 kbps here too, so the name says both
   Profile {
     hz: 19_530.0,
     name: "mp3 ~224-256 kbps",
     kbps: 256,
+    guide: Some("MP3 224-256k"),
   },
   Profile {
     hz: 20_000.0,
     name: "mp3 ~320 kbps or aac",
     kbps: 320,
+    guide: Some("MP3 320k / AAC"),
   },
   Profile {
     hz: 20_500.0,
     name: "mp3 ~320 kbps",
     kbps: 320,
+    guide: None,
   },
 ];
 
@@ -167,10 +180,10 @@ pub(in crate::analysis) fn profile_at(hz: f64) -> Option<&'static Profile> {
     .min_by(|a, b| (a.hz - hz).abs().total_cmp(&(b.hz - hz).abs()))
 }
 
-/// The guide lines drawn across a spectrogram: where common encoder settings cut off.
-pub(in crate::analysis) const GUIDES: &[(f64, &str)] = &[
-  (16_000.0, "MP3 128k"),
-  (19_000.0, "MP3 192k"),
-  (19_500.0, "MP3 224-256k"),
-  (20_000.0, "MP3 320k / AAC"),
-];
+/// The guide lines drawn across a spectrogram: where common encoder settings cut off, as each
+/// profile with a guide labels it.
+pub(in crate::analysis) fn guides() -> impl Iterator<Item = (f64, &'static str)> {
+  PROFILES
+    .iter()
+    .filter_map(|profile| Some((profile.hz, profile.guide?)))
+}
