@@ -32,6 +32,8 @@ export class Tabs {
   readonly #now: () => number;
   /** when this tab last asked the others to answer; it leads nothing for `SETTLE_MS` after */
   #since: number;
+  /** when this tab was hidden, null while it shows */
+  #hiddenAt: number | null = null;
 
   constructor(channel: TabChannel, loadedAt: number, now: () => number = Date.now) {
     this.id = `${String(Math.round(loadedAt)).padStart(16, "0")}-${Math.random().toString(36).slice(2)}`;
@@ -53,13 +55,28 @@ export class Tabs {
   }
 
   /**
-   * This tab is back, from the back-forward cache, a freeze or a suspension the others may have
-   * dropped it for: it asks again, and leads nothing until they could answer
+   * This tab is back, from the back-forward cache, a freeze or a long hide the others may have
+   * dropped it for: it asks again, and leads nothing for `SETTLE_MS`
    */
   back() {
     this.#heard.clear();
     this.#since = this.#now();
     this.#say("hello");
+  }
+
+  /** This tab is hidden, which a browser may suspend it in without a word */
+  hide() {
+    this.#hiddenAt = this.#now();
+  }
+
+  /**
+   * This tab shows again. Hidden longer than `QUIET_MS`, it may have been suspended and dropped
+   * by the others, so it asks again; a shorter hide changes nothing
+   */
+  show() {
+    const away = this.#hiddenAt === null ? 0 : this.#now() - this.#hiddenAt;
+    this.#hiddenAt = null;
+    if (away > QUIET_MS) this.back();
   }
 
   /** Whether this tab leads: it has listened long enough and no older tab is there */
@@ -104,9 +121,10 @@ export const browserTabs = (): Tabs | null => {
   });
   addEventListener("resume", () => made.back());
   // a tab suspended with neither, as a phone's browser does in the background, may have been
-  // dropped by the others, and asks again as it shows
+  // dropped by the others
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") made.back();
+    if (document.visibilityState === "visible") made.show();
+    else made.hide();
   });
   return (tabs = made);
 };

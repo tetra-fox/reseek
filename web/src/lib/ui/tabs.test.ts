@@ -74,4 +74,26 @@ describe("the tabs of one browser", () => {
     now += SETTLE_MS;
     expect([woken.leads(), standIn.leads()]).toEqual([true, false]);
   });
+
+  it("asks again on showing only after a hide the others could have dropped it in", () => {
+    let now = 0;
+    const clock = () => now;
+    const channel = bus();
+    const leader = new Tabs(channel(), 100, clock);
+    const other = new Tabs(channel(), 200, clock);
+    now += SETTLE_MS;
+    // an ordinary switch away and back: it leads throughout, and the other never does
+    leader.hide();
+    now += 5_000;
+    leader.show();
+    expect([leader.leads(), other.leads()]).toEqual([true, false]);
+    // hidden past the time the others count it, it asks again and settles first
+    leader.hide();
+    now += QUIET_MS + 1;
+    other.beat();
+    leader.show();
+    expect(leader.leads()).toBe(false);
+    now += SETTLE_MS;
+    expect([leader.leads(), other.leads()]).toEqual([true, false]);
+  });
 });
