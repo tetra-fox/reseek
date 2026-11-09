@@ -14,7 +14,7 @@ use crate::db::{self, read_timestamp};
 pub const COLUMNS: &str = "Id, JobId, Username, Direction, Filename, Size, State, RequestedAt, \
                            EnqueuedAt, StartedAt, EndedAt, BytesTransferred, AverageSpeed, \
                            PlaceInQueue, Exception, Attempts, NextAttemptAt, Removed, LocalPath, \
-                           Destination, SearchId, Paused";
+                           Destination, SearchId, Paused, QueuePosition";
 
 /// The order transfers are listed in when nothing else decides: as they were asked for, and
 /// rows from the same instant in the order they were written, since their ids are random.
@@ -70,6 +70,9 @@ pub struct Record {
   pub local_path: Option<String>,
   /// a download the user paused, waiting here until resumed
   pub paused: bool,
+  /// where a download stands in the local queue, lower starting first; none on an upload. A
+  /// running download only writes it when it is new: the user's reorders write it apart
+  pub queue_position: Option<f64>,
 }
 
 impl Record {
@@ -98,6 +101,7 @@ impl Record {
       removed: false,
       local_path: None,
       paused: false,
+      queue_position: None,
     }
   }
 
@@ -152,6 +156,7 @@ impl Record {
       removed: row.get(17)?,
       local_path: text(18)?,
       paused: row.get(21)?,
+      queue_position: row.get(22)?,
     })
   }
 

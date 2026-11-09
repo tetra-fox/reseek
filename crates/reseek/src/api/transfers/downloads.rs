@@ -69,7 +69,7 @@ async fn move_queued(
   _caller: Authorized<ReadWrite>,
   Json(body): Json<MoveQueuedDownloads>,
 ) -> Json<DownloadQueue> {
-  app.downloads.move_queued(&body.ids, body.before);
+  app.downloads.move_queued(&body.ids, body.before).await;
   Json(DownloadQueue {
     ids: app.downloads.queue_order(),
   })

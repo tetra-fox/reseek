@@ -72,9 +72,16 @@ fn retry_wait(attempt: u32, delay: Duration, max: Duration) -> Duration {
 }
 
 impl Downloads {
-  /// Starts the task of the download `record`, which takes a turn of `request`, whose files
-  /// hold that many at once, and stops when `cancel` is canceled.
-  pub(super) fn spawn(&self, record: Record, request: (u64, usize), cancel: CancellationToken) {
+  /// Starts the task of the download `record`, which waits at `position` in the local queue,
+  /// takes a turn of `request`, whose files hold that many at once, and stops when `cancel` is
+  /// canceled.
+  pub(super) fn spawn(
+    &self,
+    record: Record,
+    position: f64,
+    request: (u64, usize),
+    cancel: CancellationToken,
+  ) {
     let this = self.this();
     let span = info_span!(
       "transfer",
@@ -84,11 +91,17 @@ impl Downloads {
     );
     self
       .tasks
-      .spawn(async move { this.run(record.id, request, cancel).await }.instrument(span));
+      .spawn(async move { this.run(record.id, position, request, cancel).await }.instrument(span));
   }
 
-  async fn run(self: Arc<Self>, id: Uuid, request: (u64, usize), cancel: CancellationToken) {
-    match self.download(id, request, &cancel).await {
+  async fn run(
+    self: Arc<Self>,
+    id: Uuid,
+    position: f64,
+    request: (u64, usize),
+    cancel: CancellationToken,
+  ) {
+    match self.download(id, position, request, &cancel).await {
       Ended::Succeeded(record, incomplete, writing) => match self.may_move() {
         Some(_moving) => self.complete(record, incomplete, writing).await,
         // the file stays whole in the incomplete directory, where the resume after the next
@@ -104,9 +117,15 @@ impl Downloads {
   }
 
   /// The download's tries, from its turn in the local queue to how it ended.
-  async fn download(&self, id: Uuid, request: (u64, usize), cancel: &CancellationToken) -> Ended {
+  async fn download(
+    &self,
+    id: Uuid,
+    position: f64,
+    request: (u64, usize),
+    cancel: &CancellationToken,
+  ) -> Ended {
     let first = tokio::select! {
-      grant = self.starts.wait(id, Some(request)) => grant,
+      grant = self.starts.wait(id, position, Some(request)) => grant,
       () = cancel.cancelled() => return self.canceled(id, None).await,
     };
     let mut first_slot = Some(first.slot);
@@ -189,7 +208,7 @@ impl Downloads {
       let _slot = match first_slot.take() {
         Some(slot) => slot,
         None => tokio::select! {
-          grant = self.starts.wait(id, None) => grant.slot,
+          grant = self.starts.wait(id, position, None) => grant.slot,
           () = cancel.cancelled() => return self.canceled(id, Some(incomplete)).await,
         },
       };

@@ -788,6 +788,7 @@ mod tests {
         .map(|f| super::super::FileRequest {
           filename: (*f).to_string(),
           size: 1,
+          position: None,
         })
         .collect(),
       destination: None,

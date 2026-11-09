@@ -185,6 +185,7 @@ fn group(request: EnqueueDownloadGroup) -> Group {
       .map(|f| FileRequest {
         filename: f.filename,
         size: f.size,
+        position: None,
       })
       .collect(),
     destination: request.destination,

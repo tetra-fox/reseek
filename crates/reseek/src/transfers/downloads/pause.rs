@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use std::collections::hash_map::Entry;
 
 use api_types::transfers::{BulkFailure, TransferStates};
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 use super::enqueue::gate_for;
@@ -118,6 +118,14 @@ impl Downloads {
     for (username, records) in by_user {
       let request = (self.starts.request(), gate_for(records.len()));
       for mut record in records {
+        let Some(position) = record.queue_position else {
+          warn!(id = %record.id, "paused download without a place in the queue not resumed");
+          outcomes.push(Err(failure(
+            record.id,
+            "the download has no place in the queue",
+          )));
+          continue;
+        };
         let cancel = self.shutdown.child_token();
         match lock(&self.in_flight).entry(record.id) {
           // another resume of it got here first
@@ -134,7 +142,7 @@ impl Downloads {
         self.save(&record, true).await;
         info!(id = %record.id, username, "download resumed");
         let id = record.id;
-        self.spawn(record, request, cancel);
+        self.spawn(record, position, request, cancel);
         outcomes.push(Ok(id));
       }
     }

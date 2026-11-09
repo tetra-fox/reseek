@@ -233,16 +233,31 @@ impl Downloads {
   }
 
   /// Moves the waiting downloads `ids` to just before `before`, or to the end of the local
-  /// queue, and pushes the new order; returns those moved.
-  pub fn move_queued(&self, ids: &[Uuid], before: Option<Uuid>) -> Vec<Uuid> {
+  /// queue, writes the new places and pushes the new order; returns those moved. A failed write
+  /// is logged; the order holds until the next stop.
+  pub async fn move_queued(&self, ids: &[Uuid], before: Option<Uuid>) -> Vec<Uuid> {
     let moved = self.starts.move_to(ids, before);
-    if !moved.is_empty() {
-      info!(moved = moved.len(), ?before, "queued downloads moved");
-      self.live.publish(LiveFrame::TransfersQueue(
-        api_types::transfers::DownloadQueue {
-          ids: self.starts.order(),
-        },
-      ));
+    if moved.is_empty() {
+      return moved;
+    }
+    info!(moved = moved.len(), ?before, "queued downloads moved");
+    self.live.publish(LiveFrame::TransfersQueue(
+      api_types::transfers::DownloadQueue {
+        ids: self.starts.order(),
+      },
+    ));
+    let starts = self.starts.clone();
+    let written = self
+      .db
+      .write(move |conn| {
+        // read in the write, so of two moves the one written last writes the order now held
+        let tx = conn.transaction()?;
+        store::place(&tx, &starts.placed())?;
+        tx.commit()
+      })
+      .await;
+    if let Err(e) = written {
+      warn!(error = %e, "local queue order not written");
     }
     moved
   }

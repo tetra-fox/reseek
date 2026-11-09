@@ -42,12 +42,15 @@ const FILTERED: &str = "Skipped: Filtered";
 const ALREADY_RUNNING: &str = "Skipped: Already in progress";
 
 /// One file to download.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct FileRequest {
   /// the remote filename exactly as the peer shares it
   pub filename: String,
   /// its size in bytes, 0 when not known
   pub size: u64,
+  /// the place in the local queue a download of it held before a restart, which it keeps;
+  /// none for the end of the queue
+  pub position: Option<f64>,
 }
 
 /// Files from one user to enqueue together, one group of a job, with where they go and what
@@ -66,11 +69,12 @@ pub struct Group {
 }
 
 impl FileRequest {
-  /// The file of the download `record`.
+  /// The file of the download `record`, asked for again at the end of the queue.
   pub fn of(record: &Record) -> Self {
     Self {
       filename: record.filename.clone(),
       size: record.size,
+      position: None,
     }
   }
 }
@@ -270,6 +274,7 @@ impl Downloads {
         job_id: Some(job),
         destination: destination.clone(),
         search_id,
+        queue_position: file.position,
         ..Record::download(username, &file.filename, file.size)
       })
       .collect();
@@ -320,7 +325,10 @@ impl Downloads {
         .get(&record.id)
         .map(|entry| entry.cancel.clone())
         .expect("the handle of an inserted download is kept");
-      self.spawn(record, request, cancel);
+      let position = record
+        .queue_position
+        .expect("the write places every download it inserts");
+      self.spawn(record, position, request, cancel);
       enqueued.push(transfer);
     }
     Ok(Enqueued {
@@ -365,7 +373,8 @@ impl Downloads {
 }
 
 /// Writes, in one transaction, every candidate record whose file is not downloading already,
-/// superseding the user's earlier records of the same file.
+/// superseding the user's earlier records of the same file. A candidate without a place in the
+/// local queue is placed after every download.
 fn write(
   conn: &mut rusqlite::Connection,
   username: &str,
@@ -391,7 +400,12 @@ fn write(
     superseded: Vec::new(),
     failed: Vec::new(),
   };
-  for record in candidates {
+  let mut next = store::next_position(&tx)?;
+  for mut record in candidates {
+    if record.queue_position.is_none() {
+      record.queue_position = Some(next);
+      next += 1.0;
+    }
     if running.contains(&record.filename) {
       written.failed.push(EnqueueFailure {
         filename: record.filename,
@@ -449,6 +463,7 @@ mod tests {
     FileRequest {
       filename: name.to_string(),
       size: 1,
+      position: None,
     }
   }
 
@@ -473,6 +488,7 @@ mod tests {
       FileRequest {
         filename: "a\\b.flac".to_string(),
         size: 2,
+        position: None,
       },
     ];
     assert_eq!(

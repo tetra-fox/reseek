@@ -10,13 +10,19 @@ use uuid::Uuid;
 use crate::testing::{TRUSTED, TestApp, app, request};
 use crate::transfers::{Record, store};
 
-/// Writes `record` into the daemon's `transfers.db`.
+/// Writes `record` into the daemon's `transfers.db`, at the end of the local queue when it has
+/// no place, as an enqueue writes it.
 async fn insert(app: &TestApp, record: &Record) {
-  let record = record.clone();
+  let mut record = record.clone();
   app
     .state
     .transfers
-    .write(move |conn| store::insert(conn, &record))
+    .write(move |conn| {
+      if record.queue_position.is_none() {
+        record.queue_position = Some(store::next_position(conn)?);
+      }
+      store::insert(conn, &record)
+    })
     .await
     .unwrap();
 }
@@ -352,6 +358,7 @@ async fn a_folder_download_skips_the_files_the_filters_match_before_asking_its_u
       .map(|name| super::FileRequest {
         filename: format!("@@a\\Album\\{name}"),
         size: 1,
+        position: None,
       })
       .collect(),
     destination: None,

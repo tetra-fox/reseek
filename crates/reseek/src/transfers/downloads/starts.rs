@@ -2,7 +2,9 @@
 //! change. A download waits for two things, both granted in queue order: its request's turn,
 //! held until its peer has queued it, so a big request does not ask a peer for dozens of files
 //! at once, and a download slot while `transfers.download.slots` is set, held for each try. A
-//! download that cannot have its request's turn yet lets the next one in the queue start.
+//! download that cannot have its request's turn yet lets the next one in the queue start. Each
+//! download's place comes with its record, and the places a reorder gives are written back, so
+//! the order outlives a restart.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -25,7 +27,6 @@ struct Waiting {
 struct State {
   /// where each download is in the queue; lower starts first
   positions: HashMap<Uuid, f64>,
-  next_position: f64,
   /// the downloads waiting, in queue order
   waiting: Vec<Waiting>,
   /// the slots held by downloads trying now
@@ -143,18 +144,14 @@ impl Starts {
     self.grant(&mut state);
   }
 
-  /// Waits for the download `id`'s turn: a slot, and a turn of `request` when given, whose
-  /// files may hold that many at once.
-  pub async fn wait(&self, id: Uuid, request: Option<(u64, usize)>) -> Grant {
+  /// Waits for the download `id`'s turn at `position`, or at the place a reorder gave it since
+  /// it first waited: a slot, and a turn of `request` when given, whose files may hold that many
+  /// at once.
+  pub async fn wait(&self, id: Uuid, position: f64, request: Option<(u64, usize)>) -> Grant {
     let (granted, grant_rx) = oneshot::channel();
     {
       let mut state = lock(&self.state);
-      if !state.positions.contains_key(&id) {
-        state.next_position += 1.0;
-        let position = state.next_position;
-        state.positions.insert(id, position);
-      }
-      let position = state.positions[&id];
+      let position = *state.positions.entry(id).or_insert(position);
       let at = state
         .waiting
         .iter()
@@ -178,6 +175,16 @@ impl Starts {
   /// The downloads waiting, in queue order.
   pub fn order(&self) -> Vec<Uuid> {
     lock(&self.state).waiting.iter().map(|w| w.id).collect()
+  }
+
+  /// The downloads waiting, each with its place.
+  pub fn placed(&self) -> Vec<(Uuid, f64)> {
+    let state = lock(&self.state);
+    state
+      .waiting
+      .iter()
+      .map(|w| (w.id, state.positions[&w.id]))
+      .collect()
   }
 
   /// Moves the waiting downloads `ids`, in the order given, to just before `before`, or to the
@@ -240,8 +247,12 @@ mod tests {
     request: Option<(u64, usize)>,
   ) -> tokio::task::JoinHandle<Grant> {
     let queue = queue.clone();
-    tokio::spawn(async move { queue.wait(id, request).await })
+    let position = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed) as f64;
+    tokio::spawn(async move { queue.wait(id, position, request).await })
   }
+
+  /// The places the waiters take, in the order they are made.
+  static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(1);
 
   async fn granted(waiter: &mut tokio::task::JoinHandle<Grant>) -> Option<Grant> {
     tokio::time::timeout(Duration::from_millis(50), waiter)
@@ -270,6 +281,11 @@ mod tests {
     assert_eq!(queue.order(), ids[1..]);
     assert_eq!(queue.move_to(&[ids[3]], Some(ids[1])), [ids[3]]);
     assert_eq!(queue.order(), [ids[3], ids[1], ids[2]]);
+    let placed = queue.placed();
+    assert!(
+      placed.windows(2).all(|pair| pair[0].1 < pair[1].1),
+      "the places written back hold the new order: {placed:?}"
+    );
     assert!(
       queue.move_to(&[ids[0]], None).is_empty(),
       "a running one is not waiting"

@@ -20,9 +20,9 @@ pub fn insert(conn: &Connection, record: &Record) -> rusqlite::Result<()> {
     "INSERT INTO Transfers (Id, JobId, Username, Direction, Filename, Size, State, \
      StateDescription, RequestedAt, EnqueuedAt, StartedAt, EndedAt, BytesTransferred, \
      AverageSpeed, PlaceInQueue, Exception, Removed, Attempts, NextAttemptAt, LocalPath, \
-     Destination, SearchId, Paused) \
+     Destination, SearchId, Paused, QueuePosition) \
      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, \
-     ?19, ?20, ?21, ?22, ?23)",
+     ?19, ?20, ?21, ?22, ?23, ?24)",
     params![
       record.id.to_string(),
       record.job_id.map(|id| id.to_string()),
@@ -47,9 +47,29 @@ pub fn insert(conn: &Connection, record: &Record) -> rusqlite::Result<()> {
       record.destination,
       record.search_id.map(|id| id.to_string()),
       record.paused,
+      record.queue_position,
     ],
   )?;
   entered(conn, record.id, record.state, record.requested_at)
+}
+
+/// The place in the local queue after every download's, for the next one enqueued.
+pub fn next_position(conn: &Connection) -> rusqlite::Result<f64> {
+  conn.query_row(
+    "SELECT coalesce(max(QueuePosition), 0) + 1 FROM Transfers",
+    [],
+    |row| row.get(0),
+  )
+}
+
+/// Writes where each of `placed` downloads stands in the local queue.
+pub fn place(conn: &Connection, placed: &[(Uuid, f64)]) -> rusqlite::Result<()> {
+  let mut statement =
+    conn.prepare_cached("UPDATE Transfers SET QueuePosition = ?2 WHERE Id = ?1")?;
+  for (id, position) in placed {
+    statement.execute(params![id.to_string(), position])?;
+  }
+  Ok(())
 }
 
 /// Writes everything about `record` that changes while it runs; returns whether its row was

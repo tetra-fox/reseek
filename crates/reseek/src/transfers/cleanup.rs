@@ -77,8 +77,8 @@ pub async fn end_unfinished(db: &Database) -> Result<usize, DbError> {
 }
 
 /// Takes the downloads marked resumable that were not removed since, as files to enqueue
-/// grouped by job, then by user, destination and search, and clears the mark of every marked
-/// download, removed or not.
+/// grouped by job, then by user, destination and search, each keeping its place in the local
+/// queue, and clears the mark of every marked download, removed or not.
 pub async fn take_resumable(db: &Database) -> Result<Resumable, DbError> {
   db.write(move |conn| {
     let tx = conn.transaction()?;
@@ -94,10 +94,17 @@ pub async fn take_resumable(db: &Database) -> Result<Resumable, DbError> {
       )?;
       for record in records {
         let record = record?;
+        let file = FileRequest {
+          position: record.queue_position,
+          ..FileRequest::of(&record)
+        };
         let groups = jobs.entry(record.job_id).or_default();
         match groups.iter_mut().find(|group| group.holds(&record)) {
-          Some(group) => group.files.push(FileRequest::of(&record)),
-          None => groups.push(Group::of(&record)),
+          Some(group) => group.files.push(file),
+          None => groups.push(Group {
+            files: vec![file],
+            ..Group::of(&record)
+          }),
         }
       }
     }
@@ -227,7 +234,7 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn interrupted_downloads_come_back_in_their_job_with_their_destination_and_search() {
+  async fn interrupted_downloads_come_back_in_their_job_with_their_destination_search_and_place() {
     let db = transfers().await;
     let job = Uuid::new_v4();
     let search = Uuid::new_v4();
@@ -243,10 +250,12 @@ mod tests {
       in_job("a\\Disc 1\\2.flac", "Album/Disc 1"),
       Record::download("alice", "b\\old.flac", 1),
     ];
-    // asked for a second apart, so the order they are taken in is the order above
+    // asked for a second apart, so the order they are taken in is the order above, and placed
+    // in the local queue the other way round
     let asked: chrono::DateTime<Utc> = "2026-05-06T10:00:00Z".parse().unwrap();
     for (record, seconds) in records.iter_mut().zip(0..) {
       record.requested_at = asked + chrono::Duration::seconds(seconds);
+      record.queue_position = Some(4.0 - seconds as f64);
     }
     db.write(move |conn| {
       for record in &records {
@@ -258,13 +267,14 @@ mod tests {
     .unwrap();
     end_unfinished(&db).await.unwrap();
     let resumable = take_resumable(&db).await.unwrap();
-    let group = |destination: Option<&str>, search_id, filenames: &[&str]| Group {
+    let group = |destination: Option<&str>, search_id, files: &[(&str, f64)]| Group {
       username: "alice".to_string(),
-      files: filenames
+      files: files
         .iter()
-        .map(|filename| FileRequest {
+        .map(|(filename, position)| FileRequest {
           filename: (*filename).to_string(),
           size: 1,
+          position: Some(*position),
         })
         .collect(),
       destination: destination.map(str::to_string),
@@ -277,16 +287,21 @@ mod tests {
           group(
             Some("Album/Disc 1"),
             Some(search),
-            &["a\\Disc 1\\1.flac", "a\\Disc 1\\2.flac"],
+            &[("a\\Disc 1\\1.flac", 4.0), ("a\\Disc 1\\2.flac", 2.0)],
           ),
-          group(Some("Album/Disc 2"), Some(search), &["a\\Disc 2\\1.flac"]),
+          group(
+            Some("Album/Disc 2"),
+            Some(search),
+            &[("a\\Disc 2\\1.flac", 3.0)],
+          ),
         ],
       ),
-      (None, vec![group(None, None, &["b\\old.flac"])]),
+      (None, vec![group(None, None, &[("b\\old.flac", 1.0)])]),
     ]);
     assert_eq!(
       resumable, expected,
-      "each destination keeps its files, and a download from before jobs comes back under none"
+      "each destination keeps its files and each file its place, and a download from before \
+       jobs comes back under none"
     );
   }
 }
