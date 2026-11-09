@@ -3,7 +3,9 @@
 
   import { cn } from "#lib/ui/cn.js";
 
-  type Props = HTMLButtonAttributes & {
+  type Props = Omit<HTMLButtonAttributes, "onclick"> & {
+    /** a click, on the button or on the link it renders with `href` */
+    onclick?: (e: MouseEvent) => void;
     variant?: "primary" | "secondary" | "outline" | "ghost" | "danger" | "link";
     size?: "default" | "sm" | "icon" | "icon-sm";
     /** renders a link that looks like the button, for navigation */
@@ -65,7 +67,7 @@
   )}
   data-label
   {...rest}
-  onclick={(e: MouseEvent & { currentTarget: EventTarget & HTMLButtonElement }) => {
+  onclick={(e: MouseEvent) => {
     if (unusable) return e.preventDefault();
     onclick?.(e);
   }}>
