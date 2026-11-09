@@ -204,10 +204,25 @@ export const CHIME_GAP_MS = 1_000;
 /** when the sound last played, by performance.now */
 let chimed = -Infinity;
 
-/** Plays the notification sound; a browser that refuses until the page is used stays silent */
+/** The Web Lock the tabs of one browser take to play a sound */
+const CHIME_LOCK = "reseek-chime";
+
+/**
+ * Plays the notification sound in one tab of the browser: every tab hears of the same message or
+ * finished download, and the one that takes the lock plays it and holds the lock for the gap.
+ * Web Locks need a secure context, so on plain http each tab plays its own
+ */
 const chime = () => {
   const now = performance.now();
   if (now - chimed < CHIME_GAP_MS) return;
   chimed = now;
-  new Audio(notificationSound).play().catch(() => {});
+  // a browser that refuses until the page is used stays silent
+  const play = () => void new Audio(notificationSound).play().catch(() => {});
+  if (!navigator.locks) return play();
+  void navigator.locks.request(CHIME_LOCK, { ifAvailable: true }, async (lock) => {
+    // another tab played it
+    if (!lock) return;
+    play();
+    await new Promise((done) => setTimeout(done, CHIME_GAP_MS));
+  });
 };

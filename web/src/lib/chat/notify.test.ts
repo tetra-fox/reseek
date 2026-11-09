@@ -158,6 +158,39 @@ describe("what a mode delivers", () => {
     visible.mockRestore();
   });
 
+  it("plays the sound in the one tab that takes the lock", async () => {
+    app.options = { chat: { notifications: { only_when_hidden: false } } } as never;
+    // the lock as two tabs of one browser share it: held by the other tab, then free
+    let held = true;
+    vi.stubGlobal("navigator", {
+      ...navigator,
+      locks: {
+        request: async (
+          name: string,
+          _options: LockOptions,
+          run: (lock: Lock | null) => Promise<void>
+        ) => {
+          if (held) return run(null);
+          held = true;
+          await run({ name, mode: "exclusive" });
+          held = false;
+        }
+      }
+    });
+    notifier.other("sound", "Download finished", "", "download:1", "/downloads");
+    expect(played).not.toHaveBeenCalled();
+    held = false;
+    later();
+    vi.useFakeTimers({ toFake: ["setTimeout"] });
+    notifier.other("sound", "Download finished", "", "download:2", "/downloads");
+    expect(played).toHaveBeenCalledOnce();
+    // held through the gap, so a tab hearing of it a moment later stays quiet
+    expect(held).toBe(true);
+    await vi.advanceTimersByTimeAsync(CHIME_GAP_MS);
+    expect(held).toBe(false);
+    vi.useRealTimers();
+  });
+
   it("plays one sound for a burst of messages", () => {
     app.options = { chat: { notifications: { only_when_hidden: false } } } as never;
     notifier.other("sound", "Download finished", "", "download:1", "/downloads");
