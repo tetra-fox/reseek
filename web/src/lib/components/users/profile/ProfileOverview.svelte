@@ -2,12 +2,14 @@
   import CopyIcon from "@lucide/svelte/icons/copy";
 
   import type { Schemas } from "#lib/api/client.js";
+  import { app } from "#lib/app.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Card from "#lib/components/ui/Card.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import { formatBytes, formatCount } from "#lib/format.js";
   import { session } from "#lib/session.svelte.js";
+  import { speedLimitsOf } from "#lib/transfers/speed.js";
   import { uploadsText } from "#lib/users/groups.js";
 
   import GroupsEditor from "./GroupsEditor.svelte";
@@ -17,6 +19,12 @@
 
   // what the user says about themselves, what we note about them, and what we did together
   let { profile: p }: { profile: Schemas["UserProfile"] } = $props();
+
+  /** the total upload limit in force, the alternative one while those are on */
+  const uploadTotal = $derived.by(() => {
+    const limits = speedLimitsOf(app.options, app.state);
+    return (limits.alternative ? limits.alt : limits.normal).upload;
+  });
 
   const write = $derived(session.can("ReadWrite"));
   const endpoint = $derived(p.endpoint ? `${p.endpoint.address}:${p.endpoint.port}` : null);
@@ -61,7 +69,7 @@
   </Card>
   <Card title="Groups">
     <GroupsEditor username={p.username} groups={p.groups} disabled={!write} />
-    <p class="mt-3 text-xs text-fg-muted">{uploadsText(p.uploads)}</p>
+    <p class="mt-3 text-xs text-fg-muted">{uploadsText(p.uploads, uploadTotal)}</p>
     {#if endpoint}
       <p class="mt-4 flex items-center gap-1 text-sm">
         <span class="shrink-0 text-fg-muted">Address</span>

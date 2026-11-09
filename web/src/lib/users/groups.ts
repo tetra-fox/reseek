@@ -19,8 +19,10 @@ export const LEECHERS = "leechers";
 /** The group everyone is in, below every other, which holds what no group above sets */
 export const DEFAULT = "default";
 
+/** The group of privileged users, whose uploads are paced by the total upload limit */
+const PRIVILEGED = "privileged";
 /** The names a user-defined group cannot take */
-const BUILTIN = ["privileged", LEECHERS, BUDDIES, DEFAULT, "blacklisted"];
+const BUILTIN = [PRIVILEGED, LEECHERS, BUDDIES, DEFAULT, "blacklisted"];
 
 /** Why `name` can't name a user-defined group, null when it can; `taken` are the names in use */
 export const nameProblem = (name: string, taken: string[]): string | null => {
@@ -246,16 +248,20 @@ export const groupLabel = (name: string) => (name === DEFAULT ? "Everyone" : nam
 
 /**
  * What a user's uploads get and which group each comes from, "Queue: buddies · Speed: no limit
- * (buddies) · Daily 10 files (leechers)"; a group that sets nothing is not named
+ * (buddies) · Daily 10 files (leechers)"; a group that sets nothing is not named. A privileged
+ * user's uploads go at `total`, the total upload limit in force, the alternative one while those
+ * are on; the profile's own figure for them is always the normal one
  */
-export const uploadsText = (uploads: Schemas["UserUploads"]): string =>
-  [
+export const uploadsText = (uploads: Schemas["UserUploads"], total: number | null): string => {
+  const speed = uploads.speed === PRIVILEGED ? total : uploads.speedLimit;
+  return [
     `Queue: ${groupLabel(uploads.queue)} (${uploads.slots ? plural(uploads.slots, "slot", "slots") : "every slot"})`,
-    `Speed: ${uploads.speedLimit ? `${uploads.speedLimit} KiB/s` : "no limit"} (${groupLabel(uploads.speed)})`,
+    `Speed: ${speed ? `${speed} KiB/s` : "no limit"} (${groupLabel(uploads.speed)})`,
     ...uploads.limits.map(
       (l) => `${limitText(l.window, l.measure, l.limit ?? null)} (${groupLabel(l.group)})`
     )
   ].join(" · ");
+};
 
 /** The group whose queue a user waits in, with its color, null for everyone's */
 export const queueOf = (user: { groups: UserGroup[]; uploads: Schemas["UserUploads"] }) =>

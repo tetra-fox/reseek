@@ -157,14 +157,31 @@ describe("a group's upload settings", () => {
 describe("what a user's uploads get", () => {
   it("names the group each setting comes from", () => {
     expect(
-      uploadsText({
-        queue: "buddies",
-        slots: null,
-        speed: "default",
-        speedLimit: 200,
-        limits: [{ window: "daily", measure: "files", limit: 10, group: "leechers" }]
-      })
+      uploadsText(
+        {
+          queue: "buddies",
+          slots: null,
+          speed: "default",
+          speedLimit: 200,
+          limits: [{ window: "daily", measure: "files", limit: 10, group: "leechers" }]
+        },
+        500
+      )
     ).toBe("Queue: buddies (every slot) · Speed: 200 KiB/s (Everyone) · Daily 10 files (leechers)");
+  });
+
+  it("names the total limit in force for a privileged user", () => {
+    const privileged = {
+      queue: "privileged",
+      slots: null,
+      speed: "privileged",
+      speedLimit: 500,
+      limits: []
+    };
+    // the alternative limits are on
+    expect(uploadsText(privileged, 50)).toBe(
+      "Queue: privileged (every slot) · Speed: 50 KiB/s (privileged)"
+    );
   });
 });
 
