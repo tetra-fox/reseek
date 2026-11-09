@@ -1,9 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Schemas } from "#lib/api/client.js";
 import { app } from "#lib/app.svelte.js";
 import { toasts } from "#lib/feedback/toast.svelte.js";
+import { live } from "#lib/live/live.svelte.js";
 import { fakeNetwork } from "#lib/testing/network.js";
+import { SETTLE_MS, Tabs } from "#lib/ui/tabs.js";
 import { SUMMARY_TTL_MS, users } from "#lib/users/users.svelte.js";
 
 import type { NotifyMode } from "./modes";
@@ -16,9 +18,6 @@ import {
 } from "./notify.svelte";
 
 vi.mock("$app/navigation", () => ({ goto: vi.fn() }));
-/** whether this tab leads the browser's tabs, which play the sound */
-let leading = true;
-vi.mock("#lib/ui/tabs.js", () => ({ browserTabs: () => ({ leads: () => leading }) }));
 
 const options: NotifyOptions = {
   onlyWhenHidden: true,
@@ -88,6 +87,15 @@ describe("what a mode delivers", () => {
   let now = 0;
   const later = () => (now += CHIME_GAP_MS);
 
+  // the app starts the stream, which has the tabs agree on the one that plays; they are
+  // settled before its frames come
+  beforeAll(async () => {
+    fakeNetwork(() => undefined);
+    live.start();
+    live.stop();
+    vi.unstubAllGlobals();
+    await new Promise((done) => setTimeout(done, SETTLE_MS));
+  });
   beforeEach(() => {
     played.mockClear();
     shown.mockClear();
@@ -109,7 +117,6 @@ describe("what a mode delivers", () => {
     );
   });
   afterEach(() => {
-    leading = true;
     app.options = null;
     notifier.permission = permission;
     toasts.splice(0);
@@ -162,12 +169,25 @@ describe("what a mode delivers", () => {
     visible.mockRestore();
   });
 
-  it("plays the sound only in the tab that leads", () => {
+  it("plays the first sound in a tab alone", () => {
     app.options = { chat: { notifications: { only_when_hidden: false } } } as never;
-    leading = false;
+    notifier.other("sound", "Download finished", "", "download:1", "/downloads");
+    expect(played).toHaveBeenCalledOnce();
+  });
+
+  it("plays the sound only in the oldest tab of the browser", async () => {
+    app.options = { chat: { notifications: { only_when_hidden: false } } } as never;
+    const pause = () => new Promise((done) => setTimeout(done, 20));
+    // a tab opened before this one, on the channel the tabs share
+    const channel = new BroadcastChannel("reseek-tabs");
+    const older = new Tabs(channel, 0);
+    await pause();
     notifier.other("sound", "Download finished", "", "download:1", "/downloads");
     expect(played).not.toHaveBeenCalled();
-    leading = true;
+    older.leave();
+    channel.close();
+    await pause();
+    later();
     notifier.other("sound", "Download finished", "", "download:2", "/downloads");
     expect(played).toHaveBeenCalledOnce();
   });

@@ -20,8 +20,8 @@ export const SETTLE_MS = 250;
 /**
  * The tabs of this browser open on reseek, which agree on one of them to lead: the oldest that is
  * there, by when its page loaded. Each says it is there every `BEAT_MS` and goes when it closes,
- * freezes or is not heard from for `QUIET_MS`. A new tab asks the others to answer at once and
- * leads nothing until they have had `SETTLE_MS` to
+ * freezes or is not heard from for `QUIET_MS`. A new tab asks the others to answer at once, and
+ * leads nothing for `SETTLE_MS`, the time they have to answer
  */
 export class Tabs {
   /** sorts by when the page loaded, a random part keeping two loaded together apart */
@@ -83,8 +83,9 @@ export class Tabs {
 let tabs: Tabs | null | undefined;
 
 /**
- * The tabs of this browser, made on first use; null where the browser has no BroadcastChannel,
- * where this tab is taken to be alone
+ * The tabs of this browser, made on first use, which the live stream's start is, so they agree
+ * before the first frame they all hear; null where the browser has no BroadcastChannel, where
+ * this tab is taken to be alone
  */
 export const browserTabs = (): Tabs | null => {
   if (tabs !== undefined) return tabs;
