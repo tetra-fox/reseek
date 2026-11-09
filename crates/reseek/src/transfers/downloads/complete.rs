@@ -80,9 +80,16 @@ impl Downloads {
       }),
       ended_at,
     );
+    // the options as they were before the record was saved as moved
     self
       .analysis
-      .downloaded(&record.username, record.id, record.job_id, &path)
+      .downloaded(
+        &options.analysis,
+        &record.username,
+        record.id,
+        record.job_id,
+        &path,
+      )
       .await;
     self.directory_complete(&record, &directory).await;
   }

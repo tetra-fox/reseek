@@ -21,6 +21,7 @@ use uuid::Uuid;
 
 use super::{Analysis, current, store};
 use crate::api::error::ApiError;
+use crate::config::Analysis as AnalysisOptions;
 use crate::files::LocalFile;
 use crate::jobs::{Ended, NewJob, NewPart, StoredPart, store as job_store};
 use crate::services::FileTarget;
@@ -329,15 +330,16 @@ impl Analysis {
   /// Queues the file the download `id` from `username` of the download job `job` finished into
   /// at `path`, when `analysis.on_download` is on and the file's extension is in
   /// `analysis.extensions`: a part of the one analysis job that follows the download job.
+  /// `analysis` is the options as read before the download was saved as moved, so a change made
+  /// once it shows as finished does not apply to it.
   pub async fn downloaded(
     &self,
+    analysis: &AnalysisOptions,
     username: &str,
     id: Uuid,
     job: Option<Uuid>,
     path: &std::path::Path,
   ) {
-    let options = self.config.current();
-    let analysis = &options.values.analysis;
     if !analysis.on_download || !listed(&analysis.extensions, path) {
       return;
     }
