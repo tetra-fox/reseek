@@ -11,7 +11,7 @@ use api_types::options::{FilePatch, FileReplace, FileValidate, OptionsPatch};
 use api_types::search::SearchRequest;
 use api_types::transfers::{BulkRequest, EnqueueDownloadJobRequest, TransferStates};
 use api_types::users::blocking::{Block, BlockRequest};
-use api_types::users::{GroupAssignment, UserTags};
+use api_types::users::{GroupMove, UserGroups};
 use libfuzzer_sys::fuzz_target;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -48,8 +48,8 @@ fuzz_target!(|data: &[u8]| {
     13 => round_trip::<JoinRoom>(rest),
     14 => round_trip::<MessageText>(rest),
     15 => round_trip::<NotifySetting>(rest),
-    16 => round_trip::<UserTags>(rest),
-    17 => round_trip::<GroupAssignment>(rest),
+    16 => round_trip::<UserGroups>(rest),
+    17 => round_trip::<GroupMove>(rest),
     18 => round_trip::<FileTokenRequest>(rest),
     19 => round_trip::<SetAnalysisOverride>(rest),
     _ => round_trip::<LiveFrame>(rest),
