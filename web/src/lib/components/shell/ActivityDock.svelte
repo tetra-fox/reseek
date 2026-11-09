@@ -45,6 +45,8 @@
 
   /** the docked height: the remembered one, or less in a window too short for it */
   let height = $state(Math.min(activityPrefs.height, dockMax()));
+  /** the height in effect, which a window made shorter since lowers */
+  const docked = $derived(Math.min(height, dockMax()));
   /** docked it opens and closes by its height, which moves the content with it; a sheet rises */
   const drawer = (node: Element) =>
     viewport.phone
@@ -103,7 +105,7 @@
       ? "fixed inset-x-0 bottom-(--bottom-h) z-20 h-72 max-h-[45svh] bg-surface/95 shadow-raised backdrop-blur-md"
       : "relative bg-surface"
   ]}
-  style:height={viewport.phone ? undefined : `${height}px`}
+  style:height={viewport.phone ? undefined : `${docked}px`}
   transition:drawer>
   {#if !viewport.phone}
     <ResizeHandle

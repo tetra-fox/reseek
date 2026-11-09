@@ -41,12 +41,17 @@
   /** the keys that move the handle back and forward along its axis */
   const keys = $derived(sideways ? ["ArrowLeft", "ArrowRight"] : ["ArrowUp", "ArrowDown"]);
   const clamp = (v: number) => Math.round(Math.min(max, Math.max(min, v)));
+  /**
+   * the size in effect: a window made smaller lowers `max` under a size kept from before, which
+   * the element shows no larger than `max`
+   */
+  const size = $derived(clamp(value));
   /** where a pointer is along the axis the handle moves on */
   const along = (e: PointerEvent) => (sideways ? e.clientX : e.clientY);
   /** how far a move of `by` pixels down or to the right grows the element */
   const grows = (by: number) => (edge === "bottom" || edge === "right" ? by : -by);
-  const set = (size: number) => {
-    value = clamp(size);
+  const set = (next: number) => {
+    value = clamp(next);
     onchange(value);
   };
 </script>
@@ -68,7 +73,7 @@
       aria-label={label}
       aria-valuemin={min}
       aria-valuemax={Number.isFinite(max) ? max : undefined}
-      aria-valuenow={value}
+      aria-valuenow={size}
       data-dragging={dragging ? "" : undefined}
       class={cn(
         "touch-none outline-none after:absolute after:bg-accent after:opacity-0 after:transition-opacity after:duration-(--motion-fast) hover:after:opacity-100 hover:after:delay-150 focus-visible:after:opacity-100 data-dragging:after:opacity-100 data-dragging:after:delay-0",
@@ -80,7 +85,7 @@
       onpointerdowncapture={(e) => {
         e.preventDefault();
         e.currentTarget.focus();
-        dragging = { at: along(e), value };
+        dragging = { at: along(e), value: size };
         e.currentTarget.setPointerCapture(e.pointerId);
       }}
       onpointermovecapture={(e) => {
@@ -95,7 +100,7 @@
         if (withModifier(e)) return;
         if (e.key === "Home") set(min);
         else if (e.key === "End" && Number.isFinite(max)) set(max);
-        else if (keys.includes(e.key)) set(value + grows(e.key === keys[1] ? STEP : -STEP));
+        else if (keys.includes(e.key)) set(size + grows(e.key === keys[1] ? STEP : -STEP));
         else return;
         e.preventDefault();
       }}>
