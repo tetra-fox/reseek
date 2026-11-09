@@ -12,7 +12,7 @@
   const target = $derived(chatTarget(at.path));
   $effect(() => {
     const user = at.query.get("user");
-    if (user) void goto(chatHref(user), { replaceState: true });
+    if (user) void goto(chatHref(user), { replace: true });
   });
   const message = $derived(Number(at.query.get("at")) || null);
 </script>

@@ -88,7 +88,7 @@
     else if (value === ALL) {
       const to = resultsHref(text);
       // the results already on screen take no second step in the history
-      void goto(to, { replaceState: to === page.url.hash });
+      void goto(to, { replace: to === page.url.hash });
     } else if (value === NEW) onnew(text);
     else if (value === JOIN) onjoin(text);
     else if (value.startsWith("room:")) openChat(roomHref(value.slice(5)));

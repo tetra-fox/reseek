@@ -14,7 +14,7 @@
 
   // the name the server's notices come from has no profile, only its pane
   $effect(() => {
-    if (username === SERVER) void goto(chatHref(SERVER), { replaceState: true });
+    if (username === SERVER) void goto(chatHref(SERVER), { replace: true });
   });
 </script>
 

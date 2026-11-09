@@ -113,7 +113,7 @@
       missing = true;
       if (outcome.status === 404) {
         toast("Search not found", "error");
-        void goto(href("/searches"), { replaceState: true });
+        void goto(href("/searches"), { replace: true });
       }
     });
   });

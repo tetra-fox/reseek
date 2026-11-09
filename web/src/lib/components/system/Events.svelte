@@ -115,7 +115,7 @@
     const p = { page, perPage, types, ...next };
     const q = new URLSearchParams({ page: String(p.page), per_page: String(p.perPage) });
     if (p.types.length) q.set("type", p.types.join(","));
-    void goto(href(`/system/events?${q}`), { replaceState: true });
+    void goto(href(`/system/events?${q}`), { replace: true });
   };
   const toggle = (type: string) =>
     to({

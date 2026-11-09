@@ -77,7 +77,7 @@
   const toggle = (id: string) => (opened = opened === id ? null : id);
   const show = (id: string) => {
     focus(id);
-    void goto(href(`/jobs?job=${id}`), { replaceState: true });
+    void goto(href(`/jobs?job=${id}`), { replace: true });
   };
 
   const flip = <T>(list: T[], value: T) =>

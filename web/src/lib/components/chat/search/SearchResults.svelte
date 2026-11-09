@@ -136,7 +136,7 @@
       <Select
         class="w-44"
         aria-label="Which messages"
-        bind:value={() => kind, (next) => void goto(resultsHref(q, next), { replaceState: true })}
+        bind:value={() => kind, (next) => void goto(resultsHref(q, next), { replace: true })}
         options={[
           { value: "all" as SearchKind, label: "All messages" },
           { value: "private" as SearchKind, label: "Private messages" },

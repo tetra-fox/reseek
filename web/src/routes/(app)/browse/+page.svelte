@@ -6,6 +6,6 @@
 
   // browsing lives on each user's Shares tab, and links to this address still land there
   $effect(() => {
-    void goto(browseTarget(route(page.url).query), { replaceState: true });
+    void goto(browseTarget(route(page.url).query), { replace: true });
   });
 </script>

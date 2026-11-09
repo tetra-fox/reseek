@@ -20,7 +20,7 @@
       text={query.get("text") ?? ""}
       history
       scope={user ? { type: "user", subjects: [user] } : undefined}
-      onclearscope={() => void goto(href("/searches"), { replaceState: true })} />
+      onclearscope={() => void goto(href("/searches"), { replace: true })} />
   {/key}
 {/if}
 <Unreachable />
