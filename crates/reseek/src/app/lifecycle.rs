@@ -2,10 +2,10 @@
 //!
 //! Starting: the transfers the last run left unfinished are ended and the downloads among them
 //! marked to resume after the login, and the searches it left running are ended, before
-//! anything can start new ones; then, in the background, the client's events and the options
-//! are followed, whether other users can reach us is judged and the router is asked to forward
-//! our peer port while we are logged in, the shares are initialized, and the upkeep and the
-//! schedules start. Then the watchdog connects, unless connecting is turned off or there are
+//! anything can start new ones, and the process's health is sampled into the state; then, in
+//! the background, the client's events and the options are followed, whether other users can
+//! reach us is judged and the router is asked to forward our peer port while we are logged in,
+//! the shares are initialized, and the upkeep and the schedules start. Then the watchdog connects, unless connecting is turned off or there are
 //! no credentials.
 //!
 //! Stopping, once the HTTP host has stopped: the running searches end as canceled, the
@@ -24,6 +24,9 @@ use crate::jobs::schedules::{self, upkeep};
 use crate::network;
 use crate::transfers::cleanup;
 
+/// How often the health of incoming searches and the process's memory are copied into the state
+const HEALTH_EVERY: Duration = Duration::from_secs(30);
+
 /// Ends what the last run left unfinished, then starts the daemon's work in order, in the
 /// background.
 pub(super) async fn start(app: &AppState) {
@@ -32,6 +35,8 @@ pub(super) async fn start(app: &AppState) {
     warn!(error = %e, "transfers left unfinished at the last stop not ended");
   }
   app.searches.end_dangling().await;
+  // the state is served complete from the first request, without waiting for the upkeep
+  figures::sample_health(app).await;
   app.network.follow_events(app);
   app.network.follow_listening(app.shutdown.clone());
   tokio::spawn(network::follow_changes(app.clone()).instrument(info_span!("client_options")));
@@ -57,62 +62,105 @@ async fn run(app: AppState) {
   }
   app.shares.initialized().await;
 
-  upkeep(app, Duration::from_secs(60), "client figures", {
-    let app = app.clone();
-    move || {
-      network::observe_client(&app);
-      async {}
-    }
-  });
-  upkeep(app, Duration::from_secs(60), "enqueue turns", {
-    let intake = app.uploads.clone();
-    move || {
-      intake.collect_idle_turns();
-      async {}
-    }
-  });
-  upkeep(app, Duration::from_secs(5), "transfer figures", {
-    let app = app.clone();
-    move || {
+  upkeep(
+    app,
+    Duration::ZERO,
+    Duration::from_secs(60),
+    "client figures",
+    {
       let app = app.clone();
-      async move { network::observe_transfers(&app).await }
-    }
-  });
-  upkeep(app, Duration::from_secs(1), "transfer figures pushed", {
-    let app = app.clone();
-    move || {
-      figures::push_transfers(&app);
-      async {}
-    }
-  });
-  upkeep(app, Duration::from_secs(30), "health sample", {
+      move || {
+        network::observe_client(&app);
+        async {}
+      }
+    },
+  );
+  upkeep(
+    app,
+    Duration::ZERO,
+    Duration::from_secs(60),
+    "enqueue turns",
+    {
+      let intake = app.uploads.clone();
+      move || {
+        intake.collect_idle_turns();
+        async {}
+      }
+    },
+  );
+  upkeep(
+    app,
+    Duration::ZERO,
+    Duration::from_secs(5),
+    "transfer figures",
+    {
+      let app = app.clone();
+      move || {
+        let app = app.clone();
+        async move { network::observe_transfers(&app).await }
+      }
+    },
+  );
+  upkeep(
+    app,
+    Duration::ZERO,
+    Duration::from_secs(1),
+    "transfer figures pushed",
+    {
+      let app = app.clone();
+      move || {
+        figures::push_transfers(&app);
+        async {}
+      }
+    },
+  );
+  // the first sample was taken as the daemon started
+  upkeep(app, HEALTH_EVERY, HEALTH_EVERY, "health sample", {
     let app = app.clone();
     move || {
       let app = app.clone();
       async move { figures::sample_health(&app).await }
     }
   });
-  upkeep(app, Duration::from_secs(60), "session heartbeat", {
-    let messaging = app.messaging.clone();
-    move || {
-      let messaging = messaging.clone();
-      async move { messaging.heartbeat().await }
-    }
-  });
-  upkeep(app, Duration::from_secs(60), "expired blocks", {
-    let users = app.users.clone();
-    move || {
-      let users = users.clone();
-      async move { users.expire_blocks().await }
-    }
-  });
-  upkeep(app, Duration::from_secs(3600), "lapsed sessions", {
-    let app = app.clone();
-    move || {
+  upkeep(
+    app,
+    Duration::ZERO,
+    Duration::from_secs(60),
+    "session heartbeat",
+    {
+      let messaging = app.messaging.clone();
+      move || {
+        let messaging = messaging.clone();
+        async move { messaging.heartbeat().await }
+      }
+    },
+  );
+  upkeep(
+    app,
+    Duration::ZERO,
+    Duration::from_secs(60),
+    "expired blocks",
+    {
+      let users = app.users.clone();
+      move || {
+        let users = users.clone();
+        async move { users.expire_blocks().await }
+      }
+    },
+  );
+  upkeep(
+    app,
+    Duration::ZERO,
+    Duration::from_secs(3600),
+    "lapsed sessions",
+    {
       let app = app.clone();
-      async move { super::tasks::end_lapsed_sessions(&app).await }
-    }
-  });
+      move || {
+        let app = app.clone();
+        async move { super::tasks::end_lapsed_sessions(&app).await }
+      }
+    },
+  );
   tokio::spawn(schedules::run(app.clone()).instrument(info_span!("schedules")));
 
   if options.relay.enabled {

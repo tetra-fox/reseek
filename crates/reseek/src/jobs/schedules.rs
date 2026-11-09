@@ -368,18 +368,23 @@ async fn release_check(app: &AppState) -> RunOutcome {
   }
 }
 
-/// Runs `work` every `period` until the daemon stops, first at once; a run missed while the
-/// runtime was busy is delayed, not run twice. This is the daemon's own upkeep, which is not a
-/// job.
-pub fn upkeep<F, Fut>(app: &AppState, period: Duration, name: &'static str, work: F)
-where
+/// Runs `work` every `period` until the daemon stops, the first time once `first` has passed; a
+/// run missed while the runtime was busy is delayed, not run twice. This is the daemon's own
+/// upkeep, which is not a job.
+pub fn upkeep<F, Fut>(
+  app: &AppState,
+  first: Duration,
+  period: Duration,
+  name: &'static str,
+  work: F,
+) where
   F: Fn() -> Fut + Send + 'static,
   Fut: Future<Output = ()> + Send + 'static,
 {
   let shutdown = app.shutdown.clone();
   tokio::spawn(
     async move {
-      let mut ticks = tokio::time::interval(period);
+      let mut ticks = tokio::time::interval_at(tokio::time::Instant::now() + first, period);
       ticks.set_missed_tick_behavior(MissedTickBehavior::Delay);
       loop {
         tokio::select! {
