@@ -4747,7 +4747,19 @@ export interface components {
         EnqueuedDownloadGroup: {
             /** @description the downloads made */
             enqueued: components["schemas"]["Transfer"][];
-            error?: components["schemas"]["ErrorBody"] | null;
+            /**
+             * @description why none of the group's files was enqueued, such as its user being offline; null when
+             *     the group was tried
+             */
+            error?: {
+                /** @description a longer explanation, null when the message says it all */
+                detail?: string | null;
+                /**
+                 * @description a short message, or a fixed code such as `soulseek_unavailable`
+                 * @example invalid configuration
+                 */
+                error: string;
+            } | null;
             /** @description the files of the group that were not enqueued, and why */
             failures: components["schemas"]["EnqueueFailure"][];
             /** @description the user the group's files come from */

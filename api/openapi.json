@@ -18869,13 +18869,31 @@
           "error": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/ErrorBody",
-                "description": "why none of the group's files was enqueued, such as its user being offline; null when\nthe group was tried"
+                "type": "object",
+                "description": "What went wrong, sent with every 4xx and 5xx status.",
+                "required": [
+                  "error"
+                ],
+                "properties": {
+                  "detail": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "a longer explanation, null when the message says it all"
+                  },
+                  "error": {
+                    "type": "string",
+                    "description": "a short message, or a fixed code such as `soulseek_unavailable`",
+                    "example": "invalid configuration"
+                  }
+                }
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "why none of the group's files was enqueued, such as its user being offline; null when\nthe group was tried"
           },
           "failures": {
             "type": "array",

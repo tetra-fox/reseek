@@ -82,6 +82,9 @@ pub struct EnqueuedDownloadGroup {
   pub failures: Vec<EnqueueFailure>,
   /// why none of the group's files was enqueued, such as its user being offline; null when
   /// the group was tried
+  // inline, since utoipa writes the description of a nullable reference inside its `oneOf`,
+  // where generated clients do not look, and of an inline one on the `oneOf` itself
+  #[schema(inline)]
   pub error: Option<crate::ErrorBody>,
 }
 

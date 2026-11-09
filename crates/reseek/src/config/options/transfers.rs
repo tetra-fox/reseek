@@ -187,7 +187,9 @@ impl Default for Retry {
 pub struct Destination {
   /// Directory inside the downloads directory that finished files go to. `${SOURCE_USERNAME}`,
   /// `${SOURCE_PATH}`, `${SOURCE_DIRECTORY}`, `${JOB_ID}` (everything queued together),
-  /// `${SEARCH_ID}` and `${SEARCH_TEXT}` are replaced with their values.
+  /// `${SEARCH_ID}` and `${SEARCH_TEXT}` are replaced with their values. `{}` puts files
+  /// straight into the downloads directory. A download queued with a directory of its own goes
+  /// there instead.
   pub subdirectory: Option<String>,
   /// What happens when the file already exists: `rename` or `overwrite`.
   pub exists: DestinationExists,
