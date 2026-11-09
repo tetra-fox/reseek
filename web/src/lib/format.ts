@@ -305,7 +305,7 @@ export const WIDEST = {
   size: formatBytes(1023.99 * 1024 ** 3),
   speed: formatSpeed(1023.9 * 1024 ** 2),
   // a large library shares a few million files
-  count: (9_999_999).toLocaleString(),
+  count: formatCount(9_999_999),
   length: formatSeconds(99 * 3600 + 59 * 60 + 59),
   // a stalled transfer can be thousands of days from done
   duration: formatDuration(9999 * 86_400 + 23 * 3600),

@@ -24,6 +24,7 @@
     ago,
     formatBytes,
     formatCount,
+    formatDate,
     formatDuration,
     formatSpeed,
     plural
@@ -207,7 +208,7 @@
         <dt>Privileges</dt>
         <dd>
           {s.user.privileges.isPrivileged
-            ? `Until ${s.user.privileges.privilegedUntil ? new Date(s.user.privileges.privilegedUntil).toLocaleString() : formatDuration(s.user.privileges.privilegesRemaining)}`
+            ? `Until ${s.user.privileges.privilegedUntil ? formatDate(s.user.privileges.privilegedUntil) : formatDuration(s.user.privileges.privilegesRemaining)}`
             : "None"}
         </dd>
         <dt>Auto-reconnect</dt>

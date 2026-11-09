@@ -1,4 +1,5 @@
 import { api, type Schemas } from "#lib/api/client.js";
+import { formatCount } from "#lib/format.js";
 import { call, type Outcome } from "#lib/request.js";
 import { fields } from "#lib/stored.svelte.js";
 
@@ -28,7 +29,7 @@ export const speedLimitsOf = (
 
 /** A limit as the footer names it */
 export const formatLimit = (kib: number | null): string =>
-  kib === null ? "No limit" : `${kib.toLocaleString()} KiB/s`;
+  kib === null ? "No limit" : `${formatCount(kib)} KiB/s`;
 
 /** Puts the alternative limits in force, or the normal ones; the state frame brings it back */
 export const switchSpeedLimits = (alternative: boolean): Promise<Outcome<unknown>> =>
