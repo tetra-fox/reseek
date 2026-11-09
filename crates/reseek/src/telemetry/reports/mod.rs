@@ -13,7 +13,7 @@ mod summary;
 pub use histogram::{HistogramError, Width};
 
 use api_types::reports::{TransferOutcome, TransferSummary};
-use api_types::transfers::TransferDirection;
+use api_types::transfers::{TransferDirection, TransferStates};
 use chrono::{DateTime, Utc};
 use rusqlite::types::Value;
 
@@ -55,17 +55,24 @@ impl Reports {
   }
 }
 
-/// How a finished transfer in the state `state` ended: the state without `Completed`.
+/// Each outcome flag of a finished transfer and the outcome it reports.
+const OUTCOMES: [(TransferStates, TransferOutcome); 6] = [
+  (TransferStates::Succeeded, TransferOutcome::Succeeded),
+  (TransferStates::Cancelled, TransferOutcome::Cancelled),
+  (TransferStates::TimedOut, TransferOutcome::TimedOut),
+  (TransferStates::Errored, TransferOutcome::Errored),
+  (TransferStates::Rejected, TransferOutcome::Rejected),
+  (TransferStates::Aborted, TransferOutcome::Aborted),
+];
+
+/// How a finished transfer in the state `state` ended: the state without `Completed`, when
+/// that is one outcome flag, else none.
 fn outcome(state: u32) -> TransferOutcome {
-  match state & !16 {
-    32 => TransferOutcome::Succeeded,
-    64 => TransferOutcome::Cancelled,
-    128 => TransferOutcome::TimedOut,
-    256 => TransferOutcome::Errored,
-    512 => TransferOutcome::Rejected,
-    1024 => TransferOutcome::Aborted,
-    _ => TransferOutcome::None,
-  }
+  let flags = TransferStates::from_bits_retain(state).difference(TransferStates::Completed);
+  OUTCOMES
+    .iter()
+    .find(|(flag, _)| *flag == flags)
+    .map_or(TransferOutcome::None, |(_, outcome)| *outcome)
 }
 
 /// The [`TransferSummary`] of the [`SUMMARY`] columns starting at `at`.
