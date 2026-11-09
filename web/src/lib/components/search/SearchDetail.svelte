@@ -27,7 +27,7 @@
   import { parseFilters } from "#lib/files/filters.js";
   import { formatCount, listText, plural } from "#lib/format.js";
   import { useInspector } from "#lib/inspector/inspector.svelte.js";
-  import { type ActiveFilter, clearThen, TEXT_FILTER, typedFilter } from "#lib/lists/filtered.js";
+  import { type ActiveFilter, clearThen, typedFilter } from "#lib/lists/filtered.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
   import { href } from "#lib/nav.js";
@@ -151,17 +151,9 @@
       filterText = "";
     })
   ]);
-  // strings rather than the filters themselves, so what reads them reruns as a toggle changes and
-  // not as the filter text does
-  /** the hide toggles the line of filters names */
-  const namedHides = $derived(
-    filters
-      .filter((f) => f.id !== TEXT_FILTER)
-      .map((f) => f.id)
-      .join(" ")
-  );
   const anyNamed = $derived(filters.length > 0);
-  const named = (key: HideKey) => namedHides.split(" ").includes(key);
+  /** whether a toggle is on from the start and still on, so the line of filters leaves it out */
+  const onByDefault = (key: HideKey) => searchOptions[key] && HIDE_DEFAULTS[key];
 
   /** the pipeline's options with the toggles `on` holds for and the filter `text` */
   const options = (on: (key: HideKey) => boolean, text: string, sort: ResultSort | null) => ({
@@ -193,12 +185,7 @@
   });
   /** the results with the named filters off, which the line of filters counts the shown ones of */
   const unnamed = $derived(
-    anyNamed
-      ? pipeline(
-          results.results,
-          options((key) => searchOptions[key] && !named(key), "", null)
-        )
-      : view
+    anyNamed ? pipeline(results.results, options(onByDefault, "", null)) : view
   );
   // what keeps results out of view, counted apart since each has its own way back: the ones
   // dismissed, those from blocked users, those the toggles on from the start hide, and those the
@@ -214,7 +201,7 @@
         ).length
   );
   /** the toggles on from the start and still on */
-  const defaults = $derived(HIDING.filter((h) => searchOptions[h.key] && !named(h.key)));
+  const defaults = $derived(HIDING.filter((h) => onByDefault(h.key)));
   const byDefaults = $derived(
     results.results.length - dismissedCount - fromBlocked - unnamed.length
   );
