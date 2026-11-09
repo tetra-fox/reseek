@@ -48,7 +48,7 @@ stdenvNoCC.mkDerivation (finalAttrs: {
       ];
     };
     fetcherVersion = 4;
-    hash = "sha256-6fVoXRjtBFH9hdoT+JzsKg126oaV8D/FHIpfQf81xE0=";
+    hash = "sha256-6nk23+E18qkzZp6+BBLdQRmDDj3NzU7y1GSGyOiypbM=";
   };
 
   nativeBuildInputs = [
