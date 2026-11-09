@@ -451,10 +451,9 @@ impl Downloads {
 
   /// Enqueues again the downloads a stop interrupted that were not removed since, each in its
   /// job and with its destination and search, as new downloads that supersede the old records,
-  /// so a job goes on and is told of once all of it has ended. Downloads from before jobs were
-  /// kept go into one new job. Only the first call after a start does anything, which is after
-  /// the first login; the marks are cleared before the enqueues, so a user that cannot be
-  /// reached is logged, not tried again.
+  /// so a job goes on and is told of once all of it has ended. Only the first call after a
+  /// start does anything, which is after the first login; the marks are cleared before the
+  /// enqueues, so a user that cannot be reached is logged, not tried again.
   pub async fn resume(&self) {
     if self.resumed.swap(true, Ordering::AcqRel) {
       return;
@@ -464,7 +463,6 @@ impl Downloads {
       Err(e) => return warn!(error = %e, "interrupted downloads not resumed"),
     };
     for (job, groups) in resumable {
-      let job = job.unwrap_or_else(Uuid::new_v4);
       self.ensure_listed(job, &groups).await;
       let asked: Vec<(String, usize)> = groups
         .iter()

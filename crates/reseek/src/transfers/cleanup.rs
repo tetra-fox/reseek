@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 use api_types::transfers::{TransferDirection, TransferStates};
 use chrono::Utc;
 use rusqlite::params;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 use super::categories::UNFINISHED;
@@ -20,8 +20,8 @@ use crate::db::{Database, DbError, timestamp};
 pub const SHUT_DOWN: &str = "Application shut down";
 
 /// The downloads to resume by job, in groups of one user, destination and search each, in the
-/// order they were asked for; downloads from before jobs were kept are under none.
-pub type Resumable = BTreeMap<Option<Uuid>, Vec<Group>>;
+/// order they were asked for.
+pub type Resumable = BTreeMap<Uuid, Vec<Group>>;
 
 /// Ends every transfer left unfinished but the paused downloads, removed ones included, as
 /// `Completed, Errored` with [`SHUT_DOWN`] at the time of this call, adding the state to each
@@ -78,7 +78,8 @@ pub async fn end_unfinished(db: &Database) -> Result<usize, DbError> {
 
 /// Takes the downloads marked resumable that were not removed since, as files to enqueue
 /// grouped by job, then by user, destination and search, each keeping its place in the local
-/// queue, and clears the mark of every marked download, removed or not.
+/// queue, and clears the mark of every marked download, removed or not. A download without a
+/// job is logged and left.
 pub async fn take_resumable(db: &Database) -> Result<Resumable, DbError> {
   db.write(move |conn| {
     let tx = conn.transaction()?;
@@ -94,11 +95,15 @@ pub async fn take_resumable(db: &Database) -> Result<Resumable, DbError> {
       )?;
       for record in records {
         let record = record?;
+        let Some(job) = record.job_id else {
+          warn!(id = %record.id, username = record.username, "interrupted download without a job not resumed");
+          continue;
+        };
         let file = FileRequest {
           position: record.queue_position,
           ..FileRequest::of(&record)
         };
-        let groups = jobs.entry(record.job_id).or_default();
+        let groups = jobs.entry(job).or_default();
         match groups.iter_mut().find(|group| group.holds(&record)) {
           Some(group) => group.files.push(file),
           None => groups.push(Group {
@@ -205,6 +210,10 @@ mod tests {
       ..Row::new("alice", TransferDirection::Download, 8)
     };
     insert(&db, vec![kept, removed]).await;
+    let job = Uuid::new_v4().to_string();
+    db.write(move |conn| conn.execute("UPDATE Transfers SET JobId = ?1", [job]))
+      .await
+      .unwrap();
     end_unfinished(&db).await.unwrap();
     let taken = take_resumable(&db).await.unwrap();
     let files: Vec<(&str, &str)> = taken
@@ -248,7 +257,7 @@ mod tests {
       in_job("a\\Disc 1\\1.flac", "Album/Disc 1"),
       in_job("a\\Disc 2\\1.flac", "Album/Disc 2"),
       in_job("a\\Disc 1\\2.flac", "Album/Disc 1"),
-      Record::download("alice", "b\\old.flac", 1),
+      Record::download("alice", "b\\jobless.flac", 1),
     ];
     // asked for a second apart, so the order they are taken in is the order above, and placed
     // in the local queue the other way round
@@ -280,28 +289,25 @@ mod tests {
       destination: destination.map(str::to_string),
       search_id,
     };
-    let expected = Resumable::from([
-      (
-        Some(job),
-        vec![
-          group(
-            Some("Album/Disc 1"),
-            Some(search),
-            &[("a\\Disc 1\\1.flac", 4.0), ("a\\Disc 1\\2.flac", 2.0)],
-          ),
-          group(
-            Some("Album/Disc 2"),
-            Some(search),
-            &[("a\\Disc 2\\1.flac", 3.0)],
-          ),
-        ],
-      ),
-      (None, vec![group(None, None, &[("b\\old.flac", 1.0)])]),
-    ]);
+    let expected = Resumable::from([(
+      job,
+      vec![
+        group(
+          Some("Album/Disc 1"),
+          Some(search),
+          &[("a\\Disc 1\\1.flac", 4.0), ("a\\Disc 1\\2.flac", 2.0)],
+        ),
+        group(
+          Some("Album/Disc 2"),
+          Some(search),
+          &[("a\\Disc 2\\1.flac", 3.0)],
+        ),
+      ],
+    )]);
     assert_eq!(
       resumable, expected,
-      "each destination keeps its files and each file its place, and a download from before \
-       jobs comes back under none"
+      "each destination keeps its files and each file its place, and a download without a job \
+       is left"
     );
   }
 }
