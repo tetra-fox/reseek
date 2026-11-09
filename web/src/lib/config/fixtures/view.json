@@ -217,7 +217,6 @@
       ]
     },
     "shares": {
-      "buddies_only": [],
       "cache": {
         "retention": "off",
         "storage_mode": "memory",
@@ -227,7 +226,7 @@
       "filters": [],
       "follow_symlinks": false,
       "share_downloads": false,
-      "trusted_only": []
+      "visible_to": {}
     },
     "shutdown_timeout": "10s",
     "soulseek": {
@@ -333,6 +332,30 @@
           "members": [],
           "patterns": []
         },
+        "buddies": {
+          "upload": {
+            "limits": {
+              "daily": {
+                "failures": null,
+                "files": null,
+                "megabytes": null
+              },
+              "queued": {
+                "failures": null,
+                "files": null,
+                "megabytes": null
+              },
+              "weekly": {
+                "failures": null,
+                "files": null,
+                "megabytes": null
+              }
+            },
+            "slots": 0,
+            "speed_limit": 0,
+            "strategy": null
+          }
+        },
         "default": {
           "upload": {
             "limits": {
@@ -352,10 +375,9 @@
                 "megabytes": null
               }
             },
-            "priority": 1,
             "slots": null,
             "speed_limit": null,
-            "strategy": "roundrobin"
+            "strategy": null
           }
         },
         "leechers": {
@@ -381,12 +403,15 @@
                 "megabytes": null
               }
             },
-            "priority": 1,
             "slots": null,
             "speed_limit": null,
-            "strategy": "roundrobin"
+            "strategy": null
           }
         },
+        "order": [
+          "buddies",
+          "leechers"
+        ],
         "user_defined": {}
       },
       "ui": {
@@ -2228,7 +2253,7 @@
       "envVar": "RESEEK_RETENTION_USERS",
       "cliFlag": null,
       "kind": "duration",
-      "doc": "Time a user can go unseen before they are removed from Users. Buddies and users with a note, tag, block or group are kept.",
+      "doc": "Time a user can go unseen before they are removed from Users. Buddies and users with a note, a block or a group are kept.",
       "choices": null,
       "default": null,
       "apply": "live",
@@ -2366,24 +2391,6 @@
         }
       ]
     },
-    "shares.buddies_only": {
-      "source": {
-        "layer": "default"
-      },
-      "file": "config.toml",
-      "envVar": "RESEEK_SHARE_BUDDIES_ONLY",
-      "cliFlag": null,
-      "kind": {
-        "list": "string"
-      },
-      "doc": "Aliases of shares only buddies and trusted buddies see, ignoring case. This covers relay agents' shares too. A buddy on your own network is not recognized as one.",
-      "choices": null,
-      "default": [],
-      "apply": "live",
-      "secret": false,
-      "notApplied": null,
-      "entries": []
-    },
     "shares.cache.retention": {
       "source": {
         "layer": "default"
@@ -2503,19 +2510,17 @@
       "notApplied": null,
       "entries": []
     },
-    "shares.trusted_only": {
+    "shares.visible_to": {
       "source": {
         "layer": "default"
       },
       "file": "config.toml",
-      "envVar": "RESEEK_SHARE_TRUSTED_ONLY",
+      "envVar": null,
       "cliFlag": null,
-      "kind": {
-        "list": "string"
-      },
-      "doc": "Aliases of shares only trusted buddies see, ignoring case. This covers relay agents' shares too. A buddy on your own network is not recognized as one.",
+      "kind": "map",
+      "doc": "Aliases of shares only some groups see, ignoring case, each with those groups. A share listed without groups, or only with groups that do not exist, is seen by no one. This covers relay agents' shares too. A member on your own network is not recognized as one.",
       "choices": null,
-      "default": [],
+      "default": {},
       "apply": "live",
       "secret": false,
       "notApplied": null,
@@ -3526,6 +3531,201 @@
       "notApplied": null,
       "entries": []
     },
+    "transfers.groups.buddies.upload.limits.daily.failures": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "Maximum number of failed transfers. `0` for no limit.",
+      "choices": null,
+      "default": null,
+      "apply": "live",
+      "secret": false,
+      "notApplied": null,
+      "entries": []
+    },
+    "transfers.groups.buddies.upload.limits.daily.files": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "Maximum number of files. `0` for no limit.",
+      "choices": null,
+      "default": null,
+      "apply": "live",
+      "secret": false,
+      "notApplied": null,
+      "entries": []
+    },
+    "transfers.groups.buddies.upload.limits.daily.megabytes": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "Maximum number of megabytes. `0` for no limit.",
+      "choices": null,
+      "default": null,
+      "apply": "live",
+      "secret": false,
+      "notApplied": null,
+      "entries": []
+    },
+    "transfers.groups.buddies.upload.limits.queued.failures": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "Maximum number of failed transfers. `0` for no limit.",
+      "choices": null,
+      "default": null,
+      "apply": "live",
+      "secret": false,
+      "notApplied": null,
+      "entries": []
+    },
+    "transfers.groups.buddies.upload.limits.queued.files": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "Maximum number of files. `0` for no limit.",
+      "choices": null,
+      "default": null,
+      "apply": "live",
+      "secret": false,
+      "notApplied": null,
+      "entries": []
+    },
+    "transfers.groups.buddies.upload.limits.queued.megabytes": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "Maximum number of megabytes. `0` for no limit.",
+      "choices": null,
+      "default": null,
+      "apply": "live",
+      "secret": false,
+      "notApplied": null,
+      "entries": []
+    },
+    "transfers.groups.buddies.upload.limits.weekly.failures": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "Maximum number of failed transfers. `0` for no limit.",
+      "choices": null,
+      "default": null,
+      "apply": "live",
+      "secret": false,
+      "notApplied": null,
+      "entries": []
+    },
+    "transfers.groups.buddies.upload.limits.weekly.files": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "Maximum number of files. `0` for no limit.",
+      "choices": null,
+      "default": null,
+      "apply": "live",
+      "secret": false,
+      "notApplied": null,
+      "entries": []
+    },
+    "transfers.groups.buddies.upload.limits.weekly.megabytes": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "Maximum number of megabytes. `0` for no limit.",
+      "choices": null,
+      "default": null,
+      "apply": "live",
+      "secret": false,
+      "notApplied": null,
+      "entries": []
+    },
+    "transfers.groups.buddies.upload.slots": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "Maximum number of uploads of the group's own queue running at once, shared by its members. `0` for every slot.",
+      "choices": null,
+      "default": 0,
+      "apply": "live",
+      "secret": false,
+      "notApplied": null,
+      "entries": []
+    },
+    "transfers.groups.buddies.upload.speed_limit": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "Total upload speed limit of the group's members together in KiB/s. `0` for no limit.",
+      "choices": null,
+      "default": 0,
+      "apply": "live",
+      "secret": false,
+      "notApplied": null,
+      "entries": []
+    },
+    "transfers.groups.buddies.upload.strategy": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "string",
+      "doc": "How the group's own queue is served: `roundrobin`, one file per user in turn, or `firstinfirstout`, in the order queued. Setting it or `slots` gives the group a queue of its own.",
+      "choices": [
+        "roundrobin",
+        "firstinfirstout"
+      ],
+      "default": null,
+      "apply": "live",
+      "secret": false,
+      "notApplied": null,
+      "entries": []
+    },
     "transfers.groups.default.upload.limits.daily.failures": {
       "source": {
         "layer": "default"
@@ -3670,22 +3870,6 @@
       "notApplied": null,
       "entries": []
     },
-    "transfers.groups.default.upload.priority": {
-      "source": {
-        "layer": "default"
-      },
-      "file": "config.toml",
-      "envVar": null,
-      "cliFlag": null,
-      "kind": "integer",
-      "doc": "Priority of the group. A lower number is served first.",
-      "choices": null,
-      "default": 1,
-      "apply": "live",
-      "secret": false,
-      "notApplied": null,
-      "entries": []
-    },
     "transfers.groups.default.upload.slots": {
       "source": {
         "layer": "default"
@@ -3694,7 +3878,7 @@
       "envVar": null,
       "cliFlag": null,
       "kind": "integer",
-      "doc": "Maximum number of uploads of the group running at once. Only the global limit applies when not set.",
+      "doc": "Maximum number of uploads of the group's own queue running at once, shared by its members. `0` for every slot.",
       "choices": null,
       "default": null,
       "apply": "live",
@@ -3710,7 +3894,7 @@
       "envVar": null,
       "cliFlag": null,
       "kind": "integer",
-      "doc": "Total upload speed limit of the group in KiB/s. No limit when not set.",
+      "doc": "Total upload speed limit of the group's members together in KiB/s. `0` for no limit.",
       "choices": null,
       "default": null,
       "apply": "live",
@@ -3726,12 +3910,12 @@
       "envVar": null,
       "cliFlag": null,
       "kind": "string",
-      "doc": "How the group's queue is served: `roundrobin`, one file per user in turn, or `firstinfirstout`, in the order queued.",
+      "doc": "How the group's own queue is served: `roundrobin`, one file per user in turn, or `firstinfirstout`, in the order queued. Setting it or `slots` gives the group a queue of its own.",
       "choices": [
         "roundrobin",
         "firstinfirstout"
       ],
-      "default": "roundrobin",
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null,
@@ -3913,22 +4097,6 @@
       "notApplied": null,
       "entries": []
     },
-    "transfers.groups.leechers.upload.priority": {
-      "source": {
-        "layer": "default"
-      },
-      "file": "config.toml",
-      "envVar": null,
-      "cliFlag": null,
-      "kind": "integer",
-      "doc": "Priority of the group. A lower number is served first.",
-      "choices": null,
-      "default": 1,
-      "apply": "live",
-      "secret": false,
-      "notApplied": null,
-      "entries": []
-    },
     "transfers.groups.leechers.upload.slots": {
       "source": {
         "layer": "default"
@@ -3937,7 +4105,7 @@
       "envVar": null,
       "cliFlag": null,
       "kind": "integer",
-      "doc": "Maximum number of uploads of the group running at once. Only the global limit applies when not set.",
+      "doc": "Maximum number of uploads of the group's own queue running at once, shared by its members. `0` for every slot.",
       "choices": null,
       "default": null,
       "apply": "live",
@@ -3953,7 +4121,7 @@
       "envVar": null,
       "cliFlag": null,
       "kind": "integer",
-      "doc": "Total upload speed limit of the group in KiB/s. No limit when not set.",
+      "doc": "Total upload speed limit of the group's members together in KiB/s. `0` for no limit.",
       "choices": null,
       "default": null,
       "apply": "live",
@@ -3969,12 +4137,33 @@
       "envVar": null,
       "cliFlag": null,
       "kind": "string",
-      "doc": "How the group's queue is served: `roundrobin`, one file per user in turn, or `firstinfirstout`, in the order queued.",
+      "doc": "How the group's own queue is served: `roundrobin`, one file per user in turn, or `firstinfirstout`, in the order queued. Setting it or `slots` gives the group a queue of its own.",
       "choices": [
         "roundrobin",
         "firstinfirstout"
       ],
-      "default": "roundrobin",
+      "default": null,
+      "apply": "live",
+      "secret": false,
+      "notApplied": null,
+      "entries": []
+    },
+    "transfers.groups.order": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": {
+        "list": "string"
+      },
+      "doc": "Order of the groups, highest first. Privileged users always go first and `default`, which is everyone, always last. Must list `buddies` and `leechers`; a user-defined group not listed goes just above `default`, and a name no group has is passed over.",
+      "choices": null,
+      "default": [
+        "buddies",
+        "leechers"
+      ],
       "apply": "live",
       "secret": false,
       "notApplied": null,
@@ -3988,7 +4177,7 @@
       "envVar": null,
       "cliFlag": null,
       "kind": "map",
-      "doc": "User-defined groups by name.",
+      "doc": "User-defined groups by name. A name is 1 to 32 characters from `a-z`, `0-9`, `_` and `-`.",
       "choices": null,
       "default": {},
       "apply": "live",
@@ -3996,28 +4185,20 @@
       "notApplied": null,
       "entries": [
         {
-          "key": "upload.priority",
-          "kind": "integer",
-          "doc": "Priority of the group. A lower number is served first.",
-          "choices": null,
-          "default": 1,
-          "secret": false
-        },
-        {
           "key": "upload.strategy",
           "kind": "string",
-          "doc": "How the group's queue is served: `roundrobin`, one file per user in turn, or `firstinfirstout`, in the order queued.",
+          "doc": "How the group's own queue is served: `roundrobin`, one file per user in turn, or `firstinfirstout`, in the order queued. Setting it or `slots` gives the group a queue of its own.",
           "choices": [
             "roundrobin",
             "firstinfirstout"
           ],
-          "default": "roundrobin",
+          "default": null,
           "secret": false
         },
         {
           "key": "upload.slots",
           "kind": "integer",
-          "doc": "Maximum number of uploads of the group running at once. Only the global limit applies when not set.",
+          "doc": "Maximum number of uploads of the group's own queue running at once, shared by its members. `0` for every slot.",
           "choices": null,
           "default": null,
           "secret": false
@@ -4025,7 +4206,7 @@
         {
           "key": "upload.speed_limit",
           "kind": "integer",
-          "doc": "Total upload speed limit of the group in KiB/s. No limit when not set.",
+          "doc": "Total upload speed limit of the group's members together in KiB/s. `0` for no limit.",
           "choices": null,
           "default": null,
           "secret": false
@@ -4103,13 +4284,24 @@
           "secret": false
         },
         {
-          "key": "members",
-          "kind": {
-            "list": "string"
-          },
-          "doc": "Usernames in the group.",
-          "choices": null,
-          "default": [],
+          "key": "color",
+          "kind": "string",
+          "doc": "Color the group is shown in.",
+          "choices": [
+            "blue",
+            "red",
+            "orange",
+            "amber",
+            "lime",
+            "green",
+            "teal",
+            "cyan",
+            "indigo",
+            "violet",
+            "pink",
+            "gray"
+          ],
+          "default": "blue",
           "secret": false
         }
       ]

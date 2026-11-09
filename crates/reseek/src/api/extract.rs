@@ -250,10 +250,10 @@ mod tests {
   #[test]
   fn empty_query_parameters_count_as_not_given() {
     let query: UserListQuery =
-      read_query("q=&presence=&limit=5&tag=").unwrap_or_else(|e| panic!("{e:?}"));
+      read_query("q=&presence=&limit=5&group=").unwrap_or_else(|e| panic!("{e:?}"));
     assert_eq!(query.q, None);
     assert_eq!(query.presence, None);
-    assert_eq!(query.tag, None);
+    assert_eq!(query.group, None);
     assert_eq!(query.limit, 5);
     let query: TransferListQuery =
       read_query("since=&state=&state=Failed").unwrap_or_else(|e| panic!("{e:?}"));

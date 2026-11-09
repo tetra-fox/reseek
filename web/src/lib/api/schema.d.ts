@@ -778,6 +778,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v0/groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every group: privileged, the others in the order they go, then the names of groups the
+         *     configuration no longer has that still have members.
+         */
+        get: operations["list_groups"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v0/groups/{name}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Takes every member out of a group. */
+        delete: operations["let_go"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v0/groups/{name}/members/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Moves every member of a group into a user-defined group of the configuration; a member of
+         *     both is kept once.
+         */
+        post: operations["move_members"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v0/interests/popular": {
         parameters: {
             query?: never;
@@ -3037,8 +3094,8 @@ export interface paths {
         };
         get?: never;
         /**
-         * Makes a user our buddy, or changes whether they are trusted and whether we are told of their
-         *     presence; a field left out keeps its value, and an empty body makes a buddy with neither.
+         * Makes a user our buddy, or changes whether we are told of their presence; a field left out
+         *     keeps its value, and an empty body makes a buddy who is not.
          *     Our own account and the server's notices cannot be a buddy.
          */
         put: operations["set_buddy"];
@@ -3087,7 +3144,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v0/users/{username}/group": {
+    "/api/v0/users/{username}/groups": {
         parameters: {
             query?: never;
             header?: never;
@@ -3096,11 +3153,11 @@ export interface paths {
         };
         get?: never;
         /**
-         * Puts a user in one of the configuration's user-defined upload groups, or with `null` takes
-         *     them out of the one they were put in. A user the configuration lists for another group stays
-         *     there and the call is refused.
+         * Puts a user in exactly the groups named, up to 64: user-defined groups of the configuration,
+         *     and any the user is in already that it no longer has. An empty list takes them out of every
+         *     group we put them in.
          */
-        put: operations["set_group"];
+        put: operations["set_groups"];
         post?: never;
         delete?: never;
         options?: never;
@@ -3278,26 +3335,6 @@ export interface paths {
          */
         get: operations["user_summary"];
         put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/users/{username}/tags": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Replaces our tags on a user: up to 32, each 1 to 32 of `a-z`, `0-9`, `_` and `-` once made
-         *     lower case.
-         */
-        put: operations["set_tags"];
         post?: never;
         delete?: never;
         options?: never;
@@ -3976,8 +4013,6 @@ export interface components {
         Buddy: {
             /** @description we are told when they come online, go away or go offline */
             notifyPresence: boolean;
-            /** @description they also see the shares only trusted buddies see */
-            trusted: boolean;
         };
         /**
          * @description The body of `PUT /users/{username}/buddy`, which makes a user our buddy or changes how. A
@@ -3986,8 +4021,6 @@ export interface components {
         BuddyChange: {
             /** @description we are told when they come online, go away or go offline */
             notifyPresence?: boolean | null;
-            /** @description they also see the shares only trusted buddies see */
-            trusted?: boolean | null;
         };
         /** @description The data of `BuddyPresenceChanged`, and of the `users.presence` frame. */
         BuddyPresenceChanged: {
@@ -4044,8 +4077,6 @@ export interface components {
         ByeReason: "unauthorized" | "lagged" | "shutdown";
         /** @description A user the in-memory user cache holds, as `GET /users/cache` lists it. */
         CachedUser: {
-            /** @description the user-defined group the configuration lists the user in, null when none */
-            group?: string | null;
             statistics?: components["schemas"]["StatisticsSnapshot"] | null;
             status?: components["schemas"]["UserStatus"] | null;
             /** @description the user */
@@ -5193,16 +5224,64 @@ export interface components {
              */
             name: string;
         };
-        /** @description Assigns a user to a user-defined group, the body of `PUT /users/{username}/group`. */
-        GroupAssignment: {
-            /** @description a user-defined group from the configuration, null to remove the assignment */
-            group?: string | null;
-        };
         /**
-         * @description Where the effective group of a user comes from.
+         * @description What decides who is in a group.
          * @enum {string}
          */
-        GroupSource: "config" | "override" | "builtin";
+        GroupKind: "smart" | "manual";
+        /** @description One per-user limit a group sets. */
+        GroupLimit: {
+            /**
+             * @description the group that sets it
+             * @example leechers
+             */
+            group: string;
+            /**
+             * Format: int32
+             * @description the limit, null for no limit
+             */
+            limit?: number | null;
+            /** @description what is limited */
+            measure: components["schemas"]["LimitMeasure"];
+            /** @description what is counted: queued at once, `daily` or `weekly` */
+            window: components["schemas"]["LimitWindow"];
+        };
+        /**
+         * @description Every group, the reply of `GET /groups`: privileged, the others highest first, default, then
+         *     the names of groups the configuration no longer has that still have members.
+         */
+        GroupList: {
+            /** @description the groups */
+            groups: components["schemas"]["GroupSummary"][];
+        };
+        /** @description How many users a call on a group's members changed. */
+        GroupMembersChanged: {
+            /**
+             * Format: int64
+             * @description the users moved or let go
+             */
+            users: number;
+        };
+        /** @description Where the members of a group go, the body of `POST /groups/{name}/members/move`. */
+        GroupMove: {
+            /**
+             * @description a user-defined group of the configuration
+             * @example friends
+             */
+            to: string;
+        };
+        /** @description A group as the groups page lists it, the items of `GET /groups`. */
+        GroupSummary: components["schemas"]["UserGroup"] & {
+            /** @description one of the groups every instance has: privileged, leechers, default and buddies */
+            builtin: boolean;
+            /**
+             * Format: int64
+             * @description how many users the directory knows in the group
+             */
+            members: number;
+            /** @description the aliases of the shares only some groups see that this one's members see */
+            shares: string[];
+        };
         /**
          * @description What a guide line marks.
          * @enum {string}
@@ -5658,13 +5737,12 @@ export interface components {
              * @description when we first interacted with the user, null when not known
              */
             firstSeenAt?: string | null;
-            /** @description the upload group the user is in */
-            group: components["schemas"]["UserGroup"];
             /**
-             * @description the user-defined group we put the user in, null when none; kept also when that group no
-             *     longer exists, so a client can say the override has no effect
+             * @description every group the user is in but the default group: privileged and leechers when they
+             *     are, buddies for a buddy, then the groups we put them in by name, those the configuration
+             *     no longer has included
              */
-            groupOverride?: string | null;
+            groups: components["schemas"]["UserGroup"][];
             /** @description the server last reported the user as privileged */
             isPrivileged: boolean;
             /**
@@ -5687,8 +5765,8 @@ export interface components {
              */
             presenceAt?: string | null;
             statistics?: components["schemas"]["StoredStatistics"] | null;
-            /** @description our labels for the user, lower case */
-            tags: string[];
+            /** @description what the user's uploads get, each setting from the highest group they are in that sets it */
+            uploads: components["schemas"]["UserUploads"];
             /**
              * @description the user
              * @example alice
@@ -5707,6 +5785,16 @@ export interface components {
          * @enum {string}
          */
         LeaderboardSort: "Count" | "TotalBytes" | "AverageSpeed";
+        /**
+         * @description What a per-user upload limit limits.
+         * @enum {string}
+         */
+        LimitMeasure: "files" | "megabytes" | "failures";
+        /**
+         * @description What a per-user upload limit counts over.
+         * @enum {string}
+         */
+        LimitWindow: "queued" | "daily" | "weekly";
         /** @description An entry of `GET /tokens`, told apart by `source`. */
         ListedToken: (components["schemas"]["Token"] & {
             /** @enum {string} */
@@ -7552,10 +7640,10 @@ export interface components {
             /** @description the path other users see, the same as `alias` */
             remotePath: string;
             /**
-             * @description who other users must be to see the share; a relay agent leaves it to the server, which
-             *     fills it in from its own options
+             * @description the groups whose members see the share: null when everyone sees it, empty when no one
+             *     does; a relay agent leaves it to the server, which fills it in from its own options
              */
-            visibility: components["schemas"]["ShareVisibility"];
+            visibleTo: string[] | null;
         };
         /** @description One folder of this machine, a choice in the folder picker. */
         ShareFolder: {
@@ -7573,13 +7661,6 @@ export interface components {
             /** @description more folders are there than were listed */
             truncated: boolean;
         };
-        /**
-         * @description Who sees a shared folder in our browse listing, folder contents and search answers, and may
-         *     download from it. Ordered from the widest audience to the narrowest, so a user who sees
-         *     shares of one visibility also sees those of every wider one.
-         * @enum {string}
-         */
-        ShareVisibility: "everyone" | "buddies" | "trusted";
         /**
          * @description The shares of every host by host name: `local` for this instance, always present, and each
          *     relay agent's instance name.
@@ -8393,18 +8474,18 @@ export interface components {
              */
             globalSlotsUsed: number;
             /**
-             * @description the group the user is in
+             * @description the group whose queue the user waits in
              * @example default
              */
             group: string;
             /**
              * Format: int32
-             * @description how many uploads the group may run at once
+             * @description how many uploads that queue may run at once
              */
             groupSlots: number;
             /**
              * Format: int32
-             * @description uploads in progress in that group
+             * @description uploads in progress in that queue
              */
             groupSlotsUsed: number;
             /** @description the user's figures against the group's limits */
@@ -8500,25 +8581,43 @@ export interface components {
             /** @description our uploads to the user */
             uploads: components["schemas"]["TransferFigures"];
         };
-        /** @description The upload group a user is in. */
+        /** @description A group a user is in. */
         UserGroup: {
             /**
-             * @description the color the group is shown in, a CSS color name such as `violet`; null for none
+             * @description the color the group is shown in, one of `blue`, `red`, `orange`, `amber`, `lime`, `green`,
+             *     `teal`, `cyan`, `indigo`, `violet`, `pink` and `gray`; null for none
              * @example violet
              */
             color?: string | null;
             /**
+             * @description the configuration has the group; false for the name of a group it no longer has, which
+             *     gives its members nothing
+             */
+            defined: boolean;
+            /** @description what decides who is in it */
+            kind: components["schemas"]["GroupKind"];
+            /**
              * @description the group's name
-             * @example default
+             * @example friends
              */
             name: string;
             /**
-             * Format: int32
-             * @description the group's upload priority, a lower number served first
+             * @description the group sets at least one upload setting; one that sets none changes nothing about its
+             *     members' uploads
              */
-            priority: number;
-            /** @description why the user is in it */
-            source: components["schemas"]["GroupSource"];
+            uploadSettings: boolean;
+        };
+        /** @description The groups we put a user in, the body of `PUT /users/{username}/groups`. */
+        UserGroups: {
+            /**
+             * @description user-defined groups of the configuration, and any the user is in already that it no
+             *     longer has
+             * @example [
+             *       "friends",
+             *       "jazz"
+             *     ]
+             */
+            groups: string[];
         };
         /** @description What a peer says about itself, as `GET /users/{username}/info` returns it. */
         UserInfo: {
@@ -8679,17 +8778,6 @@ export interface components {
              */
             unreadMessages: number;
         };
-        /** @description Our labels for a user, the body of `PUT /users/{username}/tags`. */
-        UserTags: {
-            /**
-             * @description at most 32 tags, each 1 to 32 of `a-z`, `0-9`, `_` and `-` after lower-casing
-             * @example [
-             *       "friend",
-             *       "jazz"
-             *     ]
-             */
-            tags: string[];
-        };
         /** @description Outcome counts of one direction of a user report. */
         UserTransferStatistics: {
             /**
@@ -8736,6 +8824,40 @@ export interface components {
              * @description the shape version of this event type, 0
              */
             version: number;
+        };
+        /**
+         * @description What a user's uploads get from their groups. Each setting comes from the highest group in
+         *     the configured order they are in that sets it, else from `default`; privileged users go
+         *     before everyone, with every slot and no per-user limits.
+         */
+        UserUploads: {
+            /**
+             * @description each per-user limit one of the user's groups sets, with the group; the others are the
+             *     global limits
+             */
+            limits: components["schemas"]["GroupLimit"][];
+            /**
+             * @description the group whose queue the user waits in: privileged, else the highest of their groups with
+             *     slots or a queue order of its own, else default
+             * @example buddies
+             */
+            queue: string;
+            /**
+             * Format: int32
+             * @description the slots of that queue, null for every slot
+             */
+            slots?: number | null;
+            /**
+             * @description the group whose speed limit the user's uploads count against, which its members share:
+             *     privileged, else the highest of their groups that sets one, else default
+             * @example default
+             */
+            speed: string;
+            /**
+             * Format: int32
+             * @description that speed limit in KiB/s, null for none
+             */
+            speedLimit?: number | null;
         };
         /** @description Whether a text would load as the configuration, checked together with every other layer. */
         Validation: {
@@ -11953,6 +12075,145 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    list_groups: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupList"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    let_go: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description the group */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupMembersChanged"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    move_members: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description the group whose members move */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GroupMove"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupMembersChanged"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
             };
         };
     };
@@ -19386,13 +19647,11 @@ export interface operations {
     list_users: {
         parameters: {
             query?: {
-                /** @description a substring of the username, a tag or the notes, matched ignoring case */
+                /** @description a substring of the username, a group we put them in or the notes, matched ignoring case */
                 q?: string;
                 /** @description only blocked users, or only users not blocked */
                 blocked?: boolean;
-                /** @description only users with this tag */
-                tag?: string;
-                /** @description only users in this group */
+                /** @description only users in this group, smart or one we put them in */
                 group?: string;
                 /** @description only our buddies, or only users who are not */
                 buddy?: boolean;
@@ -20200,7 +20459,7 @@ export interface operations {
             };
         };
     };
-    set_group: {
+    set_groups: {
         parameters: {
             query?: {
                 /** @description the username, exactly */
@@ -20215,11 +20474,11 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["GroupAssignment"];
+                "application/json": components["schemas"]["UserGroups"];
             };
         };
         responses: {
-            /** @description assigned */
+            /** @description saved */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -20243,14 +20502,6 @@ export interface operations {
                 };
             };
             403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -20857,66 +21108,6 @@ export interface operations {
                 };
             };
             401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-        };
-    };
-    set_tags: {
-        parameters: {
-            query?: {
-                /** @description the username, exactly */
-                username?: string;
-            };
-            header?: never;
-            path: {
-                /** @description the user */
-                username: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UserTags"];
-            };
-        };
-        responses: {
-            /** @description saved */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            403: {
                 headers: {
                     [name: string]: unknown;
                 };

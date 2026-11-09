@@ -4,9 +4,9 @@
 //!
 //! An upload is in the queue from when it is accepted until it ends, whether it started or not.
 //! It is ready once the client holds the user's one upload at a time for it and asks for a
-//! slot. Each pass over the queue starts ready uploads while slots are free: the groups by
-//! priority, lowest number first and ties by name, and within a group the upload a bump put in
-//! front, else the one ready longest for `roundrobin` or queued longest for `firstinfirstout`.
+//! slot. Each pass over the queue starts ready uploads while slots are free: privileged, then
+//! the groups in `transfers.groups.order`, and within a group the upload a bump put in front,
+//! else the one ready longest for `roundrobin` or queued longest for `firstinfirstout`.
 //! A user's group is looked up on every pass, so a user moved between groups waits in their
 //! new group; once started, an upload's slot belongs to the group that gave it.
 //!
@@ -26,9 +26,8 @@ use uuid::Uuid;
 pub use position::Forecast;
 
 use crate::config::enums::QueueStrategy;
-use crate::config::{GroupUpload, Groups, Options};
+use crate::config::{DEFAULT_GROUP, GroupUpload, Groups, Options, PRIVILEGED_GROUP};
 use crate::sync::lock;
-use crate::users::{DEFAULT_GROUP, LEECHERS, PRIVILEGED};
 
 /// Looks up the group a user is in, without waiting.
 pub type GroupOf = Box<dyn Fn(&str) -> String + Send + Sync>;
@@ -55,7 +54,7 @@ pub struct NotQueued(pub Uuid);
 
 struct State {
   global_slots: u32,
-  /// by priority, then name
+  /// privileged, then in the configured order
   groups: Vec<Group>,
   /// in the order each user first queued
   users: Vec<UserEntries>,
@@ -69,7 +68,6 @@ struct State {
 
 struct Group {
   name: String,
-  priority: u32,
   strategy: QueueStrategy,
   /// at most the global slots
   slots: u32,
@@ -122,40 +120,38 @@ impl State {
   }
 }
 
-/// A group's table entry from its options; at most `global` slots.
-fn group(name: &str, upload: &GroupUpload, global: u32) -> Group {
+/// A group's table entry from its options: at most `global` slots, `0` or none being all of
+/// them, and the queue order of `everyone` when it sets none.
+fn group(name: &str, upload: &GroupUpload, everyone: &GroupUpload, global: u32) -> Group {
   Group {
     name: name.to_string(),
-    priority: upload.priority,
-    strategy: upload.strategy,
-    slots: upload.slots.map_or(global, |slots| slots.min(global)),
+    strategy: upload.strategy.or(everyone.strategy).unwrap_or_default(),
+    slots: upload
+      .slots
+      .filter(|&slots| slots != 0)
+      .map_or(global, |slots| slots.min(global)),
     used: BTreeSet::new(),
   }
 }
 
-/// The groups `options` call for: `privileged` first in request order with every slot, then
-/// `default`, `leechers` and each user-defined group, by priority and then name.
+/// The queues `options` call for: `privileged` first in request order with every slot, then
+/// each group with a queue of its own, highest first, then default.
 fn groups(options: &Options) -> Vec<Group> {
   let global = options.transfers.upload.slots;
   let configured = &options.transfers.groups;
-  let mut groups = vec![
-    Group {
-      name: PRIVILEGED.to_string(),
-      priority: 0,
-      strategy: QueueStrategy::FirstInFirstOut,
-      slots: global,
-      used: BTreeSet::new(),
-    },
-    group(DEFAULT_GROUP, &configured.default.upload, global),
-    group(LEECHERS, &configured.leechers.upload, global),
-  ];
-  groups.extend(
-    configured
-      .user_defined
-      .iter()
-      .map(|(name, defined)| group(name, &defined.upload, global)),
-  );
-  groups.sort_by(|a, b| (a.priority, &a.name).cmp(&(b.priority, &b.name)));
+  let everyone = &configured.default.upload;
+  let mut groups = vec![Group {
+    name: PRIVILEGED_GROUP.to_string(),
+    strategy: QueueStrategy::FirstInFirstOut,
+    slots: global,
+    used: BTreeSet::new(),
+  }];
+  for name in configured.ordered() {
+    if let Some(upload) = configured.upload(name).filter(|upload| upload.own_queue()) {
+      groups.push(group(name, upload, everyone, global));
+    }
+  }
+  groups.push(group(DEFAULT_GROUP, everyone, everyone, global));
   groups
 }
 
@@ -509,8 +505,7 @@ pub(super) mod tests {
   fn a_higher_group_waiting_takes_the_next_free_slot() {
     let (queue, groups) = queue(
       "[transfers.upload]\nslots = 1\n\
-       [transfers.groups.default.upload]\npriority = 500\n\
-       [transfers.groups.user_defined.buddies.upload]\npriority = 250\nslots = 1\n",
+       [transfers.groups.buddies.upload]\nslots = 1\n",
     );
     groups.set("bob", "buddies");
     let (running, mut first) = ready(&queue, "erin");
@@ -523,11 +518,37 @@ pub(super) mod tests {
   }
 
   #[test]
+  fn the_order_decides_which_group_takes_the_next_free_slot() {
+    for (order, first) in [("vip", "bob"), ("friends", "carol")] {
+      let (queue, groups) = queue(&format!(
+        "[transfers.upload]\nslots = 1\n\
+         [transfers.groups]\norder = [\"{order}\", \"buddies\", \"leechers\"]\n\
+         [transfers.groups.user_defined.vip.upload]\nslots = 1\n\
+         [transfers.groups.user_defined.friends.upload]\nslots = 1\n"
+      ));
+      groups.set("bob", "vip");
+      groups.set("carol", "friends");
+      let (running, mut held) = ready(&queue, "erin");
+      assert!(started(&mut held));
+      let (_, mut carol) = ready(&queue, "carol");
+      let (_, mut bob) = ready(&queue, "bob");
+      queue.complete(running);
+      let picked = if started(&mut bob) {
+        "bob"
+      } else if started(&mut carol) {
+        "carol"
+      } else {
+        "nobody"
+      };
+      assert_eq!(picked, first, "{order} first");
+    }
+  }
+
+  #[test]
   fn a_capped_group_lets_a_lower_one_take_the_slot() {
     let (queue, groups) = queue(
       "[transfers.upload]\nslots = 3\n\
-       [transfers.groups.default.upload]\npriority = 500\n\
-       [transfers.groups.user_defined.buddies.upload]\npriority = 250\nslots = 1\n",
+       [transfers.groups.buddies.upload]\nslots = 1\n",
     );
     groups.set("bob", "buddies");
     groups.set("dave", "buddies");
@@ -568,7 +589,7 @@ pub(super) mod tests {
   fn a_slot_is_given_back_to_the_group_that_gave_it_after_the_user_moves() {
     let (queue, groups) = queue(
       "[transfers.upload]\nslots = 4\n\
-       [transfers.groups.user_defined.buddies.upload]\nslots = 1\n",
+       [transfers.groups.buddies.upload]\nslots = 1\n",
     );
     groups.set("bob", "buddies");
     let (id, mut bob) = ready(&queue, "bob");
@@ -651,7 +672,7 @@ pub(super) mod tests {
     );
     let state = queue.lock();
     assert_eq!(state.group(DEFAULT_GROUP).unwrap().used.len(), 2);
-    assert_eq!(state.group(PRIVILEGED).unwrap().slots, 3);
+    assert_eq!(state.group(PRIVILEGED_GROUP).unwrap().slots, 3);
   }
 
   #[test]

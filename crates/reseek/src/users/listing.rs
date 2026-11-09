@@ -1,16 +1,19 @@
 //! A page of the directory: the users matching every filter, buddies first within the chosen
-//! order.
+//! order; and the list of groups with how many users are in each.
 
 use api_types::transfers::SortOrder;
-use api_types::users::{UserList, UserListQuery, UserSort};
+use api_types::users::{
+  GroupKind, GroupList, GroupSummary, UserGroup, UserList, UserListQuery, UserSort,
+};
 use chrono::Utc;
 use rusqlite::params_from_iter;
 use rusqlite::types::Value;
 use soulseek_proto::SERVER_USERNAME;
 
-use super::store::{COLUMNS, Stored, presence_text, stored};
+use super::store::{COLUMN_COUNT, COLUMNS, Stored, presence_text, stored};
 use super::{Directory, blocking, groups, transfers};
 use crate::api::error::ApiError;
+use crate::config::{BUILTIN_GROUPS, DEFAULT_GROUP, PRIVILEGED_GROUP};
 use crate::db::timestamp;
 
 /// A candidate row with what the filters and the sort need.
@@ -38,13 +41,6 @@ impl Directory {
       values.push(Value::Text(presence_text(presence).to_string()));
       filter.push(format!("last_presence = ?{}", values.len()));
     }
-    if let Some(tag) = &query.tag {
-      values.push(Value::Text(tag.to_lowercase()));
-      filter.push(format!(
-        "EXISTS (SELECT 1 FROM json_each(users.tags) WHERE value = ?{})",
-        values.len()
-      ));
-    }
     let sql = format!(
       "SELECT {COLUMNS}, EXISTS (SELECT 1 FROM blocks b WHERE b.username = users.username \
        AND {}) FROM users WHERE {}",
@@ -56,7 +52,7 @@ impl Directory {
       .read(move |conn| {
         let mut statement = conn.prepare(&sql)?;
         let rows = statement.query_map(params_from_iter(&values), |row| {
-          Ok((stored(row)?, row.get::<_, bool>(26)?))
+          Ok((stored(row)?, row.get::<_, bool>(COLUMN_COUNT)?))
         })?;
         rows.collect::<rusqlite::Result<Vec<_>>>()
       })
@@ -84,7 +80,7 @@ impl Directory {
         needle.as_ref().is_none_or(|needle| {
           c.stored.username.to_lowercase().contains(needle)
             || c.stored.notes.to_lowercase().contains(needle)
-            || c.stored.tags.iter().any(|tag| tag.contains(needle))
+            || c.stored.groups.iter().any(|group| group.contains(needle))
         })
       })
       .filter(|c| query.blocked.is_none_or(|wanted| c.blocked == wanted))
@@ -94,9 +90,10 @@ impl Directory {
           .is_none_or(|wanted| c.has_transfers == wanted)
       })
       .filter(|c| {
-        query.group.as_ref().is_none_or(|wanted| {
-          groups::effective(&options, &c.stored.username, Some(&c.stored)).name == *wanted
-        })
+        query
+          .group
+          .as_ref()
+          .is_none_or(|wanted| groups::placement(&options, Some(&c.stored)).is_in(wanted))
       })
       .collect();
     let order = query.order.unwrap_or(match query.sort {
@@ -132,5 +129,90 @@ impl Directory {
       users.push(self.summary_of(&candidate.stored.username).await?);
     }
     Ok(UserList { users, total })
+  }
+}
+
+impl Directory {
+  /// Every group: privileged, the others in the order they go, then the names of groups the
+  /// configuration no longer has that still have members, each with how many users the
+  /// directory knows in it and the shares only some groups see that its members see.
+  pub(crate) async fn group_list(&self) -> Result<GroupList, ApiError> {
+    let sql = format!("SELECT {COLUMNS} FROM users WHERE username <> ?1");
+    let rows = self
+      .db
+      .read(move |conn| {
+        let mut statement = conn.prepare(&sql)?;
+        let rows = statement.query_map([SERVER_USERNAME], stored)?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()
+      })
+      .await
+      .map_err(ApiError::internal)?;
+    let options = self.config.current().values.clone();
+    let placements: Vec<groups::Placement> = rows
+      .iter()
+      .map(|row| groups::placement(&options, Some(row)))
+      .collect();
+    let mut names: Vec<String> = vec![PRIVILEGED_GROUP.to_string()];
+    names.extend(
+      options
+        .transfers
+        .groups
+        .ordered()
+        .into_iter()
+        .chain([DEFAULT_GROUP])
+        .map(str::to_string),
+    );
+    let mut gone: Vec<&String> = rows
+      .iter()
+      .flat_map(|row| &row.groups)
+      .filter(|name| {
+        BUILTIN_GROUPS.contains(&name.as_str())
+          || !options.transfers.groups.user_defined.contains_key(*name)
+      })
+      .collect();
+    gone.sort();
+    gone.dedup();
+    let list: Vec<GroupSummary> = names
+      .iter()
+      .map(|name| (name.as_str(), groups::describe(&options, name)))
+      .chain(gone.into_iter().map(|name| {
+        let group = UserGroup {
+          name: name.clone(),
+          kind: GroupKind::Manual,
+          defined: false,
+          upload_settings: false,
+          color: None,
+        };
+        (name.as_str(), group)
+      }))
+      .map(|(name, group)| {
+        let builtin = group.defined && BUILTIN_GROUPS.contains(&name);
+        let members = placements
+          .iter()
+          .filter(|placed| {
+            if group.defined {
+              placed.is_in(name)
+            } else {
+              placed.groups.iter().any(|g| g.name == name && !g.defined)
+            }
+          })
+          .count() as u64;
+        let mut shares: Vec<String> = options
+          .shares
+          .visible_to
+          .iter()
+          .filter(|(_, seen_by)| group.defined && seen_by.iter().any(|g| g == name))
+          .map(|(alias, _)| alias.clone())
+          .collect();
+        shares.sort();
+        GroupSummary {
+          group,
+          builtin,
+          members,
+          shares,
+        }
+      })
+      .collect();
+    Ok(GroupList { groups: list })
   }
 }

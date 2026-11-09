@@ -132,7 +132,10 @@ impl Uploads {
       shutdown,
       tasks: TaskTracker::new(),
       in_flight: Mutex::new(HashMap::new()),
-      queue: UploadQueue::new(&options, Box::new(move |username| grouped.group(username))),
+      queue: UploadQueue::new(
+        &options,
+        Box::new(move |username| grouped.queue_group(username)),
+      ),
       governor: Arc::new(Governor::new(&options)),
       intake: Intake::default(),
     });
@@ -183,8 +186,7 @@ impl Uploads {
     place
   }
 
-  /// Takes every change of the options into the queue's groups and the speed limits, and
-  /// watches the users a change put in a user-defined group while logged in.
+  /// Takes every change of the options into the queue's groups and the speed limits.
   async fn follow_configuration(self: Arc<Self>) {
     let mut changes = self.config.changes();
     loop {
@@ -192,52 +194,30 @@ impl Uploads {
         () = self.shutdown.cancelled() => return,
         change = changes.recv() => change,
       };
-      let (previous, current) = match change {
-        Ok(change) => (Some(change.previous.clone()), change.current.clone()),
+      let current = match change {
+        Ok(change) => change.current.clone(),
         Err(RecvError::Lagged(missed)) => {
           debug!(
             missed,
             "options changes missed; the upload groups follow the current ones"
           );
-          (None, self.config.current())
+          self.config.current()
         }
         Err(RecvError::Closed) => return,
       };
       let options = &current.values;
       self.queue.configure(options);
       self.governor.configure(options);
-      let added: Vec<String> = members(options)
-        .into_iter()
-        .filter(|member| {
-          previous
-            .as_ref()
-            .is_none_or(|p| !members(&p.values).contains(member))
-        })
-        .collect();
-      if !added.is_empty()
-        && let Ok(client) = self.client()
-        && client.state() == soulseek_client::ClientState::READY
-      {
-        for member in added {
-          self.users.watch(&client, &member).await;
-        }
-      }
     }
   }
 
-  /// After a login: the users with uploads in the queue and every member of a user-defined
-  /// group are watched, so their groups are current.
+  /// After a login: the users with uploads in the queue are watched, so their groups are
+  /// current.
   pub async fn logged_in(&self) {
     let Ok(client) = self.client() else {
       return;
     };
-    let mut users = self.queue.users();
-    for member in members(&self.config.current().values) {
-      if !users.contains(&member) {
-        users.push(member);
-      }
-    }
-    for username in users {
+    for username in self.queue.users() {
       self.users.watch(&client, &username).await;
     }
   }
@@ -347,18 +327,4 @@ impl Uploads {
       );
     }
   }
-}
-
-/// Every member of a user-defined group in `options`.
-fn members(options: &Options) -> Vec<String> {
-  let mut members: Vec<String> = options
-    .transfers
-    .groups
-    .user_defined
-    .values()
-    .flat_map(|group| group.members.iter().cloned())
-    .collect();
-  members.sort();
-  members.dedup();
-  members
 }

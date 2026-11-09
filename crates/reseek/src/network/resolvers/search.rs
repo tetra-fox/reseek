@@ -243,8 +243,8 @@ async fn answer(
 
 /// The files we would offer for `username`'s search, `None` when the requester is known to be
 /// blocked, a request filter matches, the query names nothing to look for or nothing matches.
-/// A buddy's search sees more than everyone's only when its answer is bound for the address the
-/// server reports for them: a connection open in their name must come from it.
+/// A group member's search sees more than everyone's only when its answer is bound for the
+/// address the server reports for them: a connection open in their name must come from it.
 async fn matches(
   edges: &Edges,
   options: &Options,
@@ -295,7 +295,7 @@ async fn matches(
     .message_connection_address(username)
     .map(|remote| remote.ip());
   let (sees, confined_to) = edges.users.search_sees(username, open).await;
-  let view = edges.shares.view(sees);
+  let view = edges.shares.view(&sees);
   let query = excluding(query, &excluded);
   let files = query_shares(edges, &query, limit, &view, QUERY_BUDGET).await?;
   let querying = millis(started) - filtering;
@@ -599,7 +599,7 @@ mod tests {
     std::fs::create_dir_all(&album).unwrap();
     std::fs::write(album.join("01 - Come Together.mp3"), "one").unwrap();
     let config = format!(
-      "[shares]\ndirectories = [\"{}\"]\nbuddies_only = [\"Music\"]\n",
+      "[shares]\ndirectories = [\"{}\"]\n[shares.visible_to]\nMusic = [\"buddies\"]\n",
       dir.path().join("Music").display()
     );
     let app = app(&config, &[]).await;

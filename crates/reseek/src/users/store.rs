@@ -8,8 +8,11 @@ use rusqlite::{Connection, OptionalExtension, Row, params};
 
 use crate::db::{self, Schema, read_timestamp, timestamp};
 
-/// `users.db`: the `users` and `blocks` tables.
-pub static SCHEMA: Schema = db::schema!("users", ["0001_initial", "0002_drop_interests"]);
+/// `users.db`: the `users`, `blocks` and `memberships` tables.
+pub static SCHEMA: Schema = db::schema!(
+  "users",
+  ["0001_initial", "0002_drop_interests", "0003_groups"]
+);
 
 /// What the peer last said about itself.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -51,28 +54,30 @@ pub struct Stored {
   pub info: Option<Info>,
   /// our notes
   pub notes: String,
-  /// our labels
-  pub tags: Vec<String>,
-  /// the user-defined group we put them in
-  pub group_override: Option<String>,
+  /// the groups we put them in, by name
+  pub groups: Vec<String>,
   /// their notifications are off
   pub muted: bool,
   /// they are our buddy, and how
   pub buddy: Option<Buddy>,
 }
 
-/// The columns [`stored`] reads, in its order.
+/// The columns [`stored`] reads from `users`, in its order; the last is the user's groups.
 pub const COLUMNS: &str = "username, first_seen_at, last_seen_at, last_presence, presence_at, \
                            is_privileged, average_speed, upload_count, file_count, \
                            directory_count, statistics_at, country_code, description, \
                            has_picture, upload_slots, queue_length, has_free_slot, info_at, \
-                           notes, tags, group_override, muted, buddy, picture_tag, \
-                           trusted, notify_presence";
+                           notes, muted, buddy, picture_tag, notify_presence, \
+                           (SELECT json_group_array(group_name) FROM memberships m \
+                           WHERE m.username = users.username)";
 
-/// Every user we put in a user-defined group, with the group.
-pub fn overrides(conn: &Connection) -> rusqlite::Result<Vec<(String, String)>> {
+/// How many columns [`COLUMNS`] names.
+pub const COLUMN_COUNT: usize = 24;
+
+/// Every membership, as the user and the group.
+pub fn memberships(conn: &Connection) -> rusqlite::Result<Vec<(String, String)>> {
   conn
-    .prepare("SELECT username, group_override FROM users WHERE group_override IS NOT NULL")?
+    .prepare("SELECT username, group_name FROM memberships ORDER BY username, group_name")?
     .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
     .collect()
 }
@@ -80,13 +85,12 @@ pub fn overrides(conn: &Connection) -> rusqlite::Result<Vec<(String, String)>> {
 /// Every buddy, by name.
 pub fn buddies(conn: &Connection) -> rusqlite::Result<Vec<(String, Buddy)>> {
   conn
-    .prepare("SELECT username, trusted, notify_presence FROM users WHERE buddy = 1")?
+    .prepare("SELECT username, notify_presence FROM users WHERE buddy = 1")?
     .query_map([], |row| {
       Ok((
         row.get(0)?,
         Buddy {
-          trusted: row.get(1)?,
-          notify_presence: row.get(2)?,
+          notify_presence: row.get(1)?,
         },
       ))
     })?
@@ -147,11 +151,14 @@ pub fn stored(row: &Row) -> rusqlite::Result<Stored> {
       queue_length: row.get::<_, Option<u32>>(15)?.unwrap_or(0),
       has_free_slot: row.get::<_, Option<bool>>(16)?.unwrap_or(false),
       at,
-      picture_tag: row.get(23)?,
+      picture_tag: row.get(21)?,
     }),
     None => None,
   };
-  let tags: String = row.get(19)?;
+  let groups: String = row.get(23)?;
+  let mut groups: Vec<String> =
+    serde_json::from_str(&groups).map_err(|e| conversion(23, e.to_string()))?;
+  groups.sort();
   Ok(Stored {
     username: row.get(0)?,
     first_seen_at: read_timestamp(&row.get::<_, String>(1)?)?,
@@ -164,15 +171,13 @@ pub fn stored(row: &Row) -> rusqlite::Result<Stored> {
     country_code: row.get(11)?,
     info,
     notes: row.get(18)?,
-    tags: serde_json::from_str(&tags).map_err(|e| conversion(19, e.to_string()))?,
-    group_override: row.get(20)?,
-    muted: row.get(21)?,
+    groups,
+    muted: row.get(19)?,
     buddy: row
-      .get::<_, bool>(22)?
+      .get::<_, bool>(20)?
       .then(|| {
         Ok::<_, rusqlite::Error>(Buddy {
-          trusted: row.get(24)?,
-          notify_presence: row.get(25)?,
+          notify_presence: row.get(22)?,
         })
       })
       .transpose()?,
@@ -208,14 +213,12 @@ pub fn ensure(conn: &Connection, username: &str, now: DateTime<Utc>) -> rusqlite
 pub enum Change {
   /// our notes
   Notes(String),
-  /// our labels, lower case and unique
-  Tags(Vec<String>),
+  /// the groups we put them in, each once
+  Groups(Vec<String>),
   /// our buddy, and how, or not
   Buddy(Option<Buddy>),
   /// notifications off or on
   Muted(bool),
-  /// the user-defined group, or none
-  Group(Option<String>),
 }
 
 /// Applies `change` to `username`'s row, making the row when there is none.
@@ -232,19 +235,20 @@ pub fn change(
       "UPDATE users SET notes = ?2 WHERE username = ?1",
       params![username, notes],
     )?,
-    Change::Tags(tags) => tx.execute(
-      "UPDATE users SET tags = ?2 WHERE username = ?1",
-      params![
-        username,
-        serde_json::to_string(tags).expect("strings are JSON")
-      ],
-    )?,
+    Change::Groups(groups) => {
+      tx.execute("DELETE FROM memberships WHERE username = ?1", [username])?;
+      let mut insert =
+        tx.prepare("INSERT OR IGNORE INTO memberships (username, group_name) VALUES (?1, ?2)")?;
+      for group in groups {
+        insert.execute(params![username, group])?;
+      }
+      groups.len()
+    }
     Change::Buddy(buddy) => tx.execute(
-      "UPDATE users SET buddy = ?2, trusted = ?3, notify_presence = ?4 WHERE username = ?1",
+      "UPDATE users SET buddy = ?2, notify_presence = ?3 WHERE username = ?1",
       params![
         username,
         buddy.is_some(),
-        buddy.is_some_and(|b| b.trusted),
         buddy.is_some_and(|b| b.notify_presence)
       ],
     )?,
@@ -252,12 +256,39 @@ pub fn change(
       "UPDATE users SET muted = ?2 WHERE username = ?1",
       params![username, muted],
     )?,
-    Change::Group(group) => tx.execute(
-      "UPDATE users SET group_override = ?2 WHERE username = ?1",
-      params![username, group],
-    )?,
   };
   tx.commit()
+}
+
+/// Moves every member of the group `from` into the group `to`, a member of both kept once, and
+/// returns who moved.
+pub fn move_members(conn: &mut Connection, from: &str, to: &str) -> rusqlite::Result<Vec<String>> {
+  let tx = conn.transaction()?;
+  let moved = members(&tx, from)?;
+  tx.execute(
+    "INSERT OR IGNORE INTO memberships (username, group_name) \
+     SELECT username, ?2 FROM memberships WHERE group_name = ?1",
+    params![from, to],
+  )?;
+  tx.execute("DELETE FROM memberships WHERE group_name = ?1", [from])?;
+  tx.commit()?;
+  Ok(moved)
+}
+
+/// Takes every member out of the group `group` and returns who they were.
+pub fn let_go(conn: &mut Connection, group: &str) -> rusqlite::Result<Vec<String>> {
+  let tx = conn.transaction()?;
+  let members = members(&tx, group)?;
+  tx.execute("DELETE FROM memberships WHERE group_name = ?1", [group])?;
+  tx.commit()?;
+  Ok(members)
+}
+
+fn members(conn: &Connection, group: &str) -> rusqlite::Result<Vec<String>> {
+  conn
+    .prepare("SELECT username FROM memberships WHERE group_name = ?1 ORDER BY username")?
+    .query_map([group], |row| row.get(0))?
+    .collect()
 }
 
 /// The picture stored for `username`, if any.
@@ -278,7 +309,77 @@ pub fn picture(conn: &Connection, username: &str) -> rusqlite::Result<Option<Vec
 pub fn delete(conn: &mut Connection, username: &str) -> rusqlite::Result<bool> {
   let tx = conn.transaction()?;
   tx.execute("DELETE FROM blocks WHERE username = ?1", [username])?;
+  tx.execute("DELETE FROM memberships WHERE username = ?1", [username])?;
   let deleted = tx.execute("DELETE FROM users WHERE username = ?1", [username])?;
   tx.commit()?;
   Ok(deleted == 1)
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::db::{Database, Location};
+
+  /// `users.db` before groups had a table of their own.
+  static BEFORE_GROUPS: Schema = db::schema!("users", ["0001_initial", "0002_drop_interests"]);
+
+  #[tokio::test]
+  async fn tags_upload_groups_and_trusted_buddies_become_memberships() {
+    let dir = tempfile::tempdir().unwrap();
+    let location = Location::on_disk(dir.path());
+    let old = Database::open(&BEFORE_GROUPS, &location).await.unwrap();
+    old
+      .write(|conn| {
+        for (username, tags, group, buddy, trusted) in [
+          (
+            "alice",
+            r#"["jazz","trusted"]"#,
+            Some("Friends"),
+            true,
+            true,
+          ),
+          ("bob", "[]", None, true, false),
+          ("carol", r#"["jazz"]"#, Some("jazz"), false, false),
+        ] {
+          conn.execute(
+            "INSERT INTO users (username, first_seen_at, last_seen_at, tags, group_override, \
+             buddy, trusted) VALUES (?1, '2026-11-01T00:00:00Z', '2026-11-01T00:00:00Z', ?2, \
+             ?3, ?4, ?5)",
+            params![username, tags, group, buddy, trusted],
+          )?;
+        }
+        Ok(())
+      })
+      .await
+      .unwrap();
+    drop(old);
+    let migrated = Database::open(&SCHEMA, &location).await.unwrap();
+    let (all, alice, bob) = migrated
+      .read(|conn| Ok((memberships(conn)?, get(conn, "alice")?, get(conn, "bob")?)))
+      .await
+      .unwrap();
+    let pairs = |list: &[(&str, &str)]| {
+      list
+        .iter()
+        .map(|(u, g)| (u.to_string(), g.to_string()))
+        .collect::<Vec<_>>()
+    };
+    assert_eq!(
+      all,
+      pairs(&[
+        ("alice", "friends"),
+        ("alice", "jazz"),
+        ("alice", "trusted"),
+        ("carol", "jazz"),
+      ]),
+      "a group named twice is one membership, and an upload group's name is lower case"
+    );
+    assert_eq!(alice.unwrap().groups, ["friends", "jazz", "trusted"]);
+    let bob = bob.unwrap();
+    assert!(bob.groups.is_empty());
+    assert!(
+      bob.buddy.is_some(),
+      "a buddy who was not trusted stays a buddy"
+    );
+  }
 }

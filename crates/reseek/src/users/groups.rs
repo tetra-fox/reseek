@@ -1,46 +1,26 @@
-//! Which upload group a user is in: privileged by the server's word, then a user-defined group
-//! the configuration lists them in, then one we put them in, then leechers by their
-//! statistics, then the default group.
+//! Which groups a user is in, and what their uploads get from them. The smart groups take their
+//! members from what the server says: privileged by its word, leechers by their statistics.
+//! The manual ones are ours: buddies is the buddy list, and each user-defined group of the
+//! configuration holds the users we put in it. Default is everyone. Each upload setting comes
+//! from the highest group in the configured order the user is in that sets it, else from
+//! default: the queue they wait in (a group setting slots or a queue order), the speed limit
+//! they count against, and each per-user limit. Privileged users go before everyone.
 
-use api_types::users::{GroupSource, StatisticsSnapshot, UserGroup, UserPresence};
+use std::collections::BTreeSet;
+
+use api_types::users::{
+  GroupKind, GroupLimit, LimitMeasure, LimitWindow, StatisticsSnapshot, UserGroup, UserPresence,
+  UserUploads,
+};
 
 use super::store::Stored;
-use crate::config::Options;
+use crate::config::{
+  BUDDIES_GROUP, BUILTIN_GROUPS, DEFAULT_GROUP, GroupUpload, LEECHERS_GROUP, Limits, Options,
+  PRIVILEGED_GROUP,
+};
 
-/// The group of users the server calls privileged.
-pub const PRIVILEGED: &str = "privileged";
-/// The group of users who share too little.
-pub const LEECHERS: &str = "leechers";
-/// The group of everyone else.
-pub const DEFAULT: &str = "default";
-
-/// The color a group is shown in: the built-in groups each their own, every user-defined group
-/// the same, the default group none.
-fn color(name: &str, source: GroupSource) -> Option<String> {
-  let color = match (source, name) {
-    (GroupSource::Builtin, PRIVILEGED) => "violet",
-    (GroupSource::Builtin, LEECHERS) => "orange",
-    (GroupSource::Builtin, _) => return None,
-    (GroupSource::Config | GroupSource::Override, _) => "blue",
-  };
-  Some(color.to_string())
-}
-
-/// The user-defined group the configuration lists `username` in, with its priority: of
-/// several, the lowest priority number, then the first name.
-pub fn configured(options: &Options, username: &str) -> Option<(String, u32)> {
-  options
-    .transfers
-    .groups
-    .user_defined
-    .iter()
-    .filter(|(_, group)| group.members.iter().any(|m| m == username))
-    .map(|(name, group)| (name.clone(), group.upload.priority))
-    .min_by(|a, b| a.1.cmp(&b.1).then_with(|| a.0.cmp(&b.0)))
-}
-
-/// What a user's group is worked out from, besides the configuration, and what else the
-/// server last said of them.
+/// What a user's groups are worked out from, besides the configuration and the buddy list, and
+/// what else the server last said of them.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Facts {
   /// the server calls them privileged
@@ -49,8 +29,8 @@ pub struct Facts {
   pub presence: Option<UserPresence>,
   /// their statistics as the server last said, with when; `None` until it said
   pub statistics: Option<StatisticsSnapshot>,
-  /// the user-defined group we put them in
-  pub group_override: Option<String>,
+  /// the groups we put them in, by name
+  pub memberships: Vec<String>,
 }
 
 impl Facts {
@@ -66,60 +46,250 @@ impl Facts {
           statistics: statistics.clone(),
           updated_at: *at,
         }),
-      group_override: stored.group_override.clone(),
+      memberships: stored.groups.clone(),
     }
   }
 }
 
-/// The group `username` is in, from what is stored about them. A group we put them in that
-/// the configuration no longer has is passed over.
-pub fn effective(options: &Options, username: &str, stored: Option<&Stored>) -> UserGroup {
-  resolve(
-    options,
-    username,
-    &stored.map(Facts::of).unwrap_or_default(),
-  )
+/// The groups a user is in, and what their uploads get from them.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Placement {
+  /// every group they are in but default, as [`place`] orders them
+  pub groups: Vec<UserGroup>,
+  /// the server calls them privileged, so they go before everyone without per-user limits
+  pub privileged: bool,
+  /// the group whose queue they wait in
+  pub queue: String,
+  /// the group whose speed limit their uploads count against
+  pub speed: String,
+  /// the per-user limits their groups set, each field the highest group's that sets it; a field
+  /// none sets is taken from the global limits
+  pub limits: Limits,
+  /// the group that set each of `limits`' fields, in [`LIMIT_FIELDS`] order
+  limit_groups: Vec<Option<String>>,
 }
 
-/// The group `username` is in by `facts`. Shares not known make no leecher.
-pub fn resolve(options: &Options, username: &str, facts: &Facts) -> UserGroup {
-  let groups = &options.transfers.groups;
-  let builtin = |name: &str, priority: u32| UserGroup {
-    name: name.to_string(),
-    source: GroupSource::Builtin,
-    priority,
-    color: color(name, GroupSource::Builtin),
+impl Placement {
+  /// The groups that decide which shares the user sees: their manual groups the configuration
+  /// has.
+  pub fn share_groups(&self) -> BTreeSet<String> {
+    self
+      .groups
+      .iter()
+      .filter(|g| g.kind == GroupKind::Manual && g.defined)
+      .map(|g| g.name.clone())
+      .collect()
+  }
+
+  /// Whether the user is in the group `name`; everyone is in default.
+  pub fn is_in(&self, name: &str) -> bool {
+    name == DEFAULT_GROUP || self.groups.iter().any(|g| g.name == name)
+  }
+
+  /// What their uploads get, as the API shows it; a privileged user has no per-user limits.
+  pub fn uploads(&self, options: &Options) -> UserUploads {
+    let groups = &options.transfers.groups;
+    let global = options.transfers.upload.slots;
+    let slots = groups
+      .upload(&self.queue)
+      .and_then(|upload| upload.slots)
+      .filter(|&slots| slots != 0 && slots < global);
+    let speed_limit = match self.speed.as_str() {
+      PRIVILEGED_GROUP => options.transfers.upload.speed_limit,
+      name => groups.upload(name).and_then(|upload| upload.speed_limit),
+    }
+    .filter(|&limit| limit != 0);
+    let limits = LIMIT_FIELDS
+      .iter()
+      .filter(|_| !self.privileged)
+      .zip(&self.limit_groups)
+      .filter_map(|(field, group)| {
+        Some(GroupLimit {
+          window: field.window,
+          measure: field.measure,
+          limit: (field.get)(&self.limits).filter(|&limit| limit != 0),
+          group: group.clone()?,
+        })
+      })
+      .collect();
+    UserUploads {
+      queue: self.queue.clone(),
+      slots: if self.privileged { None } else { slots },
+      speed: self.speed.clone(),
+      speed_limit,
+      limits,
+    }
+  }
+}
+
+/// One field of the per-user limits: which window and measure it is, and how to read and set
+/// it.
+struct LimitField {
+  window: LimitWindow,
+  measure: LimitMeasure,
+  get: fn(&Limits) -> Option<u32>,
+  set: fn(&mut Limits, Option<u32>),
+}
+
+macro_rules! limit_field {
+  ($window:ident, $measure:ident, $w:ident . $m:ident) => {
+    LimitField {
+      window: LimitWindow::$window,
+      measure: LimitMeasure::$measure,
+      get: |limits| limits.$w.$m,
+      set: |limits, value| limits.$w.$m = value,
+    }
   };
-  if facts.privileged {
-    return builtin(PRIVILEGED, 0);
+}
+
+/// Every field of the per-user limits.
+const LIMIT_FIELDS: [LimitField; 9] = [
+  limit_field!(Queued, Files, queued.files),
+  limit_field!(Queued, Megabytes, queued.megabytes),
+  limit_field!(Queued, Failures, queued.failures),
+  limit_field!(Daily, Files, daily.files),
+  limit_field!(Daily, Megabytes, daily.megabytes),
+  limit_field!(Daily, Failures, daily.failures),
+  limit_field!(Weekly, Files, weekly.files),
+  limit_field!(Weekly, Megabytes, weekly.megabytes),
+  limit_field!(Weekly, Failures, weekly.failures),
+];
+
+/// The group `name` as the API shows it: a built-in group, a user-defined group of `options`,
+/// or the name of one it does not have.
+pub fn describe(options: &Options, name: &str) -> UserGroup {
+  let groups = &options.transfers.groups;
+  let (kind, defined, color) = match name {
+    PRIVILEGED_GROUP => (GroupKind::Smart, true, Some("violet")),
+    LEECHERS_GROUP => (GroupKind::Smart, true, Some("orange")),
+    DEFAULT_GROUP => (GroupKind::Smart, true, None),
+    BUDDIES_GROUP => (GroupKind::Manual, true, Some("green")),
+    name => match groups.user_defined.get(name) {
+      Some(group) => (GroupKind::Manual, true, Some(group.color.as_str())),
+      None => (GroupKind::Manual, false, None),
+    },
+  };
+  UserGroup {
+    name: name.to_string(),
+    kind,
+    defined,
+    upload_settings: groups.upload(name).is_some_and(GroupUpload::sets_any),
+    color: color.map(str::to_string),
   }
-  if let Some((name, priority)) = configured(options, username) {
+}
+
+/// A group we put a user in. One named like a built-in group, which the API refuses but an
+/// older tag may be, is a name the configuration does not have.
+fn membership(options: &Options, name: &str) -> UserGroup {
+  if BUILTIN_GROUPS.contains(&name) {
     return UserGroup {
-      color: color(&name, GroupSource::Config),
-      name,
-      source: GroupSource::Config,
-      priority,
+      name: name.to_string(),
+      kind: GroupKind::Manual,
+      defined: false,
+      upload_settings: false,
+      color: None,
     };
   }
-  if let Some(name) = &facts.group_override
-    && let Some(group) = groups.user_defined.get(name)
-  {
-    return UserGroup {
-      name: name.clone(),
-      source: GroupSource::Override,
-      priority: group.upload.priority,
-      color: color(name, GroupSource::Override),
-    };
-  }
-  let thresholds = &groups.leechers.thresholds;
-  let leeches = facts.statistics.as_ref().is_some_and(|snapshot| {
+  describe(options, name)
+}
+
+/// Whether a user with `statistics` shares too little under `options`. Shares not known make
+/// no leecher.
+fn leeches(options: &Options, statistics: Option<&StatisticsSnapshot>) -> bool {
+  let thresholds = &options.transfers.groups.leechers.thresholds;
+  statistics.is_some_and(|snapshot| {
     let shared = &snapshot.statistics;
     shared.file_count < thresholds.files || shared.directory_count < thresholds.directories
-  });
-  if leeches {
-    return builtin(LEECHERS, groups.leechers.upload.priority);
+  })
+}
+
+/// The groups of a user with `facts`, our buddy when `buddy`, under `options`: privileged,
+/// leechers and buddies when they are in them, then the groups we put them in by name.
+pub fn place(options: &Options, facts: &Facts, buddy: bool) -> Placement {
+  let privileged = describe(options, PRIVILEGED_GROUP);
+  let leechers = describe(options, LEECHERS_GROUP);
+  let leeches = leeches(options, facts.statistics.as_ref());
+  let mut groups = Vec::new();
+  if facts.privileged {
+    groups.push(privileged.clone());
   }
-  builtin(DEFAULT, groups.default.upload.priority)
+  if leeches {
+    groups.push(leechers.clone());
+  }
+  if buddy {
+    groups.push(describe(options, BUDDIES_GROUP));
+  }
+  let mut memberships: Vec<&String> = facts.memberships.iter().collect();
+  memberships.sort();
+  memberships.dedup();
+  groups.extend(
+    memberships
+      .into_iter()
+      .map(|name| membership(options, name)),
+  );
+  // the groups whose settings count, highest first, then default
+  let config = &options.transfers.groups;
+  let chain: Vec<(&str, &GroupUpload)> = config
+    .ordered()
+    .into_iter()
+    .filter(|name| groups.iter().any(|g| g.name == *name && g.defined))
+    .chain([DEFAULT_GROUP])
+    .filter_map(|name| Some((name, config.upload(name)?)))
+    .collect();
+  let first = |sets: fn(&GroupUpload) -> bool| {
+    chain
+      .iter()
+      .find(|(_, upload)| sets(upload))
+      .map_or(DEFAULT_GROUP, |(name, _)| *name)
+      .to_string()
+  };
+  let (queue, speed) = if facts.privileged {
+    (PRIVILEGED_GROUP.to_string(), PRIVILEGED_GROUP.to_string())
+  } else {
+    (
+      first(GroupUpload::own_queue),
+      first(|upload| upload.speed_limit.is_some()),
+    )
+  };
+  let mut limits = Limits::default();
+  let mut limit_groups = Vec::new();
+  for field in &LIMIT_FIELDS {
+    let set = chain
+      .iter()
+      .find_map(|(name, upload)| Some((*name, (field.get)(&upload.limits)?)));
+    (field.set)(&mut limits, set.map(|(_, value)| value));
+    limit_groups.push(set.map(|(name, _)| name.to_string()));
+  }
+  Placement {
+    groups,
+    privileged: facts.privileged,
+    queue,
+    speed,
+    limits,
+    limit_groups,
+  }
+}
+
+/// The groups of `stored`, the row of a user, under `options`; a user without a row is in the
+/// default group only.
+pub fn placement(options: &Options, stored: Option<&Stored>) -> Placement {
+  let facts = stored.map(Facts::of).unwrap_or_default();
+  place(options, &facts, stored.is_some_and(|s| s.buddy.is_some()))
+}
+
+/// Each share alias of `shares.visible_to` with a group listed for it that no member can see
+/// it through: one that is neither buddies nor a user-defined group, such as a misspelled name
+/// or a smart group.
+pub fn unknown_share_groups(options: &Options) -> BTreeSet<(String, String)> {
+  let groups = &options.transfers.groups;
+  options
+    .shares
+    .visible_to
+    .iter()
+    .flat_map(|(alias, seen_by)| seen_by.iter().map(move |group| (alias, group)))
+    .filter(|(_, group)| *group != BUDDIES_GROUP && !groups.user_defined.contains_key(*group))
+    .map(|(alias, group)| (alias.clone(), group.clone()))
+    .collect()
 }
 
 #[cfg(test)]
@@ -127,82 +297,167 @@ mod tests {
   use super::*;
   use crate::config::UserDefinedGroup;
   use api_types::state::UserStatistics;
+  use chrono::Utc;
 
-  fn stored() -> Stored {
-    let now = "2026-10-25T12:00:00Z".parse().unwrap();
-    Stored {
-      username: "alice".to_string(),
-      first_seen_at: now,
-      last_seen_at: now,
-      presence: None,
-      is_privileged: false,
-      statistics: None,
-      country_code: None,
-      info: None,
-      notes: String::new(),
-      tags: Vec::new(),
-      group_override: None,
-      muted: false,
-      buddy: None,
-    }
+  fn sharing(files: u32) -> Option<StatisticsSnapshot> {
+    Some(StatisticsSnapshot {
+      statistics: UserStatistics {
+        average_speed: 0,
+        directory_count: 4,
+        file_count: files,
+        upload_count: 0,
+      },
+      updated_at: Utc::now(),
+    })
   }
 
-  fn group(priority: u32, members: &[&str]) -> UserDefinedGroup {
-    let mut group = UserDefinedGroup::default();
-    group.upload.priority = priority;
-    group.members = members.iter().map(|m| m.to_string()).collect();
-    group
+  fn names(placement: &Placement) -> Vec<&str> {
+    placement.groups.iter().map(|g| g.name.as_str()).collect()
+  }
+
+  fn order(options: &mut Options, names: &[&str]) {
+    options.transfers.groups.order = names.iter().map(|n| n.to_string()).collect();
+  }
+
+  /// Options where the leechers get 1 slot, 32 KiB/s and 10 files a day, `throttled` sets 50
+  /// KiB/s and 1 slot, and `jazz` sets nothing.
+  fn options() -> Options {
+    let mut options = Options::default();
+    let groups = &mut options.transfers.groups;
+    groups.leechers.upload = GroupUpload {
+      slots: Some(1),
+      speed_limit: Some(32),
+      ..GroupUpload::default()
+    };
+    groups.leechers.upload.limits.daily.files = Some(10);
+    let throttled = GroupUpload {
+      slots: Some(1),
+      speed_limit: Some(50),
+      ..GroupUpload::default()
+    };
+    groups.user_defined.insert(
+      "throttled".into(),
+      UserDefinedGroup {
+        upload: throttled,
+        ..UserDefinedGroup::default()
+      },
+    );
+    groups
+      .user_defined
+      .insert("jazz".into(), UserDefinedGroup::default());
+    options
   }
 
   #[test]
-  fn privilege_then_configuration_then_override_then_statistics() {
+  fn each_setting_comes_from_the_highest_group_that_sets_it() {
+    let mut options = options();
+    let mut facts = Facts {
+      statistics: sharing(0),
+      memberships: ["jazz", "gone"].map(String::from).to_vec(),
+      ..Facts::default()
+    };
+    let leecher = place(&options, &facts, false);
+    assert_eq!(names(&leecher), ["leechers", "gone", "jazz"]);
+    assert_eq!(
+      (leecher.queue.as_str(), leecher.speed.as_str()),
+      ("leechers", "leechers"),
+      "jazz sets nothing, so it changes nothing"
+    );
+    assert_eq!(leecher.limits.daily.files, Some(10));
+    assert_eq!(
+      leecher.share_groups(),
+      ["jazz"].map(String::from).into(),
+      "a group the configuration lacks gives nothing"
+    );
+
+    let buddy = place(&options, &facts, true);
+    assert_eq!(
+      (buddy.queue.as_str(), buddy.speed.as_str()),
+      ("buddies", "buddies"),
+      "the buddies' own slots and speed are above the leechers'"
+    );
+    let uploads = buddy.uploads(&options);
+    assert_eq!(uploads.speed_limit, None, "the buddies' 0 is no limit");
+    assert_eq!(uploads.slots, None, "and every slot");
+    assert_eq!(
+      uploads.limits,
+      [GroupLimit {
+        window: LimitWindow::Daily,
+        measure: LimitMeasure::Files,
+        limit: Some(10),
+        group: "leechers".into(),
+      }],
+      "the buddies set no daily files, so the leechers' still apply"
+    );
+
+    facts.memberships = vec!["throttled".into()];
+    let below = place(&options, &facts, true);
+    assert_eq!(
+      below.speed, "buddies",
+      "a group left out of the order goes just above default"
+    );
+    order(&mut options, &["throttled", "buddies", "leechers"]);
+    let above = place(&options, &facts, true);
+    assert_eq!(
+      (above.queue.as_str(), above.speed.as_str()),
+      ("throttled", "throttled")
+    );
+    assert_eq!(above.uploads(&options).speed_limit, Some(50));
+
+    facts.privileged = true;
+    let privileged = place(&options, &facts, true);
+    assert_eq!(
+      (privileged.queue.as_str(), privileged.speed.as_str()),
+      ("privileged", "privileged")
+    );
+    assert!(
+      privileged.uploads(&options).limits.is_empty(),
+      "the leechers' daily limit does not apply to a privileged leecher"
+    );
+  }
+
+  #[test]
+  fn a_share_listed_for_a_group_no_member_can_see_it_through_is_found() {
+    let mut options = options();
+    options.shares.visible_to = [
+      (
+        "Rare".to_string(),
+        ["buddies", "jazz", "Jazz", "leechers"]
+          .map(String::from)
+          .to_vec(),
+      ),
+      ("Live".to_string(), Vec::new()),
+    ]
+    .into();
+    let pair = |alias: &str, group: &str| (alias.to_string(), group.to_string());
+    assert_eq!(
+      unknown_share_groups(&options),
+      [pair("Rare", "Jazz"), pair("Rare", "leechers")].into()
+    );
+  }
+
+  #[test]
+  fn everyone_holds_what_no_group_sets_and_built_in_names_are_never_ours() {
     let mut options = Options::default();
-    let groups = &mut options.transfers.groups.user_defined;
-    groups.insert("friends".into(), group(5, &["alice"]));
-    groups.insert("family".into(), group(3, &["alice"]));
-    groups.insert("crew".into(), group(3, &["alice"]));
-    groups.insert("vip".into(), group(2, &[]));
-    let mut alice = stored();
-    alice.group_override = Some("vip".to_string());
-    let name = |options: &Options, s: &Stored| effective(options, "alice", Some(s));
-    let picked = name(&options, &alice);
+    options.transfers.groups.default.upload.speed_limit = Some(100);
+    let facts = Facts {
+      memberships: ["buddies", "privileged"].map(String::from).to_vec(),
+      ..Facts::default()
+    };
+    let placed = place(&options, &facts, false);
     assert_eq!(
-      (picked.name.as_str(), picked.source),
-      ("crew", GroupSource::Config),
-      "the lowest priority number, ties by name, and over the override"
+      (placed.queue.as_str(), placed.speed.as_str()),
+      ("default", "default")
     );
-    assert_eq!(picked.color.as_deref(), Some("blue"));
-    alice.is_privileged = true;
-    let privileged = name(&options, &alice);
-    assert_eq!(privileged.name, PRIVILEGED);
-    assert_eq!(privileged.color.as_deref(), Some("violet"));
-    alice.is_privileged = false;
-    for g in options.transfers.groups.user_defined.values_mut() {
-      g.members.clear();
-    }
-    assert_eq!(name(&options, &alice).source, GroupSource::Override);
-    options.transfers.groups.user_defined.remove("vip");
-    alice.statistics = Some((
-      UserStatistics {
-        average_speed: 0,
-        directory_count: 4,
-        file_count: 0,
-        upload_count: 0,
-      },
-      alice.last_seen_at,
-    ));
-    assert_eq!(
-      name(&options, &alice).name,
-      LEECHERS,
-      "an override of a group gone is passed over"
-    );
-    alice.statistics = None;
-    assert_eq!(
-      name(&options, &alice).name,
-      DEFAULT,
-      "unknown is no leecher"
-    );
-    assert_eq!(name(&options, &alice).color, None);
-    assert_eq!(effective(&options, "nobody", None).name, DEFAULT);
+    assert_eq!(placed.uploads(&options).speed_limit, Some(100));
+    assert!(placed.uploads(&options).limits.is_empty());
+    assert!(placed.groups.iter().all(|g| !g.defined));
+    assert!(placed.share_groups().is_empty());
+    assert!(placed.is_in("default"), "everyone is in default");
+    let enough = Facts {
+      statistics: sharing(10),
+      ..Facts::default()
+    };
+    assert!(!place(&options, &enough, false).is_in("leechers"));
   }
 }

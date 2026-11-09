@@ -5,7 +5,6 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use api_types::shares::ShareVisibility;
 use cascade::{Change, Watcher};
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::error::RecvError;
@@ -13,7 +12,7 @@ use tracing::{Instrument, debug, error, info, info_span, warn};
 
 use super::scanner::{self, Settings};
 use super::schedule::Schedule;
-use super::{ScanOrigin, Shares, View, repository, share, storage};
+use super::{ScanOrigin, Shares, repository, share, storage};
 use crate::db::DbError;
 use crate::lock;
 use crate::options::{self, StorageMode};
@@ -290,21 +289,9 @@ impl Shares {
       );
       pending = true;
     }
-    if previous.buddies_only != current.buddies_only
-      || previous.trusted_only != current.trusted_only
-    {
+    if previous.visible_to != current.visible_to {
       info!("Share visibility changed");
       self.recount_for_server();
-      // a view no audience has any more is not rewritten again; its file goes at the next start
-      let views: Vec<View> = [
-        ShareVisibility::Everyone,
-        ShareVisibility::Buddies,
-        ShareVisibility::Trusted,
-      ]
-      .into_iter()
-      .map(|sees| View::of(current, sees))
-      .collect();
-      lock(&self.browse_views).retain(|view| views.contains(view));
     }
     if previous.follow_symlinks != current.follow_symlinks {
       info!(

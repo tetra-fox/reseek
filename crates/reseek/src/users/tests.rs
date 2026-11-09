@@ -18,8 +18,8 @@ use serde_json::{Value, json};
 const CONFIG: &str = "[soulseek]\nusername = \"me\"\n\
                       [web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n\
                       [transfers.groups.blacklisted]\nmembers = [\"mallory\"]\n\
-                      [transfers.groups.user_defined.friends]\nmembers = [\"bob\"]\n\
-                      [transfers.groups.user_defined.vip]\nmembers = []\n";
+                      [transfers.groups.user_defined.friends]\ncolor = \"teal\"\n\
+                      [transfers.groups.user_defined.vip.upload]\nslots = 2\n";
 
 fn query() -> UserListQuery {
   serde_json::from_value(json!({})).unwrap()
@@ -40,7 +40,7 @@ async fn the_directory_filters_and_sorts_with_buddies_first() {
       .unwrap();
   }
   directory
-    .change("carol", Change::Tags(vec!["jazzy".into()]))
+    .change("carol", Change::Groups(vec!["jazzy".into()]))
     .await
     .unwrap();
   directory
@@ -82,7 +82,7 @@ async fn the_directory_filters_and_sorts_with_buddies_first() {
   assert_eq!(
     names(directory.list(jazz).await.unwrap()),
     ["carol", "Bob"],
-    "notes and tags in any case, the latest seen first"
+    "notes and group names in any case, the latest seen first"
   );
   let mut presence = query();
   presence.presence = Some(UserPresence::Away);
@@ -97,12 +97,6 @@ async fn the_directory_filters_and_sorts_with_buddies_first() {
     ["carol", "Bob"],
     "most succeeded uploads first"
   );
-  let mut friends = query();
-  friends.group = Some("friends".into());
-  assert!(
-    directory.list(friends).await.unwrap().users.is_empty(),
-    "Bob is not bob"
-  );
   let mut idle = query();
   idle.has_transfers = Some(false);
   idle.limit = 1;
@@ -110,9 +104,23 @@ async fn the_directory_filters_and_sorts_with_buddies_first() {
   assert_eq!(page.total, 1);
   assert_eq!(names(page), ["alice"]);
 
-  let mut tagged = query();
-  tagged.tag = Some("jazzy".into());
-  assert_eq!(names(directory.list(tagged).await.unwrap()), ["carol"]);
+  let mut grouped = query();
+  grouped.group = Some("jazzy".into());
+  assert_eq!(
+    names(directory.list(grouped.clone()).await.unwrap()),
+    ["carol"]
+  );
+  grouped.group = Some("buddies".into());
+  assert_eq!(
+    names(directory.list(grouped.clone()).await.unwrap()),
+    ["alice"]
+  );
+  grouped.group = Some("default".into());
+  assert_eq!(
+    names(directory.list(grouped).await.unwrap()),
+    ["alice", "carol", "Bob"],
+    "everyone is in default"
+  );
   let mut buddies = query();
   buddies.buddy = Some(true);
   assert_eq!(names(directory.list(buddies).await.unwrap()), ["alice"]);
@@ -253,41 +261,97 @@ async fn the_users_retention_sets_the_cutoff_of_forgetting() {
 }
 
 #[tokio::test]
-async fn a_group_the_configuration_contradicts_is_refused() {
+async fn groups_are_set_per_user_and_moved_or_let_go_together() {
   let app = app(CONFIG, &[]).await;
-  let group = |name: &str| Some(json!({ "group": name }));
-  let (status, body) = app
-    .call("PUT", "/api/v0/users/bob/group", group("vip"))
-    .await;
-  assert_eq!(status, 409);
-  assert!(
-    body["error"].as_str().unwrap().contains("friends"),
-    "{body}"
-  );
-  let (status, _) = app
-    .call("PUT", "/api/v0/users/bob/group", group("friends"))
-    .await;
-  assert_eq!(status, 204, "the group the configuration puts the user in");
-  let (status, _) = app
-    .call("PUT", "/api/v0/users/alice/group", group("vip"))
-    .await;
-  assert_eq!(status, 204);
-  let (_, summary) = app.call("GET", "/api/v0/users/alice/summary", None).await;
+  let set = async |names: &[&str]| {
+    let body = Some(json!({ "groups": names }));
+    app.call("PUT", "/api/v0/users/alice/groups", body).await.0
+  };
+  let groups_of = async || {
+    let (_, summary) = app.call("GET", "/api/v0/users/alice/summary", None).await;
+    let names: Vec<String> = summary["groups"]
+      .as_array()
+      .unwrap()
+      .iter()
+      .map(|g| g["name"].as_str().unwrap().to_string())
+      .collect();
+    (names, summary["uploads"].clone())
+  };
+  assert_eq!(set(&["vip", "nope"]).await, 400, "only a defined group");
+  assert_eq!(set(&["buddies"]).await, 400, "buddies is the buddy list");
+  assert_eq!(set(&["vip"]).await, 204);
   assert_eq!(
-    summary["group"],
-    json!({ "name": "vip", "source": "override", "priority": 1, "color": "blue" })
+    groups_of().await.1,
+    json!({ "queue": "vip", "slots": 2, "speed": "default", "speedLimit": null, "limits": [] })
   );
-  assert_eq!(summary["groupOverride"], "vip");
-  assert_eq!(summary["known"], true);
-  let without_vip = CONFIG.replace("[transfers.groups.user_defined.vip]\nmembers = []\n", "");
+  assert_eq!(set(&["vip", "friends", "vip"]).await, 204);
+  let (names, upload) = groups_of().await;
+  assert_eq!(names, ["friends", "vip"]);
+  assert_eq!(
+    upload["queue"], "vip",
+    "friends sets nothing, so the slots are still vip's"
+  );
+  let (_, listed) = app.call("GET", "/api/v0/groups", None).await;
+  let summary = |list: &Value| -> Vec<(String, u64, bool)> {
+    list["groups"]
+      .as_array()
+      .unwrap()
+      .iter()
+      .map(|g| {
+        (
+          g["name"].as_str().unwrap().to_string(),
+          g["members"].as_u64().unwrap(),
+          g["defined"].as_bool().unwrap(),
+        )
+      })
+      .collect()
+  };
+  let row = |name: &str, members: u64, defined: bool| (name.to_string(), members, defined);
+  assert_eq!(
+    summary(&listed),
+    [
+      row("privileged", 0, true),
+      row("buddies", 0, true),
+      row("leechers", 0, true),
+      row("friends", 1, true),
+      row("vip", 1, true),
+      row("default", 1, true),
+    ]
+  );
+
+  let without_vip = CONFIG.replace(
+    "[transfers.groups.user_defined.vip.upload]\nslots = 2\n",
+    "",
+  );
   std::fs::write(app.dir.path().join("config.toml"), without_vip).unwrap();
   app.state.config.reload().await.unwrap();
-  let (_, profile) = app.call("GET", "/api/v0/users/alice/profile", None).await;
-  assert_eq!(profile["group"]["source"], "builtin");
+  let (names, upload) = groups_of().await;
   assert_eq!(
-    profile["groupOverride"], "vip",
-    "kept, so the page can say its group is gone"
+    names,
+    ["friends", "vip"],
+    "kept, so the page can say it is gone"
   );
+  assert_eq!(upload["queue"], "default");
+  assert_eq!(
+    set(&["vip"]).await,
+    204,
+    "a gone group the user is in stays"
+  );
+  assert_eq!(set(&["vip", "gone"]).await, 400);
+  let (_, listed) = app.call("GET", "/api/v0/groups", None).await;
+  assert_eq!(summary(&listed).last(), Some(&row("vip", 1, false)));
+
+  let moved = Some(json!({ "to": "friends" }));
+  let (status, body) = app
+    .call("POST", "/api/v0/groups/vip/members/move", moved)
+    .await;
+  assert_eq!((status, &body["users"]), (200, &json!(1)));
+  assert_eq!(groups_of().await.0, ["friends"]);
+  let (status, body) = app
+    .call("DELETE", "/api/v0/groups/friends/members", None)
+    .await;
+  assert_eq!((status, &body["users"]), (200, &json!(1)));
+  assert!(groups_of().await.0.is_empty());
 }
 
 /// Each listed block's user and source.
@@ -532,30 +596,27 @@ async fn a_picture_too_large_or_not_cached_has_no_url() {
 
 #[tokio::test]
 async fn a_buddy_change_keeps_what_it_leaves_out_and_sets_what_they_see() {
-  let app = app(CONFIG, &[]).await;
+  let config =
+    format!("{CONFIG}[shares.visible_to]\nRare = [\"buddies\"]\nPrivate = [\"friends\"]\n");
+  let app = app(&config, &[]).await;
   let buddy = async |body: Option<Value>| {
     let (status, _) = app.call("PUT", "/api/v0/users/alice/buddy", body).await;
     assert_eq!(status, 204);
     let (_, summary) = app.call("GET", "/api/v0/users/alice/summary", None).await;
     summary["buddy"].clone()
   };
-  let neither = json!({ "trusted": false, "notifyPresence": false });
-  assert_eq!(buddy(None).await, neither, "a new buddy has neither");
-  assert_eq!(
-    app.state.users.sees("alice"),
-    api_types::shares::ShareVisibility::Buddies
-  );
-  assert_eq!(
-    buddy(Some(json!({ "trusted": true }))).await,
-    json!({ "trusted": true, "notifyPresence": false })
-  );
+  let quiet = json!({ "notifyPresence": false });
+  assert_eq!(buddy(None).await, quiet, "a new buddy is not followed");
+  let buddies = std::collections::BTreeSet::from(["buddies".to_string()]);
+  assert_eq!(app.state.users.sees("alice"), buddies);
   assert_eq!(
     buddy(Some(json!({ "notifyPresence": true }))).await,
-    json!({ "trusted": true, "notifyPresence": true })
+    json!({ "notifyPresence": true })
   );
   assert_eq!(
-    app.state.users.sees("alice"),
-    api_types::shares::ShareVisibility::Trusted
+    buddy(Some(json!({}))).await,
+    json!({ "notifyPresence": true }),
+    "left out, kept"
   );
   let (status, _) = app.call("PUT", "/api/v0/users/me/buddy", None).await;
   assert_eq!(status, 409, "our own account is no buddy");
@@ -563,10 +624,28 @@ async fn a_buddy_change_keeps_what_it_leaves_out_and_sets_what_they_see() {
   assert_eq!(status, 204);
   let (_, summary) = app.call("GET", "/api/v0/users/alice/summary", None).await;
   assert_eq!(summary["buddy"], Value::Null);
-  assert_eq!(buddy(None).await, neither, "added again from scratch");
+  assert_eq!(buddy(None).await, quiet, "added again from scratch");
+  assert!(app.state.users.sees("me").is_empty());
+  app
+    .state
+    .users
+    .set_groups("bob", vec!["vip".into()])
+    .await
+    .unwrap();
+  assert!(
+    app.state.users.sees("bob").is_empty(),
+    "no share is shown to vip, so nothing is confirmed"
+  );
+  app
+    .state
+    .users
+    .set_groups("bob", vec!["vip".into(), "friends".into()])
+    .await
+    .unwrap();
   assert_eq!(
-    app.state.users.sees("me"),
-    api_types::shares::ShareVisibility::Everyone
+    app.state.users.sees("bob"),
+    std::collections::BTreeSet::from(["friends".to_string()]),
+    "only the group a share is shown to"
   );
 }
 
@@ -574,28 +653,19 @@ async fn a_buddy_change_keeps_what_it_leaves_out_and_sets_what_they_see() {
 async fn two_buddy_changes_made_at_once_both_hold() {
   let app = app(CONFIG, &[]).await;
   let users = &app.state.users;
-  let trusted = BuddyChange {
-    trusted: Some(true),
-    notify_presence: None,
-  };
   let notify = BuddyChange {
-    trusted: None,
     notify_presence: Some(true),
   };
   let (a, b) = tokio::join!(
-    users.set_buddy("alice", trusted),
+    users.set_buddy("alice", BuddyChange::default()),
     users.set_buddy("alice", notify)
   );
   a.unwrap();
   b.unwrap();
-  let both = Buddy {
-    trusted: true,
+  let followed = Buddy {
     notify_presence: true,
   };
-  assert_eq!(users.buddy("alice"), Some(both));
+  assert_eq!(users.buddy("alice"), Some(followed));
   let (_, summary) = app.call("GET", "/api/v0/users/alice/summary", None).await;
-  assert_eq!(
-    summary["buddy"],
-    json!({ "trusted": true, "notifyPresence": true })
-  );
+  assert_eq!(summary["buddy"], json!({ "notifyPresence": true }));
 }

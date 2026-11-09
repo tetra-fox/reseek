@@ -16,9 +16,8 @@ use std::sync::{Arc, Mutex, PoisonError, RwLock};
 use soulseek_client::{Governor as ChunkGovernor, Reporter, TokenBucket};
 use tracing::debug;
 
-use crate::config::{Groups, Options};
+use crate::config::{DEFAULT_GROUP, Groups, Options, PRIVILEGED_GROUP};
 use crate::sync::lock;
-use crate::users::{DEFAULT_GROUP, LEECHERS, PRIVILEGED};
 
 /// Looks up the group an upload's user is in now.
 pub type CurrentGroup = Arc<dyn Fn() -> String + Send + Sync>;
@@ -41,23 +40,19 @@ fn buckets(options: &Options, alternative: bool) -> HashMap<String, Arc<TokenBuc
   let groups = &options.transfers.groups;
   // an unset limit is the client's no limit
   let bucket = |limit: Option<u32>| Arc::new(TokenBucket::for_speed(limit.unwrap_or(0)));
-  let mut buckets = HashMap::from([
-    (
-      PRIVILEGED.to_string(),
-      bucket(options.transfers.upload_speed_limit(alternative)),
-    ),
-    (
-      DEFAULT_GROUP.to_string(),
-      bucket(groups.default.upload.speed_limit),
-    ),
-    (
-      LEECHERS.to_string(),
-      bucket(groups.leechers.upload.speed_limit),
-    ),
-  ]);
-  for (name, group) in &groups.user_defined {
-    buckets.insert(name.clone(), bucket(group.upload.speed_limit));
+  let mut buckets = HashMap::from([(
+    PRIVILEGED_GROUP.to_string(),
+    bucket(options.transfers.upload_speed_limit(alternative)),
+  )]);
+  // a group's bucket is shared by its members; `0` makes one without a limit
+  for name in groups.ordered().into_iter().chain([DEFAULT_GROUP]) {
+    if let Some(limit) = groups.upload(name).and_then(|upload| upload.speed_limit) {
+      buckets.insert(name.to_string(), bucket(Some(limit)));
+    }
   }
+  buckets
+    .entry(DEFAULT_GROUP.to_string())
+    .or_insert_with(|| bucket(None));
   buckets
 }
 
@@ -150,6 +145,7 @@ mod tests {
   use tokio_util::sync::CancellationToken;
 
   use super::*;
+  use crate::config::LEECHERS_GROUP;
 
   fn options(toml: &str) -> Options {
     toml::from_str(toml).unwrap()
@@ -207,7 +203,7 @@ mod tests {
     let governor = Arc::new(Governor::new(&options(
       "[transfers.groups.leechers.upload]\nspeed_limit = 1\n",
     )));
-    let (chunk, report) = governor.pace(Arc::new(|| LEECHERS.to_string()));
+    let (chunk, report) = governor.pace(Arc::new(|| LEECHERS_GROUP.to_string()));
     let never = CancellationToken::new();
     assert_eq!(chunk(&transfer(), 1000, never.clone()).await, 102);
     // the client's limit let 40 through and 30 were written
@@ -231,7 +227,7 @@ mod tests {
       &governor.bucket(DEFAULT_GROUP)
     ));
     assert!(!Arc::ptr_eq(
-      &governor.bucket(PRIVILEGED),
+      &governor.bucket(PRIVILEGED_GROUP),
       &governor.bucket(DEFAULT_GROUP)
     ));
   }

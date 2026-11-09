@@ -1,6 +1,6 @@
-//! What the server last said of each user, kept in memory so each user's upload group is known
-//! at once wherever it is asked: whether the server calls them privileged, their presence and
-//! their statistics with when they came, and the group we put them in. A user enters on a
+//! What the server last said of each user, kept in memory so each user's groups are known at
+//! once wherever they are asked: whether the server calls them privileged, their presence and
+//! their statistics with when they came, and the groups we put them in. A user enters on a
 //! fetch, a watch or the server's list of privileged users, and every user we put in a group is
 //! loaded at startup; nobody leaves. What the server pushes on its own is taken only for users
 //! known already.
@@ -22,7 +22,7 @@ use soulseek_client::{Client, ClientError, LogLimiter};
 use soulseek_proto::server::UserStats;
 use tracing::{Instrument, debug, info, trace, warn};
 
-use super::groups::{self, Facts};
+use super::groups::{self, Facts, Placement};
 use super::{Directory, Touch};
 use crate::sync::lock;
 use crate::turns::Turns;
@@ -49,18 +49,12 @@ pub struct GroupCache {
 }
 
 impl GroupCache {
-  /// The cache knowing the groups `overrides` puts users in.
-  pub fn new(overrides: impl IntoIterator<Item = (String, String)>) -> Self {
-    let facts = overrides
-      .into_iter()
-      .map(|(username, group)| {
-        let facts = Facts {
-          group_override: Some(group),
-          ..Facts::default()
-        };
-        (username, facts)
-      })
-      .collect();
+  /// The cache knowing the groups `memberships` puts users in, each as the user and the group.
+  pub fn new(memberships: impl IntoIterator<Item = (String, String)>) -> Self {
+    let mut facts: HashMap<String, Facts> = HashMap::new();
+    for (username, group) in memberships {
+      facts.entry(username).or_default().memberships.push(group);
+    }
     Self {
       facts: RwLock::new(facts),
       ..Self::default()
@@ -121,10 +115,9 @@ fn statistics(stats: &UserStats) -> UserStatistics {
 }
 
 impl Directory {
-  /// The upload group `username` is in by what is known now, without waiting for anyone. A user
-  /// nothing is known of is in the configuration's group for them, else the default group;
-  /// statistics older than four hours are asked for again meanwhile.
-  pub fn group(self: &Arc<Self>, username: &str) -> String {
+  /// The groups `username` is in by what is known now, without waiting for anyone; statistics
+  /// older than four hours are asked for again meanwhile.
+  pub fn placement(self: &Arc<Self>, username: &str) -> Placement {
     let facts = self.groups.facts(username).unwrap_or_default();
     if facts.statistics.as_ref().is_some_and(|s| {
       (Utc::now() - s.updated_at)
@@ -133,32 +126,53 @@ impl Directory {
     }) {
       self.refetch_statistics(username);
     }
-    groups::resolve(&self.config.current().values, username, &facts).name
+    let buddy = self.buddy(username).is_some();
+    groups::place(&self.config.current().values, &facts, buddy)
   }
 
-  /// The upload group `username` is in, after asking the server for their statistics and
-  /// their status when nothing is known of them, or always with `force`. A question that fails
-  /// is logged and what is known stands, so a user who could not be asked about is in the
-  /// default group.
-  pub async fn fetch_group(
+  /// The group whose queue `username` waits in, by what is known now, without waiting for
+  /// anyone.
+  pub fn queue_group(self: &Arc<Self>, username: &str) -> String {
+    self.placement(username).queue
+  }
+
+  /// The group whose speed limit `username`'s uploads count against, by what is known now,
+  /// without waiting for anyone.
+  pub fn speed_group(self: &Arc<Self>, username: &str) -> String {
+    self.placement(username).speed
+  }
+
+  /// The groups `username` is in, after asking the server for their statistics and their
+  /// status when it has said neither yet, or always with `force`. A question that fails is
+  /// logged and what is known stands, so a user who could not be asked about is neither
+  /// privileged nor a leecher.
+  pub async fn fetch_placement(
     self: &Arc<Self>,
     client: &Client,
     username: &str,
     force: bool,
-  ) -> String {
-    let known = self.groups.facts(username).is_some();
+  ) -> Placement {
+    let known = self
+      .groups
+      .facts(username)
+      .is_some_and(|facts| facts.statistics.is_some() || facts.presence.is_some());
     if !known || force {
       self.groups.update(username, true, |_| {});
       if let Err(e) = self.statistics_of(client, username).await {
-        warn!(username, error = %e, "statistics for the upload group not fetched");
+        warn!(username, error = %e, "statistics for the upload groups not fetched");
       }
       if let Err(e) = self.status_of(client, username).await {
-        warn!(username, error = %e, "status for the upload group not fetched");
+        warn!(username, error = %e, "status for the upload groups not fetched");
       }
     }
-    let group = self.group(username);
-    trace!(username, group, "upload group");
-    group
+    let placement = self.placement(username);
+    trace!(
+      username,
+      queue = placement.queue,
+      speed = placement.speed,
+      "upload groups"
+    );
+    placement
   }
 
   /// Asks the server for `username`'s statistics now, keeps them and touches the user.
@@ -171,7 +185,7 @@ impl Directory {
     Ok(self.statistics_fetched(username, &fetched.stats).await)
   }
 
-  /// Asks the server for `username`'s statistics now and keeps them for the upload group,
+  /// Asks the server for `username`'s statistics now and keeps them for the upload groups,
   /// leaving the user's row to the caller.
   pub(super) async fn statistics_untouched(
     &self,
@@ -191,7 +205,7 @@ impl Directory {
     taken
   }
 
-  /// Statistics we asked for, kept for the upload group.
+  /// Statistics we asked for, kept for the upload groups.
   fn statistics_kept(&self, username: &str, stats: &UserStats) -> StatisticsSnapshot {
     let taken = snapshot(stats);
     self.groups.update(username, true, |facts| {
@@ -372,7 +386,6 @@ impl Directory {
 
   /// Every user the cache knows, by name, with what the server last said of them.
   pub fn cached_users(&self) -> Vec<CachedUser> {
-    let options = self.config.current().values.clone();
     let facts = self
       .groups
       .facts
@@ -382,7 +395,6 @@ impl Directory {
       .iter()
       .map(|(username, facts)| CachedUser {
         username: username.clone(),
-        group: groups::configured(&options, username).map(|(name, _)| name),
         statistics: facts.statistics.clone(),
         status: facts.presence.map(|presence| UserStatus {
           presence,
@@ -400,11 +412,24 @@ impl Directory {
     lock(&self.groups.asked).clear();
   }
 
-  /// `username` is in the user-defined group `group` we put them in from now on, or in none.
-  pub(super) fn group_changed(&self, username: &str, group: Option<String>) {
-    let create = group.is_some();
+  /// `username` left the group `from`, for the group `to` when given.
+  pub(super) fn membership_moved(&self, username: &str, from: &str, to: Option<&str>) {
+    self.groups.update(username, false, |facts| {
+      facts.memberships.retain(|group| group != from);
+      if let Some(to) = to
+        && !facts.memberships.iter().any(|group| group == to)
+      {
+        facts.memberships.push(to.to_string());
+        facts.memberships.sort();
+      }
+    });
+  }
+
+  /// `username` is in the groups `memberships` from now on.
+  pub(super) fn memberships_changed(&self, username: &str, memberships: Vec<String>) {
+    let create = !memberships.is_empty();
     self.groups.update(username, create, |facts| {
-      facts.group_override = group;
+      facts.memberships = memberships;
     });
   }
 }

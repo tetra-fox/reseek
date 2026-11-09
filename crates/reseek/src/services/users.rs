@@ -2,9 +2,9 @@
 
 use api_types::profile::Interests;
 use api_types::users::{
-  BrowseProgress, BrowseResponse, BuddyChange, CachedUser, Directory, StatisticsSnapshot,
-  UserEndpoint, UserInfo, UserList, UserListQuery, UserProfile, UserStatus, UserSummary,
-  UserTransfers, UserTransfersQuery,
+  BrowseProgress, BrowseResponse, BuddyChange, CachedUser, Directory, GroupList,
+  StatisticsSnapshot, UserEndpoint, UserInfo, UserList, UserListQuery, UserProfile, UserStatus,
+  UserSummary, UserTransfers, UserTransfersQuery,
 };
 use async_trait::async_trait;
 use axum::response::Response;
@@ -108,8 +108,25 @@ pub trait UserService: Send + Sync {
     Err(not_yet(DOMAIN))
   }
 
-  /// Replaces our tags on a user; each is lower case already.
-  async fn set_tags(&self, username: &str, tags: Vec<String>) -> Result<(), ApiError> {
+  /// Puts a user in exactly the groups named: user-defined groups of the configuration, and
+  /// any they are in already that it no longer has. Another name is refused.
+  async fn set_groups(&self, username: &str, groups: Vec<String>) -> Result<(), ApiError> {
+    Err(not_yet(DOMAIN))
+  }
+
+  /// Every group, with how many users the directory knows in it.
+  async fn groups(&self) -> Result<GroupList, ApiError> {
+    Err(not_yet(DOMAIN))
+  }
+
+  /// Moves every member of a group into a user-defined group of the configuration, and says
+  /// how many moved.
+  async fn move_members(&self, from: &str, to: &str) -> Result<u64, ApiError> {
+    Err(not_yet(DOMAIN))
+  }
+
+  /// Takes every member out of a group, and says how many there were.
+  async fn let_go_members(&self, group: &str) -> Result<u64, ApiError> {
     Err(not_yet(DOMAIN))
   }
 
@@ -126,12 +143,6 @@ pub trait UserService: Send + Sync {
 
   /// Mutes a user's notifications, or unmutes them.
   async fn set_muted(&self, username: &str, muted: bool) -> Result<(), ApiError> {
-    Err(not_yet(DOMAIN))
-  }
-
-  /// Puts a user in a user-defined upload group, or takes them out of the one they were put
-  /// in. A user the configuration lists for another group is a conflict.
-  async fn set_group(&self, username: &str, group: Option<String>) -> Result<(), ApiError> {
     Err(not_yet(DOMAIN))
   }
 

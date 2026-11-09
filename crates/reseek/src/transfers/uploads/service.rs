@@ -149,7 +149,11 @@ impl TransferService for Uploads {
     let options = self.config.current();
     Ok(UploadQueueStatus {
       position: standing.position,
-      limits: limits::usage(&options.values, &standing.group, &figures),
+      limits: limits::usage(
+        &options.values,
+        &self.users.placement(username).limits,
+        &figures,
+      ),
       group: standing.group,
       group_slots_used: standing.group_slots_used,
       group_slots: standing.group_slots,

@@ -6,12 +6,11 @@
 //! A request for a file not shared, or shared and gone from disk, is refused, and so is one
 //! past the limits of its user's group, unless the user is privileged.
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use api_types::shares::ShareVisibility;
 use chrono::Utc;
 use soulseek_client::{ClientError, LogLimiter};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore, SemaphorePermit};
@@ -21,7 +20,6 @@ use super::{Uploads, limits};
 use crate::shares::{LOCAL_HOST, Resolved};
 use crate::sync::lock;
 use crate::telemetry::millis;
-use crate::users::PRIVILEGED;
 
 /// What a peer is told when too many requests wait to be decided.
 pub const OVERWHELMED: &str = "Overwhelmed with requests; try again later.";
@@ -183,14 +181,14 @@ impl Uploads {
     true
   }
 
-  /// Decides the request of `username`, who sees the shares visible to `sees`, for `filename`,
+  /// Decides the request of `username`, who sees the shares of the groups `sees`, for `filename`,
   /// which passed the network's edge, and queues the upload when it is accepted. A refusal is
   /// the reason the peer is told.
   pub async fn request(
     &self,
     username: &str,
     filename: &str,
-    sees: ShareVisibility,
+    sees: &BTreeSet<String>,
   ) -> Result<(), ClientError> {
     let (_turn, waiting) = self.intake.turn(username).await;
     let enqueue = &self.telemetry.metrics().enqueue;
@@ -248,7 +246,7 @@ impl Uploads {
     };
     let (_turn, _) = self.intake.turn(username).await;
     for filename in files {
-      let queued = match self.decide(username, &filename, sees).await {
+      let queued = match self.decide(username, &filename, &sees).await {
         Ok(located) => self.enqueue(username, &filename, located).await,
         Err(Refusal::Peer(reason)) => Err(ClientError::DownloadEnqueue(reason.to_string())),
         Err(Refusal::Failed(error)) => Err(error),
@@ -279,7 +277,7 @@ impl Uploads {
     &self,
     username: &str,
     filename: &str,
-    sees: ShareVisibility,
+    sees: &BTreeSet<String>,
   ) -> Result<Located, Refusal> {
     let located = self
       .locate(sees, filename)
@@ -287,8 +285,8 @@ impl Uploads {
       .map_err(Refusal::Failed)?
       .ok_or(Refusal::Peer(NOT_SHARED))?;
     let client = self.client().map_err(Refusal::Failed)?;
-    let group = self.users.fetch_group(&client, username, false).await;
-    if group == PRIVILEGED {
+    let placement = self.users.fetch_placement(&client, username, false).await;
+    if placement.privileged {
       debug!(username, "Limits bypassed; the user is privileged");
       return Ok(located);
     }
@@ -304,21 +302,21 @@ impl Uploads {
           None,
         ))
       })?;
-    trace!(username, group, ?figures, "upload figures");
+    trace!(username, ?figures, "upload figures");
     let options = self.config.current();
-    match limits::refusal(&options.values, &group, &figures, located.size) {
+    match limits::refusal(&options.values, &placement.limits, &figures, located.size) {
       Some(reason) => Err(Refusal::Peer(reason)),
       None => Ok(located),
     }
   }
 
   /// Where the shared file `filename` is, with its size on disk; `None` when it is not shared,
-  /// is in a share not visible to `sees`, or is gone from disk. A local file gone, or whose size changed, asks the shares for a
+  /// is in a share the groups `sees` do not see, or is gone from disk. A local file gone, or whose size changed, asks the shares for a
   /// scan; one that changed is taken at its size on disk. A relay agent's file is taken at its
   /// indexed size when the options trust agents' listings, else the agent is asked.
   pub(super) async fn locate(
     &self,
-    sees: ShareVisibility,
+    sees: &BTreeSet<String>,
     filename: &str,
   ) -> Result<Option<Located>, ClientError> {
     let view = self.shares.view(sees);

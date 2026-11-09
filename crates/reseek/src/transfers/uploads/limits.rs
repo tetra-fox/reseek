@@ -12,7 +12,6 @@ use rusqlite::{Connection, params};
 use crate::config::{Limit, Limits, Options};
 use crate::db::timestamp;
 use crate::transfers::direction_text;
-use crate::users::{DEFAULT_GROUP, LEECHERS};
 
 /// What a request over the queued files limit is told; clients ask again later.
 pub const TOO_MANY_FILES: &str = "Too many files";
@@ -134,26 +133,8 @@ impl Window {
   }
 }
 
-/// The limits that apply to a user of `group`: a user-defined group's own, the default group's
-/// for the default group and any group the configuration does not have, the leechers' for the
-/// leechers.
-fn group_limits<'a>(options: &'a Options, group: &str) -> &'a Limits {
-  let groups = &options.transfers.groups;
-  match group {
-    LEECHERS => &groups.leechers.upload.limits,
-    DEFAULT_GROUP => &groups.default.upload.limits,
-    name => groups
-      .user_defined
-      .get(name)
-      .map_or(&groups.default.upload.limits, |defined| {
-        &defined.upload.limits
-      }),
-  }
-}
-
-/// The queued, daily and weekly windows of `group`.
-fn windows(options: &Options, group: &str) -> (Window, Window, Window) {
-  let own = group_limits(options, group);
+/// The queued, daily and weekly windows of a user whose groups set `own`.
+fn windows(options: &Options, own: &Limits) -> (Window, Window, Window) {
   let global = &options.transfers.upload.limits;
   (
     Window::of(&own.queued, &global.queued),
@@ -162,17 +143,17 @@ fn windows(options: &Options, group: &str) -> (Window, Window, Window) {
   )
 }
 
-/// Why one more upload of `size` bytes to a user of `group` with `figures` is refused, `None`
-/// when it is not: the queued window first, then the last week, then the last day, each
+/// Why one more upload of `size` bytes to a user whose groups set `own` with `figures` is
+/// refused, `None` when it is not: the queued window first, then the last week, then the last day, each
 /// checking files before megabytes. The queued window's answers are the ones clients ask
 /// again after.
 pub fn refusal(
   options: &Options,
-  group: &str,
+  own: &Limits,
   figures: &Statistics,
   size: u64,
 ) -> Option<&'static str> {
-  let (queued, daily, weekly) = windows(options, group);
+  let (queued, daily, weekly) = windows(options, own);
   if queued.configured() {
     if queued.over_files(figures.queued_files) {
       return Some(TOO_MANY_FILES);
@@ -222,9 +203,9 @@ pub fn refusal(
   None
 }
 
-/// The figures of a user of `group` against the group's limits, per window.
-pub fn usage(options: &Options, group: &str, figures: &Statistics) -> UploadLimits {
-  let (queued, daily, weekly) = windows(options, group);
+/// The figures of a user whose groups set `own` against their limits, per window.
+pub fn usage(options: &Options, own: &Limits, figures: &Statistics) -> UploadLimits {
+  let (queued, daily, weekly) = windows(options, own);
   let usage = |used: u64, limit: Option<u64>| UploadLimitUsage { used, limit };
   let bytes = |limit: Option<u32>| limit.map(|mb| u64::from(mb) * MEGABYTE);
   let period = |window: Window, failed: u64, files: u64, sent: u64| UploadLimitWindow {
@@ -256,10 +237,18 @@ pub fn usage(options: &Options, group: &str, figures: &Statistics) -> UploadLimi
 #[cfg(test)]
 mod tests {
   use super::*;
+  use crate::config::{DEFAULT_GROUP, LEECHERS_GROUP};
   use crate::transfers::fixtures::{Row, insert, transfers};
 
   fn options(toml: &str) -> Options {
     toml::from_str(toml).unwrap()
+  }
+
+  /// The limits the group `group` sets, or the default group's for a name it lacks.
+  fn own(options: &Options, group: &str) -> Limits {
+    let groups = &options.transfers.groups;
+    let upload = groups.upload(group).unwrap_or(&groups.default.upload);
+    upload.limits.clone()
   }
 
   #[test]
@@ -269,7 +258,9 @@ mod tests {
                   weekly = { files = 10, megabytes = 30, failures = 4 }\n\
                   daily = { files = 5, megabytes = 20, failures = 2 }\n";
     let options = options(limits);
-    let refused = |figures: Statistics, size: u64| refusal(&options, DEFAULT_GROUP, &figures, size);
+    let refused = |figures: Statistics, size: u64| {
+      refusal(&options, &own(&options, DEFAULT_GROUP), &figures, size)
+    };
     let none = Statistics::default();
     assert_eq!(refused(none, 1_000_000), None);
     let queued_files = Statistics {
@@ -350,14 +341,17 @@ mod tests {
       queued_files: 1,
       ..Statistics::default()
     };
-    assert_eq!(refusal(&options, "friends", &one_queued, 1), None);
     assert_eq!(
-      refusal(&options, "friends", &one_queued, 1_000_001),
+      refusal(&options, &own(&options, "friends"), &one_queued, 1),
+      None
+    );
+    assert_eq!(
+      refusal(&options, &own(&options, "friends"), &one_queued, 1_000_001),
       Some(TOO_MANY_MEGABYTES),
       "the global megabytes"
     );
     assert_eq!(
-      refusal(&options, "gone", &one_queued, 1),
+      refusal(&options, &own(&options, "gone"), &one_queued, 1),
       Some(TOO_MANY_FILES),
       "a group the configuration lacks takes the default group's"
     );
@@ -366,7 +360,7 @@ mod tests {
       ..Statistics::default()
     };
     assert_eq!(
-      refusal(&options, LEECHERS, &failed, 1),
+      refusal(&options, &own(&options, LEECHERS_GROUP), &failed, 1),
       Some("Too many failed transfers today"),
       "a window with only failures set in the group is configured"
     );
@@ -376,18 +370,23 @@ mod tests {
   fn a_window_limiting_only_failures_globally_is_checked_for_a_group_without_its_own() {
     let options = options(
       "[transfers.upload.limits.daily]\nfailures = 1\n\
-       [transfers.groups.user_defined.friends]\nmembers = [\"alice\"]\n",
+       [transfers.groups.user_defined.friends.upload]\n",
     );
     let failed = Statistics {
       daily_failed_files: 1,
       ..Statistics::default()
     };
     assert_eq!(
-      refusal(&options, "friends", &failed, 1),
+      refusal(&options, &own(&options, "friends"), &failed, 1),
       Some("Too many failed transfers today")
     );
     assert_eq!(
-      refusal(&options, "friends", &Statistics::default(), 1),
+      refusal(
+        &options,
+        &own(&options, "friends"),
+        &Statistics::default(),
+        1
+      ),
       None
     );
   }
@@ -400,29 +399,41 @@ mod tests {
     };
     let grouped = options(
       "[transfers.groups.user_defined.friends.upload.limits.queued]\nfiles = 0\n\
-       [transfers.groups.user_defined.others]\nmembers = [\"bob\"]\n",
+       [transfers.groups.user_defined.others.upload]\n",
     );
     assert_eq!(
       grouped.transfers.upload.limits.queued.files,
       Some(1000),
       "the default global limit"
     );
-    assert_eq!(refusal(&grouped, "friends", &thousand_queued, 1), None);
     assert_eq!(
-      refusal(&grouped, "others", &thousand_queued, 1),
+      refusal(&grouped, &own(&grouped, "friends"), &thousand_queued, 1),
+      None
+    );
+    assert_eq!(
+      refusal(&grouped, &own(&grouped, "others"), &thousand_queued, 1),
       Some(TOO_MANY_FILES),
       "a group that leaves it unset inherits the global limit"
     );
     let unlimited = options("[transfers.upload.limits.queued]\nfiles = 0\n");
     assert_eq!(
-      refusal(&unlimited, DEFAULT_GROUP, &thousand_queued, 1),
+      refusal(
+        &unlimited,
+        &own(&unlimited, DEFAULT_GROUP),
+        &thousand_queued,
+        1
+      ),
       None
     );
     assert_eq!(
-      usage(&unlimited, DEFAULT_GROUP, &thousand_queued)
-        .queued
-        .files
-        .limit,
+      usage(
+        &unlimited,
+        &own(&unlimited, DEFAULT_GROUP),
+        &thousand_queued
+      )
+      .queued
+      .files
+      .limit,
       None
     );
   }

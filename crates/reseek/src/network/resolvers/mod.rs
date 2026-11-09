@@ -199,7 +199,7 @@ pub async fn enqueue_download(
     return Err(ClientError::DownloadEnqueue(refusal));
   }
   let sees = edges.users.sees_from(username, endpoint.ip()).await;
-  uploads.request(username, filename.as_str(), sees).await?;
+  uploads.request(username, filename.as_str(), &sees).await?;
   edges.activity.queued(username, filename.as_str());
   Ok(())
 }
@@ -232,11 +232,11 @@ pub async fn user_info(edges: &Edges, username: &str, endpoint: SocketAddr) -> U
 async fn profile(edges: &Edges, username: &str) -> UserInfo {
   let local = crate::profile::local_info(&edges.config.current().values).await;
   if let Some(network) = edges.network.upgrade() {
-    let group = edges
+    let placement = edges
       .users
-      .fetch_group(network.client(), username, false)
+      .fetch_placement(network.client(), username, false)
       .await;
-    debug!(username, group, "user info asked for");
+    debug!(username, queue = placement.queue, "user info asked for");
   }
   let forecast = forecast(edges, username);
   UserInfo {

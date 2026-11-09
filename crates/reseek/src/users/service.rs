@@ -1,6 +1,8 @@
 //! The users directory calls of the API and its blocking calls, answered by the [`Directory`]
 //! from what it stores. The calls that ask the network about a user are the users service's.
 
+use std::sync::Arc;
+
 use api_types::auth::Principal;
 use api_types::events::{Event, UnblockReason, UserBlocked, UserUnblocked};
 use api_types::users::blocking::{
@@ -15,7 +17,7 @@ use sha2::{Digest, Sha256};
 use tracing::debug;
 
 use super::store::{self, Change};
-use super::{Directory, SUMMARY_FOR, blocking, groups, profile, transfers};
+use super::{Directory, SUMMARY_FOR, blocking, profile, transfers};
 use crate::api::error::ApiError;
 use crate::db::shifted;
 use crate::services::{BlockImport, BlockingService};
@@ -142,12 +144,13 @@ impl Directory {
 }
 
 impl Directory {
-  /// What is stored about `username`, kept a minute.
+  /// What is stored about `username`, kept a minute while the options stay the same.
   pub(crate) async fn summary(&self, username: &str) -> Result<UserSummary, ApiError> {
+    let config = self.config.current();
     let cached = lock(&self.summaries)
       .get(username)
-      .filter(|(at, _)| at.elapsed() < SUMMARY_FOR)
-      .map(|(_, summary)| summary.clone());
+      .filter(|cached| cached.at.elapsed() < SUMMARY_FOR && Arc::ptr_eq(&cached.options, &config))
+      .map(|cached| cached.summary.clone());
     match cached {
       Some(summary) => Ok(summary),
       None => self.summary_of(username).await,
@@ -186,44 +189,91 @@ impl Directory {
     self.change(username, Change::Notes(notes)).await
   }
 
-  /// Replaces our tags on `username`, each kept once.
-  pub(crate) async fn set_tags(&self, username: &str, tags: Vec<String>) -> Result<(), ApiError> {
-    let mut unique = Vec::new();
-    for tag in tags {
-      if !unique.contains(&tag) {
-        unique.push(tag);
+  /// Puts `username` in exactly the groups `wanted`, each once: user-defined groups of the
+  /// configuration, and any they are in already that it no longer has.
+  pub(crate) async fn set_groups(
+    &self,
+    username: &str,
+    wanted: Vec<String>,
+  ) -> Result<(), ApiError> {
+    let options = self.config.current().values.clone();
+    let held = self
+      .groups
+      .facts(username)
+      .map(|facts| facts.memberships)
+      .unwrap_or_default();
+    let mut groups: Vec<String> = Vec::new();
+    for name in wanted {
+      let defined = options.transfers.groups.user_defined.contains_key(&name);
+      if !defined && !held.contains(&name) {
+        return Err(ApiError::invalid(
+          "Unknown group",
+          format!("{name} is not a user-defined group"),
+        ));
+      }
+      if !groups.contains(&name) {
+        groups.push(name);
       }
     }
-    self.change(username, Change::Tags(unique)).await
+    groups.sort();
+    self
+      .change(username, Change::Groups(groups.clone()))
+      .await?;
+    self.memberships_changed(username, groups);
+    Ok(())
+  }
+
+  /// Moves every member of the group `from` into the user-defined group `to`, and says how
+  /// many moved.
+  pub(crate) async fn move_members(&self, from: &str, to: &str) -> Result<u64, ApiError> {
+    if !self
+      .config
+      .current()
+      .values
+      .transfers
+      .groups
+      .user_defined
+      .contains_key(to)
+    {
+      return Err(ApiError::invalid(
+        "Unknown group",
+        format!("{to} is not a user-defined group"),
+      ));
+    }
+    if from == to {
+      return Ok(0);
+    }
+    let (from_name, to_name) = (from.to_string(), to.to_string());
+    let moved = self
+      .db
+      .write(move |conn| store::move_members(conn, &from_name, &to_name))
+      .await
+      .map_err(internal)?;
+    for username in &moved {
+      self.membership_moved(username, from, Some(to));
+      self.changed(username).await;
+    }
+    Ok(moved.len() as u64)
+  }
+
+  /// Takes every member out of the group `group`, and says how many there were.
+  pub(crate) async fn let_go_members(&self, group: &str) -> Result<u64, ApiError> {
+    let name = group.to_string();
+    let members = self
+      .db
+      .write(move |conn| store::let_go(conn, &name))
+      .await
+      .map_err(internal)?;
+    for username in &members {
+      self.membership_moved(username, group, None);
+      self.changed(username).await;
+    }
+    Ok(members.len() as u64)
   }
 
   /// Mutes or unmutes `username`.
   pub(crate) async fn set_muted(&self, username: &str, muted: bool) -> Result<(), ApiError> {
     self.change(username, Change::Muted(muted)).await
-  }
-
-  /// Puts `username` in a user-defined upload group, or takes them out; a user the
-  /// configuration lists for another group is a conflict.
-  pub(crate) async fn set_group(
-    &self,
-    username: &str,
-    group: Option<String>,
-  ) -> Result<(), ApiError> {
-    let options = self.config.current().values.clone();
-    if let Some(wanted) = &group
-      && let Some((configured, _)) = groups::configured(&options, username)
-      && configured != *wanted
-    {
-      return Err(ApiError::conflict(
-        format!("The configuration puts {username} in the group {configured}"),
-        Some(format!(
-          "Change transfers.groups.user_defined.{configured}.members to move the user"
-        )),
-      ));
-    }
-    self.change(username, Change::Group(group.clone())).await?;
-    self.group_changed(username, group);
-    Ok(())
   }
 
   /// A page of `username`'s transfers.
@@ -254,7 +304,7 @@ impl Directory {
     }
     self.blocks.unset(username);
     self.buddies.set(username, None);
-    self.group_changed(username, None);
+    self.memberships_changed(username, Vec::new());
     if purge {
       let removed = transfers::remove_all(&self.transfers, username)
         .await

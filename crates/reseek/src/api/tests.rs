@@ -110,8 +110,9 @@ async fn each_route_takes_its_least_role() {
     (Method::POST, "/api/v0/conversations/{username}", write),
     (Method::GET, "/api/v0/users/{username}/browse", read),
     (Method::POST, "/api/v0/users/{username}/directory", read),
-    (Method::PUT, "/api/v0/users/{username}/tags", write),
-    (Method::PUT, "/api/v0/users/{username}/group", admin),
+    (Method::PUT, "/api/v0/users/{username}/groups", write),
+    (Method::GET, "/api/v0/groups", read),
+    (Method::DELETE, "/api/v0/groups/{name}/members", write),
     (Method::DELETE, "/api/v0/users/{username}", admin),
     (Method::GET, "/api/v0/users/blocked", read),
     (Method::PUT, "/api/v0/users/{username}/block", write),
@@ -301,14 +302,8 @@ async fn requests_are_checked_before_any_service_is_asked() {
     ),
     (
       "PUT",
-      "/api/v0/users/alice/tags".into(),
-      Some(json!({ "tags": ["two words"] })),
-      400,
-    ),
-    (
-      "PUT",
-      "/api/v0/users/alice/group".into(),
-      Some(json!({ "group": "friends" })),
+      "/api/v0/users/alice/groups".into(),
+      Some(json!({ "groups": ["friends"] })),
       400,
     ),
     (

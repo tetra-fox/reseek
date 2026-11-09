@@ -44,7 +44,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
 use std::time::{Duration, Instant};
 
-use api_types::shares::{ShareFolders, ShareVisibility};
+use api_types::shares::ShareFolders;
 use api_types::state::SharesState;
 use cascade::Watcher;
 use soulseek_client::LogLimiter;
@@ -399,26 +399,17 @@ impl Shares {
     self.counts.subscribe()
   }
 
-  /// What a user who sees the shares visible to `sees` sees, under the share options in
-  /// effect.
-  pub fn view(&self, sees: ShareVisibility) -> View {
-    View::of(&lock(&self.applied), sees)
+  /// What a member of `groups` sees, under the share options in effect.
+  pub fn view(&self, groups: &BTreeSet<String>) -> View {
+    View::of(&lock(&self.applied), groups)
   }
 
-  /// Warns of each alias of the visibility lists that no share on any host has, when it comes
+  /// Warns of each alias of `shares.visible_to` that no share on any host has, when it comes
   /// to have none, and says so when it comes to have one: a share meant to be hidden whose
-  /// alias is spelled otherwise is seen by everyone. Run whenever the lists or the hosts'
+  /// alias is spelled otherwise is seen by everyone. Run whenever the option or the hosts'
   /// shares change.
   fn check_unmatched(&self) {
-    let listed: Vec<String> = {
-      let applied = lock(&self.applied);
-      applied
-        .buddies_only
-        .iter()
-        .chain(&applied.trusted_only)
-        .cloned()
-        .collect()
-    };
+    let listed: Vec<String> = lock(&self.applied).visible_to.keys().cloned().collect();
     let now: HashSet<String> = listed
       .into_iter()
       .filter(|alias| !self.has_alias(&alias.to_lowercase()))
@@ -427,14 +418,14 @@ impl Shares {
     for alias in now.difference(&before) {
       warn!(
         alias,
-        "a share listed as buddy-only or trusted-only matches no share's alias on any host; \
-         it hides nothing"
+        "a share listed in shares.visible_to matches no share's alias on any host; it hides \
+         nothing"
       );
     }
     for alias in before.difference(&now) {
       info!(
         alias,
-        "a share listed as buddy-only or trusted-only now matches a share"
+        "a share listed in shares.visible_to now matches a share"
       );
     }
     *before = now;
@@ -676,7 +667,7 @@ impl Shares {
   /// What the server is told we share: the totals over the shares everyone sees, the local
   /// ones as last counted and each relay agent's.
   fn server_counts(&self) -> SharedCounts {
-    let view = self.view(ShareVisibility::Everyone);
+    let view = View::everyone(&lock(&self.applied));
     lock(&self.local_counts)
       .seen_by(&view)
       .add(self.agent_counts(&view))

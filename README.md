@@ -9,7 +9,7 @@ Soulseek client & daemon
 - **Chat: rooms, private messages, search** - A more modern take on chat, more akin to Discord or Slack.
 - **File management** - Browse, save and delete files right in the browser, instead of downloading to your server and then digging them out over a Samba share or scp.
 - **Audio analysis and spectrogram** - A feature-rich file inspector to pick out bad transcodes. e.g. a wav-converted 128k YouTube/SoundCloud rip (which I run into way too often. Shame on those who do this)
-- **Users and buddies** - Similar to Nicotine+'s feature set, with buddy shares, blocking and rich user management.
+- **Users, buddies and groups** - Similar to Nicotine+'s feature set, with groups that set upload limits and which shares people see, blocking and rich user management.
 - **Settings UI** - Everything is configurable from within reseek, with an easy way to tell whether it was set by an environment variable, a command line argument, or Nix with a convenient `Copy as Nix` button. First class Nix support! Finally!
 - **API** - An API for scripting reseek, with an optional Swagger UI for exploring it. (available at `/swagger`. off by default, enable with `--swagger`)
 - **Relay** - Run reseek on a server and your PC can add files to it while connected.

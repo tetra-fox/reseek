@@ -273,28 +273,27 @@ async fn the_upload_calls_find_an_upload_by_its_user_and_id() {
 
 #[tokio::test]
 async fn a_group_we_put_a_user_in_takes_effect_at_once() {
-  let (_files, app) =
-    shared_app("[transfers.groups.user_defined.vip.upload]\npriority = 5\n").await;
-  assert_eq!(app.state.users.group("zoe"), "default");
+  let (_files, app) = shared_app("[transfers.groups.user_defined.vip.upload]\nslots = 5\n").await;
+  assert_eq!(app.state.users.queue_group("zoe"), "default");
   let (status, _) = app
     .call(
       "PUT",
-      "/api/v0/users/zoe/group",
-      Some(json!({ "group": "vip" })),
+      "/api/v0/users/zoe/groups",
+      Some(json!({ "groups": ["vip"] })),
     )
     .await;
   assert_eq!(status, 204);
-  assert_eq!(app.state.users.group("zoe"), "vip");
+  assert_eq!(app.state.users.queue_group("zoe"), "vip");
   assert_eq!(app.state.uploads.forecast("zoe").group, "vip");
   let (status, _) = app
     .call(
       "PUT",
-      "/api/v0/users/zoe/group",
-      Some(json!({ "group": null })),
+      "/api/v0/users/zoe/groups",
+      Some(json!({ "groups": [] })),
     )
     .await;
   assert_eq!(status, 204);
-  assert_eq!(app.state.users.group("zoe"), "default");
+  assert_eq!(app.state.users.queue_group("zoe"), "default");
 }
 
 #[tokio::test]

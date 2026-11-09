@@ -19,6 +19,8 @@ pub fn known(
   stored: Option<&Stored>,
   block: Option<Block>,
 ) -> KnownUser {
+  let placement = groups::placement(options, stored);
+  let uploads = placement.uploads(options);
   KnownUser {
     username: username.to_string(),
     known: stored.is_some(),
@@ -35,10 +37,9 @@ pub fn known(
         stale: false,
       }),
     country_code: stored.and_then(|s| s.country_code.clone()),
-    group: groups::effective(options, username, stored),
-    group_override: stored.and_then(|s| s.group_override.clone()),
+    groups: placement.groups,
+    uploads,
     block,
-    tags: stored.map(|s| s.tags.clone()).unwrap_or_default(),
     muted: stored.is_some_and(|s| s.muted),
     buddy: stored.and_then(|s| s.buddy),
     endpoint: None,
@@ -158,8 +159,7 @@ mod tests {
         picture_tag: None,
       }),
       notes: "met in #indie\nfast\nslow at night".to_string(),
-      tags: Vec::new(),
-      group_override: None,
+      groups: Vec::new(),
       muted: false,
       buddy: None,
     };

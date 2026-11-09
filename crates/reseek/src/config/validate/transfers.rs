@@ -5,12 +5,12 @@ use std::time::Duration;
 
 use super::Report;
 use super::fields::{at_least, cidr, duration_at_least, is_regex, optional_at_least};
-use crate::config::{Destination, GroupUpload, Transfers};
+use crate::config::{
+  BUDDIES_GROUP, BUILTIN_GROUPS, DEFAULT_GROUP, Destination, Groups, LEECHERS_GROUP,
+  PRIVILEGED_GROUP, Transfers, is_group_name,
+};
 use crate::files::mode::to_unix_file_mode;
 use crate::safety::{non_traversing, relative_everywhere};
-
-/// Group names that belong to the built-in groups.
-const RESERVED_GROUPS: &[&str] = &["privileged", "default", "leechers", "blacklisted"];
 
 pub(super) fn check(transfers: &Transfers, case_sensitive: bool, report: &mut Report) {
   let upload = &transfers.upload;
@@ -72,16 +72,6 @@ pub(super) fn check(transfers: &Transfers, case_sensitive: bool, report: &mut Re
   }
 
   let groups = &transfers.groups;
-  check_group(
-    "transfers.groups.default.upload",
-    &groups.default.upload,
-    report,
-  );
-  check_group(
-    "transfers.groups.leechers.upload",
-    &groups.leechers.upload,
-    report,
-  );
   let thresholds = &groups.leechers.thresholds;
   for (key, value) in [
     (
@@ -106,20 +96,21 @@ pub(super) fn check(transfers: &Transfers, case_sensitive: bool, report: &mut Re
   for range in &groups.blacklisted.cidrs {
     report.check("transfers.groups.blacklisted.cidrs", cidr(range));
   }
+  check_order(groups, report);
   let key = "transfers.groups.user_defined";
-  for (name, group) in &groups.user_defined {
-    if RESERVED_GROUPS.contains(&name.as_str()) {
+  for name in groups.user_defined.keys() {
+    if BUILTIN_GROUPS.contains(&name.as_str()) {
       report.add(
         key,
         format!(
           "The user-defined group '{name}' collides with a built-in group. Choose a different name."
         ),
       );
-    }
-    let mut entry = Report::default();
-    check_group(&format!("{key}.{name}.upload"), &group.upload, &mut entry);
-    for problem in entry.0 {
-      report.add(key, problem.message);
+    } else if !is_group_name(name) {
+      report.add(
+        key,
+        format!("The group name '{name}' must be 1 to 32 characters from a-z, 0-9, _ and -."),
+      );
     }
   }
 }
@@ -134,13 +125,34 @@ pub(super) fn check_speed(key: &str, limit: Option<u32>, report: &mut Report) {
   }
 }
 
-/// A group's upload settings, each reported under its own key.
-fn check_group(prefix: &str, upload: &GroupUpload, report: &mut Report) {
-  let key = format!("{prefix}.priority");
-  report.check(&key, at_least(&key, upload.priority, 1));
-  let key = format!("{prefix}.slots");
-  report.check(&key, optional_at_least(&key, upload.slots, 1));
-  check_speed(&format!("{prefix}.speed_limit"), upload.speed_limit, report);
+/// The order holds buddies and leechers, each group once, and neither default, always last,
+/// nor privileged, always first. A name no group has is passed over, so a group and the order
+/// can be changed in separate files one after the other.
+fn check_order(groups: &Groups, report: &mut Report) {
+  let key = "transfers.groups.order";
+  for (at, name) in groups.order.iter().enumerate() {
+    if name == DEFAULT_GROUP {
+      report.add(
+        key,
+        format!("The group '{name}' always goes last; leave it out of {key}."),
+      );
+    } else if name == PRIVILEGED_GROUP {
+      report.add(
+        key,
+        format!("The group '{name}' always goes first; leave it out of {key}."),
+      );
+    } else if groups.order[..at].contains(name) {
+      report.add(key, format!("The group '{name}' is listed twice in {key}."));
+    }
+  }
+  for name in [BUDDIES_GROUP, LEECHERS_GROUP] {
+    if !groups.order.iter().any(|listed| listed == name) {
+      report.add(
+        key,
+        format!("The field {key} must list the group '{name}'."),
+      );
+    }
+  }
 }
 
 fn check_destination(destination: &Destination, report: &mut Report) {
@@ -204,9 +216,9 @@ mod tests {
   }
 
   #[test]
-  fn built_in_group_names_are_reserved() {
+  fn group_names_are_words_and_built_in_ones_are_reserved() {
     let mut transfers = Transfers::default();
-    for name in ["blacklisted", "friends"] {
+    for name in ["buddies", "friends", "Close friends"] {
       transfers
         .groups
         .user_defined
@@ -214,31 +226,42 @@ mod tests {
     }
     assert_eq!(
       problems(&transfers),
-      [(
-        "transfers.groups.user_defined".to_string(),
-        "The user-defined group 'blacklisted' collides with a built-in group. Choose a \
-         different name."
-          .to_string()
-      )]
+      [
+        (
+          "transfers.groups.user_defined".to_string(),
+          "The group name 'Close friends' must be 1 to 32 characters from a-z, 0-9, _ and -."
+            .to_string()
+        ),
+        (
+          "transfers.groups.user_defined".to_string(),
+          "The user-defined group 'buddies' collides with a built-in group. Choose a \
+           different name."
+            .to_string()
+        )
+      ]
     );
   }
 
   #[test]
-  fn a_group_entrys_problem_is_reported_under_the_map() {
+  fn the_order_lists_the_built_in_groups_and_known_ones_once() {
     let mut transfers = Transfers::default();
-    let mut group = UserDefinedGroup::default();
-    group.upload.priority = 0;
+    assert!(problems(&transfers).is_empty(), "the default order");
     transfers
       .groups
       .user_defined
-      .insert("friends".into(), group);
+      .insert("friends".into(), UserDefinedGroup::default());
+    transfers.groups.order = ["friends", "default", "friends", "gone", "leechers"]
+      .map(String::from)
+      .into();
+    let messages: Vec<String> = problems(&transfers).into_iter().map(|(_, m)| m).collect();
     assert_eq!(
-      problems(&transfers),
-      [(
-        "transfers.groups.user_defined".to_string(),
-        "The field transfers.groups.user_defined.friends.upload.priority must be at least 1."
-          .to_string()
-      )]
+      messages,
+      [
+        "The group 'default' always goes last; leave it out of transfers.groups.order.",
+        "The group 'friends' is listed twice in transfers.groups.order.",
+        "The field transfers.groups.order must list the group 'buddies'.",
+      ],
+      "a name no group has is passed over"
     );
   }
 

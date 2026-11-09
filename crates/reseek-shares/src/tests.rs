@@ -209,11 +209,14 @@ async fn the_startup_scan_fills_the_index() {
 async fn a_share_hidden_from_a_user_is_answered_as_one_we_do_not_have() {
   let (files, engine) = shared_engine().await;
   let shares = &engine.shares;
-  let text = format!("{}buddies_only = [\"music\"]\n", config(files.path()));
+  let text = format!(
+    "{}[shares.visible_to]\nmusic = [\"buddies\"]\n",
+    config(files.path())
+  );
   engine.reconfigure(&text).await;
   eventually(async || shares.shared_counts().borrow().files == 0).await;
-  let everyone = shares.view(ShareVisibility::Everyone);
-  let buddies = shares.view(ShareVisibility::Buddies);
+  let everyone = shares.view(&BTreeSet::new());
+  let buddies = shares.view(&BTreeSet::from(["buddies".to_string()]));
   assert!(names_seen(shares, "album", &everyone).await.is_empty());
   assert_eq!(
     names_seen(shares, "album", &buddies).await,
@@ -253,8 +256,8 @@ async fn a_share_hidden_from_a_user_is_answered_as_one_we_do_not_have() {
   assert_eq!(browsed(&everyone).await, 0);
   assert_eq!(browsed(&buddies).await, 2);
   assert_eq!(
-    shares.local_shares()[1].visibility,
-    ShareVisibility::Buddies
+    shares.local_shares()[1].visible_to.as_deref(),
+    Some(&["buddies".to_string()][..])
   );
 }
 

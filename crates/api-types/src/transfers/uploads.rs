@@ -12,12 +12,12 @@ pub struct UploadQueueStatus {
   /// the upload's 0-based place among its group's uploads, uploads in progress counted; null
   /// when the queue does not hold the upload
   pub position: Option<u32>,
-  /// the group the user is in
+  /// the group whose queue the user waits in
   #[schema(example = "default")]
   pub group: String,
-  /// uploads in progress in that group
+  /// uploads in progress in that queue
   pub group_slots_used: u32,
-  /// how many uploads the group may run at once
+  /// how many uploads that queue may run at once
   pub group_slots: u32,
   /// uploads in progress over every group
   pub global_slots_used: u32,

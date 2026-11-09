@@ -3907,6 +3907,179 @@
         }
       }
     },
+    "/api/v0/groups": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Every group: privileged, the others in the order they go, then the names of groups the\nconfiguration no longer has that still have members.",
+        "operationId": "list_groups",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupList"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/groups/{name}/members": {
+      "delete": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Takes every member out of a group.",
+        "operationId": "let_go",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "the group",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupMembersChanged"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/groups/{name}/members/move": {
+      "post": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Moves every member of a group into a user-defined group of the configuration; a member of\nboth is kept once.",
+        "operationId": "move_members",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "the group whose members move",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupMove"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupMembersChanged"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v0/interests/popular": {
       "get": {
         "tags": [
@@ -13550,7 +13723,7 @@
           {
             "name": "q",
             "in": "query",
-            "description": "a substring of the username, a tag or the notes, matched ignoring case",
+            "description": "a substring of the username, a group we put them in or the notes, matched ignoring case",
             "required": false,
             "schema": {
               "type": "string"
@@ -13566,18 +13739,9 @@
             }
           },
           {
-            "name": "tag",
-            "in": "query",
-            "description": "only users with this tag",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
             "name": "group",
             "in": "query",
-            "description": "only users in this group",
+            "description": "only users in this group, smart or one we put them in",
             "required": false,
             "schema": {
               "type": "string"
@@ -14374,7 +14538,7 @@
         "tags": [
           "users"
         ],
-        "summary": "Makes a user our buddy, or changes whether they are trusted and whether we are told of their\npresence; a field left out keeps its value, and an empty body makes a buddy with neither.\nOur own account and the server's notices cannot be a buddy.",
+        "summary": "Makes a user our buddy, or changes whether we are told of their presence; a field left out\nkeeps its value, and an empty body makes a buddy who is not.\nOur own account and the server's notices cannot be a buddy.",
         "operationId": "set_buddy",
         "parameters": [
           {
@@ -14688,13 +14852,13 @@
         }
       }
     },
-    "/api/v0/users/{username}/group": {
+    "/api/v0/users/{username}/groups": {
       "put": {
         "tags": [
           "users"
         ],
-        "summary": "Puts a user in one of the configuration's user-defined upload groups, or with `null` takes\nthem out of the one they were put in. A user the configuration lists for another group stays\nthere and the call is refused.",
-        "operationId": "set_group",
+        "summary": "Puts a user in exactly the groups named, up to 64: user-defined groups of the configuration,\nand any the user is in already that it no longer has. An empty list takes them out of every\ngroup we put them in.",
+        "operationId": "set_groups",
         "parameters": [
           {
             "name": "username",
@@ -14719,7 +14883,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/GroupAssignment"
+                "$ref": "#/components/schemas/UserGroups"
               }
             }
           },
@@ -14727,7 +14891,7 @@
         },
         "responses": {
           "204": {
-            "description": "assigned"
+            "description": "saved"
           },
           "400": {
             "content": {
@@ -14748,15 +14912,6 @@
             }
           },
           "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          },
-          "409": {
             "content": {
               "application/json": {
                 "schema": {
@@ -15569,86 +15724,6 @@
             }
           },
           "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v0/users/{username}/tags": {
-      "put": {
-        "tags": [
-          "users"
-        ],
-        "summary": "Replaces our tags on a user: up to 32, each 1 to 32 of `a-z`, `0-9`, `_` and `-` once made\nlower case.",
-        "operationId": "set_tags",
-        "parameters": [
-          {
-            "name": "username",
-            "in": "path",
-            "description": "the user",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "username",
-            "in": "query",
-            "description": "the username, exactly",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UserTags"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": "saved"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          },
-          "403": {
             "content": {
               "application/json": {
                 "schema": {
@@ -17150,17 +17225,12 @@
         "type": "object",
         "description": "A user on our buddy list: listed first, their presence followed from one login to the next.",
         "required": [
-          "trusted",
           "notifyPresence"
         ],
         "properties": {
           "notifyPresence": {
             "type": "boolean",
             "description": "we are told when they come online, go away or go offline"
-          },
-          "trusted": {
-            "type": "boolean",
-            "description": "they also see the shares only trusted buddies see"
           }
         }
       },
@@ -17174,13 +17244,6 @@
               "null"
             ],
             "description": "we are told when they come online, go away or go offline"
-          },
-          "trusted": {
-            "type": [
-              "boolean",
-              "null"
-            ],
-            "description": "they also see the shares only trusted buddies see"
           }
         }
       },
@@ -17320,13 +17383,6 @@
           "username"
         ],
         "properties": {
-          "group": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "the user-defined group the configuration lists the user in, null when none"
-          },
           "statistics": {
             "oneOf": [
               {
@@ -19846,27 +19902,127 @@
           }
         }
       },
-      "GroupAssignment": {
+      "GroupKind": {
+        "type": "string",
+        "description": "What decides who is in a group.",
+        "enum": [
+          "smart",
+          "manual"
+        ]
+      },
+      "GroupLimit": {
         "type": "object",
-        "description": "Assigns a user to a user-defined group, the body of `PUT /users/{username}/group`.",
+        "description": "One per-user limit a group sets.",
+        "required": [
+          "window",
+          "measure",
+          "group"
+        ],
         "properties": {
           "group": {
+            "type": "string",
+            "description": "the group that sets it",
+            "example": "leechers"
+          },
+          "limit": {
             "type": [
-              "string",
+              "integer",
               "null"
             ],
-            "description": "a user-defined group from the configuration, null to remove the assignment"
+            "format": "int32",
+            "description": "the limit, null for no limit",
+            "minimum": 0
+          },
+          "measure": {
+            "$ref": "#/components/schemas/LimitMeasure",
+            "description": "what is limited"
+          },
+          "window": {
+            "$ref": "#/components/schemas/LimitWindow",
+            "description": "what is counted: queued at once, `daily` or `weekly`"
           }
         }
       },
-      "GroupSource": {
-        "type": "string",
-        "description": "Where the effective group of a user comes from.",
-        "enum": [
-          "config",
-          "override",
-          "builtin"
-        ]
+      "GroupList": {
+        "type": "object",
+        "description": "Every group, the reply of `GET /groups`: privileged, the others highest first, default, then\nthe names of groups the configuration no longer has that still have members.",
+        "required": [
+          "groups"
+        ],
+        "properties": {
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GroupSummary"
+            },
+            "description": "the groups"
+          }
+        }
+      },
+      "GroupMembersChanged": {
+        "type": "object",
+        "description": "How many users a call on a group's members changed.",
+        "required": [
+          "users"
+        ],
+        "properties": {
+          "users": {
+            "type": "integer",
+            "format": "int64",
+            "description": "the users moved or let go",
+            "minimum": 0
+          }
+        }
+      },
+      "GroupMove": {
+        "type": "object",
+        "description": "Where the members of a group go, the body of `POST /groups/{name}/members/move`.",
+        "required": [
+          "to"
+        ],
+        "properties": {
+          "to": {
+            "type": "string",
+            "description": "a user-defined group of the configuration",
+            "example": "friends"
+          }
+        }
+      },
+      "GroupSummary": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/UserGroup",
+            "description": "the group"
+          },
+          {
+            "type": "object",
+            "required": [
+              "builtin",
+              "members",
+              "shares"
+            ],
+            "properties": {
+              "builtin": {
+                "type": "boolean",
+                "description": "one of the groups every instance has: privileged, leechers, default and buddies"
+              },
+              "members": {
+                "type": "integer",
+                "format": "int64",
+                "description": "how many users the directory knows in the group",
+                "minimum": 0
+              },
+              "shares": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "the aliases of the shares only some groups see that this one's members see"
+              }
+            }
+          }
+        ],
+        "description": "A group as the groups page lists it, the items of `GET /groups`."
       },
       "GuideKind": {
         "type": "string",
@@ -20697,8 +20853,8 @@
           "username",
           "known",
           "isPrivileged",
-          "group",
-          "tags",
+          "groups",
+          "uploads",
           "muted"
         ],
         "properties": {
@@ -20762,16 +20918,12 @@
             "format": "date-time",
             "description": "when we first interacted with the user, null when not known"
           },
-          "group": {
-            "$ref": "#/components/schemas/UserGroup",
-            "description": "the upload group the user is in"
-          },
-          "groupOverride": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "the user-defined group we put the user in, null when none; kept also when that group no\nlonger exists, so a client can say the override has no effect"
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserGroup"
+            },
+            "description": "every group the user is in but the default group: privileged and leechers when they\nare, buddies for a buddy, then the groups we put them in by name, those the configuration\nno longer has included"
           },
           "isPrivileged": {
             "type": "boolean",
@@ -20823,12 +20975,9 @@
               }
             ]
           },
-          "tags": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "our labels for the user, lower case"
+          "uploads": {
+            "$ref": "#/components/schemas/UserUploads",
+            "description": "what the user's uploads get, each setting from the highest group they are in that sets it"
           },
           "username": {
             "type": "string",
@@ -20869,6 +21018,24 @@
           "Count",
           "TotalBytes",
           "AverageSpeed"
+        ]
+      },
+      "LimitMeasure": {
+        "type": "string",
+        "description": "What a per-user upload limit limits.",
+        "enum": [
+          "files",
+          "megabytes",
+          "failures"
+        ]
+      },
+      "LimitWindow": {
+        "type": "string",
+        "description": "What a per-user upload limit counts over.",
+        "enum": [
+          "queued",
+          "daily",
+          "weekly"
         ]
       },
       "ListedToken": {
@@ -24862,7 +25029,7 @@
           "localPath",
           "raw",
           "remotePath",
-          "visibility"
+          "visibleTo"
         ],
         "properties": {
           "alias": {
@@ -24918,9 +25085,15 @@
             "type": "string",
             "description": "the path other users see, the same as `alias`"
           },
-          "visibility": {
-            "$ref": "#/components/schemas/ShareVisibility",
-            "description": "who other users must be to see the share; a relay agent leaves it to the server, which\nfills it in from its own options"
+          "visibleTo": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "the groups whose members see the share: null when everyone sees it, empty when no one\ndoes; a relay agent leaves it to the server, which fills it in from its own options"
           }
         }
       },
@@ -24969,15 +25142,6 @@
             "description": "more folders are there than were listed"
           }
         }
-      },
-      "ShareVisibility": {
-        "type": "string",
-        "description": "Who sees a shared folder in our browse listing, folder contents and search answers, and may\ndownload from it. Ordered from the widest audience to the narrowest, so a user who sees\nshares of one visibility also sees those of every wider one.",
-        "enum": [
-          "everyone",
-          "buddies",
-          "trusted"
-        ]
       },
       "SharesByHost": {
         "type": "object",
@@ -26423,19 +26587,19 @@
           },
           "group": {
             "type": "string",
-            "description": "the group the user is in",
+            "description": "the group whose queue the user waits in",
             "example": "default"
           },
           "groupSlots": {
             "type": "integer",
             "format": "int32",
-            "description": "how many uploads the group may run at once",
+            "description": "how many uploads that queue may run at once",
             "minimum": 0
           },
           "groupSlotsUsed": {
             "type": "integer",
             "format": "int32",
-            "description": "uploads in progress in that group",
+            "description": "uploads in progress in that queue",
             "minimum": 0
           },
           "limits": {
@@ -26631,11 +26795,12 @@
       },
       "UserGroup": {
         "type": "object",
-        "description": "The upload group a user is in.",
+        "description": "A group a user is in.",
         "required": [
           "name",
-          "source",
-          "priority"
+          "kind",
+          "defined",
+          "uploadSettings"
         ],
         "properties": {
           "color": {
@@ -26643,23 +26808,45 @@
               "string",
               "null"
             ],
-            "description": "the color the group is shown in, a CSS color name such as `violet`; null for none",
+            "description": "the color the group is shown in, one of `blue`, `red`, `orange`, `amber`, `lime`, `green`,\n`teal`, `cyan`, `indigo`, `violet`, `pink` and `gray`; null for none",
             "example": "violet"
+          },
+          "defined": {
+            "type": "boolean",
+            "description": "the configuration has the group; false for the name of a group it no longer has, which\ngives its members nothing"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/GroupKind",
+            "description": "what decides who is in it"
           },
           "name": {
             "type": "string",
             "description": "the group's name",
-            "example": "default"
+            "example": "friends"
           },
-          "priority": {
-            "type": "integer",
-            "format": "int32",
-            "description": "the group's upload priority, a lower number served first",
-            "minimum": 0
-          },
-          "source": {
-            "$ref": "#/components/schemas/GroupSource",
-            "description": "why the user is in it"
+          "uploadSettings": {
+            "type": "boolean",
+            "description": "the group sets at least one upload setting; one that sets none changes nothing about its\nmembers' uploads"
+          }
+        }
+      },
+      "UserGroups": {
+        "type": "object",
+        "description": "The groups we put a user in, the body of `PUT /users/{username}/groups`.",
+        "required": [
+          "groups"
+        ],
+        "properties": {
+          "groups": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "user-defined groups of the configuration, and any the user is in already that it no\nlonger has",
+            "example": [
+              "friends",
+              "jazz"
+            ]
           }
         }
       },
@@ -27023,26 +27210,6 @@
         ],
         "description": "A user as the directory lists them, the data of a `users.updated` frame and the reply of\n`GET /users/{username}/summary`. Built from stored data only."
       },
-      "UserTags": {
-        "type": "object",
-        "description": "Our labels for a user, the body of `PUT /users/{username}/tags`.",
-        "required": [
-          "tags"
-        ],
-        "properties": {
-          "tags": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "at most 32 tags, each 1 to 32 of `a-z`, `0-9`, `_` and `-` after lower-casing",
-            "example": [
-              "friend",
-              "jazz"
-            ]
-          }
-        }
-      },
       "UserTransferStatistics": {
         "type": "object",
         "description": "Outcome counts of one direction of a user report.",
@@ -27130,6 +27297,52 @@
             "type": "integer",
             "format": "int32",
             "description": "the shape version of this event type, 0",
+            "minimum": 0
+          }
+        }
+      },
+      "UserUploads": {
+        "type": "object",
+        "description": "What a user's uploads get from their groups. Each setting comes from the highest group in\nthe configured order they are in that sets it, else from `default`; privileged users go\nbefore everyone, with every slot and no per-user limits.",
+        "required": [
+          "queue",
+          "speed",
+          "limits"
+        ],
+        "properties": {
+          "limits": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GroupLimit"
+            },
+            "description": "each per-user limit one of the user's groups sets, with the group; the others are the\nglobal limits"
+          },
+          "queue": {
+            "type": "string",
+            "description": "the group whose queue the user waits in: privileged, else the highest of their groups with\nslots or a queue order of its own, else default",
+            "example": "buddies"
+          },
+          "slots": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "the slots of that queue, null for every slot",
+            "minimum": 0
+          },
+          "speed": {
+            "type": "string",
+            "description": "the group whose speed limit the user's uploads count against, which its members share:\nprivileged, else the highest of their groups that sets one, else default",
+            "example": "default"
+          },
+          "speedLimit": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "that speed limit in KiB/s, null for none",
             "minimum": 0
           }
         }

@@ -1,6 +1,8 @@
 //! The share options: the `[shares]` section of the daemon's and the relay agent's
 //! configuration.
 
+use std::collections::BTreeMap;
+
 use cascade::Cascade;
 use serde::{Deserialize, Serialize};
 
@@ -35,14 +37,11 @@ pub struct Shares {
   /// Follows symbolic links inside the shares. A shared directory that is itself a link is always
   /// followed.
   pub follow_symlinks: bool,
-  /// Aliases of shares only buddies and trusted buddies see, ignoring case. This covers relay
-  /// agents' shares too. A buddy on your own network is not recognized as one.
-  #[cascade(env = "RESEEK_SHARE_BUDDIES_ONLY")]
-  pub buddies_only: Vec<String>,
-  /// Aliases of shares only trusted buddies see, ignoring case. This covers relay agents' shares
-  /// too. A buddy on your own network is not recognized as one.
-  #[cascade(env = "RESEEK_SHARE_TRUSTED_ONLY")]
-  pub trusted_only: Vec<String>,
+  /// Aliases of shares only some groups see, ignoring case, each with those groups. A share
+  /// listed without groups, or only with groups that do not exist, is seen by no one. This covers relay agents' shares too. A member
+  /// on your own network is not recognized as one.
+  #[cascade(user_keyed)]
+  pub visible_to: BTreeMap<String, Vec<String>>,
   /// Index of shared files.
   pub cache: ShareCache,
 }

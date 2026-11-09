@@ -1,5 +1,5 @@
 //! Forgetting users not seen for `retention.users`, unless we keep something about them: a
-//! block, notes, tags, a group, being a buddy or being muted.
+//! block, notes, a group, being a buddy or being muted.
 
 use chrono::{DateTime, Utc};
 use rusqlite::Connection;
@@ -9,9 +9,9 @@ use crate::db::timestamp;
 /// Deletes the users last seen before `before` that have nothing of ours, and returns them.
 pub fn prune(conn: &Connection, before: DateTime<Utc>) -> rusqlite::Result<Vec<String>> {
   let mut statement = conn.prepare_cached(
-    "DELETE FROM users WHERE last_seen_at < ?1 AND notes = '' AND tags = '[]' \
-     AND group_override IS NULL AND buddy = 0 AND muted = 0 \
-     AND username NOT IN (SELECT username FROM blocks) RETURNING username",
+    "DELETE FROM users WHERE last_seen_at < ?1 AND notes = '' AND buddy = 0 AND muted = 0 \
+     AND username NOT IN (SELECT username FROM blocks) \
+     AND username NOT IN (SELECT username FROM memberships) RETURNING username",
   )?;
   let rows = statement.query_map([timestamp(before)], |row| row.get(0))?;
   rows.collect()
@@ -31,15 +31,17 @@ mod tests {
     let old: DateTime<Utc> = "2026-01-01T00:00:00Z".parse().unwrap();
     let mut pruned = db
       .write(move |conn| {
-        for name in [
-          "plain", "noted", "tagged", "grouped", "buddy", "muted", "blocked",
-        ] {
+        for name in ["plain", "noted", "grouped", "buddy", "muted", "blocked"] {
           ensure(conn, name, old)?;
         }
         ensure(conn, "recent", old + chrono::Duration::days(60))?;
         change(conn, "noted", &Change::Notes("x".into()), old)?;
-        change(conn, "tagged", &Change::Tags(vec!["t".into()]), old)?;
-        change(conn, "grouped", &Change::Group(Some("friends".into())), old)?;
+        change(
+          conn,
+          "grouped",
+          &Change::Groups(vec!["friends".into()]),
+          old,
+        )?;
         change(conn, "buddy", &Change::Buddy(Some(Default::default())), old)?;
         change(conn, "muted", &Change::Muted(true), old)?;
         let block = Block {

@@ -24,7 +24,7 @@ pub struct Retention {
   /// Chat history.
   pub messages: MessageRetention,
   /// Time a user can go unseen before they are removed from Users. Buddies and users with a note,
-  /// tag, block or group are kept.
+  /// a block or a group are kept.
   #[cascade(env = "RESEEK_RETENTION_USERS")]
   #[serde(with = "crate::config::duration")]
   pub users: Option<Duration>,

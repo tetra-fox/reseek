@@ -1,10 +1,10 @@
 //! The directory of users we dealt with: the row kept for each in `users.db`, touched as we
-//! deal with them, our notes, tags, mutes and groups for them, our buddies, the figures of
+//! deal with them, our notes, mutes and groups for them, our buddies, the figures of
 //! their transfers, and who is blocked from what.
 //!
 //! [`Directory`] is the engine: the API's users directory and blocking calls, and what the
 //! network engines ask of it: [`Directory::touch`], [`Directory::is_blocked`], each user's
-//! upload group, [`Directory::group`] and [`Directory::fetch_group`], and watching users,
+//! upload groups, [`Directory::placement`] and [`Directory::fetch_placement`], and watching users,
 //! [`Directory::watch`]. [`Users`] answers the API's user calls with it and with what the
 //! network says about users.
 
@@ -31,10 +31,10 @@ mod touch;
 mod transfers;
 
 pub use blocking::reason_fits;
-pub use groups::{DEFAULT as DEFAULT_GROUP, LEECHERS, PRIVILEGED};
+pub use groups::Placement;
 pub use interests::{HATED, LIKED};
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::net::IpAddr;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -44,7 +44,7 @@ use api_types::events::{Event, UnblockReason, UserUnblocked};
 use api_types::live::LiveFrame;
 use api_types::users::blocking::{Block, BlockScope};
 use api_types::users::{KnownUser, UserEndpoint, UserRemoved, UserSummary};
-use cascade::Watcher;
+use cascade::{Loaded, Watcher};
 use chrono::Utc;
 use rusqlite::params;
 use soulseek_client::Client;
@@ -94,10 +94,13 @@ pub struct Directory {
   events: EventBus,
   toucher: Toucher,
   blocks: Blocks,
-  /// what each user's upload group is worked out from
+  /// what each user's groups are worked out from
   groups: GroupCache,
+  /// the share aliases and groups of `shares.visible_to` warned of as letting no one see the
+  /// share through that group
+  unknown_share_groups: Mutex<BTreeSet<(String, String)>>,
   figures: FigureCache,
-  summaries: Mutex<HashMap<String, (Instant, UserSummary)>>,
+  summaries: Mutex<HashMap<String, CachedSummary>>,
   /// who has a row, with their country
   known: Known,
   /// our buddies
@@ -107,6 +110,13 @@ pub struct Directory {
   /// the interests the server holds this session, as we told it; held while telling it more,
   /// so a login's send and a change made during it cannot interleave
   interests_told: tokio::sync::Mutex<SoulseekInterests>,
+}
+
+/// A user's summary, reused for a minute while the options it was built under stay in effect.
+struct CachedSummary {
+  at: Instant,
+  options: Arc<Loaded<Options>>,
+  summary: UserSummary,
 }
 
 impl Directory {
@@ -127,11 +137,11 @@ impl Directory {
     let db = Database::open(&store::SCHEMA, location)
       .await
       .map_err(|e| format!("users.db: {e}"))?;
-    let (ours, overrides, known, buddies) = db
+    let (ours, memberships, known, buddies) = db
       .read(|conn| {
         Ok((
           blocking::stored(conn, Utc::now())?,
-          store::overrides(conn)?,
+          store::memberships(conn)?,
           Known::read(conn)?,
           Buddies::read(conn)?,
         ))
@@ -161,7 +171,8 @@ impl Directory {
       events,
       toucher,
       blocks,
-      groups: GroupCache::new(overrides),
+      groups: GroupCache::new(memberships),
+      unknown_share_groups: Mutex::new(BTreeSet::new()),
       figures: FigureCache::default(),
       summaries: Mutex::new(HashMap::new()),
       known,
@@ -169,6 +180,7 @@ impl Directory {
       impersonations: Impersonations::default(),
       interests_told: tokio::sync::Mutex::new(SoulseekInterests::default()),
     });
+    directory.check_share_groups(&options);
     tokio::spawn(
       directory
         .clone()
@@ -357,13 +369,20 @@ impl Directory {
       .get(&self.transfers, &self.messaging, username)
       .await
       .map_err(internal)?;
-    let options = self.config.current().values.clone();
-    let user = profile::known(&options, username, row.as_ref(), block);
+    let config = self.config.current();
+    let user = profile::known(&config.values, username, row.as_ref(), block);
     let user = self.with_network_and_conversation(user).await;
     let summary = profile::summary(user, row.as_ref(), &figures);
     let mut summaries = lock(&self.summaries);
-    summaries.retain(|_, (at, _)| at.elapsed() < SUMMARY_FOR);
-    summaries.insert(username.to_string(), (Instant::now(), summary.clone()));
+    summaries.retain(|_, cached| cached.at.elapsed() < SUMMARY_FOR);
+    summaries.insert(
+      username.to_string(),
+      CachedSummary {
+        at: Instant::now(),
+        options: config,
+        summary: summary.clone(),
+      },
+    );
     Ok(summary)
   }
 
@@ -464,9 +483,32 @@ impl Directory {
     Ok(count)
   }
 
+  /// Warns of each share listed in `shares.visible_to` for a group no member can see it through,
+  /// when it comes to be listed so, and says so when it no longer is: such a group shows the
+  /// share to no one.
+  fn check_share_groups(&self, options: &Options) {
+    let now = groups::unknown_share_groups(options);
+    let mut before = lock(&self.unknown_share_groups);
+    for (alias, group) in now.difference(&before) {
+      warn!(
+        alias,
+        group,
+        "a share in shares.visible_to is shown to a group that is neither buddies nor a \
+         user-defined group; no one sees it through that group"
+      );
+    }
+    for (alias, group) in before.difference(&now) {
+      info!(
+        alias,
+        group, "a share in shares.visible_to no longer names that group"
+      );
+    }
+    *before = now;
+  }
+
   /// Takes every configuration change: the blacklist is compiled again, the blocklist file
-  /// read again when its settings changed, the server told what changed in our interests, and
-  /// the cached summaries dropped, since groups may have moved.
+  /// read again when its settings changed, the shares' groups checked, the server told what
+  /// changed in our interests, and the cached summaries dropped, since groups may have moved.
   async fn follow_configuration(self: Arc<Self>, shutdown: CancellationToken) {
     let mut changes = self.config.changes();
     loop {
@@ -478,6 +520,7 @@ impl Directory {
         Ok(change) => {
           let options = &change.current.values;
           self.blocks.configure(options);
+          self.check_share_groups(options);
           if change
             .changed
             .iter()

@@ -179,8 +179,6 @@ pub struct DirectoryRequest {
 pub struct CachedUser {
   /// the user
   pub username: String,
-  /// the user-defined group the configuration lists the user in, null when none
-  pub group: Option<String>,
   /// the last statistics fetched or pushed, null before any
   pub statistics: Option<StatisticsSnapshot>,
   /// the last status fetched or pushed, null before any

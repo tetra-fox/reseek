@@ -133,7 +133,8 @@ async fn a_second_request_waits_its_place_and_starts_once_the_first_ends() {
   file(&album, "big.flac", big);
   file(&album, "small.flac", small);
   let name = soulfind::username("daemon");
-  // the test's users share nothing, so they are leechers
+  // the test's users share nothing, so they are leechers, held to 1 KiB/s while waiting in the
+  // default queue, since the leechers set no queue of their own
   let config = "[transfers.upload]\nslots = 1\n\
                 [transfers.groups.leechers.upload]\nspeed_limit = 1\n";
   let (_daemon, api) = sharing(dir.path(), &server, &name, config, 2).await;
@@ -179,7 +180,7 @@ async fn a_second_request_waits_its_place_and_starts_once_the_first_ends() {
       why.global_slots,
       why.user_active
     ),
-    (Some(1), "leechers", 1, 1, 1, 1, 0)
+    (Some(1), "default", 1, 1, 1, 1, 0)
   );
 
   // a newcomer is told where a request of theirs would land; asking for the user info finds

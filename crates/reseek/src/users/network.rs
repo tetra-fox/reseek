@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use api_types::profile::Interests;
 use api_types::users::{
-  BrowseProgress, BrowseResponse, BuddyChange, CachedUser, Directory as SharedDirectory,
+  BrowseProgress, BrowseResponse, BuddyChange, CachedUser, Directory as SharedDirectory, GroupList,
   StatisticsSnapshot, UserEndpoint, UserInfo, UserList, UserListQuery, UserProfile, UserStatus,
   UserSummary, UserTransfers, UserTransfersQuery,
 };
@@ -402,8 +402,20 @@ impl UserService for Users {
     self.directory.set_notes(username, notes).await
   }
 
-  async fn set_tags(&self, username: &str, tags: Vec<String>) -> Result<(), ApiError> {
-    self.directory.set_tags(username, tags).await
+  async fn set_groups(&self, username: &str, groups: Vec<String>) -> Result<(), ApiError> {
+    self.directory.set_groups(username, groups).await
+  }
+
+  async fn groups(&self) -> Result<GroupList, ApiError> {
+    self.directory.group_list().await
+  }
+
+  async fn move_members(&self, from: &str, to: &str) -> Result<u64, ApiError> {
+    self.directory.move_members(from, to).await
+  }
+
+  async fn let_go_members(&self, group: &str) -> Result<u64, ApiError> {
+    self.directory.let_go_members(group).await
   }
 
   async fn set_buddy(&self, username: &str, change: BuddyChange) -> Result<(), ApiError> {
@@ -416,10 +428,6 @@ impl UserService for Users {
 
   async fn set_muted(&self, username: &str, muted: bool) -> Result<(), ApiError> {
     self.directory.set_muted(username, muted).await
-  }
-
-  async fn set_group(&self, username: &str, group: Option<String>) -> Result<(), ApiError> {
-    self.directory.set_group(username, group).await
   }
 
   async fn transfers(

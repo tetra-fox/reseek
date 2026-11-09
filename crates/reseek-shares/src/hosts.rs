@@ -279,7 +279,7 @@ impl Shares {
           .shares
           .iter()
           .map(|share| ApiShare {
-            visibility: visibility::of(&options, &share.alias),
+            visible_to: visibility::of(&options, &share.alias),
             ..share.clone()
           })
           .collect();

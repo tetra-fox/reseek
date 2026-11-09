@@ -1,10 +1,9 @@
 //! The users directory: every user we have dealt with, their profile and picture, our notes,
-//! tags and mutes for them, our buddies, the upload group we put them in, their transfers, and
-//! forgetting them.
+//! mutes and groups for them, our buddies, their transfers, and forgetting them.
 
 use api_types::users::{
-  BuddyChange, DeleteUserQuery, GroupAssignment, ProfileQuery, UserList, UserListQuery, UserNotes,
-  UserProfile, UserSummary, UserTags, UserTransfers, UserTransfersQuery, UsernameQuery,
+  BuddyChange, DeleteUserQuery, ProfileQuery, UserGroups, UserList, UserListQuery, UserNotes,
+  UserProfile, UserSummary, UserTransfers, UserTransfersQuery, UsernameQuery,
 };
 use axum::extract::State;
 use axum::http::StatusCode;
@@ -23,10 +22,8 @@ use crate::auth::{Administrator, AnyRole, Authorized, ReadWrite};
 const PAGE_MAX: u32 = 500;
 /// The most bytes our notes on a user hold.
 const NOTES_BYTES: usize = 64 * 1024;
-/// The most tags a user has.
-const TAGS: usize = 32;
-/// The most characters a tag has.
-const TAG_CHARS: usize = 32;
+/// The most groups we put a user in.
+const GROUPS: usize = 64;
 
 /// The users directory routes.
 pub fn routes() -> OpenApiRouter<AppState> {
@@ -36,10 +33,9 @@ pub fn routes() -> OpenApiRouter<AppState> {
     .routes(routes!(profile))
     .routes(routes!(picture))
     .routes(routes!(set_notes))
-    .routes(routes!(set_tags))
+    .routes(routes!(set_groups))
     .routes(routes!(set_buddy, remove_buddy))
     .routes(routes!(mute, unmute))
-    .routes(routes!(set_group))
     .routes(routes!(transfers))
     .routes(routes!(remove))
 }
@@ -146,10 +142,11 @@ async fn set_notes(
   Ok(StatusCode::NO_CONTENT)
 }
 
-/// Replaces our tags on a user: up to 32, each 1 to 32 of `a-z`, `0-9`, `_` and `-` once made
-/// lower case.
+/// Puts a user in exactly the groups named, up to 64: user-defined groups of the configuration,
+/// and any the user is in already that it no longer has. An empty list takes them out of every
+/// group we put them in.
 #[utoipa::path(
-  put, path = "/users/{username}/tags", tag = "users", request_body = UserTags,
+  put, path = "/users/{username}/groups", tag = "users", request_body = UserGroups,
   params(("username" = String, Path, description = "the user"), UsernameQuery),
   responses(
     (status = 204, description = "saved"), (status = 400, body = api_types::ErrorBody),
@@ -157,41 +154,31 @@ async fn set_notes(
     (status = 503, body = api_types::ErrorBody)
   )
 )]
-async fn set_tags(
+async fn set_groups(
   State(app): State<AppState>,
-  _caller: Authorized<ReadWrite>,
+  caller: Authorized<ReadWrite>,
   NamedUser(username): NamedUser,
-  Json(body): Json<UserTags>,
+  Json(body): Json<UserGroups>,
 ) -> Result<StatusCode, ApiError> {
-  let tags = tags(body.tags)?;
-  app.services.users.set_tags(&username, tags).await?;
+  if body.groups.len() > GROUPS {
+    return Err(ApiError::bad_request("A user can be in at most 64 groups"));
+  }
+  app
+    .services
+    .users
+    .set_groups(&username, body.groups.clone())
+    .await?;
+  info!(
+    by = caller.principal.subject,
+    username,
+    groups = ?body.groups,
+    "user groups set"
+  );
   Ok(StatusCode::NO_CONTENT)
 }
 
-/// The tags made lower case, refused when there are too many or one is empty, too long or
-/// holds anything but `a-z`, `0-9`, `_` and `-`.
-fn tags(tags: Vec<String>) -> Result<Vec<String>, ApiError> {
-  if tags.len() > TAGS {
-    return Err(ApiError::bad_request("A user can have at most 32 tags"));
-  }
-  tags
-    .into_iter()
-    .map(|tag| {
-      let tag = tag.to_lowercase();
-      let allowed = |c: char| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-';
-      if tag.is_empty() || tag.chars().count() > TAG_CHARS || !tag.chars().all(allowed) {
-        return Err(ApiError::invalid(
-          "Invalid tag",
-          format!("{tag:?}: A tag has 1 to 32 characters from a-z, 0-9, _ and -"),
-        ));
-      }
-      Ok(tag)
-    })
-    .collect()
-}
-
-/// Makes a user our buddy, or changes whether they are trusted and whether we are told of their
-/// presence; a field left out keeps its value, and an empty body makes a buddy with neither.
+/// Makes a user our buddy, or changes whether we are told of their presence; a field left out
+/// keeps its value, and an empty body makes a buddy who is not.
 /// Our own account and the server's notices cannot be a buddy.
 #[utoipa::path(
   put, path = "/users/{username}/buddy", tag = "users", request_body = Option<BuddyChange>,
@@ -267,52 +254,6 @@ async fn unmute(
   Ok(StatusCode::NO_CONTENT)
 }
 
-/// Puts a user in one of the configuration's user-defined upload groups, or with `null` takes
-/// them out of the one they were put in. A user the configuration lists for another group stays
-/// there and the call is refused.
-#[utoipa::path(
-  put, path = "/users/{username}/group", tag = "users", request_body = GroupAssignment,
-  params(("username" = String, Path, description = "the user"), UsernameQuery),
-  responses(
-    (status = 204, description = "assigned"), (status = 400, body = api_types::ErrorBody),
-    (status = 401, body = api_types::ErrorBody), (status = 403, body = api_types::ErrorBody),
-    (status = 409, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
-  )
-)]
-async fn set_group(
-  State(app): State<AppState>,
-  admin: Authorized<Administrator>,
-  NamedUser(username): NamedUser,
-  Json(body): Json<GroupAssignment>,
-) -> Result<StatusCode, ApiError> {
-  if let Some(group) = &body.group
-    && !app
-      .config
-      .current()
-      .values
-      .transfers
-      .groups
-      .user_defined
-      .contains_key(group)
-  {
-    return Err(ApiError::bad_request(format!(
-      "{group} is not a user-defined group"
-    )));
-  }
-  app
-    .services
-    .users
-    .set_group(&username, body.group.clone())
-    .await?;
-  info!(
-    by = admin.principal.subject,
-    username,
-    group = body.group,
-    "user group assigned"
-  );
-  Ok(StatusCode::NO_CONTENT)
-}
-
 /// A page of a user's transfers, newest first, removed ones included.
 #[utoipa::path(
   get, path = "/users/{username}/transfers", tag = "users",
@@ -362,24 +303,4 @@ async fn remove(
     "user forgotten"
   );
   Ok(StatusCode::NO_CONTENT)
-}
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  #[test]
-  fn tags_are_lower_case_words_of_up_to_32_characters() {
-    let words = |list: &[&str]| list.iter().map(|t| t.to_string()).collect::<Vec<_>>();
-    assert_eq!(
-      tags(words(&["Jazz", "lo-fi", "a_1"])).unwrap(),
-      ["jazz", "lo-fi", "a_1"]
-    );
-    assert!(tags(words(&[""])).is_err());
-    assert!(tags(words(&["two words"])).is_err());
-    assert!(tags(words(&["caf\u{e9}"])).is_err());
-    assert!(tags(words(&[&"x".repeat(33)])).is_err());
-    assert!(tags(words(&[&"x".repeat(32)])).is_ok());
-    assert!(tags(vec!["t".to_string(); 33]).is_err());
-  }
 }

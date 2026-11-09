@@ -6,9 +6,9 @@ use api_types::users::blocking::{
 };
 use api_types::users::{
   BrowseProgress, BrowseResponse, BuddyChange, CachedUser, DeleteUserQuery, Directory,
-  DirectoryRequest, GroupAssignment, ProfileQuery, StatisticsSnapshot, UserEndpoint, UserInfo,
-  UserList, UserListQuery, UserNotes, UserProfile, UserStatus, UserSummary, UserTags,
-  UserTransfers, UserTransfersQuery,
+  DirectoryRequest, ProfileQuery, StatisticsSnapshot, UserEndpoint, UserGroups, UserInfo, UserList,
+  UserListQuery, UserNotes, UserProfile, UserStatus, UserSummary, UserTransfers,
+  UserTransfersQuery,
 };
 use bytes::Bytes;
 
@@ -106,12 +106,12 @@ impl Client {
     done(self.put(about(username, "notes")).json(&body)).await
   }
 
-  /// `PUT /users/{username}/tags`: replaces our tags on a user.
-  pub async fn set_tags(&self, username: &str, tags: &[String]) -> Result<()> {
-    let body = UserTags {
-      tags: tags.to_vec(),
+  /// `PUT /users/{username}/groups`: puts a user in exactly the groups named.
+  pub async fn set_groups(&self, username: &str, groups: &[String]) -> Result<()> {
+    let body = UserGroups {
+      groups: groups.to_vec(),
     };
-    done(self.put(about(username, "tags")).json(&body)).await
+    done(self.put(about(username, "groups")).json(&body)).await
   }
 
   /// `PUT /users/{username}/buddy`: makes a user our buddy, or changes how.
@@ -133,14 +133,6 @@ impl Client {
       self.delete(route)
     })
     .await
-  }
-
-  /// `PUT /users/{username}/group`: puts a user in a user-defined group, or out of it.
-  pub async fn set_group(&self, username: &str, group: Option<&str>) -> Result<()> {
-    let body = GroupAssignment {
-      group: group.map(str::to_string),
-    };
-    done(self.put(about(username, "group")).json(&body)).await
   }
 
   /// `GET /users/{username}/transfers`: a page of a user's transfers.

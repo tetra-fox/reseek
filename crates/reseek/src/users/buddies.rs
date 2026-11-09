@@ -1,24 +1,23 @@
 //! Our buddies: the users we listed, held in memory from `users.db` so every answer to another
-//! user knows at once which shares they see. A buddy may also be trusted, which shows them the
-//! shares only trusted buddies see, and we may ask to be told when their presence changes.
+//! user knows at once which shares they see, the buddies group being one that shares can be
+//! shown to. We may ask to be told when a buddy's presence changes.
 //! Every buddy is watched at each login and when added, so the server tells us their presence
 //! from one login to the next. Whether a request in a buddy's name comes from the buddy is
 //! decided in `identity`.
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use api_types::events::{BuddyPresenceChanged, Event};
 use api_types::live::LiveFrame;
-use api_types::shares::ShareVisibility;
 use api_types::users::{Buddy, BuddyChange, UserPresence};
 use rusqlite::Connection;
 use soulseek_client::{Client, ClientState};
 use soulseek_proto::SERVER_USERNAME;
 use tracing::{Instrument, debug, info};
 
-use super::Directory;
 use super::store::{self, Change};
+use super::{Directory, groups};
 use crate::api::error::ApiError;
 use crate::sync::lock;
 
@@ -61,7 +60,6 @@ impl Buddies {
 fn changed(current: Option<Buddy>, change: BuddyChange) -> Buddy {
   let current = current.unwrap_or_default();
   Buddy {
-    trusted: change.trusted.unwrap_or(current.trusted),
     notify_presence: change.notify_presence.unwrap_or(current.notify_presence),
   }
 }
@@ -94,18 +92,26 @@ impl Directory {
       .collect()
   }
 
-  /// The narrowest shares `username` sees once their name is confirmed: a trusted buddy's, a
-  /// buddy's or everyone's. A request in our own name could come from anyone, so it sees what
-  /// everyone sees. [`Directory::sees_from`] confirms the name first.
-  pub fn sees(&self, username: &str) -> ShareVisibility {
+  /// The groups whose shares `username` sees once their name is confirmed: those of their
+  /// manual groups some share is shown to, empty for everyone else, so a member of no such
+  /// group costs no confirmation. A request in our own name could come from anyone, so it sees
+  /// what everyone sees. [`Directory::sees_from`] confirms the name first.
+  pub fn sees(&self, username: &str) -> BTreeSet<String> {
     if self.is_us(username) {
-      return ShareVisibility::Everyone;
+      return BTreeSet::new();
     }
-    match self.buddy(username) {
-      Some(Buddy { trusted: true, .. }) => ShareVisibility::Trusted,
-      Some(_) => ShareVisibility::Buddies,
-      None => ShareVisibility::Everyone,
-    }
+    let options = &self.config.current().values;
+    let facts = self.groups.facts(username).unwrap_or_default();
+    let buddy = self.buddy(username).is_some();
+    let mut groups = groups::place(options, &facts, buddy).share_groups();
+    groups.retain(|group| {
+      options
+        .shares
+        .visible_to
+        .values()
+        .any(|seen_by| seen_by.contains(group))
+    });
+    groups
   }
 
   /// Makes `username` our buddy with `change` applied to their settings, or changes the

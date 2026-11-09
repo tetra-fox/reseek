@@ -39,7 +39,7 @@ pub async fn browse(edges: &Edges, username: &str, endpoint: SocketAddr) -> Brow
   edges.activity.record(Some(username), ActivityKind::Browse);
   let started = Instant::now();
   let sees = edges.users.sees_from(username, endpoint.ip()).await;
-  let reply = listing(edges, &edges.shares.view(sees)).await;
+  let reply = listing(edges, &edges.shares.view(&sees)).await;
   let elapsed = millis(started);
   metrics.response_latency.observe(elapsed);
   metrics.response_latency_current.update(elapsed);
@@ -134,7 +134,7 @@ async fn folder(
   directory: &RemoteFilename,
 ) -> Option<Vec<Directory>> {
   let sees = edges.users.sees_from(username, endpoint.ip()).await;
-  let view = edges.shares.view(sees);
+  let view = edges.shares.view(&sees);
   match edges
     .shares
     .folder(username, directory.as_str(), &view)
@@ -265,7 +265,7 @@ mod tests {
     std::fs::create_dir_all(&album).unwrap();
     std::fs::write(album.join("01.mp3"), "one").unwrap();
     let config = format!(
-      "[shares]\ndirectories = [\"{}\"]\nbuddies_only = [\"Music\"]\n",
+      "[shares]\ndirectories = [\"{}\"]\n[shares.visible_to]\nMusic = [\"buddies\"]\n",
       dir.path().join("Music").display()
     );
     let app = app(&config, &[]).await;

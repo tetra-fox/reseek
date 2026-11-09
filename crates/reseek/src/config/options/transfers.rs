@@ -8,7 +8,9 @@ use std::time::Duration;
 use cascade::Cascade;
 use serde::{Deserialize, Serialize};
 
-use crate::config::enums::{DestinationExists, QueueStrategy, RequestStyle, RetryPartial};
+use crate::config::enums::{
+  DestinationExists, GroupColor, QueueStrategy, RequestStyle, RetryPartial,
+};
 
 /// Uploads, downloads and upload groups.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Cascade)]
@@ -212,19 +214,117 @@ pub struct Permissions {
   pub mode: Option<String>,
 }
 
-/// User groups that determine the upload queue, slots and limits of each user.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Cascade)]
+/// The group of users the server calls privileged.
+pub const PRIVILEGED_GROUP: &str = "privileged";
+/// The group of users who share too little.
+pub const LEECHERS_GROUP: &str = "leechers";
+/// The group of our buddies.
+pub const BUDDIES_GROUP: &str = "buddies";
+/// The group of everyone in no group with upload settings of its own.
+pub const DEFAULT_GROUP: &str = "default";
+/// The names a user-defined group cannot have.
+pub const BUILTIN_GROUPS: [&str; 5] = [
+  PRIVILEGED_GROUP,
+  LEECHERS_GROUP,
+  BUDDIES_GROUP,
+  DEFAULT_GROUP,
+  "blacklisted",
+];
+
+/// Whether `name` can name a group: 1 to 32 of `a-z`, `0-9`, `_` and `-`.
+pub fn is_group_name(name: &str) -> bool {
+  let allowed = |c: char| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-';
+  !name.is_empty() && name.chars().count() <= 32 && name.chars().all(allowed)
+}
+
+/// User groups that determine the upload queue, slots and limits of each user. Each setting
+/// comes from the highest group in the order the user is in that sets it, else from `default`.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Groups {
-  /// Users in no other group.
+  /// Order of the groups, highest first. Privileged users always go first and `default`, which
+  /// is everyone, always last. Must list `buddies` and `leechers`; a user-defined group not
+  /// listed goes just above `default`, and a name no group has is passed over.
+  pub order: Vec<String>,
+  /// Everyone: the settings no higher group sets.
   pub default: Group,
   /// Users who share too little.
   pub leechers: Leechers,
+  /// Our buddies.
+  pub buddies: Buddies,
   /// Users who are never served.
   pub blacklisted: Blacklisted,
-  /// User-defined groups by name.
+  /// User-defined groups by name. A name is 1 to 32 characters from `a-z`, `0-9`, `_` and `-`.
   #[cascade(user_keyed)]
   pub user_defined: BTreeMap<String, UserDefinedGroup>,
+}
+
+impl Default for Groups {
+  fn default() -> Self {
+    Self {
+      order: [BUDDIES_GROUP, LEECHERS_GROUP].map(str::to_string).into(),
+      default: Group::default(),
+      leechers: Leechers::default(),
+      buddies: Buddies::default(),
+      blacklisted: Blacklisted::default(),
+      user_defined: BTreeMap::new(),
+    }
+  }
+}
+
+impl Groups {
+  /// Every group but privileged and `default`, highest first: those of `order` that exist, then
+  /// each user-defined group it leaves out, by name.
+  pub fn ordered(&self) -> Vec<&str> {
+    let mut ordered: Vec<&str> = self
+      .order
+      .iter()
+      .map(String::as_str)
+      .filter(|name| {
+        [BUDDIES_GROUP, LEECHERS_GROUP].contains(name) || self.user_defined.contains_key(*name)
+      })
+      .collect();
+    let left_out: Vec<&str> = self
+      .user_defined
+      .keys()
+      .map(String::as_str)
+      .filter(|name| !ordered.contains(name))
+      .collect();
+    ordered.extend(left_out);
+    ordered
+  }
+
+  /// The upload settings of the group `name`; `None` for privileged and a name no group has.
+  pub fn upload(&self, name: &str) -> Option<&GroupUpload> {
+    match name {
+      DEFAULT_GROUP => Some(&self.default.upload),
+      LEECHERS_GROUP => Some(&self.leechers.upload),
+      BUDDIES_GROUP => Some(&self.buddies.upload),
+      name => Some(&self.user_defined.get(name)?.upload),
+    }
+  }
+}
+
+/// Our buddies.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
+#[serde(default)]
+pub struct Buddies {
+  /// Upload queue and limits of our buddies. Their slots and speed limit are always set and
+  /// start at no limit, so buddies have a queue of their own served before everyone else and a
+  /// buddy who shares too little is not slowed by the leechers' settings.
+  pub upload: GroupUpload,
+}
+
+impl Default for Buddies {
+  fn default() -> Self {
+    Self {
+      upload: GroupUpload {
+        slots: Some(0),
+        speed_limit: Some(0),
+        ..GroupUpload::default()
+      },
+    }
+  }
 }
 
 /// Uploads of a built-in group.
@@ -235,33 +335,33 @@ pub struct Group {
   pub upload: GroupUpload,
 }
 
-/// Upload queue and limits of a group.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
+/// Upload queue and limits of a group. A setting left unset is taken from the next group down
+/// the order the user is in that sets it, and for `default` from the global settings.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct GroupUpload {
-  /// Priority of the group. A lower number is served first.
-  pub priority: u32,
-  /// How the group's queue is served: `roundrobin`, one file per user in turn, or
-  /// `firstinfirstout`, in the order queued.
-  pub strategy: QueueStrategy,
-  /// Maximum number of uploads of the group running at once. Only the global limit applies
-  /// when not set.
+  /// How the group's own queue is served: `roundrobin`, one file per user in turn, or
+  /// `firstinfirstout`, in the order queued. Setting it or `slots` gives the group a queue of
+  /// its own.
+  pub strategy: Option<QueueStrategy>,
+  /// Maximum number of uploads of the group's own queue running at once, shared by its
+  /// members. `0` for every slot.
   pub slots: Option<u32>,
-  /// Total upload speed limit of the group in KiB/s. No limit when not set.
+  /// Total upload speed limit of the group's members together in KiB/s. `0` for no limit.
   pub speed_limit: Option<u32>,
-  /// Per-user limits of the group. Each one not set is taken from the global ones.
+  /// Per-user limits of the group.
   pub limits: Limits,
 }
 
-impl Default for GroupUpload {
-  fn default() -> Self {
-    Self {
-      priority: 1,
-      strategy: QueueStrategy::default(),
-      slots: None,
-      speed_limit: None,
-      limits: Limits::default(),
-    }
+impl GroupUpload {
+  /// Whether the group sets any upload setting.
+  pub fn sets_any(&self) -> bool {
+    *self != Self::default()
+  }
+
+  /// Whether the group has a queue of its own.
+  pub fn own_queue(&self) -> bool {
+    self.slots.is_some() || self.strategy.is_some()
   }
 }
 
@@ -313,8 +413,8 @@ pub struct Blacklisted {
 pub struct UserDefinedGroup {
   /// Upload queue and limits of the group.
   pub upload: GroupUpload,
-  /// Usernames in the group.
-  pub members: Vec<String>,
+  /// Color the group is shown in.
+  pub color: GroupColor,
 }
 
 /// Automatic behavior of the transfers page.

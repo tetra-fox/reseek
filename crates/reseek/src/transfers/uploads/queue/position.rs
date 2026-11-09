@@ -8,8 +8,8 @@ use super::{State, UploadQueue};
 
 /// Why a group a user is queued in is in the table.
 const KNOWN: &str = "users are queued in a group of the table, else in the default group";
+use crate::config::DEFAULT_GROUP;
 use crate::config::enums::QueueStrategy;
-use crate::users::DEFAULT_GROUP;
 
 /// Where a new upload request from a user would land in the queue.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -208,7 +208,7 @@ mod tests {
 
   use super::super::tests::{queue, ready, started};
   use super::*;
-  use crate::users::DEFAULT_GROUP;
+  use crate::config::DEFAULT_GROUP;
 
   /// Queues `count` uploads for `username`, none ready; returns their ids.
   fn files(queue: &UploadQueue, username: &str, count: usize) -> Vec<Uuid> {
@@ -237,7 +237,7 @@ mod tests {
   fn fifo_places_count_every_upload_of_the_group_queued_before() {
     let (queue, groups) = queue(
       "[transfers.groups.default.upload]\nstrategy = \"firstinfirstout\"\n\
-       [transfers.groups.user_defined.other]\n",
+       [transfers.groups.user_defined.other.upload]\nslots = 1\n",
     );
     groups.set("x", "other");
     let a = files(&queue, "a", 2);
@@ -254,7 +254,7 @@ mod tests {
   fn a_forecast_is_place_zero_with_a_free_slot_and_ignores_other_groups() {
     let (queue, groups) = queue(
       "[transfers.upload]\nslots = 2\n[transfers.groups.default.upload]\nslots = 1\n\
-       [transfers.groups.user_defined.buddies.upload]\nslots = 5\n",
+       [transfers.groups.buddies.upload]\nslots = 5\n",
     );
     groups.set("bob", "buddies");
     let empty = queue.forecast("alice");

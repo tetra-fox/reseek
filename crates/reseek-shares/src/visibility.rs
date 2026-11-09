@@ -1,27 +1,22 @@
 //! Who sees which shares. A share is visible to everyone unless the share options list its
-//! alias as buddy-only or trusted-only. Every answer to another user, their browse, a folder's
-//! contents, a search and a file they ask for, goes through the [`View`] of what they see, so
-//! the answers agree: a share hidden from a user is answered as one we do not have.
+//! alias with the groups whose members see it. Every answer to another user, their browse, a
+//! folder's contents, a search and a file they ask for, goes through the [`View`] of what they
+//! see, so the answers agree: a share hidden from a user is answered as one we do not have.
 
-use api_types::shares::ShareVisibility;
+use std::collections::BTreeSet;
+
 use sha1::{Digest, Sha1};
 
 use crate::options::Shares;
 
-/// The visibility the share options give the share `alias`, matched ignoring case.
-pub fn of(options: &Shares, alias: &str) -> ShareVisibility {
-  let listed = |list: &[String]| {
-    list
-      .iter()
-      .any(|a| a.to_lowercase() == alias.to_lowercase())
-  };
-  if listed(&options.trusted_only) {
-    ShareVisibility::Trusted
-  } else if listed(&options.buddies_only) {
-    ShareVisibility::Buddies
-  } else {
-    ShareVisibility::Everyone
-  }
+/// The groups the share options let see the share `alias`, matched ignoring case: `None` for a
+/// share everyone sees, empty for one listed with no group, which no one sees.
+pub fn of(options: &Shares, alias: &str) -> Option<Vec<String>> {
+  options
+    .visible_to
+    .iter()
+    .find(|(listed, _)| listed.to_lowercase() == alias.to_lowercase())
+    .map(|(_, groups)| groups.clone())
 }
 
 /// What one user sees of our shares: every share but those it hides.
@@ -37,18 +32,20 @@ impl View {
     Self::default()
   }
 
-  /// What a user who sees the shares visible to `sees` and every wider audience sees under
-  /// `options`.
-  pub fn of(options: &Shares, sees: ShareVisibility) -> Self {
-    let mut hidden: Vec<String> = Vec::new();
-    for (list, visibility) in [
-      (&options.buddies_only, ShareVisibility::Buddies),
-      (&options.trusted_only, ShareVisibility::Trusted),
-    ] {
-      if visibility > sees {
-        hidden.extend(list.iter().map(|alias| alias.to_lowercase()));
-      }
-    }
+  /// What a member of no group sees under `options`: the shares everyone sees.
+  pub fn everyone(options: &Shares) -> Self {
+    Self::of(options, &BTreeSet::new())
+  }
+
+  /// What a member of `groups` sees under `options`: every share everyone sees, and each one
+  /// listed for one of `groups`.
+  pub fn of(options: &Shares, groups: &BTreeSet<String>) -> Self {
+    let mut hidden: Vec<String> = options
+      .visible_to
+      .iter()
+      .filter(|(_, seen_by)| !seen_by.iter().any(|group| groups.contains(group)))
+      .map(|(alias, _)| alias.to_lowercase())
+      .collect();
     hidden.sort();
     hidden.dedup();
     Self { hidden }
@@ -82,25 +79,45 @@ mod tests {
   use super::*;
 
   #[test]
-  fn each_audience_sees_its_shares_and_every_wider_one() {
+  fn a_member_of_any_listed_group_sees_a_share() {
     let options = Shares {
-      buddies_only: vec!["Rare".into()],
-      trusted_only: vec!["private".into()],
+      visible_to: [
+        ("Rare".to_string(), vec!["buddies".to_string()]),
+        ("Gone".to_string(), Vec::new()),
+        (
+          "private".to_string(),
+          vec!["close-friends".to_string(), "family".to_string()],
+        ),
+      ]
+      .into(),
       ..Shares::default()
     };
-    let everyone = View::of(&options, ShareVisibility::Everyone);
+    let groups = |names: &[&str]| names.iter().map(|n| n.to_string()).collect();
+    let everyone = View::of(&options, &groups(&[]));
     assert!(everyone.hides("rare\\a.flac"), "matched ignoring case");
     assert!(everyone.hides("Private"));
     assert!(
       !everyone.hides("Music\\Rare\\a.flac"),
       "only the alias counts"
     );
-    let buddies = View::of(&options, ShareVisibility::Buddies);
+    let buddies = View::of(&options, &groups(&["buddies"]));
     assert!(!buddies.hides("Rare\\a.flac"));
     assert!(buddies.hides("Private\\a.flac"));
-    assert!(View::of(&options, ShareVisibility::Trusted).is_everything());
+    let family = View::of(&options, &groups(&["family"]));
+    assert!(family.hides("Rare\\a.flac"), "no wider audience is implied");
+    assert!(!family.hides("Private\\a.flac"));
+    let both = View::of(&options, &groups(&["buddies", "family"]));
+    assert!(!both.hides("Private") && !both.hides("Rare"));
+    assert!(
+      both.hides("Gone"),
+      "a share listed with no group is seen by no one"
+    );
     assert_ne!(everyone.key(), buddies.key());
-    assert_eq!(of(&options, "PRIVATE"), ShareVisibility::Trusted);
-    assert_eq!(of(&options, "Music"), ShareVisibility::Everyone);
+    assert_eq!(
+      of(&options, "PRIVATE").unwrap(),
+      ["close-friends", "family"]
+    );
+    assert_eq!(of(&options, "gone"), Some(Vec::new()));
+    assert_eq!(of(&options, "Music"), None);
   }
 }

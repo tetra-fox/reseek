@@ -126,6 +126,37 @@ option_enum! {
 }
 
 option_enum! {
+  /// The color a group is shown in, one of the web UI's named colors.
+  pub enum GroupColor {
+    #[default]
+    /// blue
+    Blue = "blue",
+    /// red
+    Red = "red",
+    /// orange
+    Orange = "orange",
+    /// amber
+    Amber = "amber",
+    /// lime
+    Lime = "lime",
+    /// green
+    Green = "green",
+    /// teal
+    Teal = "teal",
+    /// cyan
+    Cyan = "cyan",
+    /// indigo
+    Indigo = "indigo",
+    /// violet
+    Violet = "violet",
+    /// pink
+    Pink = "pink",
+    /// gray
+    Gray = "gray",
+  }
+}
+
+option_enum! {
   /// How a download asks the peer for the file.
   pub enum RequestStyle {
     /// the queue request every current client sends; the peer does not answer it

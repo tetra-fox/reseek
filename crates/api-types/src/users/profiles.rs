@@ -11,32 +11,138 @@ use crate::state::UserStatistics;
 use crate::transfers::{SortOrder, Transfer, TransferDirection, TransferStateCategory};
 use crate::users::blocking::Block;
 
-/// Where the effective group of a user comes from.
+/// What decides who is in a group.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "lowercase")]
-pub enum GroupSource {
-  /// the configuration lists the user in a user-defined group
-  Config,
-  /// the group was assigned to the user from the API
-  Override,
-  /// one of the built-in groups: privileged, leechers or default
-  Builtin,
+pub enum GroupKind {
+  /// the server's word or what the user shares: privileged, leechers and default
+  Smart,
+  /// we put users in it: buddies and the user-defined groups
+  Manual,
 }
 
-/// The upload group a user is in.
+/// A group a user is in.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserGroup {
   /// the group's name
-  #[schema(example = "default")]
+  #[schema(example = "friends")]
   pub name: String,
-  /// why the user is in it
-  pub source: GroupSource,
-  /// the group's upload priority, a lower number served first
-  pub priority: u32,
-  /// the color the group is shown in, a CSS color name such as `violet`; null for none
+  /// what decides who is in it
+  pub kind: GroupKind,
+  /// the configuration has the group; false for the name of a group it no longer has, which
+  /// gives its members nothing
+  pub defined: bool,
+  /// the group sets at least one upload setting; one that sets none changes nothing about its
+  /// members' uploads
+  pub upload_settings: bool,
+  /// the color the group is shown in, one of `blue`, `red`, `orange`, `amber`, `lime`, `green`,
+  /// `teal`, `cyan`, `indigo`, `violet`, `pink` and `gray`; null for none
   #[schema(example = "violet")]
   pub color: Option<String>,
+}
+
+/// What a user's uploads get from their groups. Each setting comes from the highest group in
+/// the configured order they are in that sets it, else from `default`; privileged users go
+/// before everyone, with every slot and no per-user limits.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UserUploads {
+  /// the group whose queue the user waits in: privileged, else the highest of their groups with
+  /// slots or a queue order of its own, else default
+  #[schema(example = "buddies")]
+  pub queue: String,
+  /// the slots of that queue, null for every slot
+  pub slots: Option<u32>,
+  /// the group whose speed limit the user's uploads count against, which its members share:
+  /// privileged, else the highest of their groups that sets one, else default
+  #[schema(example = "default")]
+  pub speed: String,
+  /// that speed limit in KiB/s, null for none
+  pub speed_limit: Option<u32>,
+  /// each per-user limit one of the user's groups sets, with the group; the others are the
+  /// global limits
+  pub limits: Vec<GroupLimit>,
+}
+
+/// One per-user limit a group sets.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupLimit {
+  /// what is counted: queued at once, `daily` or `weekly`
+  pub window: LimitWindow,
+  /// what is limited
+  pub measure: LimitMeasure,
+  /// the limit, null for no limit
+  pub limit: Option<u32>,
+  /// the group that sets it
+  #[schema(example = "leechers")]
+  pub group: String,
+}
+
+/// What a per-user upload limit counts over.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum LimitWindow {
+  /// what is queued at once
+  Queued,
+  /// the last day
+  Daily,
+  /// the last week
+  Weekly,
+}
+
+/// What a per-user upload limit limits.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum LimitMeasure {
+  /// files
+  Files,
+  /// megabytes
+  Megabytes,
+  /// failed transfers
+  Failures,
+}
+
+/// A group as the groups page lists it, the items of `GET /groups`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupSummary {
+  /// the group
+  #[serde(flatten)]
+  pub group: UserGroup,
+  /// one of the groups every instance has: privileged, leechers, default and buddies
+  pub builtin: bool,
+  /// how many users the directory knows in the group
+  pub members: u64,
+  /// the aliases of the shares only some groups see that this one's members see
+  pub shares: Vec<String>,
+}
+
+/// Every group, the reply of `GET /groups`: privileged, the others highest first, default, then
+/// the names of groups the configuration no longer has that still have members.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupList {
+  /// the groups
+  pub groups: Vec<GroupSummary>,
+}
+
+/// Where the members of a group go, the body of `POST /groups/{name}/members/move`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupMove {
+  /// a user-defined group of the configuration
+  #[schema(example = "friends")]
+  pub to: String,
+}
+
+/// How many users a call on a group's members changed.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupMembersChanged {
+  /// the users moved or let go
+  pub users: u64,
 }
 
 /// The statistics stored for a user, with when they were fetched.
@@ -162,8 +268,6 @@ pub struct SummaryFigures {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Buddy {
-  /// they also see the shares only trusted buddies see
-  pub trusted: bool,
   /// we are told when they come online, go away or go offline
   pub notify_presence: bool,
 }
@@ -173,8 +277,6 @@ pub struct Buddy {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BuddyChange {
-  /// they also see the shares only trusted buddies see
-  pub trusted: Option<bool>,
   /// we are told when they come online, go away or go offline
   pub notify_presence: Option<bool>,
 }
@@ -205,15 +307,14 @@ pub struct KnownUser {
   /// the user's country as ISO 3166-1 alpha-2, from a room member list; null when never seen
   #[schema(example = "DE")]
   pub country_code: Option<String>,
-  /// the upload group the user is in
-  pub group: UserGroup,
-  /// the user-defined group we put the user in, null when none; kept also when that group no
-  /// longer exists, so a client can say the override has no effect
-  pub group_override: Option<String>,
+  /// every group the user is in but the default group: privileged and leechers when they
+  /// are, buddies for a buddy, then the groups we put them in by name, those the configuration
+  /// no longer has included
+  pub groups: Vec<UserGroup>,
+  /// what the user's uploads get, each setting from the highest group they are in that sets it
+  pub uploads: UserUploads,
   /// our block of the user, or the configuration's; null when not blocked
   pub block: Option<Block>,
-  /// our labels for the user, lower case
-  pub tags: Vec<String>,
   /// chat notifications for the user are off
   pub muted: bool,
   /// the user is our buddy, with what that buddy may do and what we hear of them; null for a
@@ -289,13 +390,11 @@ fn default_user_limit() -> u32 {
 #[serde(rename_all = "camelCase")]
 #[into_params(parameter_in = Query)]
 pub struct UserListQuery {
-  /// a substring of the username, a tag or the notes, matched ignoring case
+  /// a substring of the username, a group we put them in or the notes, matched ignoring case
   pub q: Option<String>,
   /// only blocked users, or only users not blocked
   pub blocked: Option<bool>,
-  /// only users with this tag
-  pub tag: Option<String>,
-  /// only users in this group
+  /// only users in this group, smart or one we put them in
   pub group: Option<String>,
   /// only our buddies, or only users who are not
   pub buddy: Option<bool>,
@@ -345,21 +444,14 @@ pub struct UserNotes {
   pub notes: String,
 }
 
-/// Our labels for a user, the body of `PUT /users/{username}/tags`.
+/// The groups we put a user in, the body of `PUT /users/{username}/groups`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct UserTags {
-  /// at most 32 tags, each 1 to 32 of `a-z`, `0-9`, `_` and `-` after lower-casing
-  #[schema(example = json!(["friend", "jazz"]))]
-  pub tags: Vec<String>,
-}
-
-/// Assigns a user to a user-defined group, the body of `PUT /users/{username}/group`.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct GroupAssignment {
-  /// a user-defined group from the configuration, null to remove the assignment
-  pub group: Option<String>,
+pub struct UserGroups {
+  /// user-defined groups of the configuration, and any the user is in already that it no
+  /// longer has
+  #[schema(example = json!(["friends", "jazz"]))]
+  pub groups: Vec<String>,
 }
 
 fn default_user_transfer_limit() -> u32 {
