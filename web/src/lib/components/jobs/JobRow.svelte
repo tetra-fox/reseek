@@ -148,8 +148,8 @@
     <div class="flex flex-col gap-0.5 text-xs text-fg-muted max-md:col-start-2">
       {#if job.endedAt}
         <span
-          >Ended <Time at={job.endedAt} />{#if job.startedAt}
-            (took {tookText(job.startedAt, job.endedAt)}){/if}</span>
+          >Ended <Time
+            at={job.endedAt} />{#if job.startedAt}{` (took ${tookText(job.startedAt, job.endedAt)})`}{/if}</span>
       {:else if job.startedAt}
         <span>Started <Time at={job.startedAt} /></span>
       {:else}

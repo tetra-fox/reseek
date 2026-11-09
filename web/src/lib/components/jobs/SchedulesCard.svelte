@@ -66,8 +66,8 @@
           {:else if s.lastRunAt}
             <span class="flex flex-wrap items-center gap-1.5">
               <span
-                >Last run <Time at={s.lastRunAt} />{#if s.lastEndedAt}
-                  (took {tookText(s.lastRunAt, s.lastEndedAt)}){/if}</span>
+                >Last run <Time
+                  at={s.lastRunAt} />{#if s.lastEndedAt}{` (took ${tookText(s.lastRunAt, s.lastEndedAt)})`}{/if}</span>
               {#if s.lastEnding && s.lastEnding !== "succeeded"}
                 <Badge tone={tone(s)}>{ENDING_LABELS[s.lastEnding]}</Badge>
               {/if}
