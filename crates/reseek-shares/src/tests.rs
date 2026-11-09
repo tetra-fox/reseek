@@ -259,6 +259,19 @@ async fn a_share_hidden_from_a_user_is_answered_as_one_we_do_not_have() {
     shares.local_shares()[1].visible_to.as_deref(),
     Some(&["buddies".to_string()][..])
   );
+
+  // who sees the share changes: the views kept are forgotten and their files removed, so none
+  // is rewritten for a peer that may no longer have it, nor read stale once one has it again
+  let written = shares.browse_cache(&everyone);
+  let text = format!(
+    "{}[shares.visible_to]\nmusic = [\"family\"]\n",
+    config(files.path())
+  );
+  engine.reconfigure(&text).await;
+  eventually(async || !written.exists()).await;
+  assert!(lock(&shares.browse_views).kept.is_empty());
+  assert_ne!(shares.browse_cache(&everyone), written);
+  assert!(shares.browse_cache(&View::everything()).exists());
 }
 
 #[tokio::test]

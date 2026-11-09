@@ -295,11 +295,19 @@ pub struct Shares {
   local_counts: Mutex<Counted>,
   /// the views other than everything whose browse cache was written, rewritten whenever the
   /// shares change
-  browse_views: Mutex<BTreeSet<View>>,
+  browse_views: Mutex<BrowseViews>,
   /// the aliases of the visibility lists that matched no share on any host when last checked
   unmatched: Mutex<HashSet<String>>,
   /// grows each time the local index changed
   changed: watch::Sender<u64>,
+}
+
+/// The views that hide something whose browse cache is kept, and the generation their files
+/// are written in.
+#[derive(Default)]
+struct BrowseViews {
+  kept: BTreeSet<View>,
+  generation: u64,
 }
 
 impl Shares {
@@ -361,7 +369,7 @@ impl Shares {
       hosts: Mutex::new(Vec::new()),
       hosts_settling: AtomicBool::new(false),
       local_counts: Mutex::new(Counted::default()),
-      browse_views: Mutex::new(BTreeSet::new()),
+      browse_views: Mutex::new(BrowseViews::default()),
       unmatched: Mutex::new(HashSet::new()),
       changed: watch::Sender::new(0),
       applied: Mutex::new(startup.clone()),
@@ -479,25 +487,54 @@ impl Shares {
   /// sent; written by [`Shares::rebuild_browse_cache`] when it is missing, and rewritten
   /// whenever the shares change.
   pub fn browse_cache(&self, view: &View) -> PathBuf {
-    browse::path(&self.cache, view)
+    browse::path(&self.cache, view, lock(&self.browse_views).generation)
   }
 
-  /// Writes the browse cache of `view` again from the index.
-  pub async fn rebuild_browse_cache(&self, view: &View) -> Result<(), browse::CacheError> {
-    if !view.is_everything() {
-      lock(&self.browse_views).insert(view.clone());
-    }
-    browse::rebuild(&self.databases(), &self.browse_cache(view), view).await
+  /// Writes the browse cache of `view` again from the index; returns the file written.
+  pub async fn rebuild_browse_cache(&self, view: &View) -> Result<PathBuf, browse::CacheError> {
+    // the view is kept in the generation its file is written in, so the file is rewritten
+    // with the shares for as long as it can be read
+    let file = {
+      let mut views = lock(&self.browse_views);
+      if !view.is_everything() {
+        views.kept.insert(view.clone());
+      }
+      browse::path(&self.cache, view, views.generation)
+    };
+    browse::rebuild(&self.databases(), &file, view).await?;
+    Ok(file)
   }
 
   /// Rewrites the browse cache of every view a peer browsed with, and of the view that hides
   /// nothing, after the shares changed; a failure is logged.
   async fn refresh_browse_caches(&self) {
-    let views = std::iter::once(View::everything()).chain(lock(&self.browse_views).clone());
+    let files: Vec<(View, PathBuf)> = {
+      let views = lock(&self.browse_views);
+      std::iter::once(View::everything())
+        .chain(views.kept.iter().cloned())
+        .map(|view| {
+          let file = browse::path(&self.cache, &view, views.generation);
+          (view, file)
+        })
+        .collect()
+    };
     let dbs = self.databases();
-    for view in views {
-      browse::refresh(&dbs, &self.browse_cache(&view), &view).await;
+    for (view, file) in files {
+      browse::refresh(&dbs, &file, &view).await;
     }
+  }
+
+  /// Forgets every view that hides something, after who sees which share changed: one a peer
+  /// still has is written again at its next browse, and the files of the others are removed.
+  fn drop_browse_views(&self) {
+    let generation = {
+      let mut views = lock(&self.browse_views);
+      views.kept.clear();
+      views.generation += 1;
+      views.generation
+    };
+    let cache = self.cache.clone();
+    tokio::spawn(async move { browse::remove_older(&cache, generation).await }.in_current_span());
   }
 
   /// The contents of the directory `name` a peer asked `username` for, as `view` sees it: that

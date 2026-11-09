@@ -65,12 +65,15 @@ async fn listing(edges: &Edges, view: &View) -> BrowseReply {
   if let Some(suppressed) = UNCACHED.allow() {
     warn!(suppressed, "Browse response not cached. Rebuilding...");
   }
-  if let Err(e) = edges.shares.rebuild_browse_cache(view).await {
-    if let Some(suppressed) = UNWRITTEN.allow() {
-      error!(error = %e, suppressed, "Error caching browse response");
+  let file = match edges.shares.rebuild_browse_cache(view).await {
+    Ok(file) => file,
+    Err(e) => {
+      if let Some(suppressed) = UNWRITTEN.allow() {
+        error!(error = %e, suppressed, "Error caching browse response");
+      }
+      return BrowseReply::Response(empty_listing());
     }
-    return BrowseReply::Response(empty_listing());
-  }
+  };
   match cached(&file).await {
     Ok(frame) => BrowseReply::Encoded(frame),
     Err(e) => unread(&file, &e),

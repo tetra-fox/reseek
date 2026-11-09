@@ -1,6 +1,8 @@
 //! The browse caches: our share listing as the encoded message a peer that browses us is sent,
 //! kept in a file so a browse is streamed from it instead of being built each time. Each view of
-//! the shares has a file of its own, written the first time a peer with that view browses.
+//! the shares has a file of its own, written the first time a peer with that view browses. The
+//! files of the views that hide something carry a generation, which a change of who sees what
+//! moves on, so the files written before it are never read again and can be removed.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -26,12 +28,13 @@ const SUFFIX: &str = ".cache";
 /// How the files a rebuild writes before it renames one into place begin.
 const TEMPORARY: &str = "browse.cache.tmp-";
 
-/// The file the browse cache of `view` is kept in, in the cache directory.
-pub fn path(cache: &Path, view: &View) -> PathBuf {
+/// The file the browse cache of `view` is kept in, in the cache directory, in the generation
+/// `generation` of the views that hide something.
+pub fn path(cache: &Path, view: &View, generation: u64) -> PathBuf {
   if view.is_everything() {
     cache.join(FILE)
   } else {
-    cache.join(format!("{PREFIX}{}{SUFFIX}", view.key()))
+    cache.join(format!("{PREFIX}{generation}-{}{SUFFIX}", view.key()))
   }
 }
 
@@ -119,6 +122,26 @@ pub async fn rebuild(dbs: &[Arc<Index>], file: &Path, view: &View) -> Result<(),
 /// Deletes the browse caches a last run left in `cache`, which may list shares configured
 /// differently, and any file a rebuild was writing when that run stopped.
 pub async fn remove_stale(cache: &Path) {
+  remove(cache, |name| is_cache(name) || name.starts_with(TEMPORARY)).await;
+}
+
+/// Deletes the browse caches in `cache` of the views that hide something from generations
+/// before `generation`.
+pub async fn remove_older(cache: &Path, generation: u64) {
+  let current = format!("{PREFIX}{generation}-");
+  remove(cache, |name| {
+    is_cache(name) && name != FILE && !name.starts_with(&current)
+  })
+  .await;
+}
+
+/// Whether the file `name` is a browse cache.
+fn is_cache(name: &str) -> bool {
+  name.starts_with(PREFIX) && name.ends_with(SUFFIX)
+}
+
+/// Deletes the files in `cache` whose names `stale` picks.
+async fn remove(cache: &Path, stale: impl Fn(&str) -> bool) {
   let mut entries = match tokio::fs::read_dir(cache).await {
     Ok(entries) => entries,
     Err(e) if e.kind() == std::io::ErrorKind::NotFound => return,
@@ -130,17 +153,13 @@ pub async fn remove_stale(cache: &Path) {
       Ok(None) => return,
       Err(e) => return warn!(error = %e, "cache directory not read for unfinished browse caches"),
     };
-    let name = entry.file_name().to_string_lossy().into_owned();
-    let cached = name.starts_with(PREFIX) && name.ends_with(SUFFIX);
-    if !cached && !name.starts_with(TEMPORARY) {
+    if !stale(&entry.file_name().to_string_lossy()) {
       continue;
     }
     let leftover = entry.path();
     match tokio::fs::remove_file(&leftover).await {
-      Ok(()) => debug!(path = %leftover.display(), "browse cache of the last run removed"),
-      Err(e) => {
-        warn!(path = %leftover.display(), error = %e, "browse cache of the last run not removed")
-      }
+      Ok(()) => debug!(path = %leftover.display(), "stale browse cache removed"),
+      Err(e) => warn!(path = %leftover.display(), error = %e, "stale browse cache not removed"),
     }
   }
 }
@@ -168,7 +187,7 @@ mod tests {
     .await
     .unwrap();
     let dir = tempfile::tempdir().unwrap();
-    let file = path(dir.path(), &View::everything());
+    let file = path(dir.path(), &View::everything(), 0);
     rebuild(&[Index::local(db)], &file, &View::everything())
       .await
       .unwrap();
