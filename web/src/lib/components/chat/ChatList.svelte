@@ -21,6 +21,7 @@
   import type { Target } from "#lib/chat/pane.svelte.js";
   import { pins, samePin } from "#lib/chat/pins.svelte.js";
   import { pinnedChats, sortedConversations, sortedRooms } from "#lib/chat/rooms/order.js";
+  import type { SearchKind } from "#lib/chat/search/match.js";
   import SearchBox from "#lib/components/chat/search/SearchBox.svelte";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
@@ -52,11 +53,13 @@
     feed?: boolean;
     /** the search the address holds, which the search box shows */
     q?: string;
+    /** the messages the address searches, which a new search keeps */
+    kind?: SearchKind;
     onjoin: (name?: string) => void;
     onnew: (username?: string) => void;
   };
 
-  let { current, feed = false, q = "", onjoin, onnew }: Props = $props();
+  let { current, feed = false, q = "", kind = "all", onjoin, onnew }: Props = $props();
 
   type Line =
     | { kind: "header"; key: string; title: string; ids: string[] }
@@ -217,7 +220,7 @@
 </script>
 
 <div class="flex min-h-0 flex-col gap-2 p-2">
-  <SearchBox {q} {onjoin} {onnew} />
+  <SearchBox {q} {kind} {onjoin} {onnew} />
   {#if write && unreadChats.length}
     <Button
       variant="ghost"

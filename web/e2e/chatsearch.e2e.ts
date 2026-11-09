@@ -243,6 +243,14 @@ test("the messages can be narrowed, and the address keeps it", async ({ page }) 
   await page.reload();
   await expect(results(page)).toContainText("came up here");
   await expect(results(page)).not.toContainText("have you heard");
+
+  // Enter on the same text keeps the filter and takes no step in the history
+  const steps = await page.evaluate(() => history.length);
+  await box(page).fill("floyd");
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/#\/chat\/search\?q=floyd&in=rooms$/);
+  await expect(results(page)).not.toContainText("have you heard");
+  expect(await page.evaluate(() => history.length)).toBe(steps);
 });
 
 test("Jump to latest leaves the older messages for the newest", async ({ page }) => {

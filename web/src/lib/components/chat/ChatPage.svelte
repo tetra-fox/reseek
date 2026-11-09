@@ -136,7 +136,7 @@
 <svelte:window onkeydown={keydown} />
 
 {#snippet list()}
-  <ChatList {current} feed={target === "public"} {q} {onjoin} {onnew} />
+  <ChatList {current} feed={target === "public"} {q} {kind} {onjoin} {onnew} />
 {/snippet}
 
 {#snippet lead()}
