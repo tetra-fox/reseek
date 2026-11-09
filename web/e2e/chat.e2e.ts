@@ -7,26 +7,29 @@ test("a room reads like a chat: names, actions, links, the wall and the activity
   page
 }) => {
   await fakeChat(page);
-  // the first stream that carries the room's frames has a member join; every later one is the
-  // daemon's own
-  let served = false;
-  await page.route("**/api/v0/live**", (route) => {
+  // the room is faked, so every stream that carries its frames is too: the daemon's own would
+  // list no joined rooms. The shell opens such a stream as the app starts, and a pane keeps only
+  // the joins made while it is open, so the streams are answered once the room's pane shows and
+  // the first one has a member join
+  let paneOpen!: () => void;
+  const opened = new Promise<void>((resolve) => (paneOpen = resolve));
+  let joinSent = false;
+  await page.route("**/api/v0/live**", async (route) => {
     const topics = (new URL(route.request().url()).searchParams.get("topics") ?? "").split(",");
-    if (served || !topics.includes("rooms")) return route.continue();
-    served = true;
+    if (!topics.includes("rooms")) return route.continue();
+    await opened;
     const joined = frame(2, "rooms.user_joined", {
       roomName: "indie",
       user: { username: "guest", status: "Online", self: false }
     });
-    return route.fulfill({
-      headers: { "content-type": "text/event-stream" },
-      body: helloFrame(topics) + joined
-    });
+    const body = helloFrame(topics) + (joinSent ? "" : joined);
+    joinSent = true;
+    return route.fulfill({ headers: { "content-type": "text/event-stream" }, body });
   });
-  await visit(page, "/chat");
-  await page.goto("./#/chat/rooms/indie");
+  await visit(page, "/chat/rooms/indie");
   const log = page.getByRole("log");
   await expect(log.getByText("anyone have the new boards of canada rip?")).toBeVisible();
+  paneOpen();
   await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText("#indie");
   // bob's two lines are one group under one name, colored the same everywhere
   await expect(log.getByRole("link", { name: "bob", exact: true })).toHaveCount(1);
