@@ -193,13 +193,12 @@ async fn pause(
   Path(id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
   let job = job(&app, id).await?;
-  if !job.pausable {
-    return Err(ApiError::conflict("The job cannot be paused", None));
-  }
   match job.kind {
-    JobKind::Download => app.downloads.pause_job(id).await?,
-    JobKind::Analysis => app.analysis.pause_job(id).await?,
-    JobKind::Scan | JobKind::Maintenance => unreachable!("only download and analysis pause"),
+    JobKind::Download if job.pausable => app.downloads.pause_job(id).await?,
+    JobKind::Analysis if job.pausable => app.analysis.pause_job(id).await?,
+    JobKind::Download | JobKind::Analysis | JobKind::Scan | JobKind::Maintenance => {
+      return Err(ApiError::conflict("The job cannot be paused", None));
+    }
   }
   Ok(StatusCode::NO_CONTENT)
 }
@@ -221,13 +220,12 @@ async fn resume(
   Path(id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
   let job = job(&app, id).await?;
-  if !job.pausable {
-    return Err(ApiError::conflict("The job cannot be resumed", None));
-  }
   match job.kind {
-    JobKind::Download => app.downloads.resume_job(id).await?,
-    JobKind::Analysis => app.analysis.resume_job(id).await?,
-    JobKind::Scan | JobKind::Maintenance => unreachable!("only download and analysis pause"),
+    JobKind::Download if job.pausable => app.downloads.resume_job(id).await?,
+    JobKind::Analysis if job.pausable => app.analysis.resume_job(id).await?,
+    JobKind::Download | JobKind::Analysis | JobKind::Scan | JobKind::Maintenance => {
+      return Err(ApiError::conflict("The job cannot be resumed", None));
+    }
   }
   Ok(StatusCode::NO_CONTENT)
 }
