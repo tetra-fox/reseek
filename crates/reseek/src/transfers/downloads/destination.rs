@@ -175,19 +175,6 @@ pub fn incomplete_path(
   placed(incomplete, username, filename, &name, os)
 }
 
-/// Where [`incomplete_path`] put the file before its name carried the key, which two downloads
-/// could share.
-// TODO: remove once no partial file named this way is left to resume
-pub fn earlier_incomplete_path(
-  incomplete: &Path,
-  username: &str,
-  filename: &str,
-  os: Os,
-) -> Result<PathBuf, String> {
-  let name = local_name(filename, os)?;
-  Ok(placed(incomplete, username, filename, &name, os)?.0)
-}
-
 /// The incomplete file `name` of a download of `filename` from `username`, as
 /// [`incomplete_path`] lays it out.
 fn placed(
@@ -417,8 +404,6 @@ mod tests {
       // the key is ASCII, so no normalisation of the name can make two keys one
       assert_ne!(download_key(user_a, file_a), download_key(user_b, file_b));
     }
-    let earlier = earlier_incomplete_path(Path::new("/in"), "a/b", album, Os::Unix).unwrap();
-    assert_eq!(earlier, Path::new("/in/a_b/Album/01.flac"));
   }
 
   #[test]

@@ -17,7 +17,6 @@ mod groups;
 mod identity;
 mod info;
 mod interests;
-mod interests_table;
 mod known;
 mod listing;
 mod network;
@@ -120,10 +119,9 @@ struct CachedSummary {
 }
 
 impl Directory {
-  /// Opens `users.db` in `location`, after moving the interests an older one kept into the
-  /// configuration, and loads the blocks, the groups we put users in and the blocklist file,
-  /// then starts the touch writer and the follower of the configuration, which all stop when
-  /// `shutdown` is canceled. A user's figures are read from `transfers` and `messaging`.
+  /// Opens `users.db` in `location` and loads the blocks, the groups we put users in and the
+  /// blocklist file, then starts the touch writer and the follower of the configuration, which
+  /// all stop when `shutdown` is canceled. A user's figures are read from `transfers` and `messaging`.
   pub async fn open(
     location: &Location,
     transfers: Database,
@@ -133,7 +131,6 @@ impl Directory {
     events: EventBus,
     shutdown: CancellationToken,
   ) -> Result<Arc<Self>, String> {
-    interests_table::move_to_configuration(location, &config).await?;
     let db = Database::open(&store::SCHEMA, location)
       .await
       .map_err(|e| format!("users.db: {e}"))?;

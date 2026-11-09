@@ -13,6 +13,8 @@ use std::time::Duration;
 
 use api_client::Client;
 use api_types::transfers::{Transfer, TransferStates};
+use reseek::safety::Os;
+use reseek::transfers::downloads::incomplete_path;
 use serde_json::json;
 use soulseek_client::ClientOptions;
 use soulseek_proto::init::{FileTransferInit, PeerInit};
@@ -242,15 +244,14 @@ async fn refusals_failures_and_sizes_end_each_in_their_outcome() {
 
   // a partial file is resumed where it ends, and kept when the size differs
   let sending = Scripted::start(&server).await;
-  let incomplete = dir
-    .path()
-    .join("data")
-    .join("incomplete")
-    .join(sending.name())
-    .join("b");
-  std::fs::create_dir_all(&incomplete).unwrap();
-  std::fs::write(incomplete.join("partial.flac"), &content(100)[..40]).unwrap();
+  let partial_at = |filename: &str| {
+    let root = dir.path().join("data").join("incomplete");
+    let (path, _) = incomplete_path(&root, sending.name(), filename, Os::CURRENT).unwrap();
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    path
+  };
   let partial = "@@share\\b\\partial.flac";
+  std::fs::write(partial_at(partial), &content(100)[..40]).unwrap();
   let id = enqueue(&api, sending.name(), partial, 100).await;
   let mut side = sending.connected().await;
   queued(&mut side, partial).await;
@@ -264,10 +265,9 @@ async fn refusals_failures_and_sizes_end_each_in_their_outcome() {
     std::fs::read(done.local_path.unwrap()).unwrap(),
     content(100)
   );
-  // the move took the emptied directory away
-  std::fs::create_dir_all(&incomplete).unwrap();
-  std::fs::write(incomplete.join("shrunk.flac"), &content(100)[..10]).unwrap();
   let shrunk = "@@share\\b\\shrunk.flac";
+  let kept_at = partial_at(shrunk);
+  std::fs::write(&kept_at, &content(100)[..10]).unwrap();
   let id = enqueue(&api, sending.name(), shrunk, 100).await;
   queued(&mut side, shrunk).await;
   let request = PeerMessage::TransferRequest(TransferRequest {
@@ -284,15 +284,7 @@ async fn refusals_failures_and_sizes_end_each_in_their_outcome() {
     Some("the remote size of 90 does not match expected size 100")
   );
   assert_eq!(aborted.attempts, 1, "a size dispute is not tried again");
-  // the try took the partial over under its keyed name, `shrunk [<key>].flac`
-  let kept = std::fs::read_dir(&incomplete)
-    .unwrap()
-    .filter_map(Result::ok)
-    .any(|e| {
-      let name = e.file_name().to_string_lossy().into_owned();
-      name.starts_with("shrunk [") && name.ends_with("].flac")
-    });
-  assert!(kept, "the partial stays for later");
+  assert!(kept_at.exists(), "the partial stays for later");
 
   // the place in queue, asked and said unasked
   let queue = "@@share\\c\\queued.flac";

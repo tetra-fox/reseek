@@ -20,13 +20,11 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, trace, warn};
 
 use super::Downloads;
-use super::destination::earlier_incomplete_path;
 use super::task::Gate;
 use crate::config::enums::RetryPartial;
 use crate::files::mode::to_unix_file_mode;
-use crate::files::{Files, WriteGuard, create_file};
+use crate::files::{WriteGuard, create_file};
 use crate::network::options::request_style;
-use crate::safety::Os;
 use crate::transfers::{Record, store};
 
 /// More states than one try reports.
@@ -207,31 +205,6 @@ async fn start_offset(incomplete: &Path, size: u64, partial: RetryPartial) -> io
   }
 }
 
-/// Whether anything is at `path`, a link to nothing included.
-fn present(path: &Path) -> io::Result<bool> {
-  match std::fs::symlink_metadata(path) {
-    Ok(_) => Ok(true),
-    Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(false),
-    Err(e) => Err(e),
-  }
-}
-
-/// Renames the partial file at `earlier`, where incomplete files were put before their names
-/// carried a key, to `incomplete`, which the caller has marked, so a download begun then
-/// resumes. Returns whether there was one to take; one another download writes is left to it.
-// TODO: remove once no partial file named the earlier way is left to resume
-fn rename_earlier(files: &Files, earlier: &Path, incomplete: &Path) -> io::Result<bool> {
-  if present(incomplete)? || !present(earlier)? {
-    return Ok(false);
-  }
-  // refused only while another download writes it
-  let Ok(_earlier) = files.writing(earlier) else {
-    return Ok(false);
-  };
-  std::fs::rename(earlier, incomplete)?;
-  Ok(true)
-}
-
 /// Opens the incomplete file at `path` for a try starting at `offset`, once the peer is ready
 /// to send: made with `mode` when new, cut at `offset`.
 fn output(path: PathBuf, mode: Option<u32>, offset: u64) -> OutputFactory {
@@ -276,13 +249,6 @@ impl Downloads {
         )));
       }
     };
-    if let Err(e) = self.adopt_earlier(record, incomplete).await {
-      return Attempted::Failed(Failure {
-        state: TransferStates::Errored,
-        message: format!("Failed to take over the partial file: {e}"),
-        retryable: !lasting(&e),
-      });
-    }
     let start = match start_offset(incomplete, record.size, download.retry.partial).await {
       Ok(Start::At(start)) => start,
       Ok(Start::Whole) => {
@@ -418,26 +384,6 @@ impl Downloads {
         })
       }
     }
-  }
-
-  /// Moves a partial file of `record` named the earlier way to `incomplete`, marked already.
-  async fn adopt_earlier(&self, record: &Record, incomplete: &Path) -> io::Result<()> {
-    let earlier = earlier_incomplete_path(
-      &self.incomplete,
-      &record.username,
-      &record.filename,
-      Os::CURRENT,
-    )
-    .map_err(io::Error::other)?;
-    let files = self.files.clone();
-    let (from, to) = (earlier.clone(), incomplete.to_path_buf());
-    let adopted = tokio::task::spawn_blocking(move || rename_earlier(&files, &from, &to))
-      .await
-      .map_err(io::Error::other)??;
-    if adopted {
-      info!(from = %earlier.display(), "partial file named the earlier way taken over");
-    }
-    Ok(())
   }
 
   /// Takes a state the client reported into `record` and writes it; a final state is kept in

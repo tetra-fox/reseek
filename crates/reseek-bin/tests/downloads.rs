@@ -20,6 +20,8 @@ use api_types::transfers::{
   EnqueueDownloadFile, EnqueueDownloadGroup, EnqueueDownloadJobRequest, Transfer,
   TransferDirection, TransferListQuery, TransferStates,
 };
+use reseek::safety::Os;
+use reseek::transfers::downloads::incomplete_path;
 use serde_json::json;
 use soulseek_client::{ClientOptions, UploadInput, UploadRequest};
 use support::soulfind::{self, Soulfind, User};
@@ -365,16 +367,16 @@ async fn a_download_whole_at_a_stop_is_moved_at_the_next_start_without_asking_ag
   let (daemon, api) = started(dir.path(), &server, &name).await;
   let peer = uploader.username.clone();
   let (job, first) = stopped_while_queued(daemon, &api, &mut requests, &peer).await;
-  // every byte arrived and the stop came before the move, under the name incomplete files had
-  // before they carried a key, which the next try takes over
-  let incomplete = dir
-    .path()
-    .join("data")
-    .join("incomplete")
-    .join(&peer)
-    .join("album");
-  std::fs::create_dir_all(&incomplete).unwrap();
-  file(&incomplete, "01 song.flac", SIZE);
+  // every byte arrived and the stop came before the move
+  let (incomplete, _) = incomplete_path(
+    &dir.path().join("data").join("incomplete"),
+    &peer,
+    "@@share\\album\\01 song.flac",
+    Os::CURRENT,
+  )
+  .unwrap();
+  std::fs::create_dir_all(incomplete.parent().unwrap()).unwrap();
+  std::fs::write(&incomplete, content(SIZE)).unwrap();
 
   let (_daemon, api) = started(dir.path(), &server, &name).await;
   resumed(&api, dir.path(), &peer, job, first).await;

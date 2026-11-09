@@ -57,6 +57,7 @@ use crate::sync::lock;
 use crate::telemetry::Telemetry;
 use crate::turns::{Turn, Turns};
 use crate::users::Directory;
+pub use destination::incomplete_path;
 pub use enqueue::{Enqueued, FileRequest, Group};
 
 /// How long the tasks of running downloads get to end at shutdown before their records are
