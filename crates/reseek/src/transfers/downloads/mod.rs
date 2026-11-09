@@ -32,7 +32,7 @@ use api_types::transfers::{TransferDirection, TransferStates};
 use cascade::Watcher;
 use chrono::Utc;
 use rusqlite::params;
-use tokio::sync::Semaphore;
+use tokio::sync::{Semaphore, watch};
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
@@ -83,6 +83,22 @@ struct InFlight {
   reason: Option<&'static str>,
   /// canceled to be paused: it waits here again, keeping what arrived
   pause: bool,
+  /// dropped with the entry once the task has let go of the download, which ends every wait on
+  /// a receiver of it
+  ended: watch::Sender<()>,
+}
+
+impl InFlight {
+  /// A download about to start its task, stopped by `cancel`.
+  fn new(cancel: CancellationToken) -> Self {
+    Self {
+      cancel,
+      remove: false,
+      reason: None,
+      pause: false,
+      ended: watch::Sender::new(()),
+    }
+  }
 }
 
 /// The download engine.

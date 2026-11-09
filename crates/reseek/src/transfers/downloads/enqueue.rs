@@ -278,15 +278,7 @@ impl Downloads {
     {
       let mut in_flight = lock(&self.in_flight);
       for id in &ids {
-        in_flight.insert(
-          *id,
-          InFlight {
-            cancel: self.shutdown.child_token(),
-            remove: false,
-            reason: None,
-            pause: false,
-          },
-        );
+        in_flight.insert(*id, InFlight::new(self.shutdown.child_token()));
       }
     }
     let name = username.to_string();

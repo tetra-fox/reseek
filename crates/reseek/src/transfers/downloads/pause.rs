@@ -4,6 +4,7 @@
 //! starts its task again on the same record, which carries on from the bytes it has.
 
 use std::collections::BTreeMap;
+use std::collections::hash_map::Entry;
 
 use api_types::transfers::{BulkFailure, TransferStates};
 use tracing::{debug, info};
@@ -94,8 +95,12 @@ impl Downloads {
   }
 
   /// Resumes the paused downloads `ids`: each starts its task again on its record, the files of
-  /// one user taking their turns as an enqueue's do. One not paused is refused.
+  /// one user taking their turns as an enqueue's do. A download whose task is still stopping to
+  /// be paused is waited for first. One not paused is refused.
   pub async fn resume_paused(&self, ids: Vec<Uuid>) -> Vec<Result<Uuid, BulkFailure>> {
+    for id in &ids {
+      self.pause_done(*id).await;
+    }
     let mut outcomes = Vec::new();
     let mut by_user: BTreeMap<String, Vec<Record>> = BTreeMap::new();
     for record in self.records(ids).await {
@@ -113,20 +118,17 @@ impl Downloads {
     for (username, records) in by_user {
       let request = (self.starts.request(), gate_for(records.len()));
       for mut record in records {
-        if lock(&self.in_flight).contains_key(&record.id) {
-          outcomes.push(Err(failure(record.id, "the download is still stopping")));
-          continue;
-        }
         let cancel = self.shutdown.child_token();
-        lock(&self.in_flight).insert(
-          record.id,
-          InFlight {
-            cancel: cancel.clone(),
-            remove: false,
-            reason: None,
-            pause: false,
-          },
-        );
+        match lock(&self.in_flight).entry(record.id) {
+          // another resume of it got here first
+          Entry::Occupied(_) => {
+            outcomes.push(Err(failure(record.id, "the download is resumed already")));
+            continue;
+          }
+          Entry::Vacant(entry) => {
+            entry.insert(InFlight::new(cancel.clone()));
+          }
+        }
         record.paused = false;
         record.state = TransferStates::Queued | TransferStates::Locally;
         self.save(&record, true).await;
@@ -137,6 +139,20 @@ impl Downloads {
       }
     }
     outcomes
+  }
+
+  /// Waits for the task of the download `id` to end when it was stopped to be paused, so its
+  /// record is written paused before it is read.
+  async fn pause_done(&self, id: Uuid) {
+    let ended = lock(&self.in_flight)
+      .get(&id)
+      .filter(|entry| entry.pause)
+      .map(|entry| entry.ended.subscribe());
+    if let Some(mut ended) = ended {
+      debug!(%id, "resume waits for the download to stop");
+      // nothing is ever sent: the wait ends when the entry, and its sender, are dropped
+      let _ = ended.changed().await;
+    }
   }
 }
 

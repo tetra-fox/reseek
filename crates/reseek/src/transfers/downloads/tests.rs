@@ -482,6 +482,30 @@ async fn a_download_paused_while_its_task_runs_waits_here_without_failing() {
 }
 
 #[tokio::test]
+async fn a_resume_sent_while_the_download_stops_to_be_paused_waits_and_resumes_it() {
+  let config = format!("[transfers.download.retry]\ndelay = \"1h\"\nmax_delay = \"1h\"\n{TRUSTED}");
+  let app = app(&config, &[]).await;
+  let mut held = Record::download("alice", "@@a\\Album\\1.flac", 10);
+  held.paused = true;
+  insert(&app, &held).await;
+  let id = held.id;
+  let bulk = |action: &str| json!({ "ids": [id], "action": action });
+  app
+    .call("POST", "/api/v0/transfers/downloads/bulk", Some(bulk("resume")))
+    .await;
+  read_until(&app, id, |r| r.next_attempt_at.is_some()).await;
+  // the pause answers once the task is told to stop, before the task has written it paused
+  app
+    .call("POST", "/api/v0/transfers/downloads/bulk", Some(bulk("pause")))
+    .await;
+  let (_, answer) = app
+    .call("POST", "/api/v0/transfers/downloads/bulk", Some(bulk("resume")))
+    .await;
+  assert_eq!(answer["ok"][0], id.to_string(), "{answer}");
+  assert!(!read(&app, id).await.paused);
+}
+
+#[tokio::test]
 async fn a_download_job_that_never_had_a_download_ends_on_cancel_and_after_a_restart() {
   let app = app(TRUSTED, &[]).await;
   let (canceled, stranded) = (Uuid::new_v4(), Uuid::new_v4());
