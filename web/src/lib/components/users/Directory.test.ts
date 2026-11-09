@@ -74,12 +74,15 @@ describe("the users directory", () => {
     session.principal = { name: "me", role: "ReadWrite" } as never;
     app.state = { user: { username: "me" } } as never;
     const block = { username: "bob", reason: "", scopes: [], expiresAt: null, source: "config" };
-    await start([userSummary("bob", { block } as never), userSummary("carol")]);
+    const net = await start([userSummary("bob", { block } as never), userSummary("carol")]);
     const unblock = line("bob").querySelector<HTMLButtonElement>('button[aria-label="Unblock"]')!;
-    expect(unblock.disabled).toBe(true);
-    // the reason is the tooltip of the span around it, which the keys can reach
-    expect(unblock.parentElement!.hasAttribute("data-tooltip-trigger")).toBe(true);
-    expect(unblock.parentElement!.tabIndex).toBe(0);
+    // it keeps its focus, so the keys reach the reason in its tooltip, and does nothing
+    expect(unblock.getAttribute("aria-disabled")).toBe("true");
+    expect(unblock.disabled).toBe(false);
+    expect(unblock.hasAttribute("data-tooltip-trigger")).toBe(true);
+    unblock.click();
+    await flushFaked();
+    expect(net.requests.filter((r) => r.method !== "GET")).toEqual([]);
     line("bob").querySelector<HTMLElement>("[role=checkbox]")!.click();
     await flushFaked();
     const bar = () => document.querySelector("[role=toolbar]")!;

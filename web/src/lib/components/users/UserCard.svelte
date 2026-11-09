@@ -194,20 +194,17 @@
     <span class="ml-auto flex">
       {#if manageable}
         {@const byConfig = configBlocked(user?.block)}
-        <!-- a disabled button takes no focus, so the reason is on a span around it -->
         <Tooltip text={byConfig ? CONFIG_BLOCKED : user?.block ? "Unblock" : "Block"}>
           {#snippet child({ props })}
-            <span {...byConfig ? props : {}} class="inline-flex">
-              <Button
-                {...byConfig ? {} : props}
-                variant="ghost"
-                size="icon-sm"
-                aria-label={user?.block ? "Unblock" : "Block"}
-                disabled={byConfig}
-                onclick={onblock}>
-                {#if user?.block}<ShieldCheckIcon />{:else}<BanIcon />{/if}
-              </Button>
-            </span>
+            <Button
+              {...props}
+              variant="ghost"
+              size="icon-sm"
+              aria-label={user?.block ? "Unblock" : "Block"}
+              aria-disabled={byConfig || undefined}
+              onclick={onblock}>
+              {#if user?.block}<ShieldCheckIcon />{:else}<BanIcon />{/if}
+            </Button>
           {/snippet}
         </Tooltip>
       {/if}

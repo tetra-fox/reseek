@@ -475,20 +475,17 @@
                 {/snippet}
               </Tooltip>
               {@const byConfig = configBlocked(u.block)}
-              <!-- a disabled button takes no focus, so the reason is on a span around it -->
               <Tooltip text={byConfig ? CONFIG_BLOCKED : u.block ? "Unblock" : "Block"}>
                 {#snippet child({ props })}
-                  <span {...byConfig ? props : {}} class="inline-flex">
-                    <Button
-                      {...byConfig ? {} : props}
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={u.block ? "Unblock" : "Block"}
-                      disabled={byConfig}
-                      onclick={() => toggleBlock(u.username, !!u.block)}>
-                      {#if u.block}<ShieldCheckIcon />{:else}<BanIcon />{/if}
-                    </Button>
-                  </span>
+                  <Button
+                    {...props}
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={u.block ? "Unblock" : "Block"}
+                    aria-disabled={byConfig || undefined}
+                    onclick={() => toggleBlock(u.username, !!u.block)}>
+                    {#if u.block}<ShieldCheckIcon />{:else}<BanIcon />{/if}
+                  </Button>
                 {/snippet}
               </Tooltip>
             {/if}

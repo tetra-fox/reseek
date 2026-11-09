@@ -191,17 +191,15 @@
     {#if write && p.known}
       {#if canManage(name)}
         {#if p.block}
-          <!-- a disabled button takes no focus, so the reason is on a span around it -->
           <Tooltip text={configBlocked(p.block) ? CONFIG_BLOCKED : undefined}>
             {#snippet child({ props })}
-              <span {...props} class="inline-flex">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={configBlocked(p.block)}
-                  onclick={() => void unblock(name).then(onchanged)}
-                  ><ShieldCheckIcon />Unblock</Button>
-              </span>
+              <Button
+                {...props}
+                variant="outline"
+                size="sm"
+                aria-disabled={configBlocked(p.block) || undefined}
+                onclick={() => void unblock(name).then(onchanged)}
+                ><ShieldCheckIcon />Unblock</Button>
             {/snippet}
           </Tooltip>
         {:else}
