@@ -1,20 +1,16 @@
 <script lang="ts">
-  import CopyIcon from "@lucide/svelte/icons/copy";
   import RotateCcwIcon from "@lucide/svelte/icons/rotate-ccw";
-  import TerminalIcon from "@lucide/svelte/icons/terminal";
-  import { LinkPreview } from "bits-ui";
   import type { Snippet } from "svelte";
 
   import type { Schemas } from "#lib/api/client.js";
   import Badge from "#lib/components/ui/Badge.svelte";
-  import Button from "#lib/components/ui/Button.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import type { Editability } from "#lib/config/editability.js";
   import type { Draft } from "#lib/config/fields.js";
   import { helpParts } from "#lib/config/help.js";
   import type { Control, Field } from "#lib/config/sections.js";
-  import { copyText } from "#lib/feedback/clipboard.svelte.js";
 
+  import EnvAndFlag from "./EnvAndFlag.svelte";
   import ErrorText from "./ErrorText.svelte";
   import FieldControl from "./FieldControl.svelte";
   import SourceBadge from "./SourceBadge.svelte";
@@ -178,45 +174,7 @@
         </Tooltip>
       {/if}
       {#if environment}
-        <LinkPreview.Root openDelay={250} closeDelay={150}>
-          <LinkPreview.Trigger>
-            {#snippet child({ props })}
-              <button
-                {...props}
-                type="button"
-                class="flex w-fit items-center gap-1 rounded-badge text-xs text-fg-subtle hover:text-fg"
-                aria-label={`Environment variable and flag for ${field.label}`}>
-                <TerminalIcon class="size-3.5" />Environment and flag
-              </button>
-            {/snippet}
-          </LinkPreview.Trigger>
-          <LinkPreview.Portal>
-            <LinkPreview.Content
-              side="bottom"
-              align="start"
-              sideOffset={4}
-              class="z-50 flex w-max max-w-[calc(100vw-1rem)] flex-col gap-1.5 rounded-card border bg-overlay p-3 text-xs shadow-raised motion-safe:animate-popover-in">
-              <p class="text-fg-muted">Environment variable and command-line flag:</p>
-              {#each [info.envVar && `${info.envVar}=…`, info.cliFlag && `${info.cliFlag} …`].filter((t): t is string => !!t) as text (text)}
-                <span class="flex items-center gap-2">
-                  <code
-                    class="min-w-0 flex-1 rounded-badge bg-surface-muted px-1.5 py-0.5 font-mono wrap-anywhere"
-                    >{text}</code>
-                  <Tooltip text={`Copy ${text.split(/[= ]/)[0]}`}>
-                    {#snippet child({ props })}
-                      <Button
-                        {...props}
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={`Copy ${text.split(/[= ]/)[0]}`}
-                        onclick={() => void copyText(text.split(/[= ]/)[0])}><CopyIcon /></Button>
-                    {/snippet}
-                  </Tooltip>
-                </span>
-              {/each}
-            </LinkPreview.Content>
-          </LinkPreview.Portal>
-        </LinkPreview.Root>
+        <EnvAndFlag label={field.label} envVar={info.envVar} cliFlag={info.cliFlag} />
       {/if}
     </div>
   {/if}

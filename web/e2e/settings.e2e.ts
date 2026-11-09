@@ -51,12 +51,15 @@ test("finds options by search, follows the section in view and gathers unsaved c
   await expect(page.locator('[id="soulseek.description"]')).toBeHidden();
   await page.getByRole("searchbox", { name: "Search settings" }).fill("");
 
-  // the environment variable and the flag show on hover
-  await page
+  // the environment variable and the flag show on a click, which a tap is too, and a second
+  // click closes them
+  const env = page
     .getByRole("button", { name: /^Environment variable and flag for Listen port/ })
-    .first()
-    .hover();
+    .first();
+  await env.click();
   await expect(page.getByRole("button", { name: /^Copy RESEEK_/ }).first()).toBeVisible();
+  await env.click();
+  await expect(page.getByRole("button", { name: /^Copy RESEEK_/ })).toHaveCount(0);
 
   // an edit shows in the bar at the bottom, which can discard it
   await page.locator('[id="soulseek.description"]').fill("Edited");
