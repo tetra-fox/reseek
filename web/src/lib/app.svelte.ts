@@ -6,6 +6,7 @@ import { call } from "#lib/request.js";
 import { searches } from "#lib/search/searches.svelte.js";
 import { session } from "#lib/session.svelte.js";
 import { downloads, uploads } from "#lib/transfers/transfers.svelte.js";
+import { browserTabs } from "#lib/ui/tabs.js";
 import { users } from "#lib/users/users.svelte.js";
 
 export type AppState = Schemas["State"];
@@ -61,6 +62,9 @@ class App {
   bootstrap = async () => {
     const boot = ++this.#boot;
     this.phase = "initializing";
+    // every tab hears the same frames, so the tabs agree on the one that plays a sound while the
+    // session is checked, before the stream brings the first
+    browserTabs();
     const found = await session.check();
     if (boot !== this.#boot) return;
     if (found === "out") {

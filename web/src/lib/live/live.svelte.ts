@@ -1,6 +1,5 @@
 import { root, sessionGone } from "#lib/api/client.js";
 import { toast } from "#lib/feedback/toast.svelte.js";
-import { browserTabs } from "#lib/ui/tabs.js";
 
 import {
   type End,
@@ -93,9 +92,6 @@ export class Live {
   start() {
     if (this.#running) return;
     this.#running = true;
-    // every tab hears the same frames, so the tabs agree on which of them plays a sound before
-    // the first one comes
-    browserTabs();
     this.#open();
   }
 

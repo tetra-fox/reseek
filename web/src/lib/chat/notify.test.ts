@@ -3,7 +3,6 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import type { Schemas } from "#lib/api/client.js";
 import { app } from "#lib/app.svelte.js";
 import { toasts } from "#lib/feedback/toast.svelte.js";
-import { live } from "#lib/live/live.svelte.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 import { SETTLE_MS, Tabs } from "#lib/ui/tabs.js";
 import { SUMMARY_TTL_MS, users } from "#lib/users/users.svelte.js";
@@ -87,12 +86,11 @@ describe("what a mode delivers", () => {
   let now = 0;
   const later = () => (now += CHIME_GAP_MS);
 
-  // the app starts the stream, which has the tabs agree on the one that plays; they are
-  // settled before its frames come
+  // the app's start has the tabs agree on the one that plays, settled before the stream's frames
   beforeAll(async () => {
     fakeNetwork(() => undefined);
-    live.start();
-    live.stop();
+    await app.bootstrap();
+    app.signedOut();
     vi.unstubAllGlobals();
     await new Promise((done) => setTimeout(done, SETTLE_MS));
   });
