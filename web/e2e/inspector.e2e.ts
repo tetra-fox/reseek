@@ -1,7 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 
 import { fakeBrowse, fakeConnected, fakeDownloads, fakeSearch, SEARCH_ID } from "./support/fakes";
-import { visit } from "./support/login";
+import { open, visit } from "./support/login";
 
 /** The pane's width before it is resized, in pixels */
 const WIDTH = 384;
@@ -70,9 +70,9 @@ test.describe("on a wide screen", () => {
     await flatDownloads(page);
     await page.getByRole("button", { name: /^2\.flac/ }).click();
     await expect(fileName(page)).toHaveText("2.flac");
-    const open = page.waitForEvent("popup");
+    const popup = page.waitForEvent("popup");
     await pane(page).getByRole("button", { name: "Open", exact: true }).click();
-    await (await open).close();
+    await (await popup).close();
     await page.keyboard.press("ArrowDown");
     await expect(fileName(page)).not.toHaveText("2.flac");
   });
@@ -123,9 +123,9 @@ test.describe("on a wide screen", () => {
     await expect(technical).toHaveAttribute("aria-expanded", "true");
 
     // a screen without the pane leaves it out, and it is back on the way back
-    await page.goto("./#/dashboard");
+    await open(page, "/dashboard");
     await expect(pane(page)).toHaveCount(0);
-    await page.goto("./#/downloads");
+    await open(page, "/downloads");
     await expect(pane(page)).toBeVisible();
   });
 

@@ -9,7 +9,7 @@ import {
   transfer,
   userDownloads
 } from "./support/fakes";
-import { visit } from "./support/login";
+import { open, visit } from "./support/login";
 
 const MUSIC = "@@c\\Music";
 const tracks = (prefix: string, n: number) =>
@@ -44,7 +44,7 @@ const fileLine = (tree: Locator, path: string) => line(tree, `${MUSIC}${path}`);
 const browseCarol = async (page: Page, opened?: string) => {
   await fakeShare(page);
   await visit(page, "/users/carol/shares");
-  if (opened) await page.goto(`./#/users/carol/shares?path=${encodeURIComponent(opened)}`);
+  if (opened) await open(page, `/users/carol/shares?path=${encodeURIComponent(opened)}`);
   const tree = page.getByRole("treegrid", { name: "Shared folders" });
   await expect(folder(tree, "")).toBeVisible();
   return tree;

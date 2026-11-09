@@ -11,7 +11,7 @@ import {
   transfer,
   userDownloads
 } from "./support/fakes";
-import { textSize, visit } from "./support/login";
+import { open, textSize, visit } from "./support/login";
 
 /** How far apart two names start across the page, in pixels */
 const apart = async (a: Locator, b: Locator) => {
@@ -47,7 +47,7 @@ for (const [width, height] of [
       await expect(note).toBeVisible();
       expect(await apart(folder, note), "Files").toBeLessThan(0.5);
 
-      await page.goto(`./#/searches/${SEARCH_ID}`);
+      await open(page, `/searches/${SEARCH_ID}`);
       const results = page.getByRole("treegrid", { name: "Search results" });
       const bonus = results.locator("[role=rowgroup]").getByText("Bonus", { exact: true });
       const track = results.getByText("01 One.flac", { exact: true });
@@ -59,7 +59,7 @@ for (const [width, height] of [
         dir("@@c\\Music", ["readme.txt"]),
         dir("@@c\\Music\\Albums", ["1.flac"])
       ]);
-      await page.goto("./#/users/carol/shares");
+      await open(page, "/users/carol/shares");
       const shares = page.getByRole("treegrid", { name: "Shared folders" });
       const albums = shares.getByText("Albums", { exact: true });
       const readme = shares.getByText("readme.txt", { exact: true });
@@ -68,7 +68,7 @@ for (const [width, height] of [
 
       // the downloads, each user a group and their folders under it. A phone's row has no tick of
       // its own, so its icon starts under the tick of a header at its depth
-      await page.goto("./#/downloads");
+      await open(page, "/downloads");
       const grid = page.getByRole("treegrid", { name: "Downloads" });
       const download = grid.getByText("01 One.flac", { exact: true });
       await expect(download).toBeVisible();

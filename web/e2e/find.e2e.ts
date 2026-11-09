@@ -1,7 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 
 import { fakeConnected, SEARCH_ID } from "./support/fakes";
-import { textSize, visit } from "./support/login";
+import { open, textSize, visit } from "./support/login";
 
 const box = (page: Page) => page.getByRole("combobox", { name: "Search files and users" });
 const options = (page: Page) => page.getByRole("option");
@@ -62,7 +62,7 @@ test("Enter in the Search box always searches, only a chosen row does anything e
   await expect.poll(() => posted).toEqual(["aphex"]);
   await expect(page).toHaveURL(/#\/searches\/[^/]+$/);
 
-  await page.goto("./#/searches");
+  await open(page, "/searches");
   await box(page).fill("aphex");
   await expect(options(page)).toHaveCount(3);
   await page.keyboard.press("ArrowDown");

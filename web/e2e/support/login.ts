@@ -1,5 +1,17 @@
 import { expect, type Page } from "@playwright/test";
 
+/**
+ * Opens `route` with the session the login project saved, once the app is up on it. A goto in a
+ * running app changes only the hash and returns, and the hash router answers with a full reload:
+ * this waits for that page, and for its main area, shown once its router has started
+ */
+export const open = async (page: Page, route: string) => {
+  const loaded = page.waitForEvent("load");
+  await page.goto(`./#${route}`);
+  await loaded;
+  await expect(page.getByRole("main")).toBeVisible();
+};
+
 /** Logs in through the form with the daemon's built-in account, from the login page `route` was sent to */
 export const login = async (page: Page, route = "/dashboard") => {
   await page.goto(`./#${route}`);
@@ -9,11 +21,9 @@ export const login = async (page: Page, route = "/dashboard") => {
   await expect(page).toHaveURL(new RegExp(`#${route}$`));
 };
 
-/** Opens `route` with the session the login project saved, once the app is up on it */
+/** Opens `route` as `open` does, and checks the app stays on it rather than going elsewhere */
 export const visit = async (page: Page, route: string) => {
-  await page.goto(`./#${route}`);
-  // the shell's main area shows only once the session is checked; without one the login takes it
-  await expect(page.getByRole("main")).toBeVisible();
+  await open(page, route);
   await expect(page).toHaveURL(new RegExp(`#${route.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`));
 };
 

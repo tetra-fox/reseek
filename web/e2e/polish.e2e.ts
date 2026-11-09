@@ -1,12 +1,12 @@
 import { expect, test } from "@playwright/test";
 
 import { fakeBrowse, fakeChat, fakeSearch, manyDownloads, SEARCH_ID } from "./support/fakes";
-import { visit } from "./support/login";
+import { open, visit } from "./support/login";
 
 test("shows search results as a tree and as a list walked by key", async ({ page }) => {
   await fakeSearch(page);
   await visit(page, "/dashboard");
-  await page.goto(`./#/searches/${SEARCH_ID}`);
+  await open(page, `/searches/${SEARCH_ID}`);
   const crumbs = page.getByRole("navigation", { name: "Breadcrumb" });
   await expect(crumbs).toContainText("Search");
   await expect(crumbs).toContainText("album");
@@ -64,7 +64,7 @@ test("browses a user, finds a folder by typing and shows where it is", async ({ 
   const active = await tree.getAttribute("aria-activedescendant");
   await expect(page.locator(`#${active}`)).toHaveAttribute("data-line", "folder:@@c\\Music");
   // carol is remembered under the search box
-  await page.goto("./#/searches");
+  await open(page, "/searches");
   const shares = page.getByRole("list", { name: "Recently browsed" }).getByRole("link");
   await expect(shares).toHaveText("carol");
   await shares.click();

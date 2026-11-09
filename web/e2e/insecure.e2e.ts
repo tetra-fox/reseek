@@ -1,7 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 
 import { fakeChat, fakeConnected } from "./support/fakes";
-import { login } from "./support/login";
+import { login, open } from "./support/login";
 
 // these run on a hostname over plain http that is not localhost, as a LAN address is, where the
 // page has no secure context and the browser leaves out crypto.randomUUID, navigator.clipboard
@@ -42,7 +42,7 @@ test("copies a message by selecting it, and says notifications need HTTPS", asyn
   });
   await fakeChat(page);
   const errors = await insecure(page, "/chat");
-  await page.goto("./#/chat/rooms/indie");
+  await open(page, "/chat/rooms/indie");
   await expect(page.getByText(/Browsers show desktop notifications only over HTTPS/)).toBeVisible();
   const log = page.getByRole("log");
   await log.getByText("thanks bob, grabbing it now").hover();

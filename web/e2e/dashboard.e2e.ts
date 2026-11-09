@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 import type { Schemas } from "../src/lib/api/client";
 import { summary } from "./support/fakes";
-import { visit } from "./support/login";
+import { open, visit } from "./support/login";
 
 test("the dashboard shows more at a glance, each figure a link to its list", async ({ page }) => {
   await page.route("**/api/v0/telemetry/reports/transfers/summary**", (route) =>
@@ -30,7 +30,7 @@ test("the dashboard shows more at a glance, each figure a link to its list", asy
     "aria-pressed",
     "true"
   );
-  await page.goto("./#/dashboard");
+  await open(page, "/dashboard");
   await page.getByRole("link", { name: /Users transferred with/ }).click();
   await expect(page).toHaveURL(/#\/users\?has=transfers$/);
   await expect(page.getByRole("button", { name: "Has transfers", exact: true })).toHaveAttribute(

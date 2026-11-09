@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { visit } from "./support/login";
+import { open, visit } from "./support/login";
 
 test("opens the dashboard, chat, rooms, a profile and your profile", async ({ page }) => {
   await visit(page, "/dashboard");
@@ -16,10 +16,10 @@ test("opens the dashboard, chat, rooms, a profile and your profile", async ({ pa
   await page.keyboard.press("Escape");
 
   // a path no screen renders goes where it belongs rather than to a blank page
-  await page.goto("./#/nowhere");
+  await open(page, "/nowhere");
   await expect(page).toHaveURL(/#\/dashboard$/);
 
-  await page.goto("./#/users/alice");
+  await open(page, "/users/alice");
   await expect(page.getByRole("heading", { name: "alice" })).toBeVisible();
   await page.getByRole("link", { name: "Transfers" }).last().click();
   await expect(page.getByText("No transfers with this user")).toBeVisible();

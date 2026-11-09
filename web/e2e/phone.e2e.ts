@@ -12,7 +12,7 @@ import {
   fakeSearch,
   SEARCH_ID
 } from "./support/fakes";
-import { refuseCopy, textSize, visit } from "./support/login";
+import { open, refuseCopy, textSize, visit } from "./support/login";
 
 // a phone's width: no screen may be wider than it, so nothing runs off its right edge
 test.use({ viewport: { width: 390, height: 844 } });
@@ -134,9 +134,9 @@ const analysisHolds = async (page: Page) => {
   await page.getByRole("button", { name: "More for 2.flac" }).click();
   await page.getByRole("menuitem", { name: "Details" }).click();
   const inspector = page.locator("[data-inspector]");
-  const open = inspector.getByRole("button", { name: "Technical" });
+  const technical = inspector.getByRole("button", { name: "Technical" });
   await expect(inspector.getByText("Likely a transcode").first()).toBeVisible();
-  if ((await open.getAttribute("aria-expanded")) === "false") await open.click();
+  if ((await technical.getAttribute("aria-expanded")) === "false") await technical.click();
   await layerHolds(inspector, "inspector");
   await inspector.getByRole("button", { name: "Open in Analysis" }).click();
   const slot = page.getByRole("region", { name: "Slot A" });
@@ -153,7 +153,7 @@ const analysisHolds = async (page: Page) => {
 
 /** Opens `path` and checks it fits */
 const fits = async (page: Page, path: string, ready: (page: Page) => Promise<void>) => {
-  await page.goto(`./#${path}`);
+  await open(page, `${path}`);
   await holds(page, path, ready);
 };
 
@@ -319,7 +319,7 @@ test("a toast's countdown runs along its foot and holds under the pointer", asyn
   await refuseCopy(page);
   await fakeChat(page);
   await visit(page, "/chat");
-  await page.goto("./#/chat/rooms/indie");
+  await open(page, "/chat/rooms/indie");
   const log = page.getByRole("log");
   await log.getByText("thanks bob, grabbing it now").hover();
   await page.getByRole("button", { name: "Copy text" }).last().click();

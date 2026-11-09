@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { fakeChat, frame, helloFrame } from "./support/fakes";
-import { refuseCopy, visit } from "./support/login";
+import { open, refuseCopy, visit } from "./support/login";
 
 test("a room reads like a chat: names, actions, links, the wall and the activity", async ({
   page
@@ -121,7 +121,7 @@ test("the server's notices are one read-only entry, reached by the keys", async 
   await search.fill("server");
   await expect(page.getByRole("option", { name: "Join server" })).toBeVisible();
   await expect(page.getByRole("option", { name: "Message server" })).toHaveCount(0);
-  await page.goto("./#/users/server");
+  await open(page, "/users/server");
   await expect(page).toHaveURL(/#\/chat\/server$/);
 });
 
@@ -130,12 +130,12 @@ test("a conversation's menu blocks the user, the server's notices have no such i
 }) => {
   await fakeChat(page);
   await visit(page, "/chat");
-  await page.goto("./#/chat/alice");
+  await open(page, "/chat/alice");
   await page.getByRole("button", { name: "Conversation menu" }).click();
   await page.getByRole("menuitem", { name: "Block" }).click();
   await expect(page.getByRole("dialog", { name: /block/i })).toBeVisible();
   await page.keyboard.press("Escape");
-  await page.goto("./#/chat/server");
+  await open(page, "/chat/server");
   await page.getByRole("button", { name: "Server notices menu" }).click();
   await expect(page.getByRole("menuitem", { name: "Export as text" })).toBeVisible();
   await expect(page.getByRole("menuitem", { name: "Block" })).toHaveCount(0);
@@ -144,7 +144,7 @@ test("a conversation's menu blocks the user, the server's notices have no such i
 test("the keys reach what can be done with a message", async ({ page }) => {
   await fakeChat(page);
   await visit(page, "/chat");
-  await page.goto("./#/chat/rooms/indie");
+  await open(page, "/chat/rooms/indie");
   const log = page.getByRole("log");
   await expect(log.getByText("anyone have the new boards of canada rip?")).toBeVisible();
   const copy = log.getByRole("button", { name: "Copy text" });
@@ -175,7 +175,7 @@ test("a toast sits above the docked activity log", async ({ page }) => {
   await refuseCopy(page);
   await fakeChat(page);
   await visit(page, "/chat");
-  await page.goto("./#/chat/rooms/indie");
+  await open(page, "/chat/rooms/indie");
   const log = page.getByRole("log");
   await expect(log.getByText("thanks bob, grabbing it now")).toBeVisible();
   await page.keyboard.press("Control+j");

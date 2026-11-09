@@ -1,7 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 
 import { fakeChat } from "./support/fakes";
-import { textSize, visit } from "./support/login";
+import { open, textSize, visit } from "./support/login";
 
 const box = (page: Page) => page.getByRole("combobox", { name: "Search chats" });
 const options = (page: Page) => page.getByRole("option");
@@ -229,7 +229,7 @@ test("Enter opens the results, walked by key, and Back and Escape return from a 
 test("the messages can be narrowed, and the address keeps it", async ({ page }) => {
   await fakeSearch(page);
   await visit(page, "/chat");
-  await page.goto("./#/chat/search?q=floyd");
+  await open(page, "/chat/search?q=floyd");
   await expect(results(page)).toContainText("have you heard");
   await page.getByRole("combobox", { name: "Which messages" }).click();
   await page.getByRole("option", { name: "Room messages" }).click();
@@ -248,7 +248,7 @@ test("the messages can be narrowed, and the address keeps it", async ({ page }) 
 test("Jump to latest leaves the older messages for the newest", async ({ page }) => {
   await fakeSearch(page);
   await visit(page, "/chat");
-  await page.goto("./#/chat/rooms/jazz?at=150&q=floyd");
+  await open(page, "/chat/rooms/jazz?at=150&q=floyd");
   const log = page.getByRole("log");
   await expect(log.locator('[data-message="150"]')).toBeVisible();
   await page.getByRole("button", { name: "Jump to latest" }).click();
@@ -283,7 +283,7 @@ test("a long category shows its first rooms until all are asked for", async ({ p
     })
   );
   await visit(page, "/chat");
-  await page.goto("./#/chat/search?q=floyd");
+  await open(page, "/chat/search?q=floyd");
   const rooms = results(page).locator('[data-line^="room:"]');
   await expect(rooms).toHaveCount(20);
   await results(page).getByRole("row", { name: "Show all 25 rooms" }).click();
@@ -318,7 +318,7 @@ test.describe("on a phone", () => {
     await expect(results(page)).toBeVisible();
 
     // from a chat the box is in the sheet
-    await page.goto("./#/chat/alice");
+    await open(page, "/chat/alice");
     await page.getByRole("button", { name: "Chats" }).click();
     await box(page).fill("floyd");
     await expect(options(page)).toHaveCount(5);

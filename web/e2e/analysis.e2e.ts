@@ -11,7 +11,7 @@ import {
   listedFile,
   listedFolder
 } from "./support/fakes";
-import { visit } from "./support/login";
+import { open, visit } from "./support/login";
 import { wav } from "./support/pictures";
 
 /** The color at a point `across` and `down` a plot, from 0 to 1 */
@@ -156,7 +156,7 @@ test("analyzes a finished download from its row and keeps a judgment", async ({ 
   await expect(recent.getByText("Fake", { exact: true })).toBeVisible();
 
   // and the list's row shows the judgment
-  await page.goto("./#/downloads");
+  await open(page, "/downloads");
   await expect(table.getByText("Fake", { exact: true })).toBeVisible();
 });
 
