@@ -95,8 +95,8 @@
     const { pictures, view } = scope;
     const overview = pictures.spectrogram;
     if (!overview || !width) return;
-    const { columnsPerSecond, durationSeconds } = pictures.layout;
-    if (!wantsDetail(overview, view, stage.spectrogram.width, columnsPerSecond, durationSeconds)) {
+    const { layout } = pictures;
+    if (!wantsDetail(overview, view, stage.spectrogram.width, layout.columnsPerSecond, layout)) {
       return;
     }
     pictures.forget();

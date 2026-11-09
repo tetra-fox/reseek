@@ -86,6 +86,21 @@ const waveformCells = (buffer: ArrayBuffer): Cells => {
 
 /** How many tiles of each kind are kept, the least recently drawn going first */
 const KEPT_TILES = 48;
+
+/** The first and last tile over `from` to `to` seconds, inside the file */
+const tileRange = (layout: Layout, from: number, to: number) => ({
+  first: Math.max(0, Math.floor(from / layout.tileSeconds)),
+  last: Math.min(layout.tiles - 1, Math.floor(to / layout.tileSeconds))
+});
+
+/**
+ * Whether the tiles over `from` to `to` seconds fit in those kept. A stretch that needs more is
+ * drawn from the overview alone, since tiles over part of it would change the detail partway
+ */
+export const tilesFit = (layout: Layout, from: number, to: number) => {
+  const { first, last } = tileRange(layout, from, to);
+  return last - first + 1 <= KEPT_TILES;
+};
 /** How many tiles load at once */
 const LOADING = 4;
 
@@ -165,8 +180,7 @@ export class Pictures {
    */
   want(from: number, to: number) {
     const seconds = this.layout.tileSeconds;
-    const first = Math.max(0, Math.floor(from / seconds));
-    const last = Math.min(this.layout.tiles - 1, Math.floor(to / seconds));
+    const { first, last } = tileRange(this.layout, from, to);
     const count = Math.min(KEPT_TILES, last - first + 1);
     const middle = Math.floor((from + to) / 2 / seconds);
     const start = Math.max(first, Math.min(last - count + 1, middle - Math.floor(count / 2)));

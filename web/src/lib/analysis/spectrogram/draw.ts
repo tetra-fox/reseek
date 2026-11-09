@@ -1,4 +1,4 @@
-import type { Guide, Scale } from "#lib/analysis/analysis.js";
+import type { Guide, Layout, Scale } from "#lib/analysis/analysis.js";
 
 import {
   axisTicks,
@@ -21,7 +21,7 @@ import {
   type Rect,
   warp
 } from "./paint";
-import type { Cells, Pictures } from "./pictures.svelte";
+import { type Cells, type Pictures, tilesFit } from "./pictures.svelte";
 import { acrossOf, formatTime, timeAt, timeTicks, type View, whole } from "./timeview";
 
 /** Where everything goes on the timeline's canvas, in device pixels */
@@ -191,18 +191,19 @@ export const drawOverview = (
 const detailOf = (duration: number, perSecond: number) => Math.ceil(duration * perSecond - 1e-9);
 
 /**
- * Whether a view `width` device pixels wide shows more of `overview` than it has cells for, and
- * full detail has more
+ * Whether a view `width` device pixels wide shows more of `overview` than it has cells for, full
+ * detail has more, and the tiles over the view fit in those kept
  */
 export const wantsDetail = (
   overview: Cells,
   view: View,
   width: number,
   perSecond: number,
-  duration: number
+  layout: Layout
 ) =>
-  overview.count < detailOf(duration, perSecond) &&
-  (overview.count * view.span) / (overview.to - overview.from) < width;
+  overview.count < detailOf(layout.durationSeconds, perSecond) &&
+  (overview.count * view.span) / (overview.to - overview.from) < width &&
+  tilesFit(layout, view.start, view.start + view.span);
 
 /** The tiles of `kind` that overlap `view`, those that have arrived */
 const tilesIn = (pictures: Pictures, kind: "spectrogram" | "waveform", view: View): Cells[] =>
@@ -263,13 +264,7 @@ export const drawTimeline = (
   const paint = (cells: Cells) =>
     rasters.draw(context, cells, curve, layout.maxHz, colors, top, view, spec);
   paint(overview);
-  const detail = wantsDetail(
-    overview,
-    view,
-    spec.width,
-    layout.columnsPerSecond,
-    layout.durationSeconds
-  );
+  const detail = wantsDetail(overview, view, spec.width, layout.columnsPerSecond, layout);
   const shown = detail ? tilesIn(pictures, "spectrogram", view) : [];
   shown.forEach(paint);
 
@@ -304,13 +299,7 @@ export const drawTimeline = (
   // the waveform, from the tiles at full detail where they have arrived, else the overview
   const waves = pictures.waveform;
   if (waves) {
-    const tiles = wantsDetail(
-      waves,
-      view,
-      wave.width,
-      layout.peaksPerSecond,
-      layout.durationSeconds
-    )
+    const tiles = wantsDetail(waves, view, wave.width, layout.peaksPerSecond, layout)
       ? tilesIn(pictures, "waveform", view)
       : [];
     const middle = wave.y + wave.height / 2;

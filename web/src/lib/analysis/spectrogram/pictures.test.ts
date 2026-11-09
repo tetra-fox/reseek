@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Layout } from "#lib/analysis/analysis.js";
 
-import { Pictures } from "./pictures.svelte";
+import { Pictures, tilesFit } from "./pictures.svelte";
 
 const layout: Layout = {
   scale: "linear",
@@ -58,5 +58,15 @@ describe("Pictures", () => {
     const middle = Math.floor(tiles / 2);
     expect(asked.some((url) => url.endsWith(`tile=${middle}`))).toBe(true);
     expect(asked.some((url) => url.endsWith("tile=0"))).toBe(false);
+  });
+
+  it("leaves a view wider than the kept tiles to the overview", () => {
+    const long = { ...layout, durationSeconds: 3600, tiles: 225 };
+    // 48 tiles of 16 s: from the start of tile 0 to the end of tile 47
+    expect(tilesFit(long, 0, 48 * 16 - 1)).toBe(true);
+    expect(tilesFit(long, 0, 48 * 16)).toBe(false);
+    expect(tilesFit(long, 8, 48 * 16 + 7)).toBe(false);
+    // past the end of the file counts only the tiles it has
+    expect(tilesFit(layout, -100, 1000)).toBe(true);
   });
 });
