@@ -43,7 +43,18 @@ impl Topic {
   pub fn role(self) -> Role {
     match self {
       Topic::Logs => Role::Administrator,
-      _ => Role::ReadOnly,
+      Topic::Application
+      | Topic::Metrics
+      | Topic::Search
+      | Topic::SearchResponses(_)
+      | Topic::Transfers
+      | Topic::Jobs
+      | Topic::Conversations
+      | Topic::Rooms
+      | Topic::PublicRooms
+      | Topic::Users
+      | Topic::Events
+      | Topic::Activity => Role::ReadOnly,
     }
   }
 }
