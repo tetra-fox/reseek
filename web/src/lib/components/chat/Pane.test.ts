@@ -252,14 +252,14 @@ describe("a chat pane", () => {
     expect(document.body.textContent).toContain("The start of the stored history");
 
     net.frame("rooms.message", { roomName: "indie", message: roomMessage(12) });
-    net.frame("rooms.gap", { from: "2026-10-26T10:13:00Z", to: null });
+    net.frame("rooms.gap", { roomName: "indie", gap: { from: "2026-10-26T10:13:00Z", to: null } });
     await flush();
     expect(ids()).toEqual(["1", "10", "11", "12"]);
     expect(row(10)).toBe(ten);
     expect(document.querySelectorAll("[role=note]")).toHaveLength(2);
   });
 
-  it("adds no gap from a login to the history of a room we left", async () => {
+  it("adds no gap from a login to the history of another room", async () => {
     const net = fakeNetwork((url) =>
       url.pathname.endsWith("/rooms/history/indie/messages")
         ? { messages: [roomMessage(1)], hasMore: false, gaps: [] }
@@ -273,7 +273,7 @@ describe("a chat pane", () => {
     await flush();
     expect(ids()).toEqual(["1"]);
 
-    net.frame("rooms.gap", { from: "2026-10-26T10:13:00Z", to: null });
+    net.frame("rooms.gap", { roomName: "jazz", gap: { from: "2026-10-26T10:13:00Z", to: null } });
     await flush();
     expect(document.querySelectorAll("[role=note]")).toHaveLength(0);
   });

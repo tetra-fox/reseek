@@ -3,12 +3,13 @@
 //! while we are not logged in. Gaps under a second are not reported.
 
 use api_types::live::LiveFrame;
-use api_types::messaging::rooms::HistoryGap;
+use api_types::messaging::rooms::{HistoryGap, RoomHistoryGap};
 use chrono::{DateTime, Utc};
 use rusqlite::{Connection, Row, params};
 use tracing::{debug, warn};
 
 use super::Messaging;
+use super::rooms::history;
 use crate::db::{read_timestamp, timestamp};
 use crate::sync::lock;
 
@@ -162,20 +163,44 @@ impl Messaging {
     }
   }
 
-  /// Pushes the gap that this session's login closed, when there was one.
+  /// Pushes, for each room we are in, the gap this session's login closed, when there was one
+  /// and the room has history from before it, as a page of its history would list it.
   pub(super) async fn push_gap(&self) {
-    let sessions = match self.db.read(sessions).await {
-      Ok(sessions) => sessions,
-      Err(e) => return warn!(error = %e, "session log not read; no gap pushed"),
-    };
-    let [.., earlier, current] = sessions.as_slice() else {
-      return;
-    };
-    if current.ended_at.is_some() {
-      return;
-    }
-    if let Some(gap) = gaps(&[earlier.clone(), current.clone()]).first() {
-      self.live.publish(LiveFrame::RoomsGap(*gap));
+    let rooms = self.rooms.tracker().joined_names();
+    let closed = self
+      .db
+      .read(move |conn| {
+        let sessions = sessions(conn)?;
+        let [.., earlier, current] = sessions.as_slice() else {
+          return Ok(Vec::new());
+        };
+        if current.ended_at.is_some() {
+          return Ok(Vec::new());
+        }
+        let Some(gap) = gaps(&[earlier.clone(), current.clone()]).first().copied() else {
+          return Ok(Vec::new());
+        };
+        let now = Utc::now();
+        let mut closed = Vec::new();
+        for room_name in rooms {
+          let Some(oldest) = history::oldest(conn, &room_name)? else {
+            continue;
+          };
+          if !within(&[gap], oldest, oldest, now).is_empty() {
+            closed.push(RoomHistoryGap { room_name, gap });
+          }
+        }
+        Ok(closed)
+      })
+      .await;
+    match closed {
+      Ok(closed) => {
+        for gap in closed {
+          debug!(room = gap.room_name, from = %gap.gap.from, "room history gap pushed");
+          self.live.publish(LiveFrame::RoomsGap(gap));
+        }
+      }
+      Err(e) => warn!(error = %e, "session log not read; no gap pushed"),
     }
   }
 }
@@ -252,5 +277,78 @@ mod tests {
       (0, 1),
       "a gap starting where the ranges meet is the newer one's"
     );
+  }
+
+  #[tokio::test]
+  async fn a_login_pushes_its_gap_to_each_room_we_are_in_with_history_from_before_it() {
+    let app = crate::testing::app(crate::testing::TRUSTED, &[]).await;
+    let messaging = &app.state.messaging;
+    let now = Utc::now();
+    let ended = now - chrono::Duration::hours(1);
+    let said = |room: &str, at: DateTime<Utc>| history::Arrived {
+      room: room.to_string(),
+      timestamp: at,
+      username: "alice".to_string(),
+      message: "hi".to_string(),
+      is_self: false,
+      is_mention: false,
+      hidden: false,
+    };
+    // "indie" has history from before the gap, "fresh" only from this login, "left" is one we
+    // are no longer in
+    let stored = [
+      said("indie", ended - chrono::Duration::minutes(5)),
+      said("fresh", now),
+      said("left", ended - chrono::Duration::minutes(5)),
+    ];
+    messaging
+      .database()
+      .write(move |conn| {
+        conn.execute(
+          "INSERT INTO sessions (logged_in_at, last_seen_at, ended_at) VALUES (?1, ?2, ?2)",
+          params![
+            timestamp(ended - chrono::Duration::hours(1)),
+            timestamp(ended)
+          ],
+        )?;
+        conn.execute(
+          "INSERT INTO sessions (logged_in_at, last_seen_at) VALUES (?1, ?1)",
+          [timestamp(now)],
+        )?;
+        for arrived in &stored {
+          history::insert(conn, arrived)?;
+        }
+        Ok(())
+      })
+      .await
+      .unwrap();
+    for room in ["indie", "fresh"] {
+      let data = soulseek_proto::server::RoomData {
+        name: room.into(),
+        users: Vec::new(),
+        private: None,
+      };
+      messaging.rooms.tracker().joined(&data, "me");
+    }
+    let mut stream = app
+      .stream_from(
+        "127.0.0.1:1",
+        crate::testing::request("GET", "/api/v0/live?topics=rooms", None),
+      )
+      .await;
+    stream.until("rooms.list").await;
+    messaging.push_gap().await;
+    // a frame of the same topic after them, so every gap pushed is read before it
+    app.state.live.publish(LiveFrame::RoomsList(Vec::new()));
+    let gaps: Vec<serde_json::Value> = stream
+      .until("rooms.list")
+      .await
+      .into_iter()
+      .filter(|frame| frame.event == "rooms.gap")
+      .map(|frame| frame.data)
+      .collect();
+    assert_eq!(gaps.len(), 1, "{gaps:?}");
+    assert_eq!(gaps[0]["roomName"], "indie");
+    assert_eq!(gaps[0]["gap"]["from"], timestamp(ended));
   }
 }

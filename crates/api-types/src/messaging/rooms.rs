@@ -137,8 +137,7 @@ pub struct RoomInfo {
 }
 
 /// An interval with no room history because reseek was disconnected from Soulseek, whether or
-/// not the daemon was running. The data of a `rooms.gap` frame, which is sent once logged in
-/// again.
+/// not the daemon was running.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryGap {
@@ -146,6 +145,18 @@ pub struct HistoryGap {
   pub from: DateTime<Utc>,
   /// when it received again, null while it is still disconnected
   pub to: Option<DateTime<Utc>>,
+}
+
+/// The gap a login closed in the history of one room we are in again, the data of a
+/// `rooms.gap` frame. Sent once logged in and the rooms are joined, for each room with history
+/// from before the gap.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RoomHistoryGap {
+  /// the room
+  pub room_name: String,
+  /// the interval its history has no messages for
+  pub gap: HistoryGap,
 }
 
 fn default_history_limit() -> u32 {

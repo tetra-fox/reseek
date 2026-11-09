@@ -13,7 +13,7 @@ use crate::jobs::{Job, JobSchedule, JobsRemoved};
 use crate::logs::LogRecord;
 use crate::messaging::conversations::{Conversation, ConversationMessage, ConversationUpdate};
 use crate::messaging::rooms::{
-  HistoryGap, JoinedRoom, PublicRoomMessage, Room, RoomMessageReceived, RoomUserJoined,
+  JoinedRoom, PublicRoomMessage, Room, RoomHistoryGap, RoomMessageReceived, RoomUserJoined,
   RoomUserLeft, RoomUserStatus,
 };
 use crate::messaging::{ChatPins, ChatUnread, ServerMessage};
@@ -133,9 +133,9 @@ pub enum LiveFrame {
   /// a member of a room we are in went away or came back
   #[serde(rename = "rooms.user_status")]
   RoomsUserStatus(RoomUserStatus),
-  /// room history has a gap, from a time reseek was not connected
+  /// a room's history has a gap, from a time reseek was not connected
   #[serde(rename = "rooms.gap")]
-  RoomsGap(HistoryGap),
+  RoomsGap(RoomHistoryGap),
   /// a message in any public room, while a stream follows the `public_rooms` topic; not stored
   #[serde(rename = "rooms.public_message")]
   RoomsPublicMessage(PublicRoomMessage),

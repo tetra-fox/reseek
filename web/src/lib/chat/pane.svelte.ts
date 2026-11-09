@@ -136,11 +136,11 @@ export class MessagePane {
         if (roomName === name) this.#arrived(fromRoom(message));
       })
     );
-    // a session that began after a gap says so; an open gap is replaced by its end. The frame
-    // comes after the rooms are joined again, so a room we left is not given one
+    // a session that began after a gap says so; an open gap is replaced by its end. The daemon
+    // sends one to each room we are in again whose history it falls in
     $effect(() =>
-      live.on("rooms.gap", (gap) => {
-        if (!chat.rooms.get(name)) return;
+      live.on("rooms.gap", ({ roomName, gap }) => {
+        if (roomName !== name) return;
         this.gaps = [...this.gaps.filter((g) => g.from !== gap.from), gap];
       })
     );

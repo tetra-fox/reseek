@@ -20335,7 +20335,7 @@
       },
       "HistoryGap": {
         "type": "object",
-        "description": "An interval with no room history because reseek was disconnected from Soulseek, whether or\nnot the daemon was running. The data of a `rooms.gap` frame, which is sent once logged in\nagain.",
+        "description": "An interval with no room history because reseek was disconnected from Soulseek, whether or\nnot the daemon was running.",
         "required": [
           "from"
         ],
@@ -22038,15 +22038,15 @@
           },
           {
             "type": "object",
-            "description": "room history has a gap, from a time reseek was not connected",
+            "description": "a room's history has a gap, from a time reseek was not connected",
             "required": [
               "data",
               "type"
             ],
             "properties": {
               "data": {
-                "$ref": "#/components/schemas/HistoryGap",
-                "description": "room history has a gap, from a time reseek was not connected"
+                "$ref": "#/components/schemas/RoomHistoryGap",
+                "description": "a room's history has a gap, from a time reseek was not connected"
               },
               "type": {
                 "type": "string",
@@ -24232,6 +24232,24 @@
               "$ref": "#/components/schemas/RoomMessage"
             },
             "description": "the messages, oldest first"
+          }
+        }
+      },
+      "RoomHistoryGap": {
+        "type": "object",
+        "description": "The gap a login closed in the history of one room we are in again, the data of a\n`rooms.gap` frame. Sent once logged in and the rooms are joined, for each room with history\nfrom before the gap.",
+        "required": [
+          "roomName",
+          "gap"
+        ],
+        "properties": {
+          "gap": {
+            "$ref": "#/components/schemas/HistoryGap",
+            "description": "the interval its history has no messages for"
+          },
+          "roomName": {
+            "type": "string",
+            "description": "the room"
           }
         }
       },

@@ -5337,8 +5337,7 @@ export interface components {
         };
         /**
          * @description An interval with no room history because reseek was disconnected from Soulseek, whether or
-         *     not the daemon was running. The data of a `rooms.gap` frame, which is sent once logged in
-         *     again.
+         *     not the daemon was running.
          */
         HistoryGap: {
             /**
@@ -6011,8 +6010,8 @@ export interface components {
             /** @enum {string} */
             type: "rooms.user_status";
         } | {
-            /** @description room history has a gap, from a time reseek was not connected */
-            data: components["schemas"]["HistoryGap"];
+            /** @description a room's history has a gap, from a time reseek was not connected */
+            data: components["schemas"]["RoomHistoryGap"];
             /** @enum {string} */
             type: "rooms.gap";
         } | {
@@ -7064,6 +7063,17 @@ export interface components {
             hasMore: boolean;
             /** @description the messages, oldest first */
             messages: components["schemas"]["RoomMessage"][];
+        };
+        /**
+         * @description The gap a login closed in the history of one room we are in again, the data of a
+         *     `rooms.gap` frame. Sent once logged in and the rooms are joined, for each room with history
+         *     from before the gap.
+         */
+        RoomHistoryGap: {
+            /** @description the interval its history has no messages for */
+            gap: components["schemas"]["HistoryGap"];
+            /** @description the room */
+            roomName: string;
         };
         /** @description Every room with stored messages, the reply of `GET /rooms/history`. */
         RoomHistoryList: {
