@@ -430,15 +430,20 @@ fn is_database(app: &AppState, name: &str) -> bool {
   app.databases.names().iter().any(|known| known == name)
 }
 
-/// Runs the maintenance run `data` describes again, started by the user, in the background.
-/// 409 when it cannot be: kept in a shape this version does not read, or of a database that is
-/// gone.
-pub fn run_again(app: &AppState, data: Option<serde_json::Value>) -> Result<(), ApiError> {
+/// Runs the maintenance run `data` of the job `id` describes again, started by the user, in
+/// the background. 409 when it cannot be: kept by a version that kept none, kept in a shape
+/// this version does not read, which is logged, or of a database that is gone.
+pub fn run_again(
+  app: &AppState,
+  id: Uuid,
+  data: Option<serde_json::Value>,
+) -> Result<(), ApiError> {
   let refused = |detail: String| ApiError::conflict("This job cannot be run again", Some(detail));
-  let older = || refused("It was made by an older version of reseek".to_string());
-  let run: MaintenanceRun = serde_json::from_value(data.ok_or_else(older)?).map_err(|e| {
-    debug!(error = %e, "maintenance job's run not read");
-    older()
+  let data =
+    data.ok_or_else(|| refused("It was made by an older version of reseek".to_string()))?;
+  let run: MaintenanceRun = serde_json::from_value(data).map_err(|e| {
+    warn!(job = %id, error = %e, "maintenance job's stored run not read");
+    refused("What it ran cannot be read".to_string())
   })?;
   let app = app.clone();
   match run {
@@ -551,10 +556,10 @@ mod tests {
   async fn a_vacuum_of_a_database_that_is_gone_is_refused_rather_than_dropped() {
     let app = app(TRUSTED, &[]).await;
     let gone = serde_json::json!({ "run": "vacuum", "database": "old" });
-    let refused = run_again(&app.state, Some(gone)).unwrap_err();
+    let refused = run_again(&app.state, Uuid::new_v4(), Some(gone)).unwrap_err();
     assert_eq!(refused.status(), axum::http::StatusCode::CONFLICT);
     let name = app.state.databases.names().remove(0);
     let known = serde_json::json!({ "run": "vacuum", "database": name });
-    run_again(&app.state, Some(known)).unwrap();
+    run_again(&app.state, Uuid::new_v4(), Some(known)).unwrap();
   }
 }
