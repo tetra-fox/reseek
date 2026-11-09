@@ -42,7 +42,7 @@ export const layout = (duration: number, scale: Schemas["SpectrogramScale"]) =>
     guides: [
       { hz: 16000, label: "MP3 128k", kind: "encoder" },
       { hz: CUTOFF_HZ, label: "analyzer's cutoff", kind: "cutoff" },
-      { hz: 19000, label: "MP3 192k", kind: "encoder" },
+      { hz: 18600, label: "MP3 192k", kind: "encoder" },
       { hz: 19500, label: "MP3 224-256k", kind: "encoder" },
       { hz: 20000, label: "MP3 320k / AAC", kind: "encoder" },
       { hz: MAX_HZ, label: "file limit", kind: "file_limit" }
