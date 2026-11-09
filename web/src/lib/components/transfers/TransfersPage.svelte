@@ -292,7 +292,10 @@
 
   /** A row key, only where the row's own buttons and menu offer the same */
   const onkey = (key: "retry" | "cancel" | "open", t: Transfer) => {
-    if (!rowActions(t, direction)[key]) return;
+    const can = rowActions(t, direction);
+    // the menu's Download again is the daemon's retry of a finished download
+    if (key === "retry" && can.downloadAgain) return void act(store, "retry", [t.id]);
+    if (!can[key]) return;
     if (key === "open") return void open(t);
     void runBulk(key, [t]);
   };

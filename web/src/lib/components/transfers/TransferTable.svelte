@@ -140,7 +140,10 @@
     return () => clearInterval(timer);
   });
 
-  /** A key the focused row acts on: Delete removes, R retries, C cancels, O opens */
+  /**
+   * A key the focused row acts on: Delete removes, R retries or downloads again, C cancels,
+   * O opens
+   */
   const actOnKey = (e: KeyboardEvent, line: TreeLine<Transfer>) => {
     if (line.kind !== "item") return false;
     const t = line.item;

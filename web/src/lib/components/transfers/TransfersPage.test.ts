@@ -186,6 +186,17 @@ describe("the transfers table", () => {
       expect([row(a.id), row(b.id)]).toEqual([null, null]);
     });
 
+    it("download a finished download again with r, as its menu does", async () => {
+      signIn();
+      const a = transfer({ filename: "x\\a.flac", state: "Completed, Succeeded" });
+      listing = [a];
+      const net = await start();
+      press(grid(), "ArrowDown");
+      expect(press(grid(), "r").defaultPrevented).toBe(true);
+      await flushFaked();
+      expect(bulk(net).map((r) => r.body)).toEqual([{ action: "retry", ids: [a.id] }]);
+    });
+
     it("remove the focused row alone when it is outside the selection, and undo it", async () => {
       signIn();
       const a = transfer({ filename: "x\\a.flac", state: "Completed, Succeeded" });
