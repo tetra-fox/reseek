@@ -186,3 +186,16 @@ test("a toast sits above the docked activity log", async ({ page }) => {
   const [above, top] = [(await toast.boundingBox())!, (await dock.boundingBox())!];
   expect(above.y + above.height).toBeLessThanOrEqual(top.y);
 });
+
+test("an address typed over a chat asks nothing of its name", async ({ page }) => {
+  await fakeChat(page);
+  const asked: string[] = [];
+  page.on("request", (request) => asked.push(new URL(request.url()).pathname));
+  await visit(page, "/chat");
+  await page.goto("./#/chat/alice");
+  await expect(page.getByRole("log")).toBeVisible();
+  // as typed into the browser's bar, which the app reloads for
+  await page.goto("./#/system/settings");
+  await expect(page.locator('[id="soulseek.description"]')).toBeVisible();
+  expect(asked.filter((path) => /conversations\/(system|settings)/.test(path))).toEqual([]);
+});

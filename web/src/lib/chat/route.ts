@@ -3,16 +3,18 @@ import { chatHref, href, roomHref } from "#lib/nav.js";
 import type { Target } from "./pane.svelte";
 import type { SearchKind } from "./search/match";
 
+/** Whether `path` is the chat screen's */
+export const isChatPath = (path: string) => path === "/chat" || path.startsWith("/chat/");
+
 /**
  * What a chat route shows, from its path as written: `/chat/search` the search results,
  * `/chat/public` the feed of every public room, `/chat/rooms/<room>` a room, `/chat/<user>` a
  * conversation, `/chat` none. The names are read from the written path, so a user called
- * `search` is reached as `/chat/%73earch`. A path outside `/chat` shows none: the chat screen
- * still reads the address for a moment after leaving it
+ * `search` is reached as `/chat/%73earch`
  */
 export const chatTarget = (path: string): Target | "search" | "public" | null => {
-  const [, root, ...parts] = path.split("/");
-  if (root !== "chat" || !parts.length || !parts[0]) return null;
+  const parts = path.split("/").slice(2);
+  if (!parts.length || !parts[0]) return null;
   if (parts.length === 1 && parts[0] === "search") return "search";
   if (parts.length === 1 && parts[0] === "public") return "public";
   if (parts[0] === "rooms" && parts.length === 2 && parts[1]) {

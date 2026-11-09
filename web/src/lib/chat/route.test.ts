@@ -29,11 +29,6 @@ describe("chat routes", () => {
     expect(searchKind(null)).toBe("all");
   });
 
-  it("reads nothing from another screen's path, which it sees as the chat screen closes", () => {
-    expect(chatTarget("/system/settings")).toBeNull();
-    expect(chatTarget("/users/rooms/alice")).toBeNull();
-  });
-
   it("round-trips names the routes use for themselves, slashes and dots", () => {
     for (const name of ["search", "rooms", "public", "a/b", "..", "50%"]) {
       expect(chatTarget(path(chatHref(name)))).toEqual({ kind: "user", name });
