@@ -4,6 +4,7 @@
 
   import type { Schemas } from "#lib/api/client.js";
   import Badge from "#lib/components/ui/Badge.svelte";
+  import Button from "#lib/components/ui/Button.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import type { Editability } from "#lib/config/editability.js";
   import type { Draft } from "#lib/config/fields.js";
@@ -159,17 +160,16 @@
         <Tooltip
           text={held ?? (tabular ? "Restore default" : `Restore default: ${shown(info.default)}`)}>
           {#snippet child({ props })}
-            <button
+            <!-- a dashed badge rather than a control's box, so it reads as a mark on the value -->
+            <Button
               {...props}
-              type="button"
-              class="flex items-center gap-1 rounded-badge border border-dashed border-accent/50 px-1.5 text-xs text-accent-soft-fg usable:hover:bg-accent-soft unusable:opacity-50"
+              variant="link"
+              class="gap-1 rounded-badge border border-dashed border-accent/50 px-1.5 text-xs font-normal text-accent-soft-fg usable:hover:bg-accent-soft usable:hover:no-underline"
               aria-label={`Restore default of ${field.label}`}
               aria-disabled={held ? true : undefined}
-              onclick={() => {
-                if (!held) ondefault();
-              }}>
+              onclick={ondefault}>
               <RotateCcwIcon class="size-3" />default
-            </button>
+            </Button>
           {/snippet}
         </Tooltip>
       {/if}
