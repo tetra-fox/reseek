@@ -63,11 +63,18 @@
     file = outcome.data;
     text = outcome.data.text ?? "";
     validation = null;
+  };
+  /**
+   * Reads the file again and drops what the last save came to, at once rather than once the read
+   * lands, so a failed read leaves no save of another file running
+   */
+  const reload = () => {
     lastSave = { kind: "idle" };
+    void load();
   };
   $effect(() => {
     void name;
-    untrack(() => void load());
+    untrack(reload);
   });
 
   // the newest check wins; an answer to an older text is dropped
@@ -129,7 +136,7 @@
       title: "Discard changes?",
       body: "Your edits to the file will be lost",
       confirm: "Discard",
-      run: () => void load()
+      run: reload
     });
 
   beforeNavigate(({ cancel, type }) => {
@@ -237,9 +244,7 @@
         ? `${name} changed on disk. Reload it, then make the changes again.`
         : failed.error}
       {#snippet action()}
-        {#if failed.stale}<Button variant="outline" size="sm" onclick={() => void load()}
-            >Reload</Button
-          >{/if}
+        {#if failed.stale}<Button variant="outline" size="sm" onclick={reload}>Reload</Button>{/if}
       {/snippet}
     </Notice>
   {/if}
