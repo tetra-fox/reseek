@@ -6,6 +6,11 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* a control that can be used, and one that can't: disabled, or aria-disabled, which keeps it in
+   the tab order so its tooltip can say why */
+@custom-variant usable (&:not(:disabled, [aria-disabled="true"]));
+@custom-variant unusable (&:is(:disabled, [aria-disabled="true"]));
+
 /* inside a row someone is using: the pointer is on it, the keys are on it or on a control in it, or
    one of its menus is open. A row's control keeps no state from a mouse click, which leaves focus
    on it. Rows take the pointer from data-super-hover-active, not :hover, which holds still while a

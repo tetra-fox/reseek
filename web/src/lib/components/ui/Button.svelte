@@ -22,20 +22,24 @@
     href,
     class: className,
     children,
+    onclick,
     ...rest
   }: Props = $props();
 
+  // aria-disabled keeps the button focusable, so a tooltip can give the reason, and does nothing
+  const unusable = $derived(rest["aria-disabled"] === true || rest["aria-disabled"] === "true");
+
   const variants = {
     primary:
-      "border-transparent bg-accent text-accent-fg shadow-xs not-disabled:hover:bg-accent-hover not-disabled:active:bg-accent-press",
+      "border-transparent bg-accent text-accent-fg shadow-xs usable:hover:bg-accent-hover usable:active:bg-accent-press",
     secondary:
-      "border-transparent bg-surface-muted text-fg not-disabled:hover:bg-hover not-disabled:active:bg-press",
+      "border-transparent bg-surface-muted text-fg usable:hover:bg-hover usable:active:bg-press",
     outline:
-      "border-input bg-surface text-fg shadow-xs not-disabled:hover:bg-hover not-disabled:active:bg-press",
-    ghost: "border-transparent text-fg not-disabled:hover:bg-hover not-disabled:active:bg-press",
+      "border-input bg-surface text-fg shadow-xs usable:hover:bg-hover usable:active:bg-press",
+    ghost: "border-transparent text-fg usable:hover:bg-hover usable:active:bg-press",
     danger:
-      "border-transparent bg-danger text-danger-fg not-disabled:hover:bg-danger-hover not-disabled:active:bg-danger-press",
-    link: "text-accent underline-offset-2 not-disabled:hover:underline"
+      "border-transparent bg-danger text-danger-fg usable:hover:bg-danger-hover usable:active:bg-danger-press",
+    link: "text-accent underline-offset-2 usable:hover:underline"
   };
 
   const sizes = {
@@ -47,19 +51,23 @@
 </script>
 
 <!-- link buttons sit inside a line of text, so they take its size instead of a control height.
-     not-disabled rather than enabled, since a link never matches :enabled. Every other variant has
+     usable rather than enabled, since a link never matches :enabled. Every other variant has
      a border, clear where it doesn't show, so a toggle between two keeps its width -->
 <svelte:element
   this={href ? "a" : "button"}
   {href}
   type={href ? undefined : type}
   class={cn(
-    "inline-flex shrink-0 items-center justify-center gap-1.5 rounded-control font-medium whitespace-nowrap transition-[color,background-color,border-color,opacity,scale] duration-(--motion-fast) ease-out-soft not-disabled:active:scale-[0.97] disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+    "inline-flex shrink-0 items-center justify-center gap-1.5 rounded-control font-medium whitespace-nowrap transition-[color,background-color,border-color,opacity,scale] duration-(--motion-fast) ease-out-soft usable:active:scale-[0.97] unusable:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
     variants[variant],
     variant !== "link" && ["border", sizes[size]],
     className
   )}
   data-label
-  {...rest}>
+  {...rest}
+  onclick={(e: MouseEvent & { currentTarget: EventTarget & HTMLButtonElement }) => {
+    if (unusable) return e.preventDefault();
+    onclick?.(e);
+  }}>
   {@render children?.()}
 </svelte:element>
