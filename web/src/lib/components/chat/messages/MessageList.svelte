@@ -23,6 +23,7 @@
   import { freezesWhileUsed, interaction } from "#lib/lists/interaction.svelte.js";
   import { ListWindow } from "#lib/lists/virtual.svelte.js";
   import { motionFast } from "#lib/ui/motion.js";
+  import { rem } from "#lib/ui/viewport.svelte.js";
 
   import GapRow from "./GapRow.svelte";
   import MessageRow from "./MessageRow.svelte";
@@ -67,10 +68,14 @@
   ]);
   const newest = $derived(pane.ordered.at(-1)?.localId ?? null);
 
-  /** A line's height before it is drawn */
+  /**
+   * A line's height before it is drawn, in rem. A line drawn at another height than its guess
+   * moves the lines under it, so the separators' guesses are their drawn heights: one line of
+   * small text, with `py-2` for the start, a day and a gap
+   */
   const guess = (line: Line | Start) => {
-    if (line.kind === "unread") return 24;
-    if (line.kind !== "message") return 36;
+    if (line.kind === "unread") return 1.5;
+    if (line.kind !== "message") return 2;
     const { message: m, head } = line;
     const rows = m.hidden
       ? 1
@@ -78,7 +83,7 @@
           .slice(0, LONG)
           .split("\n")
           .reduce((n, text) => n + Math.max(1, Math.ceil(text.length / 80)), 0);
-    return (head ? 32 : 2) + 20 * rows;
+    return (head ? 2 : 0.125) + 1.25 * rows;
   };
 
   /** the message the arrow keys are on, the one message that can take focus */
@@ -108,7 +113,8 @@
     () => {
       const keep = activeAt;
       return {
-        estimateSize: (index) => guess(lines[index]),
+        estimateSize: (index) => guess(lines[index]) * rem.px,
+        sizes: rem.px,
         overscan: 12,
         paddingEnd: 8,
         // while the scrollbar is held at the top, older pages go above it rather than keep the view
