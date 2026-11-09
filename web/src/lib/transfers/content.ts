@@ -1,4 +1,4 @@
-import { api, root } from "#lib/api/client.js";
+import { api, byUser, root } from "#lib/api/client.js";
 import { call, type Outcome } from "#lib/request.js";
 import { session } from "#lib/session.svelte.js";
 
@@ -15,8 +15,9 @@ export const contentUrl = async (
   disposition: "inline" | "attachment",
   as: "content" | "wav" = "content"
 ): Promise<Outcome<string>> => {
-  const path = `${root()}/api/v0/transfers/downloads/${encodeURIComponent(t.username)}/${t.id}/${as}`;
-  const query = new URLSearchParams({ disposition });
+  const user = byUser(t.username);
+  const path = `${root()}/api/v0/transfers/downloads/${encodeURIComponent(user.path.username)}/${t.id}/${as}`;
+  const query = new URLSearchParams({ ...user.query, disposition });
   if (!session.canSignOut) {
     const token = await call(() =>
       api.POST("/api/v0/session/file-token", { body: { transferId: t.id } })

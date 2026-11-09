@@ -20,9 +20,7 @@ fn transfers(direction: TransferDirection) -> Route {
 
 /// The route of one transfer.
 fn transfer(direction: TransferDirection, username: &str, id: Uuid) -> Route {
-  transfers(direction)
-    .segment(username)
-    .segment(&id.to_string())
+  transfers(direction).user(username).segment(&id.to_string())
 }
 
 impl Client {
@@ -53,7 +51,7 @@ impl Client {
     direction: TransferDirection,
     username: &str,
   ) -> Result<UserResponse> {
-    json(self.get(transfers(direction).segment(username))).await
+    json(self.get(transfers(direction).user(username))).await
   }
 
   /// `GET /transfers/{downloads,uploads}/{username}/{id}`: one transfer.

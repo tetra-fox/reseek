@@ -11,6 +11,7 @@ use api_types::files::{
   ArchiveQuery, ContentQuery, DirectoryListingQuery, FileRoot, FileToken, FileTokenRequest,
   FilesystemDirectory,
 };
+use api_types::users::UsernameQuery;
 use axum::Extension;
 use axum::extract::State;
 use axum::http::{HeaderMap, Method, StatusCode};
@@ -21,7 +22,7 @@ use utoipa_axum::routes;
 use uuid::Uuid;
 
 use super::error::ApiError;
-use super::extract::{Json, Path, Query};
+use super::extract::{Id, Json, NamedUser, Path, Query};
 use super::validate;
 use crate::app::AppState;
 use crate::auth::{AnyRole, Authentication, Authorized, ReadWrite};
@@ -351,7 +352,7 @@ async fn file_wav_head(
 #[utoipa::path(
   get, path = "/transfers/downloads/{username}/{id}/wav", tag = "files",
   params(
-    ("username" = String, Path, description = "the peer"),
+    ("username" = String, Path, description = "the peer"), UsernameQuery,
     ("id" = Uuid, Path, description = "the download's id"),
     ContentQuery
   ),
@@ -367,7 +368,8 @@ async fn file_wav_head(
 async fn download_wav(
   State(app): State<AppState>,
   Extension(authentication): Extension<Authentication>,
-  Path((username, id)): Path<(String, Uuid)>,
+  NamedUser(username): NamedUser,
+  Id(id): Id<Uuid>,
   Query(query): Query<ContentQuery>,
   method: Method,
   headers: HeaderMap,
@@ -386,7 +388,7 @@ async fn download_wav(
 #[utoipa::path(
   head, path = "/transfers/downloads/{username}/{id}/wav", tag = "files",
   params(
-    ("username" = String, Path, description = "the peer"),
+    ("username" = String, Path, description = "the peer"), UsernameQuery,
     ("id" = Uuid, Path, description = "the download's id"),
     ContentQuery
   ),
@@ -400,19 +402,20 @@ async fn download_wav(
 async fn download_wav_head(
   state: State<AppState>,
   authentication: Extension<Authentication>,
-  path: Path<(String, Uuid)>,
+  user: NamedUser,
+  id: Id<Uuid>,
   query: Query<ContentQuery>,
   method: Method,
   headers: HeaderMap,
 ) -> Result<Response, ApiError> {
-  download_wav(state, authentication, path, query, method, headers).await
+  download_wav(state, authentication, user, id, query, method, headers).await
 }
 
 /// The file a succeeded download was moved to, served as a file is.
 #[utoipa::path(
   get, path = "/transfers/downloads/{username}/{id}/content", tag = "files",
   params(
-    ("username" = String, Path, description = "the peer"),
+    ("username" = String, Path, description = "the peer"), UsernameQuery,
     ("id" = Uuid, Path, description = "the download's id"),
     ContentQuery
   ),
@@ -428,7 +431,8 @@ async fn download_wav_head(
 async fn download_content(
   State(app): State<AppState>,
   Extension(authentication): Extension<Authentication>,
-  Path((username, id)): Path<(String, Uuid)>,
+  NamedUser(username): NamedUser,
+  Id(id): Id<Uuid>,
   Query(query): Query<ContentQuery>,
   method: Method,
   headers: HeaderMap,
@@ -447,7 +451,7 @@ async fn download_content(
 #[utoipa::path(
   head, path = "/transfers/downloads/{username}/{id}/content", tag = "files",
   params(
-    ("username" = String, Path, description = "the peer"),
+    ("username" = String, Path, description = "the peer"), UsernameQuery,
     ("id" = Uuid, Path, description = "the download's id"),
     ContentQuery
   ),
@@ -461,12 +465,13 @@ async fn download_content(
 async fn download_content_head(
   state: State<AppState>,
   authentication: Extension<Authentication>,
-  path: Path<(String, Uuid)>,
+  user: NamedUser,
+  id: Id<Uuid>,
   query: Query<ContentQuery>,
   method: Method,
   headers: HeaderMap,
 ) -> Result<Response, ApiError> {
-  download_content(state, authentication, path, query, method, headers).await
+  download_content(state, authentication, user, id, query, method, headers).await
 }
 
 /// A directory under a root as a zip archive, streamed. One archive per principal at a time.

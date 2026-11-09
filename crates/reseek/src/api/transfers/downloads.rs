@@ -9,6 +9,7 @@ use api_types::transfers::{
   EnqueueDownloadJobRequest, EnqueueDownloadJobResponse, IncludeRemovedQuery, MoveQueuedDownloads,
   Transfer, TransferListQuery, TransferQuery, UserResponse,
 };
+use api_types::users::UsernameQuery;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
@@ -19,7 +20,7 @@ use uuid::Uuid;
 
 use super::list_query;
 use crate::api::error::ApiError;
-use crate::api::extract::{Json, Path, Query};
+use crate::api::extract::{Id, Json, NamedUser, Query};
 use crate::api::validate::USERNAME_CHARS;
 use crate::app::AppState;
 use crate::auth::{AnyRole, Authorized, ReadWrite};
@@ -118,7 +119,7 @@ async fn page(
 /// The downloads from one user, grouped by remote directory.
 #[utoipa::path(
   get, path = "/transfers/downloads/{username}", tag = "transfers",
-  params(("username" = String, Path, description = "the peer")),
+  params(("username" = String, Path, description = "the peer"), UsernameQuery),
   responses(
     (status = 200, body = UserResponse), (status = 401, body = api_types::ErrorBody),
     (status = 404, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
@@ -127,7 +128,7 @@ async fn page(
 async fn user_downloads(
   State(app): State<AppState>,
   _caller: Authorized<AnyRole>,
-  Path(username): Path<String>,
+  NamedUser(username): NamedUser,
 ) -> Result<Json<UserResponse>, ApiError> {
   app
     .services
@@ -141,7 +142,7 @@ async fn user_downloads(
 #[utoipa::path(
   get, path = "/transfers/downloads/{username}/{id}", tag = "transfers",
   params(
-    ("username" = String, Path, description = "the peer"),
+    ("username" = String, Path, description = "the peer"), UsernameQuery,
     ("id" = Uuid, Path, description = "the download's id"),
     TransferQuery
   ),
@@ -154,7 +155,8 @@ async fn user_downloads(
 async fn download(
   State(app): State<AppState>,
   _caller: Authorized<AnyRole>,
-  Path((username, id)): Path<(String, Uuid)>,
+  NamedUser(username): NamedUser,
+  Id(id): Id<Uuid>,
   Query(query): Query<TransferQuery>,
 ) -> Result<Json<Transfer>, ApiError> {
   app
@@ -169,7 +171,7 @@ async fn download(
 #[utoipa::path(
   get, path = "/transfers/downloads/{username}/{id}/position", tag = "transfers",
   params(
-    ("username" = String, Path, description = "the peer"),
+    ("username" = String, Path, description = "the peer"), UsernameQuery,
     ("id" = Uuid, Path, description = "the download's id")
   ),
   responses(
@@ -182,7 +184,8 @@ async fn download(
 async fn place_in_queue(
   State(app): State<AppState>,
   _caller: Authorized<AnyRole>,
-  Path((username, id)): Path<(String, Uuid)>,
+  NamedUser(username): NamedUser,
+  Id(id): Id<Uuid>,
 ) -> Result<Json<u32>, ApiError> {
   app
     .services
@@ -306,7 +309,7 @@ fn group_request(request: &EnqueueDownloadGroup) -> Result<(), ApiError> {
   operation_id = "cancel_download",
   delete, path = "/transfers/downloads/{username}/{id}", tag = "transfers",
   params(
-    ("username" = String, Path, description = "the peer"),
+    ("username" = String, Path, description = "the peer"), UsernameQuery,
     ("id" = Uuid, Path, description = "the download's id"),
     CancelQuery
   ),
@@ -319,7 +322,8 @@ fn group_request(request: &EnqueueDownloadGroup) -> Result<(), ApiError> {
 async fn cancel(
   State(app): State<AppState>,
   caller: Authorized<ReadWrite>,
-  Path((username, id)): Path<(String, Uuid)>,
+  NamedUser(username): NamedUser,
+  Id(id): Id<Uuid>,
   Query(query): Query<CancelQuery>,
 ) -> Result<StatusCode, ApiError> {
   app

@@ -1,4 +1,4 @@
-import { api } from "#lib/api/client.js";
+import { api, byUser } from "#lib/api/client.js";
 import { getFileName, plural } from "#lib/format.js";
 import { call } from "#lib/request.js";
 
@@ -39,7 +39,7 @@ export const sentText = (username: string, queued: string[], failed: { message: 
 export const sendFiles = (username: string, files: string[]) =>
   call(() =>
     api.POST("/api/v0/transfers/uploads/{username}", {
-      params: { path: { username } },
+      params: byUser(username),
       body: { files }
     })
   );

@@ -73,6 +73,14 @@ async fn a_download_is_found_by_its_peer_and_id_with_its_history() {
     .call("GET", "/api/v0/transfers/downloads/carol", None)
     .await;
   assert_eq!(status, 404, "a user without downloads");
+
+  // a name no path segment can hold comes in the query
+  let dots = Record::download("..", "@@abcde\\Music\\02.flac", 10);
+  insert(&app, &dots).await;
+  let uri = format!("/api/v0/transfers/downloads/_/{}?username=..", dots.id);
+  let (status, body) = app.call("GET", &uri, None).await;
+  assert_eq!(status, 200, "{body}");
+  assert_eq!(body["username"], "..");
 }
 
 #[tokio::test]

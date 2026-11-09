@@ -10695,6 +10695,15 @@
             }
           },
           {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "start",
             "in": "query",
             "description": "the start of the window, the first release when left out",
@@ -11435,6 +11444,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -11490,6 +11508,15 @@
             "in": "path",
             "description": "the peer",
             "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
             "schema": {
               "type": "string"
             }
@@ -11574,6 +11601,15 @@
             "in": "path",
             "description": "the peer",
             "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
             "schema": {
               "type": "string"
             }
@@ -11668,6 +11704,15 @@
             }
           },
           {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "id",
             "in": "path",
             "description": "the download's id",
@@ -11747,6 +11792,15 @@
             "in": "path",
             "description": "the peer",
             "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
             "schema": {
               "type": "string"
             }
@@ -11856,6 +11910,15 @@
             }
           },
           {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "id",
             "in": "path",
             "description": "the download's id",
@@ -11944,6 +12007,15 @@
             }
           },
           {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "id",
             "in": "path",
             "description": "the download's id",
@@ -12019,6 +12091,15 @@
             "in": "path",
             "description": "the peer",
             "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
             "schema": {
               "type": "string"
             }
@@ -12100,6 +12181,15 @@
             "in": "path",
             "description": "the peer",
             "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
             "schema": {
               "type": "string"
             }
@@ -12197,6 +12287,15 @@
             }
           },
           {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "id",
             "in": "path",
             "description": "the download's id",
@@ -12289,6 +12388,15 @@
             }
           },
           {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "id",
             "in": "path",
             "description": "the download's id",
@@ -12372,6 +12480,15 @@
             "in": "path",
             "description": "the peer",
             "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
             "schema": {
               "type": "string"
             }
@@ -12509,6 +12626,15 @@
             }
           },
           {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "id",
             "in": "path",
             "description": "the download's id",
@@ -12578,6 +12704,15 @@
             "in": "path",
             "description": "the peer",
             "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
             "schema": {
               "type": "string"
             }
@@ -12684,6 +12819,15 @@
             "in": "path",
             "description": "the peer",
             "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
             "schema": {
               "type": "string"
             }
@@ -12825,6 +12969,15 @@
             "in": "path",
             "description": "the peer",
             "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
             "schema": {
               "type": "string"
             }
@@ -13274,6 +13427,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -13318,6 +13480,15 @@
             "in": "path",
             "description": "the user to send the files to",
             "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
             "schema": {
               "type": "string"
             }
@@ -13386,6 +13557,15 @@
             "in": "path",
             "description": "the peer",
             "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
             "schema": {
               "type": "string"
             }
@@ -13470,6 +13650,15 @@
             "in": "path",
             "description": "the peer",
             "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
             "schema": {
               "type": "string"
             }
@@ -13564,6 +13753,15 @@
             }
           },
           {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "id",
             "in": "path",
             "description": "the upload's id",
@@ -13648,6 +13846,15 @@
             "in": "path",
             "description": "the peer",
             "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
             "schema": {
               "type": "string"
             }

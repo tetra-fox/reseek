@@ -36,10 +36,13 @@ type Piece = "spectrogram" | "waveform" | "spectra";
 
 /** Loads a piece of a target's pictures, the overview or tile `tile`, as its bytes */
 const load = async (t: Target, piece: Piece, tile?: number): Promise<Outcome<ArrayBuffer>> => {
-  const query = tile === undefined ? "" : `?tile=${tile}`;
+  const route = analysisRoute(t);
+  const query = new URLSearchParams(route.query);
+  if (tile !== undefined) query.set("tile", String(tile));
+  const search = query.size ? `?${query}` : "";
   let response: Response;
   try {
-    response = await globalThis.fetch(`${root()}${analysisRoute(t)}/${piece}${query}`, {
+    response = await globalThis.fetch(`${root()}${route.path}/${piece}${search}`, {
       credentials: "same-origin"
     });
   } catch {

@@ -17361,6 +17361,8 @@ export interface operations {
     user: {
         parameters: {
             query?: {
+                /** @description the username, exactly */
+                username?: string;
                 /** @description the start of the window, the first release when left out */
                 start?: string;
                 /** @description the end of the window, inclusive, now when left out */
@@ -17923,7 +17925,10 @@ export interface operations {
     };
     user_downloads: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description the username, exactly */
+                username?: string;
+            };
             header?: never;
             path: {
                 /** @description the peer */
@@ -17970,6 +17975,8 @@ export interface operations {
     download: {
         parameters: {
             query?: {
+                /** @description the username, exactly */
+                username?: string;
                 /** @description fill `stateHistory` */
                 includeHistory?: boolean;
             };
@@ -18029,6 +18036,8 @@ export interface operations {
     cancel_download: {
         parameters: {
             query?: {
+                /** @description the username, exactly */
+                username?: string;
                 /** @description also remove the transfer from the listings, once it has completed when it is still running */
                 remove?: boolean;
             };
@@ -18095,6 +18104,8 @@ export interface operations {
     report_download: {
         parameters: {
             query?: {
+                /** @description the username, exactly */
+                username?: string;
                 /** @description include the per-window measures, true when left out */
                 windows?: boolean;
             };
@@ -18154,6 +18165,8 @@ export interface operations {
     run_download: {
         parameters: {
             query?: {
+                /** @description the username, exactly */
+                username?: string;
                 /** @description analyze again even when a report for the file as it is now exists */
                 force?: boolean;
             };
@@ -18228,7 +18241,10 @@ export interface operations {
     };
     set_download_override: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description the username, exactly */
+                username?: string;
+            };
             header?: never;
             path: {
                 /** @description the peer */
@@ -18295,7 +18311,10 @@ export interface operations {
     };
     clear_download_override: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description the username, exactly */
+                username?: string;
+            };
             header?: never;
             path: {
                 /** @description the peer */
@@ -18358,7 +18377,10 @@ export interface operations {
     };
     spectra_download: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description the username, exactly */
+                username?: string;
+            };
             header?: never;
             path: {
                 /** @description the peer */
@@ -18423,6 +18445,8 @@ export interface operations {
     spectrogram_download: {
         parameters: {
             query?: {
+                /** @description the username, exactly */
+                username?: string;
                 /** @description the tile at full detail, from 0; the overview of the whole file when left out */
                 tile?: number;
             };
@@ -18490,6 +18514,8 @@ export interface operations {
     waveform_download: {
         parameters: {
             query?: {
+                /** @description the username, exactly */
+                username?: string;
                 /** @description the tile at full detail, from 0; the overview of the whole file when left out */
                 tile?: number;
             };
@@ -18556,7 +18582,10 @@ export interface operations {
     };
     window_download: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description the username, exactly */
+                username?: string;
+            };
             header?: never;
             path: {
                 /** @description the peer */
@@ -18615,6 +18644,8 @@ export interface operations {
     download_content: {
         parameters: {
             query?: {
+                /** @description the username, exactly */
+                username?: string;
                 /** @description whether the browser shows the file or saves it */
                 disposition?: components["schemas"]["ContentDisposition"];
                 /** @description the name the browser saves the file under, null for the file's own name */
@@ -18709,6 +18740,8 @@ export interface operations {
     download_content_head: {
         parameters: {
             query?: {
+                /** @description the username, exactly */
+                username?: string;
                 /** @description whether the browser shows the file or saves it */
                 disposition?: components["schemas"]["ContentDisposition"];
                 /** @description the name the browser saves the file under, null for the file's own name */
@@ -18788,7 +18821,10 @@ export interface operations {
     };
     place_in_queue: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description the username, exactly */
+                username?: string;
+            };
             header?: never;
             path: {
                 /** @description the peer */
@@ -18869,6 +18905,8 @@ export interface operations {
     download_wav: {
         parameters: {
             query?: {
+                /** @description the username, exactly */
+                username?: string;
                 /** @description whether the browser shows the file or saves it */
                 disposition?: components["schemas"]["ContentDisposition"];
                 /** @description the name the browser saves the file under, null for the file's own name */
@@ -18971,6 +19009,8 @@ export interface operations {
     download_wav_head: {
         parameters: {
             query?: {
+                /** @description the username, exactly */
+                username?: string;
                 /** @description whether the browser shows the file or saves it */
                 disposition?: components["schemas"]["ContentDisposition"];
                 /** @description the name the browser saves the file under, null for the file's own name */
@@ -19306,7 +19346,10 @@ export interface operations {
     };
     user_uploads: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description the username, exactly */
+                username?: string;
+            };
             header?: never;
             path: {
                 /** @description the peer */
@@ -19344,7 +19387,10 @@ export interface operations {
     };
     send_files: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description the username, exactly */
+                username?: string;
+            };
             header?: never;
             path: {
                 /** @description the user to send the files to */
@@ -19395,6 +19441,8 @@ export interface operations {
     upload: {
         parameters: {
             query?: {
+                /** @description the username, exactly */
+                username?: string;
                 /** @description fill `stateHistory` */
                 includeHistory?: boolean;
             };
@@ -19454,6 +19502,8 @@ export interface operations {
     cancel_upload: {
         parameters: {
             query?: {
+                /** @description the username, exactly */
+                username?: string;
                 /** @description also remove the transfer from the listings, once it has completed when it is still running */
                 remove?: boolean;
             };
@@ -19519,7 +19569,10 @@ export interface operations {
     };
     bump: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description the username, exactly */
+                username?: string;
+            };
             header?: never;
             path: {
                 /** @description the peer */
@@ -19590,7 +19643,10 @@ export interface operations {
     };
     why: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description the username, exactly */
+                username?: string;
+            };
             header?: never;
             path: {
                 /** @description the peer */

@@ -1,4 +1,4 @@
-import { api, type Schemas } from "#lib/api/client.js";
+import { api, byUser, type Schemas } from "#lib/api/client.js";
 import { call, type Outcome } from "#lib/request.js";
 import { encodePath } from "#lib/transfers/content.js";
 
@@ -24,11 +24,17 @@ export type Target =
   | { kind: "file"; root: Schemas["FileRoot"]; path: string }
   | { kind: "download"; username: string; id: string };
 
-/** The route of a target's analysis, from the daemon's root */
-export const analysisRoute = (t: Target) =>
-  t.kind === "file"
-    ? `/api/v0/files/${t.root}/files/${encodePath(t.path)}/analysis`
-    : `/api/v0/transfers/downloads/${encodeURIComponent(t.username)}/${t.id}/analysis`;
+/** The route of a target's analysis, from the daemon's root, and the query it needs */
+export const analysisRoute = (t: Target): { path: string; query: Record<string, string> } => {
+  if (t.kind === "file") {
+    return { path: `/api/v0/files/${t.root}/files/${encodePath(t.path)}/analysis`, query: {} };
+  }
+  const user = byUser(t.username);
+  return {
+    path: `/api/v0/transfers/downloads/${encodeURIComponent(user.path.username)}/${t.id}/analysis`,
+    query: user.query
+  };
+};
 
 /** A key that names the same file however the target names it, for one store of reports */
 export const targetKey = (t: Target) =>
@@ -51,7 +57,10 @@ export const loadReport = async (t: Target): Promise<Outcome<Report | null>> => 
           params: { path: { root: t.root, path: encodePath(t.path) } }
         })
       : api.GET("/api/v0/transfers/downloads/{username}/{id}/analysis", {
-          params: { path: { username: t.username, id: t.id } }
+          params: {
+            path: { ...byUser(t.username).path, id: t.id },
+            query: byUser(t.username).query
+          }
         })
   );
   // a report is kept after its file is gone, so a 404 means there is none to show
@@ -67,7 +76,10 @@ export const queue = (t: Target, force = false) =>
           params: { path: { root: t.root, path: encodePath(t.path) }, query: { force } }
         })
       : api.POST("/api/v0/transfers/downloads/{username}/{id}/analysis", {
-          params: { path: { username: t.username, id: t.id }, query: { force } }
+          params: {
+            path: { ...byUser(t.username).path, id: t.id },
+            query: { ...byUser(t.username).query, force }
+          }
         })
   );
 
@@ -80,7 +92,10 @@ export const judge = (t: Target, verdict: Judgment | null, note: string) => {
             params: { path: { root: t.root, path: encodePath(t.path) } }
           })
         : api.DELETE("/api/v0/transfers/downloads/{username}/{id}/analysis/override", {
-            params: { path: { username: t.username, id: t.id } }
+            params: {
+              path: { ...byUser(t.username).path, id: t.id },
+              query: byUser(t.username).query
+            }
           })
     );
   }
@@ -92,7 +107,10 @@ export const judge = (t: Target, verdict: Judgment | null, note: string) => {
           body
         })
       : api.PUT("/api/v0/transfers/downloads/{username}/{id}/analysis/override", {
-          params: { path: { username: t.username, id: t.id } },
+          params: {
+            path: { ...byUser(t.username).path, id: t.id },
+            query: byUser(t.username).query
+          },
           body
         })
   );

@@ -8,6 +8,7 @@ use api_types::analysis::{
   AudioAnalysis, RunAnalysisQuery, SetAnalysisOverride, TileQuery, WindowSpectrum,
 };
 use api_types::files::FileRoot;
+use api_types::users::UsernameQuery;
 use axum::body::Body;
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
@@ -18,7 +19,7 @@ use utoipa_axum::routes;
 use uuid::Uuid;
 
 use super::error::ApiError;
-use super::extract::{Json, Path, Query};
+use super::extract::{Id, Json, NamedUser, Path, Query};
 use super::files::root;
 use super::validate;
 use crate::app::AppState;
@@ -84,7 +85,7 @@ async fn run_file(
 #[utoipa::path(
   post, path = "/transfers/downloads/{username}/{id}/analysis", tag = "analysis",
   params(
-    ("username" = String, Path, description = "the peer"),
+    ("username" = String, Path, description = "the peer"), UsernameQuery,
     ("id" = Uuid, Path, description = "the download's id"),
     RunAnalysisQuery
   ),
@@ -98,7 +99,8 @@ async fn run_file(
 async fn run_download(
   State(app): State<AppState>,
   caller: Authorized<ReadWrite>,
-  Path((username, id)): Path<(String, Uuid)>,
+  NamedUser(username): NamedUser,
+  Id(id): Id<Uuid>,
   Query(query): Query<RunAnalysisQuery>,
 ) -> Result<Response, ApiError> {
   let target = FileTarget::Download { username, id };
@@ -144,7 +146,7 @@ async fn report_file(
 #[utoipa::path(
   get, path = "/transfers/downloads/{username}/{id}/analysis", tag = "analysis",
   params(
-    ("username" = String, Path, description = "the peer"),
+    ("username" = String, Path, description = "the peer"), UsernameQuery,
     ("id" = Uuid, Path, description = "the download's id"),
     AnalysisReportQuery
   ),
@@ -157,7 +159,8 @@ async fn report_file(
 async fn report_download(
   State(app): State<AppState>,
   _caller: Authorized<AnyRole>,
-  Path((username, id)): Path<(String, Uuid)>,
+  NamedUser(username): NamedUser,
+  Id(id): Id<Uuid>,
   Query(query): Query<AnalysisReportQuery>,
 ) -> Result<Json<AudioAnalysis>, ApiError> {
   let target = FileTarget::Download { username, id };
@@ -200,7 +203,7 @@ async fn spectrogram_file(
 #[utoipa::path(
   get, path = "/transfers/downloads/{username}/{id}/analysis/spectrogram", tag = "analysis",
   params(
-    ("username" = String, Path, description = "the peer"),
+    ("username" = String, Path, description = "the peer"), UsernameQuery,
     ("id" = Uuid, Path, description = "the download's id"),
     TileQuery
   ),
@@ -215,7 +218,8 @@ async fn spectrogram_file(
 async fn spectrogram_download(
   State(app): State<AppState>,
   _caller: Authorized<AnyRole>,
-  Path((username, id)): Path<(String, Uuid)>,
+  NamedUser(username): NamedUser,
+  Id(id): Id<Uuid>,
   Query(query): Query<TileQuery>,
   headers: HeaderMap,
 ) -> Result<Response, ApiError> {
@@ -263,7 +267,7 @@ async fn waveform_file(
 #[utoipa::path(
   get, path = "/transfers/downloads/{username}/{id}/analysis/waveform", tag = "analysis",
   params(
-    ("username" = String, Path, description = "the peer"),
+    ("username" = String, Path, description = "the peer"), UsernameQuery,
     ("id" = Uuid, Path, description = "the download's id"),
     TileQuery
   ),
@@ -278,7 +282,8 @@ async fn waveform_file(
 async fn waveform_download(
   State(app): State<AppState>,
   _caller: Authorized<AnyRole>,
-  Path((username, id)): Path<(String, Uuid)>,
+  NamedUser(username): NamedUser,
+  Id(id): Id<Uuid>,
   Query(query): Query<TileQuery>,
   headers: HeaderMap,
 ) -> Result<Response, ApiError> {
@@ -323,7 +328,7 @@ async fn spectra_file(
 #[utoipa::path(
   get, path = "/transfers/downloads/{username}/{id}/analysis/spectra", tag = "analysis",
   params(
-    ("username" = String, Path, description = "the peer"),
+    ("username" = String, Path, description = "the peer"), UsernameQuery,
     ("id" = Uuid, Path, description = "the download's id")
   ),
   responses(
@@ -337,7 +342,8 @@ async fn spectra_file(
 async fn spectra_download(
   State(app): State<AppState>,
   _caller: Authorized<AnyRole>,
-  Path((username, id)): Path<(String, Uuid)>,
+  NamedUser(username): NamedUser,
+  Id(id): Id<Uuid>,
   headers: HeaderMap,
 ) -> Result<Response, ApiError> {
   let target = FileTarget::Download { username, id };
@@ -405,7 +411,7 @@ async fn clear_override(
   put, path = "/transfers/downloads/{username}/{id}/analysis/override", tag = "analysis",
   request_body = SetAnalysisOverride,
   params(
-    ("username" = String, Path, description = "the peer"),
+    ("username" = String, Path, description = "the peer"), UsernameQuery,
     ("id" = Uuid, Path, description = "the download's id")
   ),
   responses(
@@ -417,7 +423,8 @@ async fn clear_override(
 async fn set_download_override(
   State(app): State<AppState>,
   caller: Authorized<ReadWrite>,
-  Path((username, id)): Path<(String, Uuid)>,
+  NamedUser(username): NamedUser,
+  Id(id): Id<Uuid>,
   Json(verdict): Json<SetAnalysisOverride>,
 ) -> Result<StatusCode, ApiError> {
   let target = FileTarget::Download { username, id };
@@ -433,7 +440,7 @@ async fn set_download_override(
 #[utoipa::path(
   delete, path = "/transfers/downloads/{username}/{id}/analysis/override", tag = "analysis",
   params(
-    ("username" = String, Path, description = "the peer"),
+    ("username" = String, Path, description = "the peer"), UsernameQuery,
     ("id" = Uuid, Path, description = "the download's id")
   ),
   responses(
@@ -445,7 +452,8 @@ async fn set_download_override(
 async fn clear_download_override(
   State(app): State<AppState>,
   _caller: Authorized<ReadWrite>,
-  Path((username, id)): Path<(String, Uuid)>,
+  NamedUser(username): NamedUser,
+  Id(id): Id<Uuid>,
 ) -> Result<StatusCode, ApiError> {
   let target = FileTarget::Download { username, id };
   app.services.analysis.clear_override(target).await?;
@@ -618,11 +626,18 @@ async fn window_file(
   app.services.analysis.window(target, index).await.map(Json)
 }
 
+/// The download and window a window's route names; its user is read apart.
+#[derive(serde::Deserialize)]
+struct WindowOf {
+  id: Uuid,
+  index: u32,
+}
+
 /// The spectrum of one window of a succeeded download's analysis.
 #[utoipa::path(
   get, path = "/transfers/downloads/{username}/{id}/analysis/windows/{index}", tag = "analysis",
   params(
-    ("username" = String, Path, description = "the peer"),
+    ("username" = String, Path, description = "the peer"), UsernameQuery,
     ("id" = Uuid, Path, description = "the download's id"),
     ("index" = u32, Path, description = "the window's position in the report's windows")
   ),
@@ -635,7 +650,8 @@ async fn window_file(
 async fn window_download(
   State(app): State<AppState>,
   _caller: Authorized<AnyRole>,
-  Path((username, id, index)): Path<(String, Uuid, u32)>,
+  NamedUser(username): NamedUser,
+  Path(WindowOf { id, index }): Path<WindowOf>,
 ) -> Result<Json<WindowSpectrum>, ApiError> {
   let target = FileTarget::Download { username, id };
   app.services.analysis.window(target, index).await.map(Json)

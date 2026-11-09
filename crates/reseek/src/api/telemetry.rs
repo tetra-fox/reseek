@@ -13,6 +13,7 @@ use api_types::reports::{
   TransferExceptionDetail, UserReport, UserReportQuery,
 };
 use api_types::telemetry::PrometheusMetric;
+use api_types::users::UsernameQuery;
 use axum::extract::State;
 use axum::http::{HeaderMap, header};
 use axum::response::{IntoResponse, Response};
@@ -21,7 +22,7 @@ use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
 use super::error::ApiError;
-use super::extract::{Json, Path, Query};
+use super::extract::{Json, NamedUser, Query};
 use super::validate;
 use crate::app::AppState;
 use crate::auth::{AnyRole, Authorized};
@@ -296,7 +297,7 @@ async fn directories(
 /// everything unless given.
 #[utoipa::path(
   get, path = "/telemetry/reports/transfers/users/{username}", tag = "telemetry",
-  params(("username" = String, Path, description = "the user"), UserReportQuery),
+  params(("username" = String, Path, description = "the user"), UsernameQuery, UserReportQuery),
   responses(
     (status = 200, body = UserReport), (status = 400, body = api_types::ErrorBody),
     (status = 401, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
@@ -305,7 +306,7 @@ async fn directories(
 async fn user(
   State(app): State<AppState>,
   _caller: Authorized<AnyRole>,
-  Path(username): Path<String>,
+  NamedUser(username): NamedUser,
   Query(mut query): Query<UserReportQuery>,
 ) -> Result<Json<UserReport>, ApiError> {
   if username.trim().is_empty() {

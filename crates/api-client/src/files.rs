@@ -43,7 +43,7 @@ fn file(target: LocalFile<'_>) -> Route {
   match target {
     LocalFile::Under(root, path) => under(root, "files", path),
     LocalFile::Download(username, id) => Route::new("transfers/downloads")
-      .segment(username)
+      .user(username)
       .segment(&id.to_string()),
   }
 }

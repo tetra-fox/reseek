@@ -168,7 +168,7 @@ export class Transfers {
   placeInQueue = async (t: Transfer): Promise<Outcome<number>> => {
     const outcome = await call(() =>
       api.GET("/api/v0/transfers/downloads/{username}/{id}/position", {
-        params: { path: { username: t.username, id: t.id } }
+        params: { path: { ...byUser(t.username).path, id: t.id }, query: byUser(t.username).query }
       })
     );
     const row = this.list.get(t.id);
@@ -183,12 +183,18 @@ export class Transfers {
     this.direction === "download"
       ? call(() =>
           api.GET("/api/v0/transfers/downloads/{username}/{id}", {
-            params: { path: { username: t.username, id: t.id }, query: { includeHistory: true } }
+            params: {
+              path: { ...byUser(t.username).path, id: t.id },
+              query: { ...byUser(t.username).query, includeHistory: true }
+            }
           })
         )
       : call(() =>
           api.GET("/api/v0/transfers/uploads/{username}/{id}", {
-            params: { path: { username: t.username, id: t.id }, query: { includeHistory: true } }
+            params: {
+              path: { ...byUser(t.username).path, id: t.id },
+              query: { ...byUser(t.username).query, includeHistory: true }
+            }
           })
         );
 
@@ -205,7 +211,7 @@ export class Transfers {
 export const why = (t: Transfer) =>
   call(() =>
     api.GET("/api/v0/transfers/uploads/{username}/{id}/why", {
-      params: { path: { username: t.username, id: t.id } }
+      params: { path: { ...byUser(t.username).path, id: t.id }, query: byUser(t.username).query }
     })
   );
 
@@ -213,7 +219,7 @@ export const why = (t: Transfer) =>
 export const bump = (t: Transfer) =>
   call(() =>
     api.POST("/api/v0/transfers/uploads/{username}/{id}/bump", {
-      params: { path: { username: t.username, id: t.id } }
+      params: { path: { ...byUser(t.username).path, id: t.id }, query: byUser(t.username).query }
     })
   );
 

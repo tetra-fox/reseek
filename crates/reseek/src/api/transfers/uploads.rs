@@ -6,6 +6,7 @@ use api_types::transfers::{
   BulkRequest, BulkResult, CancelQuery, SendFilesRequest, SendFilesResponse, Transfer,
   TransferListQuery, TransferQuery, UploadQueueStatus, UploadsQuery, UserResponse,
 };
+use api_types::users::UsernameQuery;
 use axum::extract::State;
 use axum::http::StatusCode;
 use tracing::info;
@@ -15,7 +16,7 @@ use uuid::Uuid;
 
 use super::list_query;
 use crate::api::error::ApiError;
-use crate::api::extract::{Json, Path, Query};
+use crate::api::extract::{Id, Json, NamedUser, Query};
 use crate::api::validate;
 use crate::app::AppState;
 use crate::auth::{Administrator, AnyRole, Authorized, ReadWrite};
@@ -74,7 +75,7 @@ async fn page(
 /// The uploads to one user, grouped by remote directory; no directories when there are none.
 #[utoipa::path(
   get, path = "/transfers/uploads/{username}", tag = "transfers",
-  params(("username" = String, Path, description = "the peer")),
+  params(("username" = String, Path, description = "the peer"), UsernameQuery),
   responses(
     (status = 200, body = UserResponse), (status = 401, body = api_types::ErrorBody),
     (status = 503, body = api_types::ErrorBody)
@@ -83,7 +84,7 @@ async fn page(
 async fn user_uploads(
   State(app): State<AppState>,
   _caller: Authorized<AnyRole>,
-  Path(username): Path<String>,
+  NamedUser(username): NamedUser,
 ) -> Result<Json<UserResponse>, ApiError> {
   app
     .services
@@ -99,7 +100,7 @@ async fn user_uploads(
 /// refused.
 #[utoipa::path(
   post, path = "/transfers/uploads/{username}", tag = "transfers",
-  params(("username" = String, Path, description = "the user to send the files to")),
+  params(("username" = String, Path, description = "the user to send the files to"), UsernameQuery),
   request_body = SendFilesRequest,
   responses(
     (status = 200, body = SendFilesResponse), (status = 400, body = api_types::ErrorBody),
@@ -109,7 +110,7 @@ async fn user_uploads(
 async fn send_files(
   State(app): State<AppState>,
   caller: Authorized<ReadWrite>,
-  Path(username): Path<String>,
+  NamedUser(username): NamedUser,
   Json(body): Json<SendFilesRequest>,
 ) -> Result<Json<SendFilesResponse>, ApiError> {
   if username.trim().is_empty() {
@@ -133,7 +134,7 @@ async fn send_files(
 #[utoipa::path(
   get, path = "/transfers/uploads/{username}/{id}", tag = "transfers",
   params(
-    ("username" = String, Path, description = "the peer"),
+    ("username" = String, Path, description = "the peer"), UsernameQuery,
     ("id" = Uuid, Path, description = "the upload's id"),
     TransferQuery
   ),
@@ -146,7 +147,8 @@ async fn send_files(
 async fn upload(
   State(app): State<AppState>,
   _caller: Authorized<AnyRole>,
-  Path((username, id)): Path<(String, Uuid)>,
+  NamedUser(username): NamedUser,
+  Id(id): Id<Uuid>,
   Query(query): Query<TransferQuery>,
 ) -> Result<Json<Transfer>, ApiError> {
   app
@@ -162,7 +164,7 @@ async fn upload(
 #[utoipa::path(
   get, path = "/transfers/uploads/{username}/{id}/why", tag = "transfers",
   params(
-    ("username" = String, Path, description = "the peer"),
+    ("username" = String, Path, description = "the peer"), UsernameQuery,
     ("id" = Uuid, Path, description = "the upload's id")
   ),
   responses(
@@ -174,7 +176,8 @@ async fn upload(
 async fn why(
   State(app): State<AppState>,
   _caller: Authorized<AnyRole>,
-  Path((username, id)): Path<(String, Uuid)>,
+  NamedUser(username): NamedUser,
+  Id(id): Id<Uuid>,
 ) -> Result<Json<UploadQueueStatus>, ApiError> {
   app
     .services
@@ -188,7 +191,7 @@ async fn why(
 #[utoipa::path(
   post, path = "/transfers/uploads/{username}/{id}/bump", tag = "transfers",
   params(
-    ("username" = String, Path, description = "the peer"),
+    ("username" = String, Path, description = "the peer"), UsernameQuery,
     ("id" = Uuid, Path, description = "the upload's id")
   ),
   responses(
@@ -201,7 +204,8 @@ async fn why(
 async fn bump(
   State(app): State<AppState>,
   admin: Authorized<Administrator>,
-  Path((username, id)): Path<(String, Uuid)>,
+  NamedUser(username): NamedUser,
+  Id(id): Id<Uuid>,
 ) -> Result<StatusCode, ApiError> {
   app.services.transfers.bump(&username, id).await?;
   info!(by = admin.principal.subject, username, %id, "upload bumped");
@@ -213,7 +217,7 @@ async fn bump(
   operation_id = "cancel_upload",
   delete, path = "/transfers/uploads/{username}/{id}", tag = "transfers",
   params(
-    ("username" = String, Path, description = "the peer"),
+    ("username" = String, Path, description = "the peer"), UsernameQuery,
     ("id" = Uuid, Path, description = "the upload's id"),
     CancelQuery
   ),
@@ -226,7 +230,8 @@ async fn bump(
 async fn cancel(
   State(app): State<AppState>,
   caller: Authorized<ReadWrite>,
-  Path((username, id)): Path<(String, Uuid)>,
+  NamedUser(username): NamedUser,
+  Id(id): Id<Uuid>,
   Query(query): Query<CancelQuery>,
 ) -> Result<StatusCode, ApiError> {
   app

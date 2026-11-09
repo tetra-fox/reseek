@@ -78,7 +78,7 @@ impl Client {
 
   /// `GET /telemetry/reports/transfers/users/{username}`.
   pub async fn user_report(&self, username: &str, query: &UserReportQuery) -> Result<UserReport> {
-    json(self.get(reports("users").segment(username).query(query)?)).await
+    json(self.get(reports("users").user(username).query(query)?)).await
   }
 }
 
