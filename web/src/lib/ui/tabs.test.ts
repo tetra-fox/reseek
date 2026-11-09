@@ -57,4 +57,21 @@ describe("the tabs of one browser", () => {
     // the open tab answered the new one's hello, so it knows it is not alone
     expect([open.leads(), late.leads()]).toEqual([true, false]);
   });
+
+  it("asks again as it comes back, leading nothing until the others could answer", () => {
+    let now = 0;
+    const clock = () => now;
+    const channel = bus();
+    const woken = new Tabs(channel(), 100, clock);
+    now += SETTLE_MS;
+    // the others dropped it while it slept, and one stands in
+    const standIn = new Tabs(channel(), 200, clock);
+    now += QUIET_MS + 1;
+    standIn.beat();
+    expect(woken.leads()).toBe(true);
+    woken.back();
+    expect(woken.leads()).toBe(false);
+    now += SETTLE_MS;
+    expect([woken.leads(), standIn.leads()]).toEqual([true, false]);
+  });
 });

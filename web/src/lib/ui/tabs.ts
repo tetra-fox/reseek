@@ -30,7 +30,8 @@ export class Tabs {
   readonly #heard = new Map<string, number>();
   readonly #channel: TabChannel;
   readonly #now: () => number;
-  readonly #since: number;
+  /** when this tab last asked the others to answer, which it leads nothing until they could */
+  #since: number;
 
   constructor(channel: TabChannel, loadedAt: number, now: () => number = Date.now) {
     this.id = `${String(Math.round(loadedAt)).padStart(16, "0")}-${Math.random().toString(36).slice(2)}`;
@@ -51,9 +52,13 @@ export class Tabs {
     this.#say("bye");
   }
 
-  /** This tab is back, from the back-forward cache or a freeze */
+  /**
+   * This tab is back, from the back-forward cache, a freeze or a suspension the others may have
+   * dropped it for: it asks again, and leads nothing until they could answer
+   */
   back() {
     this.#heard.clear();
+    this.#since = this.#now();
     this.#say("hello");
   }
 
@@ -99,5 +104,10 @@ export const browserTabs = (): Tabs | null => {
     if (e.persisted) made.back();
   });
   addEventListener("resume", () => made.back());
+  // a tab suspended with neither, as a phone's browser does in the background, may have been
+  // dropped by the others, and asks again as it shows
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") made.back();
+  });
   return (tabs = made);
 };
