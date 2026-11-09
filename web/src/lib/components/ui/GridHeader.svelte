@@ -22,9 +22,11 @@
     cell?: Snippet<[GridColumn<T>]>;
     /** the list's Select all, drawn over its `select` column */
     all?: AllTick;
+    /** for a grid whose rows say where they are among more than it holds: the header's, 1 */
+    rowindex?: number;
   };
 
-  let { grid, class: className, cell, all }: Props = $props();
+  let { grid, class: className, cell, all, rowindex }: Props = $props();
 </script>
 
 <!-- a label that doesn't fit is cut, with the whole of it on hover. A column's hint shows on hover
@@ -40,7 +42,11 @@
   </Tooltip>
 {/snippet}
 
-<div role="row" class={["group/head grid items-center", className]} style={grid.row}>
+<div
+  role="row"
+  aria-rowindex={rowindex}
+  class={["group/head grid items-center", className]}
+  style={grid.row}>
   {#each grid.columns as column (column.id)}
     {@const sort = grid.sortOf(column)}
     <div

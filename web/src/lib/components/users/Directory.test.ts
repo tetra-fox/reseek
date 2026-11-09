@@ -149,6 +149,10 @@ describe("the users directory", () => {
       expect(places).toEqual([{ page: 3, size: 50 }]);
       expect(pressed("Page 3").getAttribute("aria-current")).toBe("page");
       expect(pressed("Next page").disabled).toBe(true);
+      // every row says where it is among all of them, the header first
+      const rows = [...document.querySelectorAll('[role="grid"] [role="row"]')];
+      expect(rows[0].getAttribute("aria-rowindex")).toBe("1");
+      expect(rows[1].getAttribute("aria-rowindex")).toBe("102");
     });
 
     it("follows the address when a link moves it", async () => {

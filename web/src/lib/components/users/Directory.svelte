@@ -406,7 +406,11 @@
     aria-activedescendant={list.activeId}
     tabindex="0"
     {@attach list.attach}>
-    <GridHeader {grid} all={list.allTick} class="h-9 border-b bg-surface-muted text-fg-muted" />
+    <GridHeader
+      {grid}
+      all={list.allTick}
+      rowindex={1}
+      class="h-9 border-b bg-surface-muted text-fg-muted" />
     <div role="rowgroup" {@attach freezesWhileUsed}>
       {#each shown as u, i (u.username)}
         {@const listed = u.groups.filter((g) => g.name !== BUDDIES)}
