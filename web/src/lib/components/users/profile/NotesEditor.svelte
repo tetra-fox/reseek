@@ -4,7 +4,7 @@
   import { fade } from "svelte/transition";
 
   import { api, byUser } from "#lib/api/client.js";
-  import { Autosave } from "#lib/autosave.svelte.js";
+  import { Autosave, fitsKeepalive } from "#lib/autosave.svelte.js";
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import Textarea from "#lib/components/ui/Textarea.svelte";
   import { call } from "#lib/request.js";
@@ -26,11 +26,14 @@
   const TICK_MS = 2_000;
 
   const saving = new Autosave<string>(async (value, keepalive) => {
+    const body = { notes: value };
+    // the daemon takes notes up to the size browsers allow a keepalive body, so the longest
+    // go as a plain request
     const outcome = await call(() =>
       api.PUT("/api/v0/users/{username}/notes", {
         params: byUser(username),
-        body: { notes: value },
-        keepalive
+        body,
+        keepalive: keepalive && fitsKeepalive(body)
       })
     );
     if (outcome.ok) saved = value;

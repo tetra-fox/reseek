@@ -3,12 +3,23 @@ import type { Outcome } from "./request";
 /** Where an edit saved as it is typed stands */
 export type SaveState = "idle" | "waiting" | "saving" | "saved" | "failed";
 
+/** How large a body browsers send with `keepalive`: they refuse a request past 64 KiB */
+const KEEPALIVE_BYTES = 64 * 1024;
+
+/**
+ * Whether `body`, as JSON, fits in a `keepalive` request. One that doesn't goes as a plain
+ * request, which may not outlive the page but is sent at all
+ */
+export const fitsKeepalive = (body: unknown) =>
+  new TextEncoder().encode(JSON.stringify(body)).length <= KEEPALIVE_BYTES;
+
 /**
  * Saves a value as it is edited, once the edits pause for `ms`. One save runs at a time and the
  * newest edit goes last, so an older save can't land after a newer one. An edit still waiting
  * when the component goes is saved at once, so leaving the view doesn't lose it, and when the
  * page goes it is saved with `keepalive`, which `save` puts on its request so the request
- * outlives the page. Make it while a component is being set up
+ * outlives the page. That page-leaving save is the one exception to the order: it is sent
+ * without waiting for a save that runs. Make it while a component is being set up
  */
 export class Autosave<T> {
   state = $state<SaveState>("idle");

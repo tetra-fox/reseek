@@ -49,6 +49,15 @@ describe("the notes on a user", () => {
     window.dispatchEvent(new PageTransitionEvent("pagehide"));
     await flush();
     expect(sent).toEqual([{ keepalive: true, body: JSON.stringify({ notes: "owes me a rip" }) }]);
+
+    // notes past the size a keepalive request may carry go as a plain one, which is sent at all
+    const long = "é".repeat(32 * 1024);
+    box.value = long;
+    box.dispatchEvent(new Event("input", { bubbles: true }));
+    flushSync();
+    window.dispatchEvent(new PageTransitionEvent("pagehide"));
+    await flush();
+    expect(sent[1]).toEqual({ keepalive: false, body: JSON.stringify({ notes: long }) });
     unmount(component);
   });
 });
