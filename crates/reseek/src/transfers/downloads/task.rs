@@ -102,14 +102,19 @@ impl Downloads {
     cancel: CancellationToken,
   ) {
     match self.download(id, position, request, &cancel).await {
-      Ended::Succeeded(record, incomplete, writing) => match self.may_move() {
-        Some(_moving) => self.complete(record, incomplete, writing).await,
+      Ended::Succeeded(record, incomplete, writing) => {
+        let this = self.clone();
+        let moving = async move {
+          this.complete(record, incomplete, writing).await;
+          this.forget(id).await;
+        };
+        if self.spawn_move(moving.in_current_span()) {
+          return;
+        }
         // the file stays whole in the incomplete directory, where the resume after the next
         // start finds it arrived
-        None => {
-          info!("download arrived after the stop's limit; its move is left to the next start")
-        }
-      },
+        info!("download arrived after the stop's limit; its move is left to the next start");
+      }
       Ended::Failed(failed) => self.fail(failed).await,
       Ended::Abandoned => debug!("download left for the stop to end"),
     }

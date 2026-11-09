@@ -36,7 +36,6 @@ use tokio::sync::{Semaphore, watch};
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
-use tokio_util::task::task_tracker::TaskTrackerToken;
 use tracing::{Instrument, debug, info, warn};
 use uuid::Uuid;
 
@@ -125,7 +124,8 @@ pub struct Downloads {
   shutdown: CancellationToken,
   /// every download task, so the stop waits for them
   tasks: TaskTracker,
-  /// the tasks moving an arrived file, which the stop waits for without a limit
+  /// the tasks moving an arrived file and letting go of its download, which the stop waits for
+  /// without a limit
   moving: TaskTracker,
   /// set once the stop's limit has passed: a download that arrives after it leaves its file
   /// for the next start to take up, since the stop no longer waits for its move
@@ -143,6 +143,9 @@ pub struct Downloads {
   resumed: AtomicBool,
   /// when each running download last asked its peer for its place in the queue
   asked: Mutex<HashMap<Uuid, Instant>>,
+  /// held by a test to keep an arrived file's move from starting
+  #[cfg(test)]
+  move_gate: tokio::sync::Mutex<()>,
 }
 
 impl Downloads {
@@ -198,6 +201,8 @@ impl Downloads {
       enqueue_calls: Semaphore::new(ENQUEUE_CALLS),
       resumed: AtomicBool::new(false),
       asked: Mutex::new(HashMap::new()),
+      #[cfg(test)]
+      move_gate: tokio::sync::Mutex::new(()),
     });
     let slots = |options: &Options| options.transfers.download.slots.map(|n| n as usize);
     engine
@@ -516,29 +521,33 @@ impl Downloads {
   pub async fn stop(&self) {
     self.tasks.close();
     self.moving.close();
-    if tokio::time::timeout(STOPPING, self.tasks.wait())
-      .await
-      .is_ok()
-    {
-      return;
-    }
+    // the limit passing is no error: what still runs is counted below
+    let _ = tokio::time::timeout(STOPPING, self.tasks.wait()).await;
+    // from here a download that arrives leaves its file for the next start
     *lock(&self.moves_closed) = true;
     let moving = self.moving.len();
     if moving > 0 {
       info!(moving, "waiting for downloads to move their files");
       self.moving.wait().await;
     }
+    // a download whose file arrived handed its move to `moving` and ended, so what is left
+    // here is still downloading
     let running = self.tasks.len();
     if running > 0 {
       warn!(running, "download tasks still running at shutdown");
     }
   }
 
-  /// Leave for a download whose file arrived to move it, held until the move is written; none
-  /// once the stop no longer waits for moves.
-  fn may_move(&self) -> Option<TaskTrackerToken> {
+  /// Runs `moving`, the move of a download whose file arrived and what follows it, as a task
+  /// of its own the stop waits for without a limit; false, leaving it unrun, once the stop no
+  /// longer waits for moves.
+  fn spawn_move(&self, moving: impl Future<Output = ()> + Send + 'static) -> bool {
     let closed = lock(&self.moves_closed);
-    (!*closed).then(|| self.moving.token())
+    if *closed {
+      return false;
+    }
+    self.moving.spawn(moving);
+    true
   }
 }
 

@@ -533,6 +533,60 @@ async fn a_resume_sent_while_the_download_stops_to_be_paused_waits_and_resumes_i
 }
 
 #[tokio::test]
+async fn a_stop_waits_past_its_limit_for_a_download_moving_its_file() {
+  let app = app(TRUSTED, &[]).await;
+  let downloads = app.state.downloads.clone();
+  let mut held = Record::download("alice", "@@a\\Album\\1.flac", 10);
+  held.paused = true;
+  insert(&app, &held).await;
+  // the whole file is in the incomplete directory, so the resumed download arrives at once
+  let (incomplete, _) = super::incomplete_path(
+    &downloads.incomplete,
+    "alice",
+    &held.filename,
+    crate::safety::Os::CURRENT,
+  )
+  .unwrap();
+  std::fs::create_dir_all(incomplete.parent().unwrap()).unwrap();
+  std::fs::write(&incomplete, [0; 10]).unwrap();
+  let gate = downloads.move_gate.lock().await;
+  let resume = json!({ "ids": [held.id], "action": "resume" });
+  app
+    .call("POST", "/api/v0/transfers/downloads/bulk", Some(resume))
+    .await;
+  for _ in 0..1000 {
+    if downloads.moving.len() == 1 {
+      break;
+    }
+    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+  }
+  assert_eq!(downloads.moving.len(), 1, "the move waits at the gate");
+
+  tokio::time::pause();
+  let stopping = tokio::spawn({
+    let downloads = downloads.clone();
+    async move { downloads.stop().await }
+  });
+  tokio::time::sleep(super::STOPPING * 2).await;
+  assert!(
+    !stopping.is_finished(),
+    "the stop waits for the move past its limit"
+  );
+  drop(gate);
+  tokio::time::resume();
+  stopping.await.unwrap();
+  let moved = read(&app, held.id).await;
+  assert_eq!(
+    moved.state,
+    TransferStates::Completed | TransferStates::Succeeded
+  );
+  assert!(
+    moved.local_path.is_some(),
+    "the record is written with where the file went"
+  );
+}
+
+#[tokio::test]
 async fn a_reorder_of_the_local_queue_is_written_to_the_database() {
   let app = app(TRUSTED, &[]).await;
   let downloads = &app.state.downloads;

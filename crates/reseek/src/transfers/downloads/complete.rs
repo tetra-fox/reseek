@@ -51,6 +51,8 @@ impl Downloads {
       Ok(placed) => placed,
       Err(reason) => return self.move_failed(&mut record, &incomplete, reason).await,
     };
+    #[cfg(test)]
+    drop(self.move_gate.lock().await);
     let source = incomplete.clone();
     let target = directory.clone();
     let moved =
