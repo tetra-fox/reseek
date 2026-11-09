@@ -10,7 +10,6 @@
   import type { Draft } from "#lib/config/fields.js";
   import type { Control, Field } from "#lib/config/sections.js";
   import { REDACTED } from "#lib/config/tables.js";
-  import { plural } from "#lib/format.js";
 
   import TableEditor from "./TableEditor.svelte";
 
@@ -47,8 +46,8 @@
   let kept = $state<Draft>(REDACTED);
   const cleared = $derived(kept === REDACTED && draft === "");
   /** what `auto` stands for, shown while the input holds it */
-  const autoCount = $derived(
-    String(draft).trim().toLowerCase() === "auto" ? field.auto?.() : undefined
+  const autoHint = $derived(
+    String(draft).trim().toLowerCase() === "auto" ? field.auto?.hint() : undefined
   );
 </script>
 
@@ -124,18 +123,18 @@
     bind:value={draft as string}
     {disabled} />
 {:else if control === "auto-count"}
-  <div class="flex items-center gap-inline">
+  <!-- the hint goes under the input where the row has no room for both -->
+  <div class="flex flex-wrap items-center gap-inline">
     <Input
       id={field.key}
-      class="tabular-nums"
+      class="flex-1 basis-28 tabular-nums"
       placeholder="auto or a number"
-      aria-describedby={described}
+      aria-describedby={autoHint === undefined ? described : `${described} ${field.key}-auto`}
       aria-invalid={invalid || undefined}
       bind:value={draft}
       {disabled} />
-    {#if autoCount !== undefined}
-      <span class="shrink-0 text-sm text-fg-muted tabular-nums"
-        >{plural(autoCount, "file", "files")} at once</span>
+    {#if autoHint !== undefined}
+      <span id={`${field.key}-auto`} class="text-sm text-fg-muted tabular-nums">{autoHint}</span>
     {/if}
   </div>
 {:else}

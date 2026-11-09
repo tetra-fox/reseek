@@ -110,6 +110,11 @@ describe("controls and drafts", () => {
     expect(fromDraft(workers, "auto-count", "many")).toEqual({
       error: "must be auto or a number"
     });
+    // scan workers hold auto as no value
+    const scan = field("shares.cache.workers");
+    expect(toDraft("auto-count", null)).toBe("auto");
+    expect(fromDraft(scan, "auto-count", "auto")).toEqual({ unset: true });
+    expect(fromDraft(scan, "auto-count", "4")).toEqual({ set: 4 });
     expect(fromDraft(field("rooms"), "list", " a \n\n b ")).toEqual({ set: ["a", "b"] });
     expect(fromDraft(field("shares.filters"), "regex-list", "(")).toMatchObject({
       error: expect.any(String)

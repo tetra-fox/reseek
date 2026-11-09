@@ -79,6 +79,10 @@ test("says what auto stands for while the option holds it", async ({ page }) => 
   await expect(count).toBeHidden();
   await workers.fill("AUTO");
   await expect(count).toBeVisible();
+  await expect(workers).toHaveAttribute("aria-describedby", /analysis\.workers-auto/);
+  // the scan workers, which hold auto as no value, read the same
+  await expect(page.locator('[id="shares.cache.workers"]')).toHaveValue("auto");
+  await expect(page.getByText("One file per processor at once")).toBeVisible();
 });
 
 test("sets how a notification is announced, and offers the permission Desktop needs", async ({

@@ -2,6 +2,7 @@ import type { Component } from "svelte";
 
 import { app } from "#lib/app.svelte.js";
 import PortMapping from "#lib/components/settings/PortMapping.svelte";
+import { plural } from "#lib/format.js";
 
 /**
  * The control an option is edited with. Most follow from the kind the daemon reports for the key;
@@ -40,8 +41,11 @@ export type Field = {
   placeholder?: string;
   /** editable only while `key` holds one of `values` */
   enabledWhen?: { key: string; values: unknown[] };
-  /** for an `auto-count` control, the count `auto` stands for on the daemon's machine */
-  auto?: () => number | undefined;
+  /**
+   * for an `auto-count` control: what `auto` stands for on the daemon's machine, said beside the
+   * input, and whether the option holds `auto` as no value, its default
+   */
+  auto?: { hint: () => string | undefined; unset?: boolean };
   /** a list entry that follows from another option: shown dimmed under the list, never saved */
   derived?: { from: string; entry: (values: unknown) => string | null; note: string };
   /** the subheading it goes under on a big form */
@@ -291,9 +295,10 @@ export const sections: Section[] = [
       {
         key: "shares.cache.workers",
         label: "Scan workers",
+        control: "auto-count",
         min: 1,
         max: 128,
-        placeholder: "one per processor"
+        auto: { hint: () => "One file per processor at once", unset: true }
       }
     ]
   },
@@ -480,7 +485,12 @@ export const sections: Section[] = [
         label: "Concurrent analyses",
         control: "auto-count",
         min: 1,
-        auto: () => app.state?.process.autoAnalysisWorkers
+        auto: {
+          hint: () => {
+            const count = app.state?.process.autoAnalysisWorkers;
+            return count === undefined ? undefined : `${plural(count, "file", "files")} at once`;
+          }
+        }
       },
       { key: "analysis.timeout", label: "Time limit per file" },
       {

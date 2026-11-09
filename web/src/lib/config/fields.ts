@@ -47,6 +47,8 @@ export const toDraft = (control: Control, value: unknown): Draft => {
   if (control === "bool") return value === true;
   if (isList(control)) return Array.isArray(value) ? value.map(String).join("\n") : "";
   if (control === "map" || control === "table-list") return tableDraft(control, value);
+  // an option that holds `auto` as no value shows it as `auto` all the same
+  if (control === "auto-count" && (value === null || value === undefined)) return "auto";
   return value === null || value === undefined ? "" : String(value);
 };
 
@@ -95,7 +97,8 @@ export const fromDraft = (
     return tableValue(control, text, columnsOf(field, view?.entries ?? []));
   }
   if (text.trim() === "") return { unset: true };
-  if (control === "auto-count" && text.trim().toLowerCase() === "auto") return { set: "auto" };
+  if (control === "auto-count" && text.trim().toLowerCase() === "auto")
+    return field.auto?.unset ? { unset: true } : { set: "auto" };
   if (control === "number" || control === "auto-count") {
     const n = Number(text);
     if (!Number.isFinite(n))
