@@ -273,11 +273,13 @@ export class MessagePane {
       this.messages.remove(String(m.localId));
     }
     this.gaps = [];
-    this.unreadFrom = null;
     this.at = null;
     this.hasMore = false;
     this.hasNewer = false;
-    this.loaded = true;
+    // emptied before the first page came: the pane is open all the same, a conversation's draft
+    // read with it
+    if (!this.loaded) this.#opened();
+    this.unreadFrom = null;
   };
 
   /** Sends `text`; it shows at once, marked until the daemon has it, failed if it can't */

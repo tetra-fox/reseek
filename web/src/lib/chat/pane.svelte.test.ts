@@ -312,6 +312,29 @@ describe("a pane opened at a message", () => {
     expect([pane.loaded, pane.hasMore, pane.hasNewer]).toEqual([true, false, false]);
   });
 
+  it("reads a conversation's draft when the view is emptied before the first page", async () => {
+    let release!: () => void;
+    const held = new Promise<void>((done) => (release = done));
+    fakeNetwork(async (url) => {
+      if (url.pathname.endsWith("/messages")) {
+        await held;
+        return [];
+      }
+      if (url.pathname.endsWith("/conversations/alice")) {
+        return { username: "alice", draft: "half a thought" };
+      }
+      return undefined;
+    });
+    const pane = new MessagePane({ kind: "user", name: "alice" }, () => "me");
+    const loading = pane.load();
+    await flush();
+    pane.clearView();
+    release();
+    await loading;
+    await flush();
+    expect(pane.conversation?.draft).toBe("half a thought");
+  });
+
   it("opens at the newest when a message is sent before the pages around it come", async () => {
     stored(450);
     let release!: () => void;
