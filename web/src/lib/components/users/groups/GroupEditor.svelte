@@ -11,6 +11,7 @@
   import Notice from "#lib/components/ui/Notice.svelte";
   import Select from "#lib/components/ui/Select.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
+  import { clearing } from "#lib/config/editability.js";
   import type { ConfigView } from "#lib/config/fields.js";
   import { valueAt } from "#lib/config/sections.js";
   import { writeFromPage } from "#lib/config/write.js";
@@ -111,6 +112,32 @@
         )
       : null
   );
+  /**
+   * why a built-in group's setting can't be cleared here, for one a file holds; a user-defined
+   * group is written whole, which clears what it leaves out
+   */
+  const held = (key: string) =>
+    own
+      ? null
+      : clearing(
+          view,
+          key in start.draft
+            ? `transfers.groups.${start.name}.upload.${key}`
+            : `transfers.groups.leechers.thresholds.${key}`
+        );
+  /** the label of a setting the form has emptied though a file holds it */
+  const emptiedHeld = () =>
+    [
+      ...UPLOAD_COUNTS.map((f) => ({ key: f.key, label: f.label, text: draft[f.key] })),
+      { key: "strategy", label: "Queue order", text: draft.strategy },
+      ...(start.name === LEECHERS
+        ? [
+            { key: "files", label: "Files", text: files },
+            { key: "directories", label: "Folders", text: directories }
+          ]
+        : [])
+    ].find((f) => !f.text.trim() && held(f.key));
+
   /** what an empty field means: a lower group's, or for everyone the global setting */
   const unset = (key: string) => {
     if (!everyone) return "Not set";
@@ -137,6 +164,8 @@
 
   const save = async () => {
     if (problem) return void (error = problem);
+    const emptied = emptiedHeld();
+    if (emptied) return void (error = `${emptied.label}: ${held(emptied.key)}`);
     const change = groupPatch(view.values, {
       from: start.name,
       own,
@@ -242,22 +271,23 @@
     <section class="flex flex-col gap-3">
       <h4 class="text-sm font-medium">Upload settings</h4>
       <div class="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2">
-        <Field label="Queue order" for="group-strategy">
+        <Field label="Queue order" for="group-strategy" hint={held("strategy") ?? undefined}>
           <Select
             id="group-strategy"
             bind:value={draft.strategy}
             options={[
-              { value: "", label: "Not set" },
+              ...(held("strategy") ? [] : [{ value: "", label: "Not set" }]),
               ...Object.entries(STRATEGIES).map(([value, label]) => ({ value, label }))
             ]} />
         </Field>
         {#each UPLOAD_COUNTS.filter((f) => !f.limit) as field (field.key)}
-          <Field label={field.label} for={`group-${field.key}`}>
+          <Field label={field.label} for={`group-${field.key}`} hint={held(field.key) ?? undefined}>
             <CountInput
               id={`group-${field.key}`}
               unset={unset(field.key)}
               none={field.key === "slots" ? "Every slot" : "No limit"}
               always={alwaysSet(start.name, field.key)}
+              held={held(field.key)}
               bind:value={draft[field.key]} />
           </Field>
         {/each}
@@ -267,11 +297,15 @@
           >Per-user limits</summary>
         <div class="mt-3 grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2">
           {#each UPLOAD_COUNTS.filter((f) => f.limit) as field (field.key)}
-            <Field label={field.label} for={`group-${field.key}`}>
+            <Field
+              label={field.label}
+              for={`group-${field.key}`}
+              hint={held(field.key) ?? undefined}>
               <CountInput
                 id={`group-${field.key}`}
                 unset={unset(field.key)}
                 none="No limit"
+                held={held(field.key)}
                 bind:value={draft[field.key]} />
             </Field>
           {/each}
@@ -284,14 +318,20 @@
       <section class="flex flex-col gap-3">
         <h4 class="text-sm font-medium">Leechers share fewer than</h4>
         <div class="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2">
-          <Field label="Files" for="group-files">
-            <Input id="group-files" class="tabular-nums" inputmode="numeric" bind:value={files} />
+          <Field label="Files" for="group-files" hint={held("files") ?? undefined}>
+            <Input
+              id="group-files"
+              class="tabular-nums"
+              inputmode="numeric"
+              aria-describedby={held("files") ? "group-files-hint" : undefined}
+              bind:value={files} />
           </Field>
-          <Field label="Folders" for="group-directories">
+          <Field label="Folders" for="group-directories" hint={held("directories") ?? undefined}>
             <Input
               id="group-directories"
               class="tabular-nums"
               inputmode="numeric"
+              aria-describedby={held("directories") ? "group-directories-hint" : undefined}
               bind:value={directories} />
           </Field>
         </div>

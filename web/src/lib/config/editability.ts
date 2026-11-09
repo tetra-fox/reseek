@@ -57,22 +57,39 @@ export const editability = (
   const manager = managerOf(view, key);
   const reason = file?.readOnlyReason;
   const readOnly = reason ? `${name} is read-only (${reason})` : `${name} is read-only`;
+  // the managed configuration may leave the key out, so it holds the value only for a file source
+  const inFile = source.layer === "file";
   if (runtime && from === "page") {
+    const kept = inFile
+      ? `Overrides the ${manager} configuration until removed`
+      : "A change here is kept until removed";
     return {
       mode: "runtime",
-      notice: manager
-        ? `Overrides the ${manager} configuration until removed`
-        : `${readOnly}, so a change here overrides it until removed`
+      notice: manager ? kept : `${readOnly}, so a change here overrides it until removed`
     };
   }
   if (!runtime) {
-    return {
-      mode: "locked",
-      notice: manager ? `Change it in the ${manager} configuration` : readOnly
-    };
+    const where = `${inFile ? "Change" : "Set"} it in the ${manager} configuration`;
+    return { mode: "locked", notice: manager ? where : readOnly };
   }
   if (source.layer === "runtime")
     return { mode: "runtime", notice: `Applied here ${lasting(source)}` };
   // the settings page says once that managed values change here only until restart or removal
   return { mode: "runtime", notice: manager ? null : `${readOnly}, so changes here are temporary` };
+};
+
+/**
+ * Why the value of `key` can't be cleared from here, null when it can: a change applied at
+ * runtime only drops a runtime override, so a value a file sets stays in force. `mode` is how
+ * the change is written, the key's own editability unless it goes with others
+ */
+export const clearing = (
+  view: ConfigView,
+  key: string,
+  mode = editability(view, key).mode
+): string | null => {
+  const source = view.fields[key]?.source;
+  if (source?.layer !== "file" || mode !== "runtime") return null;
+  const manager = managerOf(view, key);
+  return `Set in ${manager ? `the ${manager} configuration` : source.file}, so it can't be cleared here`;
 };

@@ -201,6 +201,46 @@ describe("a settings section", () => {
     vi.unstubAllGlobals();
   });
 
+  it("keeps a value a read-only file holds, saying why it can't be cleared", async () => {
+    const fetcher = vi.fn<(request: Request) => Promise<Response>>(async () =>
+      Response.json(written())
+    );
+    vi.stubGlobal("fetch", fetcher);
+    const v = structuredClone(view);
+    v.files[0].writable = false;
+    (v.values as { analysis: { timeout: string } }).analysis.timeout = "5m";
+    v.fields["analysis.timeout"].source = { layer: "file", file: "config.toml" };
+    const target = render(
+      sections.find((s) => s.id === "analysis")!,
+      v
+    );
+    const reason = "Set in config.toml, so it can't be cleared here";
+    const restore = [...target.querySelectorAll("button")].find(
+      (b) => b.getAttribute("aria-label") === "Restore default of Time limit per file"
+    )!;
+    expect(restore.getAttribute("aria-disabled")).toBe("true");
+    restore.click();
+    flushSync();
+    const input = target.querySelector<HTMLInputElement>('[id="analysis.timeout"]')!;
+    expect(input.value).toBe("5m");
+    // emptied by hand, the apply refuses it under the field and sends nothing
+    input.value = "";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    flushSync();
+    const trigger = [...target.querySelectorAll("button")].find((b) =>
+      b.textContent?.includes("Apply at runtime")
+    )!;
+    trigger.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0 }));
+    await flush();
+    [...document.querySelectorAll<HTMLElement>("[role=menuitem]")]
+      .find((i) => i.textContent?.trim() === "Until removed")!
+      .click();
+    await flush();
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(target.querySelector('[role="alert"]')?.textContent).toContain(reason);
+    vi.unstubAllGlobals();
+  });
+
   it("shows only the options the search finds, keeping the others' edits", () => {
     const target = document.createElement("div");
     document.body.append(target);

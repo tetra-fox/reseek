@@ -11,7 +11,7 @@
   import CopyIcon from "#lib/components/ui/CopyIcon.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Textarea from "#lib/components/ui/Textarea.svelte";
-  import { editability, fileOf } from "#lib/config/editability.js";
+  import { clearing, editability, fileOf } from "#lib/config/editability.js";
   import {
     type ConfigView,
     controlOf,
@@ -61,6 +61,8 @@
     Object.fromEntries(fields.map((f) => [f.key, controlOf(f, view.fields[f.key])]))
   );
   const edits = $derived(Object.fromEntries(fields.map((f) => [f.key, editability(view, f.key)])));
+  /** why each value can't be cleared from here, for those a file holds */
+  const held = $derived(Object.fromEntries(fields.map((f) => [f.key, clearing(view, f.key)])));
 
   // the running values as the controls hold them
   const running = $derived(
@@ -154,7 +156,8 @@
         draft[field.key],
         view.fields[field.key]
       );
-      if ("error" in parsed) found[field.key] = parsed.error;
+      const refused = "error" in parsed ? parsed.error : "unset" in parsed && held[field.key];
+      if (refused) found[field.key] = refused;
       else out.push({ field, sent, ...parsed });
     }
     errors = found;
@@ -379,7 +382,8 @@
           unused={!enabled(field)}
           error={errors[field.key]}
           custom={custom(field.key)}
-          ondefault={() => toDefault(field.key)}>
+          ondefault={() => toDefault(field.key)}
+          held={held[field.key]}>
           {#snippet extra()}
             {#if field.key === "web.authentication.oidc"}
               <OidcTest names={Object.keys(valueAt(view.values, field.key) ?? {})} />

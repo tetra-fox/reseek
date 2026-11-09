@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { editability } from "./editability";
+import { clearing, editability } from "./editability";
 import type { ConfigView } from "./fields";
 import fixture from "./fixtures/view.json";
 
@@ -37,10 +37,32 @@ describe("editability", () => {
     v.managedBy = "Nix";
     v.files[0].writable = false;
     expect(editability(v, "soulseek.description")).toEqual({ mode: "runtime", notice: null });
+    // the managed file leaves the port out, so it is set there rather than changed
     expect(editability(v, "web.port")).toEqual({
       mode: "locked",
-      notice: "Change it in the Nix configuration"
+      notice: "Set it in the Nix configuration"
     });
+    v.fields["web.port"].source = { layer: "file", file: "config.toml" };
+    expect(editability(v, "web.port").notice).toBe("Change it in the Nix configuration");
+  });
+
+  it("refuses to clear a value a file holds where changes only override it", () => {
+    const v = copy();
+    const key = "soulseek.description";
+    v.fields[key].source = { layer: "file", file: "config.toml" };
+    expect(clearing(v, key)).toBeNull();
+    v.files[0].writable = false;
+    expect(clearing(v, key)).toBe("Set in config.toml, so it can't be cleared here");
+    v.managedBy = "Nix";
+    expect(clearing(v, key)).toBe("Set in the Nix configuration, so it can't be cleared here");
+    // a default or a runtime override comes out with an unset
+    v.fields[key].source = { layer: "default" };
+    expect(clearing(v, key)).toBeNull();
+    // written with keys that can't be saved, a writable file's value is overridden too
+    v.files[0].writable = true;
+    v.managedBy = null;
+    v.fields[key].source = { layer: "file", file: "config.toml" };
+    expect(clearing(v, key, "runtime")).toBe("Set in config.toml, so it can't be cleared here");
   });
 
   it("says on a page that keeps a change until removed what it overrides", () => {
@@ -53,6 +75,10 @@ describe("editability", () => {
         "config.toml is read-only (permission denied), so a change here overrides it until removed"
     });
     v.managedBy = "Nix";
+    expect(editability(v, "soulseek.description", "page").notice).toBe(
+      "A change here is kept until removed"
+    );
+    v.fields["soulseek.description"].source = { layer: "file", file: "config.toml" };
     expect(editability(v, "soulseek.description", "page").notice).toBe(
       "Overrides the Nix configuration until removed"
     );

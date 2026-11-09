@@ -41,6 +41,8 @@
     custom: boolean | null;
     /** puts the default back in the draft, which a save then writes by taking the key out */
     ondefault: () => void;
+    /** why the value can't be cleared from here, null when it can */
+    held: string | null;
   };
 
   let {
@@ -57,7 +59,8 @@
     extra,
     generation,
     custom,
-    ondefault
+    ondefault,
+    held
   }: Props = $props();
 
   const help = $derived(`${field.key}-help`);
@@ -157,14 +160,18 @@
         !tabular && "md:col-start-1 md:row-start-2"
       ]}>
       {#if restorable}
-        <Tooltip text={tabular ? "Restore default" : `Restore default: ${shown(info.default)}`}>
+        <Tooltip
+          text={held ?? (tabular ? "Restore default" : `Restore default: ${shown(info.default)}`)}>
           {#snippet child({ props })}
             <button
               {...props}
               type="button"
-              class="flex items-center gap-1 rounded-badge border border-dashed border-accent/50 px-1.5 text-xs text-accent-soft-fg hover:bg-accent-soft"
+              class="flex items-center gap-1 rounded-badge border border-dashed border-accent/50 px-1.5 text-xs text-accent-soft-fg usable:hover:bg-accent-soft unusable:opacity-50"
               aria-label={`Restore default of ${field.label}`}
-              onclick={ondefault}>
+              aria-disabled={held ? true : undefined}
+              onclick={() => {
+                if (!held) ondefault();
+              }}>
               <RotateCcwIcon class="size-3" />default
             </button>
           {/snippet}

@@ -1,7 +1,7 @@
 import { api } from "#lib/api/client.js";
 import { call, type Outcome } from "#lib/request.js";
 
-import { type Editability, editability, fileOf } from "./editability";
+import { clearing, type Editability, editability, fileOf } from "./editability";
 import type { ConfigView } from "./fields";
 
 /** Writes `set` and `unset` into the configuration file `file`, at the revision the view read */
@@ -60,6 +60,11 @@ export const writeFromPage = async (
   if (edit.mode === "locked")
     return { ok: false, error: edit.notice ?? "Remote configuration is off", status: 0 };
   if (edit.mode === "runtime") {
+    // an unset here would drop no more than a runtime override, leaving the file's value
+    for (const key of unset) {
+      const held = clearing(view, key, "runtime");
+      if (held) return { ok: false, error: `${key}: ${held}`, status: 0 };
+    }
     const outcome = await call(() =>
       api.PATCH("/api/v0/options", { body: { expiresIn: null, set, unset } })
     );
