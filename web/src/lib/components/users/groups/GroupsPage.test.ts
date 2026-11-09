@@ -93,4 +93,24 @@ describe("the groups page", () => {
     expect(net.requests.filter((r) => r.method === "PATCH")).toEqual([]);
     unmount(component);
   });
+
+  it("moves a group by its buttons, keeping focus on the button pressed", async () => {
+    const { component } = await start();
+    const order = () =>
+      [...document.querySelectorAll("li[data-line]")].map((l) => l.getAttribute("data-line"));
+    const press = async (label: string) => {
+      const pressed = button(label);
+      pressed.focus();
+      pressed.click();
+      await flush();
+    };
+    await press("Move jazz down");
+    expect(order()).toEqual(["buddies", "rock", "jazz", "leechers"]);
+    expect(document.activeElement?.getAttribute("aria-label")).toBe("Move jazz down");
+    await press("Move jazz down");
+    expect(order()).toEqual(["buddies", "rock", "leechers", "jazz"]);
+    // at the bottom its down is off, so focus goes to its up
+    expect(document.activeElement?.getAttribute("aria-label")).toBe("Move jazz up");
+    unmount(component);
+  });
 });

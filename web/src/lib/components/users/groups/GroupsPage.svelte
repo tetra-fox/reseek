@@ -5,7 +5,8 @@
   import GripVerticalIcon from "@lucide/svelte/icons/grip-vertical";
   import PlusIcon from "@lucide/svelte/icons/plus";
   import Trash2Icon from "@lucide/svelte/icons/trash-2";
-  import { untrack } from "svelte";
+  import { tick, untrack } from "svelte";
+  import { flip } from "svelte/animate";
   import { SvelteSet } from "svelte/reactivity";
 
   import { api } from "#lib/api/client.js";
@@ -31,6 +32,7 @@
   import { href } from "#lib/nav.js";
   import { call, type Outcome } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
+  import { easeOutSoft, motionFast } from "#lib/ui/motion.js";
   import {
     BUDDIES,
     deletePatch,
@@ -238,7 +240,35 @@
     { by: -1, label: "up", Icon: ArrowUpIcon },
     { by: 1, label: "down", Icon: ArrowDownIcon }
   ];
-  const step = (at: number, by: number) => reorder(movedIn(names, at, at + by));
+  /** a move from the buttons is under way, which the rows slide for; a drop leaves them still */
+  let stepping = false;
+  /** Moves `name`, at `at`, by `by` places, keeping focus on the button pressed */
+  const step = async (name: string, at: number, by: number) => {
+    const label = (dir: number) => `Move ${name} ${dir < 0 ? "up" : "down"}`;
+    const pressed = document.activeElement?.getAttribute("aria-label") === label(by);
+    stepping = true;
+    reorder(movedIn(names, at, at + by));
+    await tick();
+    stepping = false;
+    if (!pressed) return;
+    // at the end of the list this way's button is disabled, so focus goes to the other way's
+    const button = (dir: number) =>
+      box?.querySelector<HTMLButtonElement>(`button[aria-label="${CSS.escape(label(dir))}"]`);
+    const same = button(by);
+    (same && !same.disabled ? same : button(-by))?.focus();
+  };
+  /** Slides a row a step moved; after a drag the rows are already where they land */
+  const stepped = (node: Element, rects: { from: DOMRect; to: DOMRect }) =>
+    stepping ? flip(node, rects, { duration: motionFast(), easing: easeOutSoft }) : { duration: 0 };
+  /** The classes of a group's line; `movable` leaves room for the drag handle */
+  const lineClass = (g: GroupSummary, movable: boolean) => [
+    "relative flex flex-wrap items-center gap-x-4 gap-y-2 bg-surface py-3 pr-5",
+    movable ? "pl-8" : "pl-5",
+    drag.key === g.name && "z-10 shadow-raised",
+    drag.key !== null &&
+      drag.key !== g.name &&
+      "transition-[translate] duration-(--motion-fast) ease-(--ease-out-soft)"
+  ];
 
   let box = $state<HTMLElement | null>(null);
   const drag = new RowDrag(
@@ -260,115 +290,103 @@
     ><PlusIcon />New group</Button>
 {/snippet}
 
+<!-- a group's line; the lists' own each blocks hold the <li>, so the ordered one can slide -->
 {#snippet row(g: GroupSummary, at: number | null)}
   {@const movable = at !== null && orderable}
-  <li
-    data-line={g.name}
-    style:translate={drag.shift(g.name)}
-    class={[
-      "relative flex flex-wrap items-center gap-x-4 gap-y-2 bg-surface py-3 pr-5",
-      movable ? "pl-8" : "pl-5",
-      drag.key === g.name && "z-10 shadow-raised",
-      drag.key !== null &&
-        drag.key !== g.name &&
-        "transition-[translate] duration-(--motion-fast) ease-(--ease-out-soft)"
-    ]}>
-    {#if movable}
-      <button
-        type="button"
-        tabindex="-1"
-        aria-hidden="true"
-        class="absolute inset-y-0 left-0 flex w-8 cursor-grab touch-none items-center justify-center text-fg-subtle hover:text-fg-muted active:cursor-grabbing"
-        onpointerdowncapture={(e) => drag.press(e, g.name, names)}
-        ><GripVerticalIcon class="size-4" /></button>
-    {/if}
-    <div class="flex min-w-0 flex-1 flex-col gap-0.5">
-      <div class="flex min-w-0 items-center gap-2">
-        <GroupDot color={g.color} />
-        <span class={["min-w-0 truncate text-sm font-medium", g.name !== DEFAULT && "font-mono"]}
-          >{groupLabel(g.name)}</span>
-        <a
-          href={href(`/users?group=${encodeURIComponent(g.name)}`)}
-          class="shrink-0 text-xs text-accent tabular-nums hover:underline"
-          >{plural(g.members, "member", "members")}</a>
-      </div>
-      <p class="text-xs text-fg-muted">
-        {[
-          g.kind === "smart" ? who(g) : g.name === BUDDIES ? "Your buddy list" : null,
-          g.defined && uploads(g),
-          g.shares.length ? `Sees ${listText(g.shares)}` : null
-        ]
-          .filter(Boolean)
-          .join(" · ")}
-      </p>
+  {#if movable}
+    <button
+      type="button"
+      tabindex="-1"
+      aria-hidden="true"
+      class="absolute inset-y-0 left-0 flex w-8 cursor-grab touch-none items-center justify-center text-fg-subtle hover:text-fg-muted active:cursor-grabbing"
+      onpointerdowncapture={(e) => drag.press(e, g.name, names)}
+      ><GripVerticalIcon class="size-4" /></button>
+  {/if}
+  <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+    <div class="flex min-w-0 items-center gap-2">
+      <GroupDot color={g.color} />
+      <span class={["min-w-0 truncate text-sm font-medium", g.name !== DEFAULT && "font-mono"]}
+        >{groupLabel(g.name)}</span>
+      <a
+        href={href(`/users?group=${encodeURIComponent(g.name)}`)}
+        class="shrink-0 text-xs text-accent tabular-nums hover:underline"
+        >{plural(g.members, "member", "members")}</a>
     </div>
-    <div class="flex shrink-0 items-center gap-1">
-      {#if !g.defined}
-        {#if admin && editable}
-          <Button size="sm" variant="outline" onclick={() => void make(g.name)}
-            >Create group</Button>
-        {/if}
-        {#if write && targets.length}
-          <Menu.Root>
-            <Menu.Trigger>
-              {#snippet child({ props })}
-                <Button {...props} size="sm" variant="outline"
-                  >Move members<ChevronDownIcon /></Button>
-              {/snippet}
-            </Menu.Trigger>
-            <Menu.Content align="end">
-              {#each targets as t (t.name)}
-                <Menu.Item onSelect={() => move(g.name, t.name)}
-                  ><GroupDot color={t.color} />{t.name}</Menu.Item>
-              {/each}
-            </Menu.Content>
-          </Menu.Root>
-        {/if}
-        {#if write}
-          <Button size="sm" variant="ghost" onclick={() => letGo(g.name)}>Remove members</Button>
-        {/if}
-      {:else}
-        {#if movable}
-          {#each STEPS as dir (dir.label)}
-            <Tooltip text={`Move ${dir.label}`}>
-              {#snippet child({ props })}
-                <Button
-                  {...props}
-                  size="icon-sm"
-                  variant="ghost"
-                  aria-label={`Move ${g.name} ${dir.label}`}
-                  disabled={at + dir.by < 0 || at + dir.by >= names.length}
-                  onclick={() => step(at, dir.by)}><dir.Icon /></Button>
-              {/snippet}
-            </Tooltip>
-          {/each}
-        {/if}
-        {#if editable && g.name !== PRIVILEGED}
-          <Button size="sm" variant="outline" onclick={() => (editing = g)}>Edit</Button>
-        {/if}
-        {#if editable && !g.builtin}
-          <Tooltip text="Delete group">
+    <p class="text-xs text-fg-muted">
+      {[
+        g.kind === "smart" ? who(g) : g.name === BUDDIES ? "Your buddy list" : null,
+        g.defined && uploads(g),
+        g.shares.length ? `Sees ${listText(g.shares)}` : null
+      ]
+        .filter(Boolean)
+        .join(" · ")}
+    </p>
+  </div>
+  <div class="flex shrink-0 items-center gap-1">
+    {#if !g.defined}
+      {#if admin && editable}
+        <Button size="sm" variant="outline" onclick={() => void make(g.name)}>Create group</Button>
+      {/if}
+      {#if write && targets.length}
+        <Menu.Root>
+          <Menu.Trigger>
+            {#snippet child({ props })}
+              <Button {...props} size="sm" variant="outline"
+                >Move members<ChevronDownIcon /></Button>
+            {/snippet}
+          </Menu.Trigger>
+          <Menu.Content align="end">
+            {#each targets as t (t.name)}
+              <Menu.Item onSelect={() => move(g.name, t.name)}
+                ><GroupDot color={t.color} />{t.name}</Menu.Item>
+            {/each}
+          </Menu.Content>
+        </Menu.Root>
+      {/if}
+      {#if write}
+        <Button size="sm" variant="ghost" onclick={() => letGo(g.name)}>Remove members</Button>
+      {/if}
+    {:else}
+      {#if movable}
+        {#each STEPS as dir (dir.label)}
+          <Tooltip text={`Move ${dir.label}`}>
             {#snippet child({ props })}
               <Button
                 {...props}
                 size="icon-sm"
                 variant="ghost"
-                aria-label={`Delete group ${g.name}`}
-                onclick={() =>
-                  later(
-                    g.name,
-                    withHidden(
-                      `Group ${g.name} deleted`,
-                      view.data ? deletePatch(view.data.values, g.name).hidden : []
-                    ),
-                    () => remove(g.name)
-                  )}><Trash2Icon /></Button>
+                aria-label={`Move ${g.name} ${dir.label}`}
+                disabled={at + dir.by < 0 || at + dir.by >= names.length}
+                onclick={() => void step(g.name, at, dir.by)}><dir.Icon /></Button>
             {/snippet}
           </Tooltip>
-        {/if}
+        {/each}
       {/if}
-    </div>
-  </li>
+      {#if editable && g.name !== PRIVILEGED}
+        <Button size="sm" variant="outline" onclick={() => (editing = g)}>Edit</Button>
+      {/if}
+      {#if editable && !g.builtin}
+        <Tooltip text="Delete group">
+          {#snippet child({ props })}
+            <Button
+              {...props}
+              size="icon-sm"
+              variant="ghost"
+              aria-label={`Delete group ${g.name}`}
+              onclick={() =>
+                later(
+                  g.name,
+                  withHidden(
+                    `Group ${g.name} deleted`,
+                    view.data ? deletePatch(view.data.values, g.name).hidden : []
+                  ),
+                  () => remove(g.name)
+                )}><Trash2Icon /></Button>
+          {/snippet}
+        </Tooltip>
+      {/if}
+    {/if}
+  </div>
 {/snippet}
 
 <div class="flex flex-wrap items-center gap-inline">
@@ -389,9 +407,21 @@
     description="Each setting comes from the highest group that sets it, and higher groups are served first">
     {#snippet flush()}
       <ul class="divide-y border-t" bind:this={box}>
-        {#each privileged as g (g.name)}{@render row(g, null)}{/each}
-        {#each ranked as g, i (g.name)}{@render row(g, i)}{/each}
-        {#each everyone as g (g.name)}{@render row(g, null)}{/each}
+        {#each privileged as g (g.name)}
+          <li data-line={g.name} class={lineClass(g, false)}>{@render row(g, null)}</li>
+        {/each}
+        {#each ranked as g, i (g.name)}
+          <li
+            data-line={g.name}
+            style:translate={drag.shift(g.name)}
+            class={lineClass(g, orderable)}
+            animate:stepped>
+            {@render row(g, i)}
+          </li>
+        {/each}
+        {#each everyone as g (g.name)}
+          <li data-line={g.name} class={lineClass(g, false)}>{@render row(g, null)}</li>
+        {/each}
       </ul>
       {#if !targets.length}
         <p class="border-t px-5 py-3 text-sm text-fg-muted">No groups of your own yet</p>
@@ -403,7 +433,9 @@
     <Card title={NOT_CONFIGURED} description="Groups that no longer exist but still have members">
       {#snippet flush()}
         <ul class="divide-y border-t">
-          {#each gone as g (g.name)}{@render row(g, null)}{/each}
+          {#each gone as g (g.name)}
+            <li data-line={g.name} class={lineClass(g, false)}>{@render row(g, null)}</li>
+          {/each}
         </ul>
       {/snippet}
     </Card>
