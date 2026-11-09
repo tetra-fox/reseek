@@ -175,10 +175,18 @@ export class MessagePane {
 
   /**
    * The pane holds the newest messages again, so frames count from here on; this read brings
-   * what arrived while they did not
+   * what arrived after the newest message held while they did not. More than a page of them
+   * leaves the pane short of the newest again, to be read on as the list scrolls down
    */
-  #reachedNewest() {
-    return this.load();
+  async #reachedNewest() {
+    const view = this.#view;
+    const newest = this.ordered.findLast((m) => m.localId > 0)?.localId ?? 0;
+    const page = await this.#page({ after: newest });
+    if (view !== this.#view) return;
+    if (!page.ok) return void (this.error = page.error);
+    for (const m of page.data.messages) this.#store(m);
+    this.#gapsFrom(page.data.gaps);
+    this.hasNewer = page.data.hasMore;
   }
 
   /** The first messages are here: where the unread ones start, and a conversation's draft */

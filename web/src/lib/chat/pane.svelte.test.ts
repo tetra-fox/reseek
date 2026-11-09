@@ -143,6 +143,28 @@ describe("a pane opened at a message", () => {
     expect(pane.hasNewer).toBe(false);
   });
 
+  it("reads only what arrived on reaching the newest, however much it is", async () => {
+    const room450 = stored(450);
+    const pane = new MessagePane(room, () => "me", 300);
+    await pane.load();
+    expect(ids(pane).at(-1)).toBe(400);
+    // the last page down holds the newest, and 150 more arrive while it is read
+    const network = globalThis.fetch;
+    vi.stubGlobal("fetch", async (input: Request) => {
+      const answer = await network(input);
+      if (new URL(input.url).searchParams.get("after") === "400") room450.total = 600;
+      return answer;
+    });
+    room450.asked.length = 0;
+    await pane.newer();
+    expect(room450.asked.map((q) => new URLSearchParams(q).get("after"))).toEqual(["400", "450"]);
+    expect(ids(pane).at(-1)).toBe(550);
+    expect(pane.hasNewer).toBe(true);
+    await pane.newer();
+    expect(ids(pane)).toEqual(Array.from({ length: 400 }, (_, n) => n + 201));
+    expect(pane.hasNewer).toBe(false);
+  });
+
   it("is at the newest when its message is near them", async () => {
     stored(120);
     const pane = new MessagePane(room, () => "me", 100);
@@ -182,7 +204,7 @@ describe("a pane opened at a message", () => {
     // the next page down is slow to come, and the user jumps to the newest meanwhile
     const network = globalThis.fetch;
     vi.stubGlobal("fetch", async (input: Request) => {
-      if (new URL(input.url).searchParams.has("after")) await held;
+      if (new URL(input.url).searchParams.get("after") === "250") await held;
       return network(input);
     });
     const down = pane.newer();
@@ -296,7 +318,9 @@ describe("a pane opened at a message", () => {
     const held = new Promise<void>((done) => (release = done));
     // only the reads around the message wait
     delayed(async (url) => {
-      if (url.searchParams.has("before") || url.searchParams.has("after")) await held;
+      const around =
+        url.searchParams.get("before") === "151" || url.searchParams.get("after") === "150";
+      if (around) await held;
       return undefined;
     });
     const pane = new MessagePane(room, () => "me", 150);
