@@ -429,12 +429,15 @@
   </div>
 </div>
 
+<!-- folders stay in view while the filter hides every file, so the tree has no empty state and
+     the way back stays on this line -->
 <Filter.Summary
   {filters}
   shown={shownFiles}
   total={allFiles}
   noun={["file", "files"]}
-  refocus={() => tree?.focus()} />
+  refocus={() => tree?.focus()}
+  clearWhenEmpty />
 
 <!-- what a line offers, from its ... button and from a right-click, a long press or the menu key -->
 {#snippet entryItems(e: Entry)}
@@ -511,16 +514,6 @@
     {/each}
   </div>
 {:else}
-  <!-- folders stay in view while the filter hides every file, and the tree below them fills the
-       screen, so the way back goes above it -->
-  {#if only && allFiles && !shownFiles}
-    <Filter.Empty
-      {filters}
-      total={allFiles}
-      noun={["file", "files"]}
-      refocus={() => tree?.focus()}
-      class="py-4" />
-  {/if}
   <!-- an empty folder says so in a line, rather than under a tree box of nothing -->
   {#if empty}
     <div class="rounded-card border bg-surface">

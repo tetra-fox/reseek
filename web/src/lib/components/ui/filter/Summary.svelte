@@ -29,10 +29,21 @@
     refocus: () => void;
     /** turns every filter off at once, where turning each off in turn does not */
     onclear?: () => void;
+    /** keeps Clear filters while nothing shows, for a list with no empty state to offer it */
+    clearWhenEmpty?: boolean;
     class?: string;
   };
 
-  let { filters, shown, total, noun, refocus, onclear, class: className }: Props = $props();
+  let {
+    filters,
+    shown,
+    total,
+    noun,
+    refocus,
+    onclear,
+    clearWhenEmpty = false,
+    class: className
+  }: Props = $props();
 
   let chips = $state<HTMLElement | null>(null);
   /** what the status line says, set as the filters change, so opening a screen says nothing */
@@ -100,7 +111,7 @@
       {/each}
     </div>
     <!-- an emptied list offers its own Clear filters where the rows would be -->
-    {#if shown > 0}
+    {#if shown > 0 || clearWhenEmpty}
       <button
         type="button"
         class="ml-auto font-medium underline underline-offset-2 hover:no-underline"
