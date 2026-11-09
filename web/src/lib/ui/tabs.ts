@@ -30,7 +30,7 @@ export class Tabs {
   readonly #heard = new Map<string, number>();
   readonly #channel: TabChannel;
   readonly #now: () => number;
-  /** when this tab last asked the others to answer, which it leads nothing until they could */
+  /** when this tab last asked the others to answer; it leads nothing for `SETTLE_MS` after */
   #since: number;
 
   constructor(channel: TabChannel, loadedAt: number, now: () => number = Date.now) {
@@ -88,9 +88,8 @@ export class Tabs {
 let tabs: Tabs | null | undefined;
 
 /**
- * The tabs of this browser, made on first use, which the live stream's start is, so they agree
- * before the first frame they all hear; null where the browser has no BroadcastChannel, where
- * this tab is taken to be alone
+ * The tabs of this browser, made on the first call and the same after; null where the browser has
+ * no BroadcastChannel, where this tab is taken to be alone
  */
 export const browserTabs = (): Tabs | null => {
   if (tabs !== undefined) return tabs;
