@@ -247,10 +247,10 @@ impl Route {
     self
   }
 
-  /// The route with a name the daemon also takes as `?key=`, which a name a path segment cannot
-  /// hold, `.` and `..`, is sent as.
+  /// The route with a name the daemon also takes as `?key=`, which a name of dots alone is
+  /// sent as, since a path segment cannot hold `.` or `..`; `_` stands in the path.
   fn named(self, key: &str, name: &str) -> Self {
-    if name == "." || name == ".." {
+    if !name.is_empty() && name.chars().all(|c| c == '.') {
       let mut route = self.segment("_");
       route
         .query
