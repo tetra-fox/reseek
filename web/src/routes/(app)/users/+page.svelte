@@ -8,13 +8,15 @@
   import Directory from "#lib/components/users/Directory.svelte";
   import GroupsPage from "#lib/components/users/groups/GroupsPage.svelte";
   import InterestsPage from "#lib/components/users/interests/InterestsPage.svelte";
+  import { placeIn, withPlace } from "#lib/lists/pages.js";
   import { href, route, userHref } from "#lib/nav.js";
   import { BUDDY } from "#lib/wording.js";
 
-  // /users is the directory; ?user=<name> goes to that user's profile, ?group= filters by a
-  // group, ?has=transfers those we transferred with, ?tab=buddies shows the buddies, ?tab=groups
-  // the groups, ?tab=interests the recommendations and similar users, for one interest with
-  // ?interest=, and ?tab=blocked the blocked users
+  // /users is the directory, with ?page= and ?per_page= off its first page of 50; ?user=<name> goes
+  // to that user's profile, ?group= filters by a group, ?has=transfers those we transferred
+  // with, ?tab=buddies shows the buddies, ?tab=groups the groups, ?tab=interests the
+  // recommendations and similar users, for one interest with ?interest=, and ?tab=blocked the
+  // blocked users
   const query = $derived(route(page.url).query);
   $effect(() => {
     const user = query.get("user");
@@ -58,6 +60,13 @@
   <InterestsPage {interest} />
 {:else}
   {#key `${query.get("group")}|${query.get("has")}`}
-    <Directory group={query.get("group")} withTransfers={query.get("has") === "transfers"} />
+    <Directory
+      group={query.get("group")}
+      withTransfers={query.get("has") === "transfers"}
+      place={placeIn(query)}
+      onplace={(place) => {
+        const next = withPlace(query, place).toString();
+        void goto(href(`/users${next ? `?${next}` : ""}`), { replace: true, reset: false });
+      }} />
   {/key}
 {/if}

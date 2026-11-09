@@ -1,35 +1,21 @@
 <script lang="ts">
   import ChevronLeftIcon from "@lucide/svelte/icons/chevron-left";
   import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
-  import ChevronsLeftIcon from "@lucide/svelte/icons/chevrons-left";
-  import ChevronsRightIcon from "@lucide/svelte/icons/chevrons-right";
+
+  import { formatCount } from "#lib/format.js";
+  import { pagerItems } from "#lib/lists/pages.js";
 
   import Button from "./Button.svelte";
   import Tooltip from "./Tooltip.svelte";
 
-  // first, previous, the pages around this one, next, last
+  // previous, the first and last pages and those around this one with a gap for the rest, next
   type Props = { page: number; pages: number; onpage: (page: number) => void };
   let { page, pages, onpage }: Props = $props();
 
-  /** pages shown on each side of the current one */
-  const AROUND = 2;
-  const numbers = $derived(
-    Array.from({ length: pages }, (_, i) => i + 1).filter((n) => Math.abs(n - page) <= AROUND)
-  );
+  const items = $derived(pagerItems(page, pages));
 </script>
 
-<nav aria-label="Pages" class="flex items-center gap-0.5">
-  <Tooltip text="First page">
-    {#snippet child({ props })}
-      <Button
-        {...props}
-        variant="ghost"
-        size="icon-sm"
-        aria-label="First page"
-        disabled={page <= 1}
-        onclick={() => onpage(1)}><ChevronsLeftIcon /></Button>
-    {/snippet}
-  </Tooltip>
+<nav aria-label="Pages" class="flex flex-wrap items-center gap-0.5">
   <Tooltip text="Previous page">
     {#snippet child({ props })}
       <Button
@@ -41,12 +27,18 @@
         onclick={() => onpage(page - 1)}><ChevronLeftIcon /></Button>
     {/snippet}
   </Tooltip>
-  {#each numbers as n (n)}
-    <Button
-      variant={n === page ? "secondary" : "ghost"}
-      size="sm"
-      aria-current={n === page ? "page" : undefined}
-      onclick={() => onpage(n)}>{n}</Button>
+  {#each items as item, i (item === "gap" ? `gap ${i}` : item)}
+    {#if item === "gap"}
+      <span class="px-1 text-sm text-fg-subtle" aria-hidden="true">…</span>
+    {:else}
+      <Button
+        variant={item === page ? "secondary" : "ghost"}
+        size="sm"
+        class="tabular-nums"
+        aria-label={`Page ${item}`}
+        aria-current={item === page ? "page" : undefined}
+        onclick={() => onpage(item)}>{formatCount(item)}</Button>
+    {/if}
   {/each}
   <Tooltip text="Next page">
     {#snippet child({ props })}
@@ -57,17 +49,6 @@
         aria-label="Next page"
         disabled={page >= pages}
         onclick={() => onpage(page + 1)}><ChevronRightIcon /></Button>
-    {/snippet}
-  </Tooltip>
-  <Tooltip text="Last page">
-    {#snippet child({ props })}
-      <Button
-        {...props}
-        variant="ghost"
-        size="icon-sm"
-        aria-label="Last page"
-        disabled={page >= pages}
-        onclick={() => onpage(pages)}><ChevronsRightIcon /></Button>
     {/snippet}
   </Tooltip>
 </nav>

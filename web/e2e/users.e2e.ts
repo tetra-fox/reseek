@@ -15,7 +15,11 @@ const directory = (page: Page, users: (typeof alice)[]) =>
     const matching = users.filter((u) =>
       `${u.username} ${u.groups.map((g) => g.name).join(" ")}`.includes(q)
     );
-    return route.fulfill({ json: { users: matching, total: matching.length } });
+    const offset = Number(new URL(route.request().url()).searchParams.get("offset") ?? 0);
+    const limit = Number(new URL(route.request().url()).searchParams.get("limit") ?? 50);
+    return route.fulfill({
+      json: { users: matching.slice(offset, offset + limit), total: matching.length }
+    });
   });
 
 /** Answers `name`'s profile page, and the look-up of them with `refreshed` */
@@ -234,4 +238,31 @@ test("notes save as you type and say so with a tick", async ({ page }) => {
   await page.getByLabel("Notes").fill("shares rare jazz");
   await expect(page.getByRole("status").filter({ hasText: "Saved" })).toBeVisible();
   expect(saved).toBe("shares rare jazz");
+});
+
+test("the directory goes by pages, and the address keeps the page", async ({ page }) => {
+  await directory(
+    page,
+    Array.from({ length: 120 }, (_, n) => user(`user${String(n).padStart(3, "0")}`))
+  );
+  await visit(page, "/users");
+  const grid = page.getByRole("grid", { name: "Users" });
+  await expect(grid.locator("[data-line]")).toHaveCount(50);
+  const pages = page.getByRole("navigation", { name: "Pages" });
+  await pages.getByRole("button", { name: "Page 3" }).click();
+  await expect(page).toHaveURL(/#\/users\?page=3$/);
+  await expect(grid.locator("[data-line]")).toHaveCount(20);
+  // the keys reach the pager and use it
+  await pages.getByRole("button", { name: "Previous page" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/#\/users\?page=2$/);
+  await page.reload();
+  await expect(pages.getByRole("button", { name: "Page 2" })).toHaveAttribute(
+    "aria-current",
+    "page"
+  );
+  await page.getByRole("combobox", { name: "Users per page" }).click();
+  await page.getByRole("option", { name: "25 per page" }).click();
+  // the first user shown stays in view: the 51st is on page 3 of 25
+  await expect(page).toHaveURL(/#\/users\?page=3&per_page=25$/);
 });

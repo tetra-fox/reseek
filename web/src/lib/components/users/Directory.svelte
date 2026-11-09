@@ -30,6 +30,7 @@
   import * as Filter from "#lib/components/ui/filter/filter.js";
   import GridHeader from "#lib/components/ui/GridHeader.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
+  import Pagination from "#lib/components/ui/Pagination.svelte";
   import Select from "#lib/components/ui/Select.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
@@ -40,6 +41,7 @@
   import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { Keyed } from "#lib/lists/keyed.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
+  import { PAGE_SIZES, pageCount, type Place } from "#lib/lists/pages.js";
   import { Grid, type GridColumn } from "#lib/lists/table.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
@@ -47,6 +49,7 @@
   import { userHref } from "#lib/nav.js";
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
+  import { content } from "#lib/shell/content.svelte.js";
   import { clock } from "#lib/ui/clock.svelte.js";
   import { viewport } from "#lib/ui/viewport.svelte.js";
   import { canManage, configBlocked, reach, setBuddy, setGroups } from "#lib/users/actions.js";
@@ -69,11 +72,21 @@
     group?: string | null;
     /** the list starts with the users we transferred with, from the link that opened it */
     withTransfers?: boolean;
+    /** the page the list starts at and its size, from the address */
+    place: Place;
+    /** the page or its size changed, for the address to keep */
+    onplace: (place: Place) => void;
   };
 
-  let { group: startGroup = null, withTransfers = false }: Props = $props();
+  let { group: startGroup = null, withTransfers = false, place: start, onplace }: Props = $props();
 
-  const PAGE = 50;
+  /** the page shown and its size, which the address follows */
+  let place = $state(untrack(() => start));
+  const moveTo = (next: Place) => {
+    place = next;
+    onplace(next);
+  };
+
   /** how many of a user's groups a row shows; the rest are on the profile */
   const SHOWN_GROUPS = 3;
 
@@ -81,8 +94,6 @@
   /** the usernames in the order the daemon sorted them */
   let order = $state<string[]>([]);
   let total = $state(0);
-  /** how many rows are loaded: a page, more for each "load more" */
-  let wanted = $state(PAGE);
   let loaded = $state(false);
   let error = $state("");
   let q = $state("");
@@ -107,32 +118,29 @@
     order: sort.dir
   });
 
+  /** Reads the page shown; one past the end, as after a delete or a filter, goes to the last */
   const load = async () => {
     const turn = rows.reading();
-    const ask = query;
-    const want = wanted;
-    const found: UserSummary[] = [];
-    let count = 0;
-    for (let offset = 0; offset < want;) {
-      const limit = Math.min(500, want - offset);
-      const outcome = await call(() =>
-        api.GET("/api/v0/users", { params: { query: { ...ask, offset, limit } } })
-      );
-      if (!outcome.ok) {
-        if (!rows.abandon(turn)) return;
-        error = outcome.error;
-        loaded = true;
-        return;
-      }
-      // a newer load makes this one's answer moot
-      if (!rows.latest(turn)) return;
-      found.push(...outcome.data.users);
-      count = outcome.data.total;
-      offset += limit;
-      if (outcome.data.users.length < limit) break;
+    const { page, size } = place;
+    const offset = (page - 1) * size;
+    const outcome = await call(() =>
+      api.GET("/api/v0/users", { params: { query: { ...query, offset, limit: size } } })
+    );
+    if (!outcome.ok) {
+      if (!rows.abandon(turn)) return;
+      error = outcome.error;
+      loaded = true;
+      return;
     }
-    rows.reconcile(found, turn);
-    order = found.map((u) => u.username);
+    // a newer load makes this one's answer moot
+    if (!rows.latest(turn)) return;
+    const { users, total: count } = outcome.data;
+    if (page > 1 && offset >= count) {
+      rows.abandon(turn);
+      return moveTo({ page: pageCount(count, size), size });
+    }
+    rows.reconcile(users, turn);
+    order = users.map((u) => u.username);
     total = count;
     error = "";
     loaded = true;
@@ -144,9 +152,15 @@
   );
   $effect(() => {
     void query;
-    void wanted;
+    void place.page;
+    void place.size;
     untrack(() => void load());
   });
+  /** Shows another page from its top */
+  const goPlace = (next: Place) => {
+    moveTo(next);
+    content.scroller?.scrollTo({ top: 0 });
+  };
   // a user written anywhere is patched where it is; new users come with the next load
   $effect(() =>
     live.on("users.updated", (summary) => {
@@ -249,9 +263,10 @@
     ...when(group, "group", `Group ${group}`, () => (group = ""))
   ]);
 
+  /** A filter changed: the list starts again from its first page */
   const refilter = (change: () => void) => {
     change();
-    wanted = PAGE;
+    if (place.page !== 1) moveTo({ page: 1, size: place.size });
   };
   const search = (text: string) => {
     if (text !== q) refilter(() => (q = text));
@@ -299,7 +314,7 @@
     sort: () => sort,
     setSort: (next) => {
       view.sort = next;
-      wanted = PAGE;
+      if (place.page !== 1) moveTo({ page: 1, size: place.size });
     },
     dragged: () => view.dragged,
     drag: (id, width) => (view.dragged[id] = width),
@@ -358,13 +373,15 @@
     title="No users yet"
     description="Users you transfer with, message or browse appear here" />
 {:else}
+  <!-- one page of the users is in the grid; the rows count and place themselves among all of
+       them, the header row first -->
   <div
     bind:this={box}
     class="overflow-x-auto rounded-card border bg-surface text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent"
     role="grid"
     aria-label="Users"
     aria-multiselectable="true"
-    aria-rowcount={total}
+    aria-rowcount={total + 1}
     aria-activedescendant={list.activeId}
     tabindex="0"
     {@attach list.attach}>
@@ -376,6 +393,7 @@
         <div
           role="row"
           {...list.line(u, i)}
+          aria-rowindex={(place.page - 1) * place.size + i + 2}
           class={[
             "grid items-center list-row py-1.5",
             u.block && "bg-danger-soft/40",
@@ -512,9 +530,22 @@
       {/each}
     </div>
   </div>
-  {#if order.length < total}
-    <Button variant="outline" class="self-center" onclick={() => (wanted = order.length + PAGE)}
-      >Load more</Button>
+  {#if total > PAGE_SIZES[0]}
+    <div class="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
+      <Pagination
+        page={place.page}
+        pages={pageCount(total, place.size)}
+        onpage={(page) => goPlace({ page, size: place.size })} />
+      <!-- a new size goes to the page that holds the first row shown -->
+      <Select
+        class="h-control-sm w-32"
+        aria-label="Users per page"
+        bind:value={
+          () => place.size,
+          (size) => goPlace({ page: Math.floor(((place.page - 1) * place.size) / size) + 1, size })
+        }
+        options={PAGE_SIZES.map((n) => ({ value: n, label: `${n} per page` }))} />
+    </div>
   {/if}
 {/if}
 
