@@ -10,6 +10,7 @@
 </script>
 
 <script lang="ts">
+  import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
   import CopyIcon from "@lucide/svelte/icons/copy";
   import FolderIcon from "@lucide/svelte/icons/folder";
   import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
@@ -24,15 +25,16 @@
   import Dialog from "#lib/components/ui/Dialog.svelte";
   import EmptyRow from "#lib/components/ui/EmptyRow.svelte";
   import GridHeader from "#lib/components/ui/GridHeader.svelte";
+  import * as Menu from "#lib/components/ui/menu/menu.js";
   import MiddleTruncate from "#lib/components/ui/MiddleTruncate.svelte";
   import Notice from "#lib/components/ui/Notice.svelte";
   import Progress from "#lib/components/ui/Progress.svelte";
-  import Select from "#lib/components/ui/Select.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
-  import { editability, fileOf } from "#lib/config/editability.js";
   import { valueAt } from "#lib/config/sections.js";
+  import { adminView } from "#lib/config/view.svelte.js";
+  import { editabilityOf, writeFromPage } from "#lib/config/write.js";
   import { Busy } from "#lib/feedback/busy.svelte.js";
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
@@ -47,7 +49,14 @@
   import { href } from "#lib/nav.js";
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
-  import { contentsText, VISIBILITY, withVisibility } from "#lib/system/shares.js";
+  import { audienceText, contentsText } from "#lib/system/shares.js";
+  import {
+    BUDDIES,
+    USER_DEFINED,
+    VISIBLE_TO,
+    type VisibleTo,
+    withAudience
+  } from "#lib/users/groups.js";
 
   import AddShare from "./AddShare.svelte";
 
@@ -126,7 +135,7 @@
         id: "visible",
         label: "Visible to",
         width: "11.5rem",
-        value: (r) => VISIBILITY[r.visibility]
+        value: (r) => audienceText(r.visibleTo)
       }
     ],
     data: () => rows.rows.filter((r) => !r.isExcluded),
@@ -167,66 +176,40 @@
     });
   });
 
-  // who sees each share is two lists of aliases in the options, changed here where the options
-  // can be saved to their file
-  const BUDDIES_KEY = "shares.buddies_only";
-  const TRUSTED_KEY = "shares.trusted_only";
+  // who sees each share is an option, changed here when the options can be changed from a page
   const admin = $derived(session.can("Administrator"));
-  const view = new Loader(() => call(() => api.GET("/api/v0/options/view")));
-  $effect(() => {
-    if (admin) untrack(() => void view.load());
-  });
-  $effect(() =>
-    live.on("application.options", () => {
-      if (admin) void view.load();
-      void shares.load();
-    })
+  const view = adminView();
+  $effect(() => live.on("application.options", () => void shares.load()));
+  const visibleTo = $derived((valueAt(view.data?.values, VISIBLE_TO) ?? {}) as VisibleTo);
+  const settable = $derived(
+    !!view.data && admin && editabilityOf(view.data, [VISIBLE_TO]).mode !== "locked"
   );
-  const settable = $derived.by(() => {
+  /** the groups a share can be shown to: the buddies and the user-defined groups */
+  const choices = $derived([
+    BUDDIES,
+    ...Object.keys(valueAt(view.data?.values, USER_DEFINED) ?? {}).toSorted()
+  ]);
+  let showing = $state(false);
+  const showTo = async (r: Row, groups: string[] | null) => {
     const data = view.data;
-    if (!data || valueAt(data.values, "remote_configuration") !== true) return false;
-    const file = fileOf(data, BUDDIES_KEY);
-    return (
-      file === fileOf(data, TRUSTED_KEY) &&
-      [BUDDIES_KEY, TRUSTED_KEY].every((key) => editability(data, key, "page").mode === "save")
-    );
-  });
-  const VISIBILITIES = (["everyone", "buddies", "trusted"] as const).map((value) => ({
-    value,
-    label: VISIBILITY[value]
-  }));
-  const setVisibility = async (r: Row, to: Schemas["ShareVisibility"]) => {
-    const data = view.data;
-    if (!data || to === r.visibility) return;
-    const lists = withVisibility(
-      {
-        buddies: (valueAt(data.values, BUDDIES_KEY) ?? []) as string[],
-        trusted: (valueAt(data.values, TRUSTED_KEY) ?? []) as string[]
-      },
-      r.alias,
-      to
-    );
-    const file = fileOf(data, BUDDIES_KEY);
-    const outcome = await call(() =>
-      api.PATCH("/api/v0/options/file", {
-        body: {
-          file,
-          revision: data.files.find((f) => f.name === file)?.revision ?? null,
-          set: { [BUDDIES_KEY]: lists.buddies, [TRUSTED_KEY]: lists.trusted },
-          unset: []
-        }
-      })
-    );
-    if (!outcome.ok) {
-      toast(outcome.error, "error");
-      // a file changed on disk is read again, so a second try goes through
-      return void view.load();
-    }
+    if (!data) return;
+    showing = true;
+    const outcome = await writeFromPage(data, {
+      [VISIBLE_TO]: withAudience(visibleTo, r.alias, groups)
+    });
+    showing = false;
+    void view.load();
+    // a file changed on disk is read again, so a second try goes through
+    if (!outcome.ok) return toast(outcome.error, "error");
     // every share on any host with the alias, as the daemon matches it
     for (const row of rows.rows)
       if (row.alias.toLowerCase() === r.alias.toLowerCase())
-        rows.upsert({ ...row, visibility: to });
-    void view.load();
+        rows.upsert({ ...row, visibleTo: groups });
+  };
+  /** `r` shown to `group` too, or no longer; with no group left no one sees it, never everyone */
+  const toggle = (r: Row, group: string, on: boolean) => {
+    const held = r.visibleTo ?? [];
+    void showTo(r, on ? [...held, group] : held.filter((g) => g !== group));
   };
 </script>
 
@@ -349,13 +332,41 @@
             </Tooltip>
             <span role="gridcell" class="px-2">
               {#if settable}
-                <Select
-                  class="h-control-sm w-full"
-                  aria-label={`Who sees ${r.alias}`}
-                  bind:value={() => r.visibility, (to) => void setVisibility(r, to)}
-                  options={VISIBILITIES} />
+                {@const held = r.visibleTo}
+                <Menu.Root>
+                  <Menu.Trigger disabled={showing}>
+                    {#snippet child({ props })}
+                      <Button
+                        {...props}
+                        variant="outline"
+                        size="sm"
+                        class="w-full justify-between"
+                        aria-label={`Who sees ${r.alias}: ${audienceText(held)}`}>
+                        <span class="truncate">{audienceText(held)}</span><ChevronDownIcon />
+                      </Button>
+                    {/snippet}
+                  </Menu.Trigger>
+                  <Menu.Content align="start">
+                    <Menu.CheckboxItem
+                      checked={held === null}
+                      onCheckedChange={(on) => {
+                        if (on) void showTo(r, null);
+                      }}>Everyone</Menu.CheckboxItem>
+                    <Menu.CheckboxItem
+                      checked={held?.length === 0}
+                      onCheckedChange={(on) => {
+                        if (on) void showTo(r, []);
+                      }}>No one</Menu.CheckboxItem>
+                    <Menu.Separator />
+                    {#each choices as group (group)}
+                      <Menu.CheckboxItem
+                        checked={!!held?.includes(group)}
+                        onCheckedChange={(on) => toggle(r, group, on)}>{group}</Menu.CheckboxItem>
+                    {/each}
+                  </Menu.Content>
+                </Menu.Root>
               {:else}
-                {VISIBILITY[r.visibility]}
+                <span class="truncate">{audienceText(r.visibleTo)}</span>
               {/if}
             </span>
           </div>

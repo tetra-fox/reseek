@@ -27,7 +27,7 @@ export const userOf = (value: string) => value.slice(userValue("").length);
  * and follows the text for as long as the component lives
  */
 export class UserFinder {
-  /** the users the directory matched for the text; tags and notes match too */
+  /** the users the directory matched for the text; group names and notes match too */
   found = $state.raw<UserSummary[]>([]);
   /** the name being asked of the network */
   #looking = $state<string | null>(null);

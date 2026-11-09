@@ -42,7 +42,7 @@ describe("the users directory", () => {
   it("lists buddies first and patches a row in place", async () => {
     const net = await start([
       userSummary("bob"),
-      userSummary("carol", { buddy: { trusted: false, notifyPresence: false } })
+      userSummary("carol", { buddy: { notifyPresence: false } })
     ]);
     expect(
       [...document.querySelectorAll("[data-line]")].map((l) => l.getAttribute("data-line"))

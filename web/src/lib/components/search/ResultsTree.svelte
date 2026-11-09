@@ -41,6 +41,7 @@
   } from "#lib/tree/folders.js";
   import { viewport } from "#lib/ui/viewport.svelte.js";
   import { reach } from "#lib/users/actions.js";
+  import { queueOf } from "#lib/users/groups.js";
   import { users } from "#lib/users/users.svelte.js";
 
   import ResultUserItems from "./ResultUserItems.svelte";
@@ -205,6 +206,7 @@
   {@const response = result.response}
   {@const name = response.username}
   {@const user = users.get(name)}
+  {@const queue = user ? queueOf(user) : null}
   {@const on = tickedOf.get(result.key) ?? 0}
   {#if node.unlocked}
     {@const state = tickState(node, on)}
@@ -232,7 +234,7 @@
     <span class="flex min-w-0 items-center gap-2">
       <Username {name} />
       {#if user}<Presence presence={user.presence} />{/if}
-      {#if user?.group.color}<GroupBadge group={user.group} />{/if}
+      {#if queue?.color}<GroupBadge group={queue} queue />{/if}
       <Flag code={response.country} />
       {#if user?.block}<Badge tone="danger">blocked</Badge>{/if}
     </span>

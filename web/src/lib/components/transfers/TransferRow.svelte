@@ -52,6 +52,8 @@
   import { placeText, waits, whyText } from "#lib/transfers/why.svelte.js";
   import { lineStart } from "#lib/tree/indent.js";
   import { viewport } from "#lib/ui/viewport.svelte.js";
+  import { groupColor } from "#lib/users/colors.js";
+  import { queueOf } from "#lib/users/groups.js";
   import { users } from "#lib/users/users.svelte.js";
 
   import Sparkline from "./Sparkline.svelte";
@@ -257,13 +259,13 @@
         {@render name()}
       {/if}
     {:else if column === "user"}
-      {#if direction === "upload" && user?.group.color}
-        <Tooltip text={`Group ${user.group.name}`} dense spoken>
+      {@const queue = direction === "upload" && user ? queueOf(user) : null}
+      {@const dot = groupColor(queue?.color)}
+      {#if queue && dot}
+        <Tooltip text={`Queue: ${queue.name}`} dense spoken>
           {#snippet child({ props })}
-            <span
-              {...props}
-              class="size-2 shrink-0 rounded-full"
-              style:background-color={user.group.color}></span>
+            <span {...props} class="size-2 shrink-0 rounded-full" style:background-color={dot}
+            ></span>
           {/snippet}
         </Tooltip>
       {/if}
@@ -338,7 +340,7 @@
         </Tooltip>
       {/if}
     {:else if column === "group"}
-      {user?.group.name ?? ""}
+      {user?.uploads.queue ?? ""}
     {:else if column === "actions"}
       <div class="ml-auto flex items-center row-action">
         <!-- a phone shows only the menu, which holds every one of these too -->

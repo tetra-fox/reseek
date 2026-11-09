@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
+import { ORDER, USER_DEFINED, VISIBLE_TO } from "#lib/users/groups.js";
+
 import { type ConfigView, controlOf, errorsByKey, fromDraft, toDraft } from "./fields";
 import fixture from "./fixtures/view.json";
-import { sections, unlisted, valueAt } from "./sections";
+import { BLOCKING, sections, unlisted, valueAt } from "./sections";
 
 /**
  * The daemon's options view of the default configuration with an empty config.toml, written by
@@ -17,17 +19,24 @@ describe("the settings forms", () => {
   });
 
   it("name only options the daemon has, each once", () => {
-    const keys = sections.flatMap((s) => s.fields.map((f) => f.key));
+    const keys = [...sections, BLOCKING].flatMap((s) => s.fields.map((f) => f.key));
     expect(keys.filter((key) => !(key in view.fields))).toEqual([]);
     expect(new Set(keys).size).toBe(keys.length);
   });
 
   it("give every option of the daemon a section and a name of its own", () => {
-    const fields = sections.flatMap((s) => s.fields);
+    const fields = [...sections, BLOCKING].flatMap((s) => s.fields);
     const named = new Set(fields.map((f) => f.key));
-    expect(Object.keys(view.fields).filter((key) => !named.has(key) && !unlisted.has(key))).toEqual(
-      []
-    );
+    // the groups page edits the groups, their order, their settings and who sees each share
+    const onGroupsPage = (key: string) =>
+      [ORDER, USER_DEFINED, VISIBLE_TO].includes(key) ||
+      /^transfers\.groups\.(default|buddies|leechers)\.upload\./.test(key) ||
+      key.startsWith("transfers.groups.leechers.thresholds.");
+    expect(
+      Object.keys(view.fields).filter(
+        (key) => !named.has(key) && !unlisted.has(key) && !onGroupsPage(key)
+      )
+    ).toEqual([]);
     expect(fields.filter((f) => f.label === f.key)).toEqual([]);
   });
 

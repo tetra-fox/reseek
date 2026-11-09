@@ -3,6 +3,7 @@
   import { ago, dateTime } from "#lib/format.js";
   import { clock } from "#lib/ui/clock.svelte.js";
   import { nameColor } from "#lib/users/colors.js";
+  import { queueOf } from "#lib/users/groups.js";
   import { nameParts, type UserFound } from "#lib/users/match.js";
   import { pictureOf } from "#lib/users/profile.svelte.js";
   import { users } from "#lib/users/users.svelte.js";
@@ -15,6 +16,7 @@
   let { user, text }: { user: UserFound; text: string } = $props();
 
   const summary = $derived(user.summary ?? users.get(user.name));
+  const queue = $derived(summary ? queueOf(summary) : null);
 </script>
 
 <!-- an entry is a picker's option or a result row, which a click picks -->
@@ -31,7 +33,7 @@
       <span class="flex items-center gap-1.5">
         <Presence presence={summary.presence} worded />{summary.presence ?? "Unknown"}
       </span>
-      <GroupBadge group={summary.group} class="max-w-full truncate" />
+      {#if queue}<GroupBadge group={queue} queue class="max-w-full" />{/if}
       <Tooltip text={summary.lastSeenAt ? dateTime(summary.lastSeenAt) : undefined} dense>
         {#snippet child({ props })}
           <span {...props} class="min-w-0 truncate">

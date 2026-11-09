@@ -12,6 +12,7 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import BanIcon from "@lucide/svelte/icons/ban";
+  import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
   import CopyIcon from "@lucide/svelte/icons/copy";
   import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
   import ShieldCheckIcon from "@lucide/svelte/icons/shield-check";
@@ -42,38 +43,39 @@
   import { Grid, type GridColumn } from "#lib/lists/table.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
+  import { Loader } from "#lib/loader.svelte.js";
   import { userHref } from "#lib/nav.js";
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
   import { clock } from "#lib/ui/clock.svelte.js";
   import { viewport } from "#lib/ui/viewport.svelte.js";
-  import { canManage, configBlocked, reach, setBuddy, userGroups } from "#lib/users/actions.js";
+  import { canManage, configBlocked, reach, setBuddy, setGroups } from "#lib/users/actions.js";
   import { blocking, toggleBlock, unblockMany } from "#lib/users/block.svelte.js";
+  import { BUDDIES, chosenGroups, queueOf, withGroup, withoutGroup } from "#lib/users/groups.js";
   import { pictureOf } from "#lib/users/profile.svelte.js";
   import { type UserSummary, users as usersStore } from "#lib/users/users.svelte.js";
   import { BUDDY, CONFIG_BLOCKED } from "#lib/wording.js";
 
   import Avatar from "./Avatar.svelte";
   import GroupBadge from "./GroupBadge.svelte";
-  import GroupDialog from "./GroupDialog.svelte";
+  import GroupDot from "./GroupDot.svelte";
   import Presence from "./Presence.svelte";
   import UserMenuItems from "./UserMenuItems.svelte";
   import Username from "./Username.svelte";
   import UserSearch from "./UserSearch.svelte";
 
   type Props = {
-    /** the tag the list starts filtered by, from the link that opened it */
-    tag?: string | null;
+    /** the group the list starts filtered by, from the link that opened it */
+    group?: string | null;
     /** the list starts with the users we transferred with, from the link that opened it */
     withTransfers?: boolean;
   };
 
-  let { tag: startTag = null, withTransfers = false }: Props = $props();
+  let { group: startGroup = null, withTransfers = false }: Props = $props();
 
   const PAGE = 50;
-  /** how many of a user's tags a row shows; the rest are on the profile */
-  const TAGS = 3;
-  const BUILTIN_GROUPS = ["privileged", "default", "leechers"];
+  /** how many of a user's groups a row shows; the rest are on the profile */
+  const SHOWN_GROUPS = 3;
 
   const rows = new Keyed<UserSummary>((u) => u.username);
   /** the usernames in the order the daemon sorted them */
@@ -89,12 +91,10 @@
   // svelte-ignore state_referenced_locally
   let hasTransfers = $state(withTransfers);
   let presence = $state<Schemas["UserPresence"] | "">("");
-  let group = $state("");
   // svelte-ignore state_referenced_locally
-  let tag = $state(startTag ?? "");
+  let group = $state(startGroup ?? "");
   /** the daemon sorts the users, by the column the header sets */
   const sort = $derived(view.sort ?? { id: "lastSeen", dir: "desc" as const });
-  let assigning = $state(false);
 
   const query = $derived({
     q: q || undefined,
@@ -103,7 +103,6 @@
     hasTransfers: hasTransfers || undefined,
     presence: presence || undefined,
     group: group || undefined,
-    tag: tag || undefined,
     sort: sort.id as Schemas["UserSort"],
     order: sort.dir
   });
@@ -156,6 +155,17 @@
   );
   $effect(() => live.on("users.removed", ({ username }) => rows.remove(username)));
 
+  // every group with members, for the filter and the selection's group actions
+  const groupList = new Loader(() => call(() => api.GET("/api/v0/groups")));
+  void groupList.load();
+  $effect(() => live.on("application.options", () => void groupList.load()));
+  const groupNames = $derived.by(() => {
+    const names = groupList.data?.groups.map((g) => g.name) ?? [];
+    return group && !names.includes(group) ? [...names, group] : names;
+  });
+  /** the groups a selection can be put in: the user-defined groups of the configuration */
+  const joinable = $derived(groupList.data?.groups.filter((g) => !g.builtin && g.defined) ?? []);
+
   /** the loaded users, buddies first within the sort */
   const shown = $derived.by(() => {
     const users = order.flatMap((name) => rows.get(name) ?? []);
@@ -179,7 +189,44 @@
   const blockable = $derived(
     picked.filter((name) => canManage(name) && !configBlocked(known(name)?.block))
   );
-  const admin = $derived(session.can("Administrator"));
+  const write = $derived(session.can("ReadWrite"));
+  /** the groups we put a selected user in, which the selection can be taken out of */
+  const leavable = $derived(
+    [...new Set(picked.flatMap((name) => chosenGroups(known(name)?.groups ?? [])))].toSorted()
+  );
+  /**
+   * Puts each selected user in the groups `change` makes of theirs, with an Undo that puts back
+   * what each had
+   */
+  const regroup = async (change: (held: string[]) => string[], done: string) => {
+    const before = new Map<string, string[]>();
+    const failed: string[] = [];
+    for (const name of picked) {
+      const user = known(name);
+      if (!user) continue;
+      const held = chosenGroups(user.groups);
+      const next = change(held);
+      if (next.length === held.length && next.every((g) => held.includes(g))) continue;
+      const outcome = await setGroups(name, next);
+      if (outcome.ok) before.set(name, held);
+      else failed.push(`${name}: ${outcome.error}`);
+    }
+    if (failed.length) toast(failed.join("; "), "error");
+    if (!before.size) return;
+    toast(`${plural(before.size, "user", "users")} ${done}`, "info", {
+      action: {
+        label: "Undo",
+        run: async () => {
+          const undone: string[] = [];
+          for (const [name, held] of before) {
+            const outcome = await setGroups(name, held);
+            if (!outcome.ok) undone.push(`${name}: ${outcome.error}`);
+          }
+          if (undone.length) toast(`Could not undo: ${undone.join("; ")}`, "error");
+        }
+      }
+    });
+  };
   /** what is typed in the search box, which sets `q` a moment after typing stops */
   let typed = $state("");
   let box = $state<HTMLElement | null>(null);
@@ -199,8 +246,7 @@
     ...when(buddies, "buddies", BUDDY.plural, () => (buddies = false)),
     ...when(hasTransfers, "hasTransfers", "Has transfers", () => (hasTransfers = false)),
     ...when(presence, "presence", presence, () => (presence = "")),
-    ...when(group, "group", `Group ${group}`, () => (group = "")),
-    ...when(tag, "tag", `Tagged ${tag}`, () => (tag = ""))
+    ...when(group, "group", `Group ${group}`, () => (group = ""))
   ]);
 
   const refilter = (change: () => void) => {
@@ -224,8 +270,8 @@
     { id: "select", label: "Select", width: "2.5rem", quiet: true, fixed: true },
     { id: "username", label: "User", width: "9rem", grow: true, sortable: true },
     { id: "presence", label: "Presence", width: "5.5rem" },
-    { id: "group", label: "Group", width: "8.5rem" },
-    { id: "tags", label: "Tags", width: "8rem" },
+    { id: "group", label: "Queue", width: "8.5rem" },
+    { id: "groups", label: "Groups", width: "8rem" },
     { id: "lastSeen", label: "Last seen", width: "7rem", sortable: true, descFirst: true },
     {
       id: "uploads",
@@ -287,7 +333,7 @@
         bind:value={() => group, (v) => refilter(() => (group = v))}
         options={[
           { value: "", label: "Any group" },
-          ...[...BUILTIN_GROUPS, ...userGroups()].map((g) => ({ value: g, label: g }))
+          ...groupNames.map((g) => ({ value: g, label: g }))
         ]} />
     </Filter.Group>
   </Filter.Panel>
@@ -325,6 +371,8 @@
     <GridHeader {grid} all={list.allTick} class="h-9 border-b bg-surface-muted text-fg-muted" />
     <div role="rowgroup" {@attach freezesWhileUsed}>
       {#each shown as u, i (u.username)}
+        {@const listed = u.groups.filter((g) => g.name !== BUDDIES)}
+        {@const queue = queueOf(u)}
         <div
           role="row"
           {...list.line(u, i)}
@@ -358,28 +406,29 @@
             <Presence presence={u.presence} worded />{u.presence ?? "Unknown"}
           </span>
           {#if viewport.xxl}
-            <span role="gridcell" class="min-w-0 px-2"><GroupBadge group={u.group} /></span>
+            <span role="gridcell" class="min-w-0 px-2"
+              >{#if queue}<GroupBadge group={queue} queue />{/if}</span>
           {/if}
           <span role="gridcell" class="flex min-w-0 flex-wrap gap-1 px-2">
-            {#each u.tags.slice(0, TAGS) as t (t)}
-              <Tooltip text={`Show only users tagged ${t}`}>
-                {#snippet child({ props })}
-                  <button
-                    {...props}
-                    type="button"
-                    class="max-w-full truncate rounded-badge border px-1 text-xs text-fg-muted hover:bg-hover"
-                    onclick={() => refilter(() => (tag = t))}>{t}</button>
-                {/snippet}
-              </Tooltip>
+            {#each listed.slice(0, SHOWN_GROUPS) as g (g.name)}
+              <button
+                type="button"
+                class="max-w-full rounded-badge hover:bg-hover"
+                aria-label={`Show only group ${g.name}`}
+                onclick={() => refilter(() => (group = g.name))}><GroupBadge group={g} /></button>
             {/each}
-            {#if u.tags.length > TAGS}
-              <Tooltip text={u.tags.slice(TAGS).join("\n")}>
+            {#if listed.length > SHOWN_GROUPS}
+              <Tooltip
+                text={listed
+                  .slice(SHOWN_GROUPS)
+                  .map((g) => g.name)
+                  .join("\n")}>
                 {#snippet child({ props })}
                   <a
                     {...props}
                     href={userHref(u.username)}
                     class="rounded-badge px-1 text-xs text-fg-muted hover:bg-hover"
-                    >+{formatCount(u.tags.length - TAGS)}</a>
+                    >+{formatCount(listed.length - SHOWN_GROUPS)}</a>
                 {/snippet}
               </Tooltip>
             {/if}
@@ -480,11 +529,40 @@
       <Button size="sm" variant="outline" onclick={() => void unblockAll(blockable)}
         >Unblock</Button>
     {/if}
-    {#if admin}
-      <Button size="sm" variant="outline" onclick={() => (assigning = true)}>Assign group</Button>
+    {#if write && joinable.length}
+      <Menu.Root>
+        <Menu.Trigger>
+          {#snippet child({ props })}
+            <Button {...props} size="sm" variant="outline">Add to group<ChevronDownIcon /></Button>
+          {/snippet}
+        </Menu.Trigger>
+        <Menu.Content align="start">
+          {#each joinable as g (g.name)}
+            <Menu.Item
+              onSelect={() => void regroup((held) => withGroup(held, g.name), `added to ${g.name}`)}
+              ><GroupDot color={g.color} />{g.name}</Menu.Item>
+          {/each}
+        </Menu.Content>
+      </Menu.Root>
+    {/if}
+    {#if write && leavable.length}
+      <Menu.Root>
+        <Menu.Trigger>
+          {#snippet child({ props })}
+            <Button {...props} size="sm" variant="outline"
+              >Remove from group<ChevronDownIcon /></Button>
+          {/snippet}
+        </Menu.Trigger>
+        <Menu.Content align="start">
+          {#each leavable as name (name)}
+            <Menu.Item
+              onSelect={() =>
+                void regroup((held) => withoutGroup(held, name), `removed from ${name}`)}
+              >{name}</Menu.Item>
+          {/each}
+        </Menu.Content>
+      </Menu.Root>
     {/if}
     <Button size="sm" variant="ghost" onclick={() => list.clear()}>Clear</Button>
   </div>
 {/if}
-
-<GroupDialog bind:open={assigning} usernames={picked} />

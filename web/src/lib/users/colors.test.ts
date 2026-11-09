@@ -3,7 +3,9 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { DARK, LIGHT, NAME_HUES, nameHue } from "./colors";
+import fixture from "#lib/config/fixtures/view.json";
+
+import { DARK, GROUP_COLORS, LIGHT, NAME_HUES, nameHue } from "./colors";
 
 // read from disk, as vitest hands a test every stylesheet import empty, `?raw` too
 const css = readFileSync(join(import.meta.dirname, "../../app.css"), "utf8");
@@ -131,5 +133,14 @@ describe("username colors", () => {
       for (const surface of light) expect(contrast(onLight, surface)).toBeGreaterThanOrEqual(4.5);
       for (const surface of dark) expect(contrast(onDark, surface)).toBeGreaterThanOrEqual(4.5);
     }
+  });
+});
+
+describe("group colors", () => {
+  it("are every color the daemon offers, in its order", () => {
+    const entry = fixture.fields["transfers.groups.user_defined"].entries.find(
+      (e) => e.key === "color"
+    );
+    expect(GROUP_COLORS).toEqual(entry?.choices);
   });
 });

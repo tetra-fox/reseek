@@ -19,6 +19,7 @@
   import { canManage, configBlocked, reach, setBuddy, USER_ACTIONS } from "#lib/users/actions.js";
   import { blockEnd } from "#lib/users/block.svelte.js";
   import { nameColor } from "#lib/users/colors.js";
+  import { BUDDIES, queueOf } from "#lib/users/groups.js";
   import { firstLines, ownProfile, pictureOf, SHARES_UNKNOWN } from "#lib/users/profile.svelte.js";
   import { type UserSummary, users } from "#lib/users/users.svelte.js";
   import { BUDDY, CONFIG_BLOCKED } from "#lib/wording.js";
@@ -64,7 +65,12 @@
       : (user?.statistics ?? null)
   );
   const figures = $derived(user?.figures);
-  const tags = $derived(user?.tags ?? []);
+  /** the groups beside the queue's, but those the badges before them already say */
+  const queue = $derived(user ? queueOf(user) : null);
+  const others = $derived.by(() => {
+    const said = [user?.uploads.queue, "privileged", BUDDIES];
+    return user?.groups.filter((g) => !said.includes(g.name)) ?? [];
+  });
   $effect(() => {
     if (own) ownProfile.need();
   });
@@ -119,7 +125,7 @@
   {:else}
     {#if user}
       <div class="flex flex-wrap gap-1">
-        <GroupBadge group={user.group} />
+        {#if queue}<GroupBadge group={queue} queue />{/if}
         {#if user.block}
           {@const block = user.block}
           <Tooltip
@@ -133,10 +139,10 @@
         {/if}
         {#if user.isPrivileged}<Badge tone="warning">privileged</Badge>{/if}
         {#if user.buddy}<Badge tone="info">{BUDDY.badge}</Badge>{/if}
-        {#each tags.slice(0, 3) as tag (tag)}
-          <Badge tone="outline">{tag}</Badge>
+        {#each others.slice(0, 3) as group (group.name)}
+          <GroupBadge {group} />
         {/each}
-        {#if tags.length > 3}<Badge tone="outline">+{tags.length - 3}</Badge>{/if}
+        {#if others.length > 3}<Badge tone="outline">+{others.length - 3}</Badge>{/if}
       </div>
     {/if}
 

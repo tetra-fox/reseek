@@ -23,6 +23,7 @@
   import { fieldMatches } from "#lib/config/find.js";
   import { asNixSettings } from "#lib/config/nix.js";
   import { type Field, type Section, valueAt } from "#lib/config/sections.js";
+  import { changedOnDisk, patchFile } from "#lib/config/write.js";
   import { CopyButton } from "#lib/feedback/clipboard.svelte.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { plural } from "#lib/format.js";
@@ -217,30 +218,19 @@
       const done: Write[] = [];
       let restart: string[] = [];
       for (const [file, list] of byFile) {
-        const outcome = await call(() =>
-          api.PATCH("/api/v0/options/file", {
-            body: {
-              file,
-              revision: view.files.find((f) => f.name === file)?.revision ?? null,
-              set: Object.fromEntries(
-                list.filter((w) => !w.unset).map((w) => [w.field.key, w.set])
-              ),
-              unset: list.filter((w) => w.unset).map((w) => w.field.key)
-            }
-          })
+        const outcome = await patchFile(
+          view,
+          file,
+          Object.fromEntries(list.filter((w) => !w.unset).map((w) => [w.field.key, w.set])),
+          list.filter((w) => w.unset).map((w) => w.field.key)
         );
         if (!outcome.ok) {
           // the files written before this one keep their change
           await settle(done);
-          if (
-            outcome.status === 409 &&
-            outcome.error.startsWith("The configuration file changed on disk")
-          ) {
+          const moved = changedOnDisk(outcome, file);
+          if (moved) {
             if (!done.length) await onchanged();
-            return {
-              ...outcome,
-              error: `${file} changed on disk. Check the values and save again.`
-            };
+            return { ...outcome, error: moved };
           }
           const detail = (outcome.body as { detail?: string | null } | undefined)?.detail;
           errors = Object.fromEntries(

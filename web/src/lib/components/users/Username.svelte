@@ -13,6 +13,7 @@
   import { canManage, links } from "#lib/users/actions.js";
   import { toggleBlock } from "#lib/users/block.svelte.js";
   import { nameColor } from "#lib/users/colors.js";
+  import { queueOf } from "#lib/users/groups.js";
   import { CLOSE_DELAY_MS, LONG_PRESS_MS, OPEN_DELAY_MS, open } from "#lib/users/hover.svelte.js";
   import { users } from "#lib/users/users.svelte.js";
 
@@ -49,6 +50,7 @@
   let clicked = false;
 
   const user = $derived(users.get(name));
+  const queue = $derived(user ? queueOf(user) : null);
   const to = $derived(links(name, folder));
   const readWrite = $derived(session.can("ReadWrite"));
 
@@ -222,7 +224,7 @@
                   : "bg-fg-subtle/50"
             ]}></span>
           <span class="truncate font-mono font-medium" style:color={nameColor(name)}>{name}</span>
-          {#if user}<span class="ml-auto"><GroupBadge group={user.group} /></span>{/if}
+          {#if queue}<span class="ml-auto"><GroupBadge group={queue} queue /></span>{/if}
         </div>
         <Menu.Separator />
         <UserMenuItems {name} {folder} />

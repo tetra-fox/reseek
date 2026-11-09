@@ -39,7 +39,7 @@
   wrapperClass="w-full max-w-xs"
   type="search"
   autocomplete="off"
-  placeholder="Username, tag or note"
+  placeholder="Username, group or note"
   aria-label="Search users"
   class={[text && FILTERING]}>
   <UserEntries {finder} {text} />

@@ -37,17 +37,10 @@
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
   import { clock } from "#lib/ui/clock.svelte.js";
-  import {
-    assignGroup,
-    befriend,
-    canManage,
-    configBlocked,
-    reach,
-    setBuddy,
-    userGroups
-  } from "#lib/users/actions.js";
+  import { befriend, canManage, configBlocked, reach, setBuddy } from "#lib/users/actions.js";
   import { blockEnd, blocking, unblock } from "#lib/users/block.svelte.js";
   import { nameColor } from "#lib/users/colors.js";
+  import { queueOf } from "#lib/users/groups.js";
   import { pictureOf, SHARES_UNKNOWN } from "#lib/users/profile.svelte.js";
   import { BUDDY, CONFIG_BLOCKED } from "#lib/wording.js";
 
@@ -68,8 +61,7 @@
   const write = $derived(session.can("ReadWrite"));
   const admin = $derived(session.can("Administrator"));
   const stats = $derived(p.statistics);
-  const groups = $derived(userGroups());
-  const lostGroup = $derived(!!p.groupOverride && !groups.includes(p.groupOverride));
+  const queue = $derived(queueOf(p));
 
   /** someone else, whom our privileges can be given to */
   const other = $derived(name !== app.state?.user.username);
@@ -140,14 +132,7 @@
         {#if !p.known}<Badge tone="outline">Not seen before</Badge>{/if}
         {#if p.isPrivileged}<Badge tone="warning">privileged</Badge>{/if}
         <Flag code={p.countryCode} />
-        <GroupBadge group={p.group} />
-        {#if lostGroup}
-          <Tooltip text={`Assigned to ${p.groupOverride}`} spoken>
-            {#snippet child({ props })}
-              <Badge {...props} tone="warning">Group no longer exists</Badge>
-            {/snippet}
-          </Tooltip>
-        {/if}
+        {#if queue}<GroupBadge group={queue} queue />{/if}
         {#if p.block}
           {@const b = p.block}
           <Tooltip
@@ -158,14 +143,7 @@
             {/snippet}
           </Tooltip>
         {/if}
-        {#if p.buddy}<Badge tone="info"
-            >{p.buddy.trusted ? `trusted ${BUDDY.badge}` : BUDDY.badge}</Badge
-          >{/if}
-        {#each p.tags as tag (tag)}
-          <a class="inline-flex max-w-full" href={href(`/users?tag=${encodeURIComponent(tag)}`)}>
-            <Badge tone="outline">{tag}</Badge>
-          </a>
-        {/each}
+        {#if p.buddy}<Badge tone="info">{BUDDY.badge}</Badge>{/if}
       </div>
       <!-- wraps as words do, so how long ago moves to the next line whole -->
       <p class="flex flex-wrap items-center gap-x-1.5 text-sm">
@@ -240,15 +218,6 @@
               {/snippet}
             </Menu.Trigger>
             <Menu.Content align="start">
-              <Tooltip text={BUDDY.trustedHint} side="right">
-                {#snippet child({ props })}
-                  <Menu.CheckboxItem
-                    {...props}
-                    checked={buddy.trusted}
-                    onCheckedChange={(on) => void run(() => befriend(name, { trusted: on }))}
-                    >{BUDDY.trusted}</Menu.CheckboxItem>
-                {/snippet}
-              </Tooltip>
               <Tooltip text={BUDDY.notifyHint} side="right">
                 {#snippet child({ props })}
                   <Menu.CheckboxItem
@@ -271,27 +240,6 @@
       <Button variant="outline" size="sm" onclick={() => void run(() => mute(!p.muted))}>
         {#if p.muted}<BellIcon />Unmute{:else}<BellOffIcon />Mute{/if}
       </Button>
-    {/if}
-    {#if admin && p.known}
-      <Menu.Root>
-        <Tooltip text={p.group.source === "config" ? "Set in the configuration" : undefined}>
-          {#snippet child({ props })}
-            <span {...props}>
-              <Menu.Trigger disabled={p.group.source === "config"}>
-                {#snippet child({ props: trigger })}
-                  <Button {...trigger} variant="outline" size="sm">Group<ChevronDownIcon /></Button>
-                {/snippet}
-              </Menu.Trigger>
-            </span>
-          {/snippet}
-        </Tooltip>
-        <Menu.Content align="start">
-          <Menu.Item onSelect={() => void run(() => assignGroup(name, null))}>None</Menu.Item>
-          {#each groups as g (g)}
-            <Menu.Item onSelect={() => void run(() => assignGroup(name, g))}>{g}</Menu.Item>
-          {/each}
-        </Menu.Content>
-      </Menu.Root>
     {/if}
     <Menu.Root>
       <Menu.Trigger>
@@ -322,7 +270,7 @@
   bind:open={deleting}
   busy={forgetting.running}
   title={`Forget ${name}?`}
-  description="Their notes, tags and block are deleted too. They are listed again after any new interaction.">
+  description="Their notes, groups and block are deleted too. They are listed again after any new interaction.">
   <label class="flex items-center gap-2 text-sm">
     <Checkbox checked={purge} onCheckedChange={(on) => (purge = on)} />
     Also remove the transfers and messages with this user

@@ -136,7 +136,6 @@
       },
       // narrow until there is room, so a row fits beside the sidebar on a 1280px screen
       { id: "note", label: "Note", width: "5rem", grow: true },
-      { id: "trusted", label: BUDDY.trusted, width: "5rem", hint: BUDDY.trustedHint },
       { id: "notify", label: "Notify", width: "5rem", hint: BUDDY.notifyHint },
       { id: "actions", label: "Actions", width: "6rem", quiet: true, fixed: true }
     ],
@@ -186,6 +185,15 @@
   const change = async (run: () => ReturnType<typeof befriend>) => {
     const outcome = await run();
     if (!outcome.ok) toast(outcome.error, "error");
+  };
+
+  /** Takes `name` off the list, with an Undo that puts them back as they were */
+  const drop = async (name: string, notifyPresence: boolean) => {
+    const outcome = await setBuddy(name, false);
+    if (!outcome.ok) return toast(outcome.error, "error");
+    toast(`Removed ${name} from ${BUDDY.plural.toLowerCase()}`, "info", {
+      action: { label: "Undo", run: () => void change(() => befriend(name, { notifyPresence })) }
+    });
   };
 
   /** the presence and since when it holds: the time of day for today, with the date before */
@@ -252,7 +260,7 @@
       style:height={`${lines.total}px`}
       {@attach freezesWhileUsed}>
       {#each lines.drawn as { line: u, index, start } (u.username)}
-        {@const buddy = u.buddy ?? { trusted: false, notifyPresence: false }}
+        {@const buddy = u.buddy ?? { notifyPresence: false }}
         <div
           role="row"
           {...list.line(u, index)}
@@ -292,13 +300,6 @@
           </Tooltip>
           <span role="gridcell" class="px-2">
             <Switch
-              aria-label={`${BUDDY.trusted}: ${u.username}`}
-              checked={buddy.trusted}
-              disabled={!write}
-              onCheckedChange={(on) => void change(() => befriend(u.username, { trusted: on }))} />
-          </span>
-          <span role="gridcell" class="px-2">
-            <Switch
               aria-label={`${BUDDY.notify}: ${u.username}`}
               checked={buddy.notifyPresence}
               disabled={!write}
@@ -326,7 +327,7 @@
                     variant="ghost"
                     size="icon-sm"
                     aria-label={`${BUDDY.remove}: ${u.username}`}
-                    onclick={() => void change(() => setBuddy(u.username, false))}
+                    onclick={() => void drop(u.username, buddy.notifyPresence)}
                     ><UserMinusIcon /></Button>
                 {/snippet}
               </Tooltip>

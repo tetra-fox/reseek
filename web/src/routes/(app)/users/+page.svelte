@@ -6,14 +6,15 @@
   import BlockedList from "#lib/components/users/BlockedList.svelte";
   import BuddyList from "#lib/components/users/BuddyList.svelte";
   import Directory from "#lib/components/users/Directory.svelte";
+  import GroupsPage from "#lib/components/users/groups/GroupsPage.svelte";
   import InterestsPage from "#lib/components/users/interests/InterestsPage.svelte";
   import { href, route, userHref } from "#lib/nav.js";
   import { BUDDY } from "#lib/wording.js";
 
-  // /users is the directory; ?user=<name> goes to that user's profile, ?tag= filters by a tag,
-  // ?has=transfers those we transferred with, ?tab=buddies shows the buddies, ?tab=interests the
-  // recommendations and similar users, for one interest with ?interest=, and ?tab=blocked the
-  // blocked users
+  // /users is the directory; ?user=<name> goes to that user's profile, ?group= filters by a
+  // group, ?has=transfers those we transferred with, ?tab=buddies shows the buddies, ?tab=groups
+  // the groups, ?tab=interests the recommendations and similar users, for one interest with
+  // ?interest=, and ?tab=blocked the blocked users
   const query = $derived(route(page.url).query);
   $effect(() => {
     const user = query.get("user");
@@ -22,6 +23,7 @@
   const TABS = [
     { id: "all", title: "All users", to: "/users" },
     { id: "buddies", title: BUDDY.plural, to: "/users?tab=buddies" },
+    { id: "groups", title: "Groups", to: "/users?tab=groups" },
     { id: "interests", title: "Interests", to: "/users?tab=interests" },
     { id: "blocked", title: "Blocked users", to: "/users?tab=blocked" }
   ];
@@ -50,10 +52,12 @@
   <BlockedList />
 {:else if tab.id === "buddies"}
   <BuddyList />
+{:else if tab.id === "groups"}
+  <GroupsPage />
 {:else if tab.id === "interests"}
   <InterestsPage {interest} />
 {:else}
-  {#key `${query.get("tag")}|${query.get("has")}`}
-    <Directory tag={query.get("tag")} withTransfers={query.get("has") === "transfers"} />
+  {#key `${query.get("group")}|${query.get("has")}`}
+    <Directory group={query.get("group")} withTransfers={query.get("has") === "transfers"} />
   {/key}
 {/if}

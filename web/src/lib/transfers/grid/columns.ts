@@ -148,7 +148,7 @@ export const COLUMNS: Column[] = (
       end: true
     },
     { id: "job", label: "Download job", visible: false, width: "6.25rem", only: "download" },
-    { id: "group", label: "Group", visible: false, width: "7rem", only: "upload" },
+    { id: "group", label: "Queue", visible: false, width: "7rem", only: "upload" },
     {
       id: "actions",
       label: "Actions",

@@ -8,11 +8,13 @@ const alice = user("alice");
 const searchBox = (page: Page) => page.getByRole("combobox", { name: "Search users" });
 const options = (page: Page) => page.getByRole("option");
 
-/** Answers the directory with `users`, those whose name or tags hold the text searched for */
+/** Answers the directory with `users`, those whose name or groups hold the text searched for */
 const directory = (page: Page, users: (typeof alice)[]) =>
   page.route("**/api/v0/users?**", (route) => {
     const q = new URL(route.request().url()).searchParams.get("q") ?? "";
-    const matching = users.filter((u) => `${u.username} ${u.tags.join(" ")}`.includes(q));
+    const matching = users.filter((u) =>
+      `${u.username} ${u.groups.map((g) => g.name).join(" ")}`.includes(q)
+    );
     return route.fulfill({ json: { users: matching, total: matching.length } });
   });
 
@@ -40,18 +42,24 @@ test("the search box lists users best first, picks one, and closes on Escape and
   page
 }) => {
   await directory(page, [
-    { ...alice, username: "alice", tags: ["bob"] },
+    {
+      ...alice,
+      username: "alice",
+      groups: [
+        { name: "bob-fans", kind: "manual", defined: true, uploadSettings: false, color: null }
+      ]
+    },
     { ...alice, username: "bobby" },
     { ...alice, username: "bob", presence: "Online" },
-    { ...alice, username: "carol", tags: [] }
+    { ...alice, username: "carol", groups: [] }
   ]);
   await profile(page, "bobby", (route) => route.fulfill({ json: alice }));
   await profile(page, "bob", (route) => route.fulfill({ json: alice }));
   await visit(page, "/users");
 
   await searchBox(page).fill("bob");
-  await expect(options(page)).toHaveText([/\bbob\b.*Online.*default.*Last seen/, /\bbobby\b/]);
-  // the list under the box filters too, by tags as well, and the look-up entry stays away from
+  await expect(options(page)).toHaveText([/\bbob\b.*Online.*Last seen/, /\bbobby\b/]);
+  // the list under the box filters too, by groups as well, and the look-up entry stays away from
   // a name the directory holds
   await expect(page.locator('[data-line="alice"]')).toBeVisible();
   await expect(page.locator('[data-line="carol"]')).toHaveCount(0);
@@ -144,7 +152,22 @@ test("the dropdown fits a phone at the largest text size", async ({ page }) => {
     {
       ...alice,
       username: long,
-      group: { name: "a group with a long name", source: "config", priority: 1, color: null }
+      groups: [
+        {
+          name: "a-group-with-a-long-name",
+          kind: "manual",
+          defined: true,
+          uploadSettings: true,
+          color: "teal"
+        }
+      ],
+      uploads: {
+        queue: "a-group-with-a-long-name",
+        slots: 2,
+        speed: "default",
+        speedLimit: null,
+        limits: []
+      }
     }
   ]);
   await visit(page, "/users");
@@ -166,7 +189,7 @@ test("the dropdown fits a phone at the largest text size", async ({ page }) => {
 });
 
 test("a user's card and row offer Message, Browse shares and Add buddy", async ({ page }) => {
-  let buddy: { trusted: boolean; notifyPresence: boolean } | null = null;
+  let buddy: { notifyPresence: boolean } | null = null;
   await page.route("**/api/v0/users?**", (route) =>
     route.fulfill({ json: { users: [{ ...alice, buddy }], total: 1 } })
   );
@@ -174,7 +197,7 @@ test("a user's card and row offer Message, Browse shares and Add buddy", async (
     const url = new URL(route.request().url());
     if (url.pathname.endsWith("/buddy")) {
       const added = route.request().method() === "PUT";
-      buddy = added ? { trusted: false, notifyPresence: false } : null;
+      buddy = added ? { notifyPresence: false } : null;
       return route.fulfill({ status: 204 });
     }
     return route.fulfill({ json: { ...alice, buddy } });

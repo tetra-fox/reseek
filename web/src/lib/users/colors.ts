@@ -34,3 +34,33 @@ export const nameColor = (name: string): string => {
   const h = nameHue(name);
   return `light-dark(oklch(${LIGHT.l} ${LIGHT.c} ${h}), oklch(${DARK.l} ${DARK.c} ${h}))`;
 };
+
+/**
+ * The hue of each color a group can be shown in, the daemon's names in its order, taken from the
+ * hues names are drawn in so a group's color reads as text like a name's; gray has none
+ */
+const GROUP_HUES = new Map<string, number | null>([
+  ["blue", 230],
+  ["red", 15],
+  ["orange", 45],
+  ["amber", 75],
+  ["lime", 110],
+  ["green", 145],
+  ["teal", 175],
+  ["cyan", 200],
+  ["indigo", 260],
+  ["violet", 290],
+  ["pink", 350],
+  ["gray", null]
+]);
+
+/** The colors a group can be given, in the order a picker offers them */
+export const GROUP_COLORS = [...GROUP_HUES.keys()];
+
+/** The CSS color of a group's color name, null for a group without one or a name not known here */
+export const groupColor = (color: string | null | undefined): string | null => {
+  const hue = color ? GROUP_HUES.get(color) : undefined;
+  if (hue === undefined) return null;
+  const [light, dark] = hue === null ? [0, 0] : [LIGHT.c, DARK.c];
+  return `light-dark(oklch(${LIGHT.l} ${light} ${hue ?? 0}), oklch(${DARK.l} ${dark} ${hue ?? 0}))`;
+};

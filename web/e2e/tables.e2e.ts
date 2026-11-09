@@ -56,7 +56,7 @@ test("the shares", async ({ page }) => {
     raw: `[${alias}]${localPath}`,
     remotePath: `@@${alias}`,
     isExcluded: false,
-    visibility: "everyone",
+    visibleTo: null,
     directories: 12,
     files: 140
   });

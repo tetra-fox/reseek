@@ -97,8 +97,8 @@ export const profileOf = (username: string, refresh: boolean) =>
   );
 
 /**
- * Makes `username` a buddy, or with `change` sets whether they are trusted and whether we are told
- * of their presence; what `change` leaves out keeps its value
+ * Makes `username` a buddy, or with `change` sets whether we are told of their presence; what
+ * `change` leaves out keeps its value
  */
 export const befriend = (username: string, change: Schemas["BuddyChange"] = {}) =>
   call(() => api.PUT("/api/v0/users/{username}/buddy", { params: byUser(username), body: change }));
@@ -109,12 +109,17 @@ export const setBuddy = (username: string, on: boolean) =>
     ? befriend(username)
     : call(() => api.DELETE("/api/v0/users/{username}/buddy", { params: byUser(username) }));
 
-/** The names of the user-defined upload groups in the options in effect */
-export const userGroups = (): string[] =>
-  Object.keys(fields(fields(fields(fields(app.options).transfers).groups).user_defined)).toSorted();
+/** The user-defined groups in the options in effect, by name, with their colors */
+export const userGroups = (): { name: string; color: string | null }[] =>
+  Object.entries(fields(fields(fields(fields(app.options).transfers).groups).user_defined))
+    .map(([name, group]) => {
+      const color = fields(group).color;
+      return { name, color: typeof color === "string" ? color : null };
+    })
+    .toSorted((a, b) => (a.name < b.name ? -1 : 1));
 
-/** Puts a user in a user-defined group, or with null takes them out of it */
-export const assignGroup = (username: string, group: string | null) =>
+/** Puts `username` in exactly `groups`, the groups we choose for users */
+export const setGroups = (username: string, groups: string[]) =>
   call(() =>
-    api.PUT("/api/v0/users/{username}/group", { params: byUser(username), body: { group } })
+    api.PUT("/api/v0/users/{username}/groups", { params: byUser(username), body: { groups } })
   );

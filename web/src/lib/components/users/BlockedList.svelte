@@ -12,6 +12,7 @@
 
   import { api, root, type Schemas } from "#lib/api/client.js";
   import LoadError from "#lib/components/LoadError.svelte";
+  import Section from "#lib/components/settings/Section.svelte";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
@@ -22,6 +23,8 @@
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Textarea from "#lib/components/ui/Textarea.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
+  import { BLOCKING } from "#lib/config/sections.js";
+  import { adminView } from "#lib/config/view.svelte.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { ago, dateTime, formatCount, listText, plural } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
@@ -51,6 +54,9 @@
       if (was || u.block) void blocked.load();
     })
   );
+
+  // the configuration's blocks come and go with the options
+  $effect(() => live.on("application.options", () => void blocked.load()));
 
   const time = (iso: string | null | undefined, none: number) => (iso ? Date.parse(iso) : none);
   const grid = new Grid<Schemas["Block"]>({
@@ -102,6 +108,7 @@
   const chosen = $derived(entries.filter((b) => list.selected.has(b.username)));
   const write = $derived(session.can("ReadWrite"));
   const admin = $derived(session.can("Administrator"));
+  const options = adminView();
 
   let importing = $state(false);
   let text = $state("");
@@ -278,6 +285,11 @@
       {/each}
     </div>
   </div>
+{/if}
+
+{#if options.data}
+  <!-- the blocking options, which the list above shows the effect of -->
+  <Section section={BLOCKING} view={options.data} onchanged={options.load} />
 {/if}
 
 {#if list.selected.size && write}

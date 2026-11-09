@@ -43,7 +43,7 @@ const readHits = async (
 export class ChatSearch {
   /** the rooms the server lists and those with stored messages */
   #rooms = $state.raw<RoomFound[]>([]);
-  /** the users the directory matched for the text; tags and notes match too */
+  /** the users the directory matched for the text; group names and notes match too */
   #users = $state.raw<UserSummary[]>([]);
   /** the stored messages that match, the newest first */
   hits = $state.raw<MessageHit[]>([]);

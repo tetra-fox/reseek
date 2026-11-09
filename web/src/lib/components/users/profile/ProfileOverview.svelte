@@ -8,10 +8,11 @@
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import { formatBytes, formatCount } from "#lib/format.js";
   import { session } from "#lib/session.svelte.js";
+  import { uploadsText } from "#lib/users/groups.js";
 
+  import GroupsEditor from "./GroupsEditor.svelte";
   import NotesEditor from "./NotesEditor.svelte";
   import ProfileView from "./ProfileView.svelte";
-  import TagsEditor from "./TagsEditor.svelte";
   import UserInterests from "./UserInterests.svelte";
 
   // what the user says about themselves, what we note about them, and what we did together
@@ -58,8 +59,9 @@
   <Card title="Notes">
     <NotesEditor username={p.username} notes={p.notes} disabled={!write} />
   </Card>
-  <Card title="Tags">
-    <TagsEditor username={p.username} tags={p.tags} disabled={!write} />
+  <Card title="Groups">
+    <GroupsEditor username={p.username} groups={p.groups} disabled={!write} />
+    <p class="mt-3 text-xs text-fg-muted">{uploadsText(p.uploads)}</p>
     {#if endpoint}
       <p class="mt-4 flex items-center gap-1 text-sm">
         <span class="shrink-0 text-fg-muted">Address</span>

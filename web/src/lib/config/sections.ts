@@ -92,25 +92,6 @@ const limits = (prefix: string, who: string, unset: string): Field[] =>
     }))
   );
 
-const capitalized = (word: string) => `${word[0].toUpperCase()}${word.slice(1)}`;
-
-/** The row labels of a user-defined group: its members and what its upload settings are called */
-const GROUP_COLUMNS: Record<string, string> = {
-  "members": "Members",
-  "upload.priority": "Priority",
-  "upload.strategy": "Queue order",
-  "upload.slots": "Upload slots",
-  "upload.speed_limit": "Speed limit (KiB/s)",
-  ...Object.fromEntries(
-    LIMIT_WINDOWS.flatMap((window) =>
-      LIMIT_MEASURES.map((what) => [
-        `upload.limits.${window}.${what}`,
-        `${capitalized(window)} ${what}`
-      ])
-    )
-  )
-};
-
 const OIDC_COLUMNS: Record<string, string> = {
   "issuer": "Issuer URL",
   "client_id": "Client ID",
@@ -133,18 +114,6 @@ const OIDC_COLUMNS: Record<string, string> = {
   "require_https": "Require HTTPS"
 };
 
-/** A group's upload settings under `prefix` */
-const groupUpload = (prefix: string, group: string): Field[] => [
-  { key: `${prefix}.upload.priority`, label: `${group} priority`, ...AT_LEAST_1 },
-  {
-    key: `${prefix}.upload.strategy`,
-    label: `${group} queue order`
-  },
-  { key: `${prefix}.upload.slots`, label: `${group} upload slots`, ...AT_LEAST_1 },
-  { key: `${prefix}.upload.speed_limit`, label: `${group} speed limit (KiB/s)`, ...AT_LEAST_1 },
-  ...limits(`${prefix}.upload`, group, "global limit")
-];
-
 /** The four outcome ages of one transfer direction's retention, by the option key's outcome */
 const transferRetention = (direction: "upload" | "download"): Field[] =>
   ["succeeded", "errored", "canceled", "failed"].map((outcome) => ({
@@ -159,6 +128,30 @@ const transferRetention = (direction: "upload" | "download"): Field[] =>
  * whether the daemon is a controller is `relay.enabled`
  */
 export const unlisted = new Set(["relay.mode"]);
+
+/** The options of blocking, which the blocked users' tab shows rather than Settings */
+export const BLOCKING: Section = {
+  id: "blocking",
+  title: "Blocking",
+  group: "Network",
+  fields: [
+    { key: "transfers.groups.blacklisted.members", label: "Blocked users" },
+    {
+      key: "transfers.groups.blacklisted.patterns",
+      label: "Blocked name patterns",
+      control: "regex-list"
+    },
+    { key: "transfers.groups.blacklisted.cidrs", label: "Blocked networks", control: "cidr-list" },
+    { key: "blocking.default_scopes", label: "Default block scopes" },
+    { key: "blocking.refusal_message", label: "Message to blocked users" },
+    { key: "blacklist.enabled", label: "Address blocklist" },
+    {
+      key: "blacklist.file",
+      label: "Blocklist file",
+      enabledWhen: { key: "blacklist.enabled", values: [true] }
+    }
+  ]
+};
 
 /** The forms of the settings page, one per part of the configuration, in this order */
 export const sections: Section[] = [
@@ -288,8 +281,6 @@ export const sections: Section[] = [
         }
       },
       { key: "shares.share_downloads", label: "Share downloads folder" },
-      { key: "shares.buddies_only", label: "Shares only buddies see" },
-      { key: "shares.trusted_only", label: "Shares only trusted buddies see" },
       { key: "shares.filters", label: "Excluded files", control: "regex-list" },
       { key: "shares.follow_symlinks", label: "Follow symbolic links" },
       { key: "shares.cache.retention", label: "Rescan", placeholder: "off, 12h or 7d at 04:00" },
@@ -369,55 +360,6 @@ export const sections: Section[] = [
         }
       ]),
       ...under("Limits", limits("transfers.upload", "Per user", NO_LIMIT))
-    ]
-  },
-  {
-    id: "groups",
-    title: "Groups",
-    group: "Network",
-    fields: [
-      ...under("Default group", groupUpload("transfers.groups.default", "Default")),
-      ...under("Leechers", [
-        ...groupUpload("transfers.groups.leechers", "Leechers"),
-        {
-          key: "transfers.groups.leechers.thresholds.files",
-          label: "Leechers: minimum shared files",
-          ...AT_LEAST_1
-        },
-        {
-          key: "transfers.groups.leechers.thresholds.directories",
-          label: "Leechers: minimum shared folders",
-          ...AT_LEAST_1
-        }
-      ]),
-      ...under("Blocked", [
-        { key: "transfers.groups.blacklisted.members", label: "Blocked users" },
-        {
-          key: "transfers.groups.blacklisted.patterns",
-          label: "Blocked name patterns",
-          control: "regex-list"
-        },
-        {
-          key: "transfers.groups.blacklisted.cidrs",
-          label: "Blocked networks",
-          control: "cidr-list"
-        },
-        { key: "blocking.default_scopes", label: "Default block scopes" },
-        { key: "blocking.refusal_message", label: "Message to blocked users" },
-        { key: "blacklist.enabled", label: "Address blocklist" },
-        {
-          key: "blacklist.file",
-          label: "Blocklist file",
-          enabledWhen: { key: "blacklist.enabled", values: [true] }
-        }
-      ]),
-      ...under("User-defined groups", [
-        {
-          key: "transfers.groups.user_defined",
-          label: "User-defined groups",
-          columns: GROUP_COLUMNS
-        }
-      ])
     ]
   },
   {

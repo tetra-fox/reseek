@@ -22,7 +22,8 @@ describe("importing blocks", () => {
     let release!: () => void;
     const held = new Promise<void>((done) => (release = done));
     const net = fakeNetwork(async (url, method) => {
-      if (method === "GET") return { users: [], rules: null };
+      if (method === "GET")
+        return url.pathname.endsWith("/users/blocked") ? { users: [], rules: null } : undefined;
       await held;
       return { status: 400, body: { error: "not a block list" } };
     });

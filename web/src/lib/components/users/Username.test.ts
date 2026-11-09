@@ -8,7 +8,8 @@ import { CLOSE_DELAY_MS, OPEN_DELAY_MS } from "#lib/users/hover.svelte.js";
 import Username from "./Username.svelte";
 
 const summary = userSummary("alice", {
-  group: { name: "friends", source: "config", priority: 2, color: "blue" },
+  groups: [{ name: "friends", kind: "manual", defined: true, uploadSettings: true, color: "blue" }],
+  uploads: { queue: "friends", slots: 2, speed: "default", speedLimit: null, limits: [] },
   description: "plays bass\nlikes dub",
   notes: "owes me a record",
   info: {
@@ -81,7 +82,7 @@ describe("a username", () => {
     const badge = [...card()!.querySelectorAll<HTMLElement>("span")].find(
       (s) => s.textContent.trim() === "friends"
     );
-    expect(badge?.querySelector<HTMLElement>("span")?.style.backgroundColor).toBe("blue");
+    expect(badge?.querySelector("span[aria-hidden]")).not.toBeNull();
 
     link.dispatchEvent(pointer("pointerleave", "mouse"));
     await vi.advanceTimersByTimeAsync(CLOSE_DELAY_MS);

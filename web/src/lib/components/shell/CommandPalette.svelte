@@ -8,7 +8,7 @@
   import { app } from "#lib/app.svelte.js";
   import { chat } from "#lib/chat/chat.svelte.js";
   import Scrim from "#lib/components/ui/Scrim.svelte";
-  import { sections } from "#lib/config/sections.js";
+  import { BLOCKING, sections } from "#lib/config/sections.js";
   import {
     href,
     navItems,
@@ -83,6 +83,28 @@
           keywords: section.fields.map((f) => `${f.label} ${f.key}`).join(" "),
           run: go(`/system/settings?section=${section.id}`)
         });
+        // the groups' and blocking's options are edited on the users page, listed after Transfers
+        if (section.id === "transfers") {
+          entries.push(
+            {
+              id: "setting:groups",
+              group: "Settings",
+              label: "Groups",
+              hint: "Users",
+              keywords:
+                "upload groups order queue slots speed limits leechers thresholds buddies privileged everyone default shares visible",
+              run: go("/users?tab=groups")
+            },
+            {
+              id: `setting:${BLOCKING.id}`,
+              group: "Settings",
+              label: BLOCKING.title,
+              hint: "Users",
+              keywords: BLOCKING.fields.map((f) => `${f.label} ${f.key}`).join(" "),
+              run: go("/users?tab=blocked")
+            }
+          );
+        }
       }
     }
     for (const text of [...recent.pinned, ...recent.texts]) {

@@ -33,16 +33,16 @@ class Waits {
 
 export const waits = new Waits();
 
-/** The queue cell's text: the place among the group's uploads, counted from 1 */
+/** The queue cell's text: the place among the queue's uploads, counted from 1 */
 export const placeText = (s: UploadQueueStatus) =>
   s.position === null || s.position === undefined
-    ? `Queued in group ${s.group}`
-    : `Queued (#${formatCount(s.position + 1)} in group ${s.group})`;
+    ? `Queued in the ${s.group} queue`
+    : `Queued (#${formatCount(s.position + 1)} in the ${s.group} queue)`;
 
 /** Why an upload waits, in a line per reason */
 export const whyText = (s: UploadQueueStatus): string => {
   const lines = [
-    `${formatCount(s.groupSlotsUsed)} of ${formatCount(s.groupSlots)} upload slots for group ${s.group} in use`,
+    `${formatCount(s.groupSlotsUsed)} of ${formatCount(s.groupSlots)} upload slots of the ${s.group} queue in use`,
     `${formatCount(s.globalSlotsUsed)} of ${formatCount(s.globalSlots)} upload slots in use overall`
   ];
   if (s.globalSlotsUsed >= s.globalSlots) lines.push("All upload slots are in use");
