@@ -200,7 +200,7 @@ async fn an_agent_is_disconnected_once_its_networks_or_secret_no_longer_admit_it
     app
       .state
       .config
-      .set_overrides(set, Vec::new(), "test", Lasts::UntilRestart)
+      .set_overrides(set, Vec::new(), "test", Lasts::UntilRestart, None)
   };
 
   let (_to_socket, mut from_socket, _served) = log_in(&controller, home, SECRET).await;

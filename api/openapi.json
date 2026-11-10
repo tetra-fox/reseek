@@ -5328,7 +5328,7 @@
         "tags": [
           "options"
         ],
-        "summary": "Sets and removes runtime overrides. They last across restarts until they expire, are\nremoved, or the files change the value under them; with `expiresIn` `restart` they are kept\nin memory only and end when the daemon stops.",
+        "summary": "Sets and removes runtime overrides. They last across restarts until they expire, are\nremoved, or the files change the value under them; with `expiresIn` `restart` they are kept\nin memory only and end when the daemon stops. A change sent with a `revision` the options\nhave changed since is refused with 409, the current revision as its detail.",
         "operationId": "patch_options",
         "requestBody": {
           "content": {
@@ -5537,7 +5537,7 @@
         "tags": [
           "options"
         ],
-        "summary": "Changes some keys of a configuration file, keeping its comments, then reloads.",
+        "summary": "Changes some keys of a configuration file, keeping its comments, then reloads. Refused with\n409 when the file changed since `revision`, or the options since `optionsRevision`.",
         "operationId": "patch_file",
         "requestBody": {
           "content": {
@@ -17848,6 +17848,7 @@
         "description": "The configuration in effect with, for every key, where its value came from and how it can\nbe changed.",
         "required": [
           "values",
+          "revision",
           "fields",
           "files",
           "pendingRestart",
@@ -17910,6 +17911,10 @@
               "type": "string"
             },
             "description": "keys that take effect on restart whose value differs from the one the daemon started\nwith"
+          },
+          "revision": {
+            "type": "string",
+            "description": "the revision of those values, new each time they change; a change sent with it is refused\nwith 409 once the values have changed since"
           },
           "values": {
             "type": "object",
@@ -19843,6 +19848,13 @@
               "null"
             ],
             "description": "the file to change, the first configuration file when null"
+          },
+          "optionsRevision": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "the revision of the options the change was made against, from the view; null makes no\ncheck"
           },
           "revision": {
             "type": [
@@ -23037,6 +23049,13 @@
             ],
             "description": "how long the overrides set last, such as `\"2h\"`; `\"restart\"` for until the daemon stops,\nnever written to disk; null for until removed",
             "example": "2h"
+          },
+          "revision": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "the revision of the options the change was made against, from the view; null makes no\ncheck"
           },
           "set": {
             "type": "object",

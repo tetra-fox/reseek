@@ -200,6 +200,7 @@ mod tests {
         vec![],
         "admin",
         Lasts::Until(soon),
+        None,
       )
       .await
       .unwrap()
@@ -234,6 +235,7 @@ mod tests {
           vec![],
           "a",
           Lasts::UntilRemoved,
+          None,
         )
         .await,
     );
@@ -245,6 +247,7 @@ mod tests {
           vec![],
           "a",
           Lasts::UntilRemoved,
+          None,
         )
         .await,
     );
@@ -256,6 +259,7 @@ mod tests {
           vec![],
           "a",
           Lasts::UntilRemoved,
+          None,
         )
         .await,
     );
@@ -267,6 +271,7 @@ mod tests {
           vec![],
           "a",
           Lasts::UntilRemoved,
+          None,
         )
         .await,
     );
@@ -281,6 +286,7 @@ mod tests {
           vec![],
           "a",
           Lasts::UntilRemoved,
+          None,
         )
         .await,
     );
@@ -300,6 +306,7 @@ mod tests {
         vec![],
         "a",
         Lasts::UntilRemoved,
+        None,
       )
       .await
       .unwrap();
@@ -316,6 +323,7 @@ mod tests {
         vec![],
         "a",
         Lasts::UntilRemoved,
+        None,
       )
       .await
       .unwrap();
@@ -325,6 +333,7 @@ mod tests {
         vec![],
         "a",
         Lasts::UntilRemoved,
+        None,
       )
       .await
       .unwrap();
@@ -359,6 +368,7 @@ mod tests {
       .patch_file(
         "config.toml",
         revision.as_deref(),
+        None,
         values(&[("api_keys", shown.clone())]),
         vec![],
       )
@@ -378,10 +388,47 @@ mod tests {
         vec![],
         "a",
         Lasts::UntilRemoved,
+        None,
       )
       .await
       .unwrap();
     assert_eq!(watcher.current().values.api_keys["robot"].key, "real");
+  }
+
+  #[tokio::test]
+  async fn a_change_made_against_values_since_replaced_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let watcher = watched(dir.path());
+    let read = watcher.current().revision.clone();
+    let port = |port: u16| values(&[("server.port", json!(port))]);
+    watcher
+      .set_overrides(port(5000), vec![], "a", Lasts::UntilRemoved, Some(&read))
+      .await
+      .unwrap();
+    let now = watcher.current().revision.clone();
+    assert_ne!(now, read, "a change gives the values a new revision");
+
+    // a second admin read the values before the first one's change
+    let outdated = watcher
+      .set_overrides(port(6000), vec![], "b", Lasts::UntilRemoved, Some(&read))
+      .await;
+    assert!(matches!(&outdated, Err(Error::Outdated(current)) if *current == now));
+    let written = watcher
+      .patch_file("config.toml", None, Some(&read), port(6000), vec![])
+      .await;
+    assert!(matches!(written, Err(Error::Outdated(_))));
+    assert_eq!(watcher.current().values.server.port, 5000);
+
+    watcher.reload().await.unwrap();
+    assert_eq!(
+      watcher.current().revision,
+      now,
+      "a reload that changes nothing keeps it"
+    );
+    watcher
+      .patch_file("config.toml", None, Some(&now), port(6000), vec![])
+      .await
+      .unwrap();
   }
 
   #[tokio::test]
@@ -394,7 +441,7 @@ mod tests {
     let refused = async |set: BTreeMap<Key, Value>| {
       let revision = watcher.current().files[0].revision.clone();
       let written = watcher
-        .patch_file("config.toml", revision.as_deref(), set, vec![])
+        .patch_file("config.toml", revision.as_deref(), None, set, vec![])
         .await;
       match written {
         Err(Error::Invalid(invalid)) => invalid[0].to_string(),
@@ -425,6 +472,7 @@ mod tests {
       .patch_file(
         "config.toml",
         revision.as_deref(),
+        None,
         values(&[
           ("server.port", json!(3000)),
           ("debug", json!(true)),
@@ -468,6 +516,7 @@ mod tests {
       .patch_file(
         "config.toml",
         Some(&written.revision),
+        None,
         values(&[("server.password", json!(REDACTED))]),
         vec![],
       )
@@ -483,6 +532,7 @@ mod tests {
       .patch_file(
         "config.toml",
         revision.as_deref(),
+        None,
         values(&[("server.port", json!(4000))]),
         vec![],
       )
@@ -494,6 +544,7 @@ mod tests {
       .patch_file(
         "config.toml",
         now.as_deref(),
+        None,
         values(&[("server.port", json!(80))]),
         vec![],
       )
@@ -503,6 +554,7 @@ mod tests {
       .patch_file(
         "config.toml",
         now.as_deref(),
+        None,
         values(&[("server.username", json!("x"))]),
         vec![],
       )
@@ -515,7 +567,7 @@ mod tests {
     );
 
     let unknown = watcher
-      .patch_file("other.toml", None, BTreeMap::new(), vec![])
+      .patch_file("other.toml", None, None, BTreeMap::new(), vec![])
       .await;
     assert!(matches!(unknown, Err(Error::UnknownFile(_))));
   }
@@ -533,6 +585,7 @@ mod tests {
     let e = watcher
       .patch_file(
         "config.toml",
+        None,
         None,
         values(&[("server.port", json!(3000))]),
         vec![],
@@ -558,6 +611,7 @@ mod tests {
       .patch_file(
         file,
         revision.as_deref(),
+        None,
         values(&[("server.port", json!(3000))]),
         vec![],
       )
@@ -590,6 +644,7 @@ mod tests {
       .patch_file(
         "config.d/10-a.toml",
         revision.as_deref(),
+        None,
         values(&[("server.port", json!(5000))]),
         vec![],
       )
@@ -644,6 +699,7 @@ mod tests {
       .patch_file(
         "config.toml",
         None,
+        None,
         values(&[("server.port", json!(3000))]),
         vec![],
       )
@@ -660,6 +716,7 @@ mod tests {
         vec![],
         "admin",
         Lasts::UntilRemoved,
+        None,
       )
       .await
       .expect("overrides still work, they are kept elsewhere");

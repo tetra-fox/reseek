@@ -68,6 +68,10 @@ pub enum Error {
   /// the file changed since the revision an edit was based on
   #[error("config file changed on disk")]
   Stale,
+  /// the values in effect changed since the revision a change was made against; the current
+  /// revision
+  #[error("the configuration changed since it was read")]
+  Outdated(String),
   /// the file cannot be written
   #[error("{file} is read-only: {reason}")]
   ReadOnly {

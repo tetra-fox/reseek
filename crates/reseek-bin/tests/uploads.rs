@@ -251,6 +251,7 @@ async fn a_second_request_waits_its_place_and_starts_once_the_first_ends() {
     )]),
     unset: Vec::new(),
     expires_in: None,
+    revision: None,
   };
   api.patch_options(&faster).await.unwrap();
   tokio::time::timeout(PATIENCE, running)

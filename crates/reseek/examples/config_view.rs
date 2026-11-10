@@ -12,6 +12,9 @@ use reseek::paths::Defaults;
 /// The directory the files are said to be in, so the output is the same on every machine.
 const SHOWN_DIR: &str = "/var/lib/reseek";
 
+/// The revision shown, since a real one is new each time the configuration loads.
+const SHOWN_REVISION: &str = "fixture";
+
 fn main() {
   let dir = tempfile::tempdir().expect("a temporary directory");
   std::fs::write(dir.path().join("config.toml"), "").expect("an empty config.toml");
@@ -23,6 +26,7 @@ fn main() {
   let layers = load::layers(&sources, &Defaults::new(Some(dir.path())), None);
   let watcher = Watcher::new(layers).expect("the default configuration loads");
   let mut view = view::config_view(&watcher.current());
+  view.revision = SHOWN_REVISION.to_string();
   for file in &mut view.files {
     let name = Path::new(&file.path)
       .strip_prefix(dir.path())

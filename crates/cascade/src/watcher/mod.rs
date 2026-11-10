@@ -142,6 +142,17 @@ enum Attempt<T> {
   Failed(Failure),
 }
 
+/// Refuses a change made against the values of revision `read` once those in effect are others;
+/// no `read` is no check. Called with the state locked, so nothing changes them before the
+/// change is made.
+fn unchanged_since<T>(shared: &Shared<T>, read: Option<&str>) -> Result<(), Error> {
+  let current = shared.current.borrow();
+  match read {
+    Some(read) if read != current.revision => Err(Error::Outdated(current.revision.clone())),
+    _ => Ok(()),
+  }
+}
+
 /// How a file is to be changed.
 enum FileEdit {
   Patch {
@@ -241,9 +252,11 @@ impl<T: Root> Watcher<T> {
 
   /// Sets the keys of `set` and removes those of `unset` in the file `name`, keeping its
   /// comments, then reloads. `revision` is the file's revision the edit was made against,
-  /// `None` when there was no file.
+  /// `None` when there was no file, and `read` the revision of the values in effect it was made
+  /// against, when it is to be checked.
   ///
-  /// Refused, in this order, when the file changed since `revision`, cannot be written, would
+  /// Refused, in this order, when the values in effect changed since `read`, when the file
+  /// changed since `revision`, cannot be written, would
   /// leave a configuration that does not load, or when a key's value comes from an env var or
   /// flag, which nothing at run time changes, or from a later file, which this file would not
   /// beat. For a secret, `*****` keeps the value and an empty string removes it; the same goes
@@ -252,12 +265,13 @@ impl<T: Root> Watcher<T> {
     &self,
     name: &str,
     revision: Option<&str>,
+    read: Option<&str>,
     set: BTreeMap<Key, Value>,
     unset: Vec<Key>,
   ) -> Result<Written<T>, Error> {
     let set = self.with_entry_secrets(set)?;
     self
-      .write_file(name, revision, FileEdit::Patch { set, unset })
+      .write_file(name, revision, read, FileEdit::Patch { set, unset })
       .await
   }
 
@@ -277,7 +291,8 @@ impl<T: Root> Watcher<T> {
     Ok(set)
   }
 
-  /// Replaces the whole text of the file `name`, with the checks of [`Watcher::patch_file`].
+  /// Replaces the whole text of the file `name`, with the checks of [`Watcher::patch_file`]
+  /// but that of the values in effect: the text is the file's whole, checked by `revision`.
   pub async fn replace_file(
     &self,
     name: &str,
@@ -285,24 +300,31 @@ impl<T: Root> Watcher<T> {
     text: String,
   ) -> Result<Written<T>, Error> {
     self
-      .write_file(name, revision, FileEdit::Replace(text))
+      .write_file(name, revision, None, FileEdit::Replace(text))
       .await
   }
 
   /// Sets runtime overrides for the keys of `set`, lasting as `lasts` says, and removes those
-  /// for `unset`, saving them before they take effect. Refused for a key that only takes effect
-  /// on restart, or whose value comes from an env var or flag.
+  /// for `unset`, saving them before they take effect. Refused when the values in effect
+  /// changed since `read`, the revision the change was made against, when one is given; for a
+  /// key that only takes effect on restart; or for one whose value comes from an env var or
+  /// flag.
   pub async fn set_overrides(
     &self,
     set: BTreeMap<Key, Value>,
     unset: Vec<Key>,
     set_by: &str,
     lasts: Lasts,
+    read: Option<&str>,
   ) -> Result<Option<Arc<Change<T>>>, Error> {
     let set = self.with_entry_secrets(set)?;
     let set_by = set_by.to_string();
+    let read = read.map(str::to_string);
     self
-      .blocking(move |state, shared| state.change_overrides(shared, set, &unset, &set_by, lasts))
+      .blocking(move |state, shared| {
+        unchanged_since(shared, read.as_deref())?;
+        state.change_overrides(shared, set, &unset, &set_by, lasts)
+      })
       .await?
   }
 
@@ -402,12 +424,17 @@ impl<T: Root> Watcher<T> {
     &self,
     name: &str,
     revision: Option<&str>,
+    read: Option<&str>,
     edit: FileEdit,
   ) -> Result<Written<T>, Error> {
     let name = name.to_string();
     let revision = revision.map(str::to_string);
+    let read = read.map(str::to_string);
     self
-      .blocking(move |state, shared| state.write_file(shared, &name, revision.as_deref(), edit))
+      .blocking(move |state, shared| {
+        unchanged_since(shared, read.as_deref())?;
+        state.write_file(shared, &name, revision.as_deref(), edit)
+      })
       .await?
   }
 

@@ -97,6 +97,7 @@ impl<T: Root> State<T> {
     }
     if changed.is_empty() {
       debug!("configuration unchanged");
+      loaded.revision = previous.revision.clone();
       // nothing a reader sees is different, so readers are not woken
       let same = previous.load_error == loaded.load_error
         && previous.load_error_at == loaded.load_error_at
@@ -302,6 +303,7 @@ mod tests {
         vec![],
         "a",
         Lasts::UntilRemoved,
+        None,
       )
       .await
       .unwrap();
@@ -361,6 +363,7 @@ mod tests {
         vec![],
         "a",
         Lasts::Until(soon),
+        None,
       )
       .await
       .unwrap();

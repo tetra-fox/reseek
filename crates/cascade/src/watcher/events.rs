@@ -280,6 +280,7 @@ mod tests {
       .patch_file(
         "config.toml",
         None,
+        None,
         values(&[("server.port", json!(3000))]),
         vec![],
       )

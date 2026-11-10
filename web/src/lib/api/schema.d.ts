@@ -1191,7 +1191,8 @@ export interface paths {
         /**
          * Sets and removes runtime overrides. They last across restarts until they expire, are
          *     removed, or the files change the value under them; with `expiresIn` `restart` they are kept
-         *     in memory only and end when the daemon stops.
+         *     in memory only and end when the daemon stops. A change sent with a `revision` the options
+         *     have changed since is refused with 409, the current revision as its detail.
          */
         patch: operations["patch_options"];
         trace?: never;
@@ -1231,7 +1232,10 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Changes some keys of a configuration file, keeping its comments, then reloads. */
+        /**
+         * Changes some keys of a configuration file, keeping its comments, then reloads. Refused with
+         *     409 when the file changed since `revision`, or the options since `optionsRevision`.
+         */
         patch: operations["patch_file"];
         trace?: never;
     };
@@ -4239,6 +4243,11 @@ export interface components {
              *     with
              */
             pendingRestart: string[];
+            /**
+             * @description the revision of those values, new each time they change; a change sent with it is refused
+             *     with 409 once the values have changed since
+             */
+            revision: string;
             /** @description the values in effect, secrets shown as `*****` */
             values: Record<string, unknown>;
             /** @description keys, flags and variables that were ignored, each with where it was found */
@@ -5101,6 +5110,11 @@ export interface components {
         FilePatch: {
             /** @description the file to change, the first configuration file when null */
             file?: string | null;
+            /**
+             * @description the revision of the options the change was made against, from the view; null makes no
+             *     check
+             */
+            optionsRevision?: string | null;
             /** @description the file's revision the change was made against, null when the file did not exist */
             revision?: string | null;
             /**
@@ -6409,6 +6423,11 @@ export interface components {
              * @example 2h
              */
             expiresIn?: string | null;
+            /**
+             * @description the revision of the options the change was made against, from the view; null makes no
+             *     check
+             */
+            revision?: string | null;
             /**
              * @description the keys to override and their values; `*****` for a secret, or for one in an entry of a
              *     map, keeps it

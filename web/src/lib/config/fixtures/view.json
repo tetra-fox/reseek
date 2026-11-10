@@ -511,6 +511,7 @@
       "url_base": "/"
     }
   },
+  "revision": "fixture",
   "fields": {
     "analysis.cache_max_bytes": {
       "source": {

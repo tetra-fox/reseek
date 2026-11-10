@@ -365,6 +365,7 @@ impl<T: Root> Layers<T> {
     }
     Ok(Loaded {
       values,
+      revision: crate::loaded::new_revision(),
       sources,
       warnings: declared.warnings.clone(),
       load_error: None,

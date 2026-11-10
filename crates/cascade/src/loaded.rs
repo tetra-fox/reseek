@@ -17,6 +17,9 @@ use crate::source::Source;
 pub struct Loaded<T> {
   /// the values in effect
   pub values: T,
+  /// names these values: a new one each time they change, never the same twice, so a change
+  /// made against one is known to be made against values since replaced
+  pub revision: String,
   /// the layer that set each leaf key's value
   pub sources: BTreeMap<Key, Source>,
   /// keys no field has, flags no field takes, and variables that lost to another name for the
@@ -42,6 +45,11 @@ pub struct Loaded<T> {
   /// `values` as a tree
   pub(crate) tree: Value,
   pub(crate) file_of: BTreeMap<Key, String>,
+}
+
+/// A revision no values had before.
+pub(crate) fn new_revision() -> String {
+  format!("{:016x}", rand::random::<u64>())
 }
 
 /// A value the files hold that is not the one in effect.

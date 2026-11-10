@@ -16,6 +16,7 @@ pub fn config_view(loaded: &Loaded<Options>) -> api::ConfigView {
   };
   api::ConfigView {
     values: redact::values(loaded),
+    revision: view.revision,
     fields: view
       .fields
       .into_iter()

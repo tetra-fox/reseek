@@ -197,6 +197,9 @@ pub struct ConfigView {
   /// the values in effect, secrets shown as `*****`
   #[schema(value_type = Object)]
   pub values: Value,
+  /// the revision of those values, new each time they change; a change sent with it is refused
+  /// with 409 once the values have changed since
+  pub revision: String,
   /// every leaf key, by key
   pub fields: BTreeMap<String, FieldView>,
   /// the configuration files, in the order they apply
@@ -233,6 +236,10 @@ pub struct OptionsPatch {
   /// never written to disk; null for until removed
   #[schema(example = "2h")]
   pub expires_in: Option<String>,
+  /// the revision of the options the change was made against, from the view; null makes no
+  /// check
+  #[serde(default)]
+  pub revision: Option<String>,
 }
 
 /// What a change to the configuration did, by when each changed key takes effect.
@@ -261,6 +268,10 @@ pub struct FilePatch {
   pub unset: Vec<String>,
   /// the file's revision the change was made against, null when the file did not exist
   pub revision: Option<String>,
+  /// the revision of the options the change was made against, from the view; null makes no
+  /// check
+  #[serde(default)]
+  pub options_revision: Option<String>,
   /// the file to change, the first configuration file when null
   pub file: Option<String>,
 }

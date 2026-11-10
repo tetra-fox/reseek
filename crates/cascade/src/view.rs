@@ -21,6 +21,8 @@ pub struct ConfigView {
   /// the values in effect, secrets shown as `*****`
   #[cfg_attr(feature = "utoipa", schema(value_type = Object))]
   pub values: Value,
+  /// the revision of those values, which a change made against them names
+  pub revision: String,
   /// every leaf key, by key
   pub fields: BTreeMap<Key, FieldView>,
   /// the configuration files, in the order they apply
@@ -206,6 +208,7 @@ impl ConfigView {
       .collect();
     Self {
       values: loaded.redacted(),
+      revision: loaded.revision.clone(),
       fields,
       files,
       pending_restart: loaded.pending_restart.clone(),
@@ -241,6 +244,7 @@ mod tests {
         vec![],
         "admin",
         Lasts::UntilRemoved,
+        None,
       )
       .await
       .unwrap();

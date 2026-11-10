@@ -221,6 +221,9 @@ impl From<cascade::Error> for ApiError {
     use cascade::Error as E;
     match error {
       E::Stale => Self::conflict("The configuration file changed on disk", None),
+      E::Outdated(current) => {
+        Self::conflict("The options changed since they were read", Some(current))
+      }
       E::ReadOnly { file, reason } => Self::conflict(format!("{file} is read-only"), Some(reason)),
       E::SetBy { key, by } => Self::conflict(format!("Set by {by}"), Some(key)),
       E::Invalid(invalid) => Self::invalid(

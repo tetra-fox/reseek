@@ -430,6 +430,7 @@ async fn a_finished_download_is_analyzed_while_the_option_is_on() {
     set: BTreeMap::from([("analysis.on_download".to_string(), json!(on))]),
     unset: Vec::new(),
     expires_in: None,
+    revision: None,
   };
   let mut download = async |name: &str| {
     let remote = format!("@@share\\analyzed\\{name}");

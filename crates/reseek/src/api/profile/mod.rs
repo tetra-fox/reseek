@@ -432,7 +432,7 @@ async fn write(
     Target::Override if !set.is_empty() => {
       app
         .config
-        .set_overrides(set, Vec::new(), &by.subject, Lasts::UntilRemoved)
+        .set_overrides(set, Vec::new(), &by.subject, Lasts::UntilRemoved, None)
         .await
         .map_err(|e| Failed::Unwritten(e.into()))?;
       debug!(keys = keys.join(", "), "profile set as a runtime override");
@@ -443,7 +443,7 @@ async fn write(
     Target::File { name, revision } => {
       app
         .config
-        .patch_file(&name, revision.as_deref(), set, unset)
+        .patch_file(&name, revision.as_deref(), None, set, unset)
         .await
         .map_err(|e| Failed::Unwritten(e.into()))?;
       debug!(
@@ -467,6 +467,7 @@ async fn write(
         overridden,
         &by.subject,
         Lasts::UntilRemoved,
+        None,
       )
       .await
       .map_err(|e| Failed::Overridden(e.into()))?;

@@ -116,7 +116,8 @@ async fn get_debug(
 
 /// Sets and removes runtime overrides. They last across restarts until they expire, are
 /// removed, or the files change the value under them; with `expiresIn` `restart` they are kept
-/// in memory only and end when the daemon stops.
+/// in memory only and end when the daemon stops. A change sent with a `revision` the options
+/// have changed since is refused with 409, the current revision as its detail.
 #[utoipa::path(
   patch, path = "/options", tag = "options", request_body = OptionsPatch,
   responses(
@@ -155,7 +156,13 @@ async fn patch_options(
   let set = with_urls(&current, patch.set)?;
   let change = app
     .config
-    .set_overrides(set, patch.unset, &admin.principal.subject, lasts)
+    .set_overrides(
+      set,
+      patch.unset,
+      &admin.principal.subject,
+      lasts,
+      patch.revision.as_deref(),
+    )
     .await
     .map_err(|e| match e {
       cascade::Error::Invalid(_) | cascade::Error::Value { .. } => {
@@ -268,7 +275,8 @@ async fn get_file_location(
   ))
 }
 
-/// Changes some keys of a configuration file, keeping its comments, then reloads.
+/// Changes some keys of a configuration file, keeping its comments, then reloads. Refused with
+/// 409 when the file changed since `revision`, or the options since `optionsRevision`.
 #[utoipa::path(
   patch, path = "/options/file", tag = "options", request_body = FilePatch,
   responses(
@@ -292,7 +300,13 @@ async fn patch_file(
   let set = with_urls(&current, patch.set)?;
   let written = app
     .config
-    .patch_file(&name, patch.revision.as_deref(), set, patch.unset)
+    .patch_file(
+      &name,
+      patch.revision.as_deref(),
+      patch.options_revision.as_deref(),
+      set,
+      patch.unset,
+    )
     .await?;
   info!(
     by = admin.principal.subject,
@@ -629,6 +643,57 @@ mod tests {
       assert_eq!(answer.status, 403, "{method} {uri}");
       assert_eq!(answer.json()["error"], "Remote configuration is disabled");
     }
+  }
+
+  #[tokio::test]
+  async fn a_change_made_against_options_changed_since_is_refused_with_the_revision() {
+    let app = app(TRUSTED, &[]).await;
+    let view = async || {
+      app
+        .send(request("GET", "/api/v0/options/view", None))
+        .await
+        .json()
+    };
+    // two admins open Settings, then the first applies a change
+    let read = view().await;
+    let revision = read["revision"].clone();
+    let file = read["files"][0]["revision"].clone();
+    let first = app
+      .send(request(
+        "PATCH",
+        "/api/v0/options",
+        Some(json!({ "set": { "rooms": ["indie"] }, "revision": revision })),
+      ))
+      .await;
+    assert_eq!(first.status, 200, "{:?}", first.body);
+    let now = view().await["revision"].clone();
+    assert_ne!(now, revision);
+
+    let second = app
+      .send(request(
+        "PATCH",
+        "/api/v0/options",
+        Some(json!({ "set": { "debug": true }, "revision": revision })),
+      ))
+      .await;
+    assert_eq!(second.status, 409);
+    assert_eq!(
+      second.json(),
+      json!({ "error": "The options changed since they were read", "detail": now })
+    );
+    let saved = app
+      .send(request(
+        "PATCH",
+        "/api/v0/options/file",
+        Some(json!({ "set": { "debug": true }, "revision": file, "optionsRevision": revision })),
+      ))
+      .await;
+    assert_eq!(saved.status, 409);
+    assert_eq!(
+      view().await["values"]["debug"],
+      false,
+      "neither went through"
+    );
   }
 
   #[tokio::test]

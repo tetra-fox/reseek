@@ -154,6 +154,7 @@ async fn an_option_change_that_needs_it_is_flagged_until_a_reconnect() {
     set: BTreeMap::from([(key.to_string(), value)]),
     unset: Vec::new(),
     expires_in: None,
+    revision: None,
   };
   client
     .patch_options(&set("soulseek.server_keepalive.probes", json!(5)))
