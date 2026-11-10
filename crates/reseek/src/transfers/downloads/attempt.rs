@@ -19,12 +19,14 @@ use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, trace, warn};
 
-use super::Downloads;
+use super::destination::incomplete_path;
 use super::task::Gate;
+use super::{Downloads, FileRequest};
 use crate::config::enums::RetryPartial;
 use crate::files::mode::to_unix_file_mode;
 use crate::files::{WriteGuard, create_file};
 use crate::network::options::request_style;
+use crate::safety::Os;
 use crate::transfers::{Record, store};
 
 /// More states than one try reports.
@@ -161,6 +163,11 @@ enum Start {
   Whole,
 }
 
+/// Whether an incomplete file `length` bytes long holds every byte of a file of `size`.
+fn whole(length: u64, size: u64) -> bool {
+  length != 0 && length == size
+}
+
 /// Where a try starts: at the length of a partial file with `partial` set to resume, else at
 /// 0. A file as long as `size` is whole; one longer, from a file that changed, is deleted.
 async fn start_offset(incomplete: &Path, size: u64, partial: RetryPartial) -> io::Result<Start> {
@@ -181,7 +188,7 @@ async fn start_offset(incomplete: &Path, size: u64, partial: RetryPartial) -> io
   if length == 0 {
     return Ok(Start::At(0));
   }
-  if length == size {
+  if whole(length, size) {
     info!(size, "incomplete file already whole");
     return Ok(Start::Whole);
   }
@@ -219,6 +226,20 @@ fn output(path: PathBuf, mode: Option<u32>, offset: u64) -> OutputFactory {
 }
 
 impl Downloads {
+  /// Whether the incomplete file of `file` from `username` is whole already, so its download
+  /// needs nothing from the peer.
+  pub(super) async fn whole_here(&self, username: &str, file: &FileRequest) -> bool {
+    // a name with no incomplete path fails in the download's task
+    let Ok((path, _)) = incomplete_path(&self.incomplete, username, &file.filename, Os::CURRENT)
+    else {
+      return false;
+    };
+    // a file whose length cannot be read is not taken as whole
+    tokio::fs::metadata(&path)
+      .await
+      .is_ok_and(|metadata| whole(metadata.len(), file.size))
+  }
+
   /// One try of the download `record` into `incomplete`, stopped by `cancel`, or by the
   /// request's hard limit while it holds `gate`.
   pub(super) async fn attempt(

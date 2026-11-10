@@ -704,3 +704,64 @@ async fn a_job_refused_for_want_of_the_server_says_so_in_words() {
     Some("Not connected to the Soulseek server")
   );
 }
+
+/// The id of the download of `filename` still in the listings.
+async fn listed(app: &TestApp, filename: &str) -> Uuid {
+  let filename = filename.to_string();
+  app
+    .state
+    .transfers
+    .read(move |conn| {
+      conn.query_row(
+        "SELECT Id FROM Transfers WHERE Filename = ?1 AND Removed = 0",
+        [filename],
+        |row| row.get::<_, String>(0),
+      )
+    })
+    .await
+    .unwrap()
+    .parse()
+    .unwrap()
+}
+
+#[tokio::test]
+async fn an_interrupted_download_whole_here_is_moved_though_its_user_cannot_be_reached() {
+  let app = app(TRUSTED, &[]).await;
+  let downloads = &app.state.downloads;
+  let job = Uuid::new_v4();
+  listed_job(&app, job, "Album from alice").await;
+  let mut arrived = Record::download("alice", "@@a\\Album\\1.flac", 10);
+  arrived.job_id = Some(job);
+  let mut partial = Record::download("alice", "@@a\\Album\\2.flac", 10);
+  partial.job_id = Some(job);
+  for (record, bytes) in [(&arrived, 10), (&partial, 4)] {
+    insert(&app, record).await;
+    let (incomplete, _) = super::incomplete_path(
+      &downloads.incomplete,
+      "alice",
+      &record.filename,
+      crate::safety::Os::CURRENT,
+    )
+    .unwrap();
+    std::fs::create_dir_all(incomplete.parent().unwrap()).unwrap();
+    std::fs::write(&incomplete, vec![0; bytes]).unwrap();
+  }
+  crate::transfers::cleanup::end_unfinished(&app.state.transfers)
+    .await
+    .unwrap();
+
+  // the daemon is not connected, so alice cannot be reached
+  downloads.resume().await;
+  let id = listed(&app, "@@a\\Album\\1.flac").await;
+  assert_ne!(id, arrived.id, "enqueued again as a new download");
+  let moved = read_until(&app, id, |r| r.local_path.is_some()).await;
+  assert_eq!(
+    moved.state,
+    TransferStates::Completed | TransferStates::Succeeded
+  );
+  assert_eq!(
+    listed(&app, "@@a\\Album\\2.flac").await,
+    partial.id,
+    "the partial one waits for its user"
+  );
+}

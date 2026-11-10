@@ -496,9 +496,11 @@ impl Downloads {
 
   /// Enqueues again the downloads a stop interrupted that were not removed since, each in its
   /// job and with its destination and search, as new downloads that supersede the old records,
-  /// so a job goes on and is told of once all of it has ended. Only the first call after a
-  /// start does anything, which is after the first login; the marks are cleared before the
-  /// enqueues, so a user that cannot be reached is logged, not tried again.
+  /// so a job goes on and is told of once all of it has ended. A file whole here already is
+  /// enqueued apart from the rest of its group, so it is moved whether or not its user can be
+  /// reached. Only the first call after a start does anything, which is after the first login;
+  /// the marks are cleared before the enqueues, so a user that cannot be reached is logged,
+  /// not tried again.
   pub async fn resume(&self) {
     if self.resumed.swap(true, Ordering::AcqRel) {
       return;
@@ -508,6 +510,7 @@ impl Downloads {
       Err(e) => return warn!(error = %e, "interrupted downloads not resumed"),
     };
     for (job, groups) in resumable {
+      let groups = self.whole_apart(groups).await;
       self.ensure_listed(job, &groups).await;
       let asked: Vec<(String, usize)> = groups
         .iter()
@@ -552,6 +555,36 @@ impl Downloads {
       }
       Err(e) => warn!(error = %e, "download jobs not checked after the restart"),
     }
+  }
+
+  /// `groups` with the files whole here already in a group of their own, ahead of the rest of
+  /// the group they were in.
+  async fn whole_apart(&self, groups: Vec<Group>) -> Vec<Group> {
+    let mut split = Vec::with_capacity(groups.len());
+    for mut group in groups {
+      let mut whole = Vec::new();
+      let mut rest = Vec::new();
+      for file in group.files {
+        if self.whole_here(&group.username, &file).await {
+          whole.push(file);
+        } else {
+          rest.push(file);
+        }
+      }
+      if !whole.is_empty() {
+        split.push(Group {
+          files: whole,
+          username: group.username.clone(),
+          destination: group.destination.clone(),
+          search_id: group.search_id,
+        });
+      }
+      if !rest.is_empty() {
+        group.files = rest;
+        split.push(group);
+      }
+    }
+    split
   }
 
   /// Waits, at shutdown and once the client is stopped, for the download tasks the shutdown

@@ -1,5 +1,6 @@
 //! Enqueueing downloads, as a job of one or more groups of files from one user each: the job is
-//! opened, then for each group the request and the peer are checked and, in the user's turn, a
+//! opened, then for each group the request and the peer are checked (the peer only when a file
+//! is not whole in the incomplete directory already) and, in the user's turn, a
 //! record is written for every file not downloading already, in one transaction, carrying the
 //! job, the group's destination and its search, and a task is started for each; then the job is
 //! closed. A record for a file that finished earlier is superseded by the new one.
@@ -243,7 +244,11 @@ impl Downloads {
       });
     }
     group.files = kept;
-    self.reachable(&group.username).await?;
+    let mut whole = true;
+    for file in &group.files {
+      whole = whole && self.whole_here(&group.username, file).await;
+    }
+    self.admit(&group.username, whole).await?;
     let mut enqueued = self.make(job, group).await?;
     enqueued.failed.extend(skipped);
     Ok(enqueued)
@@ -339,7 +344,9 @@ impl Downloads {
 
   /// Refuses a user blocked from downloads through the API, one offline, and one the
   /// configuration blocks; reaches the others with a message connection the downloads share.
-  async fn reachable(&self, username: &str) -> Result<(), ApiError> {
+  /// For files `whole` here already the peer is not needed, so it is neither asked nor reached,
+  /// and the configuration's blocks are checked by the name and the address last known.
+  async fn admit(&self, username: &str, whole: bool) -> Result<(), ApiError> {
     if self
       .users
       .blocked_through_api(username, BlockScope::Downloads)
@@ -351,19 +358,28 @@ impl Downloads {
       return Err(ApiError::conflict("The user is blocked", None));
     }
     let client = self.network.client();
-    let endpoint = client
-      .get_user_endpoint(username)
-      .await
-      .map_err(|e| unreachable(username, e))?;
-    if self
-      .users
-      .is_blocked(username, Some(endpoint.ip()), BlockScope::Downloads)
-    {
+    let ip = if whole {
+      None
+    } else {
+      let endpoint = client
+        .get_user_endpoint(username)
+        .await
+        .map_err(|e| unreachable(username, e))?;
+      Some(endpoint.ip())
+    };
+    if self.users.is_blocked(username, ip, BlockScope::Downloads) {
       debug!(
         username,
         "enqueue from a blacklisted user refused as offline"
       );
       return Err(ApiError::offline(username));
+    }
+    if whole {
+      debug!(
+        username,
+        "every file is here already; the peer is not reached"
+      );
+      return Ok(());
     }
     client
       .connect_to_user(username, false)
