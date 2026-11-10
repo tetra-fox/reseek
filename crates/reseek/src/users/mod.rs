@@ -61,6 +61,7 @@ use crate::config::{Options, SoulseekInterests};
 use crate::db::{Database, DbError, Location};
 use crate::events::EventBus;
 use crate::live::Live;
+use crate::state::StateOwner;
 use crate::sync::lock;
 use blocking::Blocks;
 use blocklist::Blocklist;
@@ -89,6 +90,8 @@ pub struct Directory {
   /// for them
   tasks: TaskTracker,
   config: Watcher<Options>,
+  /// the daemon's state, which says which speed limits are in force
+  state: StateOwner,
   live: Live,
   events: EventBus,
   toucher: Toucher,
@@ -115,18 +118,26 @@ pub struct Directory {
 struct CachedSummary {
   at: Instant,
   options: Arc<Loaded<Options>>,
+  /// the alternative speed limits were in force
+  alternative: bool,
   summary: UserSummary,
 }
 
 impl Directory {
   /// Opens `users.db` in `location` and loads the blocks, the groups we put users in and the
   /// blocklist file, then starts the touch writer and the follower of the configuration, which
-  /// all stop when `shutdown` is canceled. A user's figures are read from `transfers` and `messaging`.
+  /// all stop when `shutdown` is canceled. A user's figures are read from `transfers` and
+  /// `messaging`, and which speed limits are in force from `state`.
+  #[allow(
+    clippy::too_many_arguments,
+    reason = "the directory takes each part of the daemon it uses"
+  )]
   pub async fn open(
     location: &Location,
     transfers: Database,
     messaging: Database,
     config: Watcher<Options>,
+    state: StateOwner,
     live: Live,
     events: EventBus,
     shutdown: CancellationToken,
@@ -164,6 +175,7 @@ impl Directory {
       client: OnceLock::new(),
       tasks: TaskTracker::new(),
       config,
+      state,
       live,
       events,
       toucher,
@@ -367,7 +379,8 @@ impl Directory {
       .await
       .map_err(internal)?;
     let config = self.config.current();
-    let user = profile::known(&config.values, username, row.as_ref(), block);
+    let alternative = self.state.current().alternative_speed_limits;
+    let user = profile::known(&config.values, alternative, username, row.as_ref(), block);
     let user = self.with_network_and_conversation(user).await;
     let summary = profile::summary(user, row.as_ref(), &figures);
     let mut summaries = lock(&self.summaries);
@@ -377,6 +390,7 @@ impl Directory {
       CachedSummary {
         at: Instant::now(),
         options: config,
+        alternative,
         summary: summary.clone(),
       },
     );
@@ -393,11 +407,38 @@ impl Directory {
   async fn changed(&self, username: &str) {
     self.known.added(username);
     self.forget(username);
+    self.push(username).await;
+  }
+
+  /// Pushes `username`'s summary as it is now.
+  async fn push(&self, username: &str) {
     match self.summary_of(username).await {
       Ok(summary) => self
         .live
         .publish(LiveFrame::UsersUpdated(Box::new(summary))),
       Err(e) => warn!(username, error = ?e, "user change not pushed"),
+    }
+  }
+
+  /// Pushes the summaries of the privileged users after the speed limits in force switched,
+  /// since their uploads go at the total upload limit in force.
+  pub async fn speed_limits_switched(&self) {
+    let privileged = self
+      .db
+      .read(|conn| {
+        conn
+          .prepare("SELECT username FROM users WHERE is_privileged = 1")?
+          .query_map([], |row| row.get::<_, String>(0))?
+          .collect::<rusqlite::Result<Vec<_>>>()
+      })
+      .await;
+    match privileged {
+      Ok(privileged) => {
+        for username in &privileged {
+          self.push(username).await;
+        }
+      }
+      Err(e) => warn!(error = %e, "privileged users not pushed after the speed limits switched"),
     }
   }
 

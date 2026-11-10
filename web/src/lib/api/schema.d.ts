@@ -8885,7 +8885,8 @@ export interface components {
             speed: string;
             /**
              * Format: int32
-             * @description that speed limit in KiB/s, null for none
+             * @description that speed limit in KiB/s, null for none; for privileged the total upload limit in force,
+             *     the alternative one while those are switched on
              */
             speedLimit?: number | null;
         };

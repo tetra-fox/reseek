@@ -86,8 +86,10 @@ impl Placement {
     name == DEFAULT_GROUP || self.groups.iter().any(|g| g.name == name)
   }
 
-  /// What their uploads get, as the API shows it; a privileged user has no per-user limits.
-  pub fn uploads(&self, options: &Options) -> UserUploads {
+  /// What their uploads get, as the API shows it, with the alternative speed limits in force
+  /// when `alternative`. A privileged user's uploads go at the total upload limit in force, and
+  /// they have no per-user limits.
+  pub fn uploads(&self, options: &Options, alternative: bool) -> UserUploads {
     let groups = &options.transfers.groups;
     let global = options.transfers.upload.slots;
     let slots = groups
@@ -95,7 +97,7 @@ impl Placement {
       .and_then(|upload| upload.slots)
       .filter(|&slots| slots != 0 && slots < global);
     let speed_limit = match self.speed.as_str() {
-      PRIVILEGED_GROUP => options.transfers.upload.speed_limit,
+      PRIVILEGED_GROUP => options.transfers.upload_speed_limit(alternative),
       name => groups.upload(name).and_then(|upload| upload.speed_limit),
     }
     .filter(|&limit| limit != 0);
@@ -376,7 +378,7 @@ mod tests {
       ("buddies", "buddies"),
       "the buddies' own slots and speed are above the leechers'"
     );
-    let uploads = buddy.uploads(&options);
+    let uploads = buddy.uploads(&options, false);
     assert_eq!(uploads.speed_limit, None, "the buddies' 0 is no limit");
     assert_eq!(uploads.slots, None, "and every slot");
     assert_eq!(
@@ -402,7 +404,7 @@ mod tests {
       (above.queue.as_str(), above.speed.as_str()),
       ("throttled", "throttled")
     );
-    assert_eq!(above.uploads(&options).speed_limit, Some(50));
+    assert_eq!(above.uploads(&options, false).speed_limit, Some(50));
 
     facts.privileged = true;
     let privileged = place(&options, &facts, true);
@@ -411,8 +413,16 @@ mod tests {
       ("privileged", "privileged")
     );
     assert!(
-      privileged.uploads(&options).limits.is_empty(),
+      privileged.uploads(&options, false).limits.is_empty(),
       "the leechers' daily limit does not apply to a privileged leecher"
+    );
+    options.transfers.upload.speed_limit = Some(500);
+    options.transfers.upload.alt_speed_limit = Some(50);
+    let speed = |alternative| privileged.uploads(&options, alternative).speed_limit;
+    assert_eq!(
+      (speed(false), speed(true)),
+      (Some(500), Some(50)),
+      "the total upload limit in force"
     );
   }
 
@@ -449,8 +459,8 @@ mod tests {
       (placed.queue.as_str(), placed.speed.as_str()),
       ("default", "default")
     );
-    assert_eq!(placed.uploads(&options).speed_limit, Some(100));
-    assert!(placed.uploads(&options).limits.is_empty());
+    assert_eq!(placed.uploads(&options, false).speed_limit, Some(100));
+    assert!(placed.uploads(&options, false).limits.is_empty());
     assert!(placed.groups.iter().all(|g| !g.defined));
     assert!(placed.share_groups().is_empty());
     assert!(placed.is_in("default"), "everyone is in default");

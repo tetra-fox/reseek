@@ -12,15 +12,17 @@ use super::store::{Info, Stored};
 use crate::config::Options;
 
 /// What the directory holds about `username`, from their row when there is one, with the
-/// block that applies to them.
+/// block that applies to them, while the alternative speed limits are in force when
+/// `alternative`.
 pub fn known(
   options: &Options,
+  alternative: bool,
   username: &str,
   stored: Option<&Stored>,
   block: Option<Block>,
 ) -> KnownUser {
   let placement = groups::placement(options, stored);
-  let uploads = placement.uploads(options);
+  let uploads = placement.uploads(options, alternative);
   KnownUser {
     username: username.to_string(),
     known: stored.is_some(),
@@ -164,14 +166,14 @@ mod tests {
       buddy: None,
     };
     let options = Options::default();
-    let user = known(&options, "alice", Some(&stored), None);
+    let user = known(&options, false, "alice", Some(&stored), None);
     let alice = summary(user, Some(&stored), &figures());
     assert_eq!(
       alice.description.as_deref(),
       Some("Jazz.\nVinyl rips.\nAsk first.")
     );
     assert_eq!(alice.notes.as_deref(), Some("met in #indie\nfast"));
-    let empty = summary(known(&options, "bob", None, None), None, &figures());
+    let empty = summary(known(&options, false, "bob", None, None), None, &figures());
     assert_eq!((empty.description, empty.notes), (None, None));
   }
 

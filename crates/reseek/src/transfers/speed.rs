@@ -80,6 +80,7 @@ pub async fn switch(app: &AppState, alternative: bool, by: &str) -> Result<(), A
     .state
     .update(|state| state.alternative_speed_limits = alternative);
   app.uploads.switch_speed_limits(alternative);
+  app.users.speed_limits_switched().await;
   info!(by, alternative, "speed limits switched");
   Ok(())
 }
@@ -123,5 +124,55 @@ mod tests {
       .await;
     assert_eq!(answer.status, 204);
     assert_eq!(limits(&app), (64, 0));
+  }
+
+  #[tokio::test]
+  async fn a_privileged_users_speed_follows_the_switch() {
+    let app = app(
+      "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n\
+       [transfers.upload]\nspeed_limit = 64\nalt_speed_limit = 16\n",
+      &[],
+    )
+    .await;
+    let now = crate::db::timestamp(chrono::Utc::now());
+    app
+      .state
+      .users
+      .database()
+      .write(move |conn| {
+        conn.execute(
+          "INSERT INTO users (username, first_seen_at, last_seen_at, is_privileged) \
+           VALUES ('alice', ?1, ?1, 1)",
+          [now],
+        )
+      })
+      .await
+      .unwrap();
+    let speed = async || {
+      let (_, summary) = app.call("GET", "/api/v0/users/alice/summary", None).await;
+      summary["uploads"]["speedLimit"].clone()
+    };
+    assert_eq!(speed().await, 64);
+    let mut stream = app
+      .stream_from(
+        "127.0.0.1:1",
+        request("GET", "/api/v0/live?topics=users", None),
+      )
+      .await;
+    stream.until("hello").await;
+    let on = json!({ "alternative": true });
+    let answer = app
+      .send(request("PUT", "/api/v0/transfers/speed-limits", Some(on)))
+      .await;
+    assert_eq!(answer.status, 204);
+    let pushed = stream.until("users.updated").await.pop().unwrap();
+    assert_eq!(
+      (
+        &pushed.data["username"],
+        &pushed.data["uploads"]["speedLimit"]
+      ),
+      (&json!("alice"), &json!(16))
+    );
+    assert_eq!(speed().await, 16, "the summary read before is not kept");
   }
 }

@@ -58,7 +58,8 @@ pub struct UserUploads {
   /// privileged, else the highest of their groups that sets one, else default
   #[schema(example = "default")]
   pub speed: String,
-  /// that speed limit in KiB/s, null for none
+  /// that speed limit in KiB/s, null for none; for privileged the total upload limit in force,
+  /// the alternative one while those are switched on
   pub speed_limit: Option<u32>,
   /// each per-user limit one of the user's groups sets, with the group; the others are the
   /// global limits

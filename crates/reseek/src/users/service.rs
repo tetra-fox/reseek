@@ -144,12 +144,18 @@ impl Directory {
 }
 
 impl Directory {
-  /// What is stored about `username`, kept a minute while the options stay the same.
+  /// What is stored about `username`, kept a minute while the options and the speed limits in
+  /// force stay the same.
   pub(crate) async fn summary(&self, username: &str) -> Result<UserSummary, ApiError> {
     let config = self.config.current();
+    let alternative = self.state.current().alternative_speed_limits;
     let cached = lock(&self.summaries)
       .get(username)
-      .filter(|cached| cached.at.elapsed() < SUMMARY_FOR && Arc::ptr_eq(&cached.options, &config))
+      .filter(|cached| {
+        cached.at.elapsed() < SUMMARY_FOR
+          && Arc::ptr_eq(&cached.options, &config)
+          && cached.alternative == alternative
+      })
       .map(|cached| cached.summary.clone());
     match cached {
       Some(summary) => Ok(summary),
@@ -166,7 +172,8 @@ impl Directory {
       .await
       .map_err(internal)?;
     let options = self.config.current().values.clone();
-    let user = profile::known(&options, username, row.as_ref(), block);
+    let alternative = self.state.current().alternative_speed_limits;
+    let user = profile::known(&options, alternative, username, row.as_ref(), block);
     let user = self.with_network_and_conversation(user).await;
     Ok(profile::profile(user, row.as_ref(), figures))
   }

@@ -236,6 +236,7 @@ impl AppState {
       transfers.clone(),
       messaging_db.clone(),
       config.clone(),
+      state.clone(),
       live.clone(),
       events.clone(),
       shutdown.clone(),
