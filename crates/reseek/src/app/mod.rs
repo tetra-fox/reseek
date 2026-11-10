@@ -233,12 +233,14 @@ impl AppState {
       .map_err(|e| StartError::Open(format!("messaging.db: {e}")))?;
     let users = Directory::open(
       &location,
-      transfers.clone(),
-      messaging_db.clone(),
-      config.clone(),
-      state.clone(),
-      live.clone(),
-      events.clone(),
+      crate::users::Parts {
+        transfers: transfers.clone(),
+        messaging: messaging_db.clone(),
+        config: config.clone(),
+        state: state.clone(),
+        live: live.clone(),
+        events: events.clone(),
+      },
       shutdown.clone(),
     )
     .await

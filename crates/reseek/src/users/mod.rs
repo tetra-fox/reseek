@@ -123,25 +123,39 @@ struct CachedSummary {
   summary: UserSummary,
 }
 
+/// The parts of the daemon the directory uses besides its own database.
+pub struct Parts {
+  /// `transfers.db`, for what each user's transfers add up to
+  pub transfers: Database,
+  /// `messaging.db`, for what our private messages with a user add up to
+  pub messaging: Database,
+  /// the configuration, whose blocks, groups and blocklist the directory follows
+  pub config: Watcher<Options>,
+  /// the daemon's state, which says which speed limits are in force
+  pub state: StateOwner,
+  /// the event stream, which each user's changes are pushed to
+  pub live: Live,
+  /// the events the directory raises
+  pub events: EventBus,
+}
+
 impl Directory {
   /// Opens `users.db` in `location` and loads the blocks, the groups we put users in and the
   /// blocklist file, then starts the touch writer and the follower of the configuration, which
-  /// all stop when `shutdown` is canceled. A user's figures are read from `transfers` and
-  /// `messaging`, and which speed limits are in force from `state`.
-  #[allow(
-    clippy::too_many_arguments,
-    reason = "the directory takes each part of the daemon it uses"
-  )]
+  /// all stop when `shutdown` is canceled.
   pub async fn open(
     location: &Location,
-    transfers: Database,
-    messaging: Database,
-    config: Watcher<Options>,
-    state: StateOwner,
-    live: Live,
-    events: EventBus,
+    parts: Parts,
     shutdown: CancellationToken,
   ) -> Result<Arc<Self>, String> {
+    let Parts {
+      transfers,
+      messaging,
+      config,
+      state,
+      live,
+      events,
+    } = parts;
     let db = Database::open(&store::SCHEMA, location)
       .await
       .map_err(|e| format!("users.db: {e}"))?;
