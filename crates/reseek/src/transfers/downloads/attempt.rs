@@ -252,6 +252,9 @@ impl Downloads {
     let start = match start_offset(incomplete, record.size, download.retry.partial).await {
       Ok(Start::At(start)) => start,
       Ok(Start::Whole) => {
+        if !self.hand_over(record.id) {
+          return Attempted::Failed(Failure::canceled());
+        }
         record.state = TransferStates::Completed | TransferStates::Succeeded;
         record.bytes_transferred = record.size;
         record.ended_at = Some(Utc::now());
@@ -348,6 +351,8 @@ impl Downloads {
       return Attempted::Abandoned;
     }
     match result {
+      // a pause or cancel that came after the last byte, before the hand-over, is kept
+      Ok(_) if !self.hand_over(record.id) => Attempted::Failed(Failure::canceled()),
       Ok(transfer) => {
         record.take_figures(&transfer);
         record.state = TransferStates::Completed | TransferStates::Succeeded;

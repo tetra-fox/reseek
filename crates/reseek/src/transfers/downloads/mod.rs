@@ -73,6 +73,9 @@ const BLOCKED: &str = "Blocked";
 /// Why a download canceled without a running task ended.
 const CANCELED: &str = "The operation was canceled.";
 
+/// Why a pause or cancel of a download that finished, or whose file is being moved, is refused.
+const COMPLETED: &str = "the download has completed";
+
 /// What is kept for a download whose task runs.
 struct InFlight {
   /// stops the download wherever it is
@@ -83,6 +86,8 @@ struct InFlight {
   reason: Option<&'static str>,
   /// canceled to be paused: it waits here again, keeping what arrived
   pause: bool,
+  /// its file arrived and is handed to its move, which a pause or cancel no longer stops
+  arrived: bool,
   /// dropped with the entry once the task has let go of the download, which ends every wait on
   /// a receiver of it
   ended: watch::Sender<()>,
@@ -96,9 +101,21 @@ impl InFlight {
       remove: false,
       reason: None,
       pause: false,
+      arrived: false,
       ended: watch::Sender::new(()),
     }
   }
+}
+
+/// What a cancel found of a download's task.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Running {
+  /// no task runs it
+  No,
+  /// its task was told to stop
+  Stopped,
+  /// its file arrived and is being moved, so it ends succeeded
+  Arrived,
 }
 
 /// The download engine.
@@ -346,11 +363,15 @@ impl Downloads {
 
   /// Cancels the download `id` of `username`: a running one stops wherever it is and ends
   /// canceled; one whose task is gone without ending it is ended canceled here. With
-  /// `remove` it leaves the listings once it has ended. 404 when there is no such download.
-  pub async fn cancel(&self, username: &str, id: Uuid, remove: bool) -> Result<(), ApiError> {
+  /// `remove` it leaves the listings once it has ended. False, doing nothing else, when the
+  /// download has completed or its file arrived and is being moved. 404 when there is no such
+  /// download.
+  pub async fn cancel(&self, username: &str, id: Uuid, remove: bool) -> Result<bool, ApiError> {
     let mut record = self.record_of(username, id).await?;
-    if self.cancel_running(id, remove, None) {
-      return Ok(());
+    match self.cancel_running(id, remove, None) {
+      Running::Stopped => return Ok(true),
+      Running::Arrived => return Ok(remove),
+      Running::No => {}
     }
     // a record no task runs any more, left behind by a failure, is ended canceled here; a task
     // that ended it since it was read keeps how it ended. The removal is in the same write, so
@@ -359,7 +380,7 @@ impl Downloads {
     let at = Utc::now();
     let unfinished = !record.is_completed();
     if !unfinished && !remove {
-      return Ok(());
+      return Ok(false);
     }
     record.state = canceled;
     record.ended_at = Some(at);
@@ -402,20 +423,39 @@ impl Downloads {
     if let Some(job) = record.job_id {
       self.sync_job(job).await;
     }
-    Ok(())
+    Ok(true)
   }
 
   /// Stops the running download `id`, marking it for removal with `remove` and noting
-  /// `reason`; false when it is not running.
-  fn cancel_running(&self, id: Uuid, remove: bool, reason: Option<&'static str>) -> bool {
+  /// `reason`. One whose file arrived is not stopped, only marked for removal.
+  fn cancel_running(&self, id: Uuid, remove: bool, reason: Option<&'static str>) -> Running {
     let mut in_flight = lock(&self.in_flight);
     let Some(entry) = in_flight.get_mut(&id) else {
-      return false;
+      return Running::No;
     };
     entry.remove |= remove;
+    if entry.arrived {
+      debug!(%id, remove, "cancel of a download moving its file");
+      return Running::Arrived;
+    }
     entry.reason = entry.reason.or(reason);
     entry.cancel.cancel();
     debug!(%id, remove, "running download canceled");
+    Running::Stopped
+  }
+
+  /// Hands the download `id`, whose file arrived, to its move, after which a pause or cancel
+  /// no longer stops it; false when one came first and it is to end as that asked. The stop of
+  /// the daemon is not such a cancel.
+  fn hand_over(&self, id: Uuid) -> bool {
+    let mut in_flight = lock(&self.in_flight);
+    let entry = in_flight
+      .get_mut(&id)
+      .expect("a download is kept while its task runs");
+    if entry.cancel.is_cancelled() && !self.shutdown.is_cancelled() {
+      return false;
+    }
+    entry.arrived = true;
     true
   }
 
@@ -447,7 +487,7 @@ impl Downloads {
     };
     let mut canceled = 0;
     for id in self::ids(ids) {
-      if self.cancel_running(id, false, Some(BLOCKED)) {
+      if self.cancel_running(id, false, Some(BLOCKED)) == Running::Stopped {
         canceled += 1;
       }
     }

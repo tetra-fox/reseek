@@ -11,7 +11,7 @@ use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 use super::enqueue::gate_for;
-use super::{Downloads, InFlight};
+use super::{COMPLETED, Downloads, InFlight, Running};
 use crate::sync::lock;
 use crate::transfers::{Record, store};
 
@@ -48,8 +48,8 @@ impl Downloads {
   }
 
   /// Pauses the downloads `ids`: a running one stops wherever it is and is written paused by
-  /// its task, one without a task is written paused here. A download that finished or is
-  /// paused already is refused.
+  /// its task, one without a task is written paused here. A download that finished, whose file
+  /// arrived and is being moved, or that is paused already is refused.
   pub async fn pause(&self, ids: Vec<Uuid>) -> Vec<Result<Uuid, BulkFailure>> {
     let mut outcomes = Vec::new();
     for record in self.records(ids).await {
@@ -61,7 +61,7 @@ impl Downloads {
         }
       };
       if record.is_completed() {
-        outcomes.push(Err(failure(record.id, "the download has completed")));
+        outcomes.push(Err(failure(record.id, COMPLETED)));
         continue;
       }
       if record.paused {
@@ -71,15 +71,20 @@ impl Downloads {
       let running = {
         let mut in_flight = lock(&self.in_flight);
         match in_flight.get_mut(&record.id) {
+          Some(entry) if entry.arrived => Running::Arrived,
           Some(entry) => {
             entry.pause = true;
             entry.cancel.cancel();
-            true
+            Running::Stopped
           }
-          None => false,
+          None => Running::No,
         }
       };
-      if running {
+      if running == Running::Arrived {
+        outcomes.push(Err(failure(record.id, COMPLETED)));
+        continue;
+      }
+      if running == Running::Stopped {
         debug!(id = %record.id, "running download stopped to be paused");
       } else {
         record.paused = true;

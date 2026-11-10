@@ -283,7 +283,8 @@ impl TransferService for Downloads {
   }
 
   async fn cancel_download(&self, username: &str, id: Uuid, remove: bool) -> Result<(), ApiError> {
-    self.cancel(username, id, remove).await
+    // a download that completed is left as it is, which is what a cancel asks
+    self.cancel(username, id, remove).await.map(drop)
   }
 
   async fn remove_completed_downloads(&self) -> Result<(), ApiError> {
@@ -331,22 +332,18 @@ impl TransferService for Downloads {
         let remove = request.action == BulkAction::Remove;
         let mut outcomes = Vec::new();
         for record in records {
-          if !remove && record.is_completed() {
-            outcomes.push(Err(BulkFailure {
-              id: record.id,
-              error: "the download has completed".to_string(),
-            }));
-            continue;
-          }
           outcomes.push(
-            self
-              .cancel(&record.username, record.id, remove)
-              .await
-              .map(|()| record.id)
-              .map_err(|e| BulkFailure {
+            match self.cancel(&record.username, record.id, remove).await {
+              Ok(true) => Ok(record.id),
+              Ok(false) => Err(BulkFailure {
+                id: record.id,
+                error: super::COMPLETED.to_string(),
+              }),
+              Err(e) => Err(BulkFailure {
                 id: record.id,
                 error: e.message().to_string(),
               }),
+            },
           );
         }
         outcomes

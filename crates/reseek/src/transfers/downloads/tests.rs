@@ -532,14 +532,13 @@ async fn a_resume_sent_while_the_download_stops_to_be_paused_waits_and_resumes_i
   assert!(!read(&app, id).await.paused);
 }
 
-#[tokio::test]
-async fn a_stop_waits_past_its_limit_for_a_download_moving_its_file() {
-  let app = app(TRUSTED, &[]).await;
-  let downloads = app.state.downloads.clone();
+/// Resumes a paused download of alice's whose whole file is in the incomplete directory, so it
+/// arrives at once, and holds its move at the gate until the guard is dropped.
+async fn moving(app: &TestApp) -> (Uuid, tokio::sync::MutexGuard<'_, ()>) {
+  let downloads = &app.state.downloads;
   let mut held = Record::download("alice", "@@a\\Album\\1.flac", 10);
   held.paused = true;
-  insert(&app, &held).await;
-  // the whole file is in the incomplete directory, so the resumed download arrives at once
+  insert(app, &held).await;
   let (incomplete, _) = super::incomplete_path(
     &downloads.incomplete,
     "alice",
@@ -561,6 +560,42 @@ async fn a_stop_waits_past_its_limit_for_a_download_moving_its_file() {
     tokio::time::sleep(std::time::Duration::from_millis(10)).await;
   }
   assert_eq!(downloads.moving.len(), 1, "the move waits at the gate");
+  (held.id, gate)
+}
+
+#[tokio::test]
+async fn a_pause_or_cancel_during_the_move_says_the_download_has_completed() {
+  let app = app(TRUSTED, &[]).await;
+  let (id, gate) = moving(&app).await;
+  for action in ["pause", "cancel"] {
+    let (status, answer) = app
+      .call(
+        "POST",
+        "/api/v0/transfers/downloads/bulk",
+        Some(json!({ "ids": [id], "action": action })),
+      )
+      .await;
+    assert_eq!(status, 200, "{answer}");
+    assert_eq!(answer["ok"], json!([]), "{action}: {answer}");
+    assert_eq!(
+      answer["failed"][0]["error"], "the download has completed",
+      "{action}: {answer}"
+    );
+  }
+  drop(gate);
+  let moved = read_until(&app, id, |r| r.local_path.is_some()).await;
+  assert_eq!(
+    moved.state,
+    TransferStates::Completed | TransferStates::Succeeded
+  );
+  assert!(!moved.paused);
+}
+
+#[tokio::test]
+async fn a_stop_waits_past_its_limit_for_a_download_moving_its_file() {
+  let app = app(TRUSTED, &[]).await;
+  let downloads = app.state.downloads.clone();
+  let (id, gate) = moving(&app).await;
 
   tokio::time::pause();
   let stopping = tokio::spawn({
@@ -575,7 +610,7 @@ async fn a_stop_waits_past_its_limit_for_a_download_moving_its_file() {
   drop(gate);
   tokio::time::resume();
   stopping.await.unwrap();
-  let moved = read(&app, held.id).await;
+  let moved = read(&app, id).await;
   assert_eq!(
     moved.state,
     TransferStates::Completed | TransferStates::Succeeded
