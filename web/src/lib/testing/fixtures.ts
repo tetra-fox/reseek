@@ -115,6 +115,14 @@ export const sharedFile = (filename: string): Schemas["File"] => ({
   attributes: []
 });
 
+/** The daemon's answer to a change of the options, which leaves them at `optionsRevision` */
+export const changed = (optionsRevision = "changed"): Schemas["OptionsChanged"] => ({
+  applied: [],
+  reconnectRequired: [],
+  restartRequired: [],
+  optionsRevision
+});
+
 /** The daemon's answer to a saved option or file, with nothing applied unless `fields` says */
 export const written = (fields: Partial<Schemas["FileWritten"]> = {}): Schemas["FileWritten"] => ({
   revision: "sha256:2",

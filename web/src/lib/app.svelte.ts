@@ -1,5 +1,6 @@
 import { api, onUnauthorized, type Schemas } from "#lib/api/client.js";
 import { chat } from "#lib/chat/chat.svelte.js";
+import { withValueAt } from "#lib/config/sections.js";
 import { toast } from "#lib/feedback/toast.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { call } from "#lib/request.js";
@@ -13,17 +14,6 @@ export type AppState = Schemas["State"];
 export type Metrics = Schemas["TransferMetrics"];
 /** The options in effect, by their configuration keys, secrets hidden */
 export type Options = Schemas["OptionsDocument"]["values"];
-
-/** `values` with `value` at the dotted `key`, the objects on the way copied */
-const withValue = (values: Options, key: string, value: unknown): Options => {
-  const [head, ...rest] = key.split(".");
-  const inner = (values as Record<string, unknown>)[head];
-  const at =
-    rest.length && inner && typeof inner === "object"
-      ? withValue(inner as Options, rest.join("."), value)
-      : value;
-  return { ...values, [head]: at } as Options;
-};
 
 /**
  * Where the shell is: checking the session, showing the login, showing the app, or showing the
@@ -112,16 +102,29 @@ class App {
   }
 
   /**
-   * Takes the values `set`, by their keys, that a write of ours put in effect at `revision`,
-   * ahead of the frame that brings them, so a change made right after it is made from them
+   * Takes the values `set`, by their keys, that a write of ours made against revision `from` left
+   * in effect at `to`, ahead of the frame that brings them, so a change made right after it is
+   * made from them. Once the options are at another revision than `from`, a frame brought this
+   * write or a later one already, and they stay as they are
    */
-  wrote(set: Record<string, unknown>, revision: string) {
-    if (!this.options) return;
+  wrote(set: Record<string, unknown>, from: string, to: string) {
+    if (!this.options || this.optionsRevision !== from) return;
     let values = this.options;
-    for (const [key, value] of Object.entries(set)) values = withValue(values, key, value);
+    for (const [key, value] of Object.entries(set))
+      values = withValueAt(values, key, value) as Options;
     this.options = values;
-    this.optionsRevision = revision;
+    this.optionsRevision = to;
   }
+
+  /**
+   * Reads the options again, for a tab whose change was refused as made against old ones. A frame
+   * that arrives meanwhile is at least as new, so the answer is then left
+   */
+  readOptions = async () => {
+    const held = this.optionsRevision;
+    const outcome = await call(() => api.GET("/api/v0/options"));
+    if (outcome.ok && this.optionsRevision === held) this.#tookOptions(outcome.data);
+  };
 
   /** The session is gone: everything kept for it goes, and the login shows */
   signedOut() {

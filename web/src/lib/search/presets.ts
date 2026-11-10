@@ -43,13 +43,19 @@ export const withPreset = (presets: Preset[], preset: Preset): Preset[] => {
 /**
  * Keeps a new list of presets in the daemon, made from the options this tab holds, which take it
  * at once; the options frame brings it to every other tab. One refused because the options
- * changed since says so
+ * changed since says so, and the options are read again
  */
 export const savePresets = async (presets: Preset[]): Promise<Outcome<unknown>> => {
   const set = { [PRESETS_KEY]: presets };
-  const outcome = await patchOverrides(app.optionsRevision, set, [], null);
-  if (!outcome.ok && changedUnder(outcome))
+  const from = app.optionsRevision;
+  const outcome = await patchOverrides(from, set, [], null);
+  if (!outcome.ok && changedUnder(outcome)) {
+    // the tab held old options, which no frame may come to replace
+    await app.readOptions();
     return { ...outcome, error: changedText([PRESETS_KEY]) };
-  if (outcome.ok && outcome.data) app.wrote(set, outcome.data.optionsRevision);
+  }
+  if (outcome.ok && outcome.data && from !== null) {
+    app.wrote(set, from, outcome.data.optionsRevision);
+  }
   return outcome;
 };

@@ -78,6 +78,14 @@ export const valueAt = (values: unknown, key: string): unknown =>
     .split(".")
     .reduce<unknown>((at, part) => (at as Record<string, unknown> | null)?.[part], values);
 
+/** `values` with `value` at the dotted `key`, the objects on the way copied */
+export const withValueAt = (values: unknown, key: string, value: unknown): unknown => {
+  const [head, ...rest] = key.split(".");
+  const object = (values && typeof values === "object" ? values : {}) as Record<string, unknown>;
+  const at = rest.length ? withValueAt(object[head], rest.join("."), value) : value;
+  return { ...object, [head]: at };
+};
+
 /** `fields` under the subheading `heading` */
 const under = (heading: string, fields: Field[]): Field[] =>
   fields.map((field) => ({ ...field, heading }));
