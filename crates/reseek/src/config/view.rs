@@ -7,6 +7,14 @@ use serde_json::Value;
 
 use super::{Options, redact};
 
+/// The options document of `loaded`: its values with secrets hidden, and their revision.
+pub fn document(loaded: &Loaded<Options>) -> api::OptionsDocument {
+  api::OptionsDocument {
+    values: redact::values(loaded),
+    revision: loaded.revision.clone(),
+  }
+}
+
 /// The view of `loaded` for the settings page.
 pub fn config_view(loaded: &Loaded<Options>) -> api::ConfigView {
   let view = cascade::ConfigView::new(loaded);
@@ -151,14 +159,19 @@ pub fn apply(apply: cascade::Apply) -> api::Apply {
   }
 }
 
-/// What a change did, by when each changed key takes effect.
-pub fn changed(change: Option<&cascade::Change<Options>>) -> api::OptionsChanged {
+/// What a change did, by when each changed key takes effect, with the revision it left: the new
+/// one, or `kept` when it changed no value.
+pub fn changed(change: Option<&cascade::Change<Options>>, kept: &str) -> api::OptionsChanged {
   match change {
     Some(change) => api::OptionsChanged {
       applied: change.by_apply.live.clone(),
       reconnect_required: change.by_apply.reconnect.clone(),
       restart_required: change.by_apply.restart.clone(),
+      options_revision: change.current.revision.clone(),
     },
-    None => api::OptionsChanged::default(),
+    None => api::OptionsChanged {
+      options_revision: kept.to_string(),
+      ..api::OptionsChanged::default()
+    },
   }
 }

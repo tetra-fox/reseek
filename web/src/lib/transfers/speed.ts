@@ -14,7 +14,7 @@ const limit = (value: unknown): number | null =>
 
 /** Both pairs in the options in effect, and which one the state says is in force */
 export const speedLimitsOf = (
-  options: Schemas["OptionsDocument"] | null,
+  options: Schemas["OptionsDocument"]["values"] | null,
   state: Schemas["State"] | null
 ): SpeedLimits => {
   const transfers = fields(fields(options).transfers);

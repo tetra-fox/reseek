@@ -118,6 +118,7 @@ export const sharedFile = (filename: string): Schemas["File"] => ({
 /** The daemon's answer to a saved option or file, with nothing applied unless `fields` says */
 export const written = (fields: Partial<Schemas["FileWritten"]> = {}): Schemas["FileWritten"] => ({
   revision: "sha256:2",
+  optionsRevision: "written",
   applied: [],
   reconnectRequired: [],
   restartRequired: [],

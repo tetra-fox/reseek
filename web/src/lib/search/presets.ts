@@ -1,5 +1,7 @@
-import { api, type Schemas } from "#lib/api/client.js";
-import { call, type Outcome } from "#lib/request.js";
+import type { Schemas } from "#lib/api/client.js";
+import { app } from "#lib/app.svelte.js";
+import { changedText, changedUnder, patchOverrides } from "#lib/config/write.js";
+import type { Outcome } from "#lib/request.js";
 import { fields } from "#lib/stored.svelte.js";
 
 /** A result filter saved under a name */
@@ -9,7 +11,7 @@ export type Preset = { name: string; filter: string };
 export const PRESETS_KEY = "search.filter_presets";
 
 /** The presets in the options in effect, those that can't be read left out */
-export const presetsOf = (options: Schemas["OptionsDocument"] | null): Preset[] => {
+export const presetsOf = (options: Schemas["OptionsDocument"]["values"] | null): Preset[] => {
   const list = fields(fields(options).search).filter_presets;
   if (!Array.isArray(list)) return [];
   return list.flatMap((entry) => {
@@ -22,7 +24,7 @@ export const presetsOf = (options: Schemas["OptionsDocument"] | null): Preset[] 
 
 /** Why presets can't be saved from here, or null when they can */
 export const whyNotSaved = (
-  options: Schemas["OptionsDocument"] | null,
+  options: Schemas["OptionsDocument"]["values"] | null,
   administrator: boolean
 ): string | null => {
   if (!administrator) return "Only administrators can save presets";
@@ -38,6 +40,16 @@ export const withPreset = (presets: Preset[], preset: Preset): Preset[] => {
   return at === -1 ? [...presets, preset] : presets.with(at, preset);
 };
 
-/** Keeps a new list of presets in the daemon; the options frame brings it back to every tab */
-export const savePresets = (presets: Preset[]): Promise<Outcome<unknown>> =>
-  call(() => api.PATCH("/api/v0/options", { body: { set: { [PRESETS_KEY]: presets } } }));
+/**
+ * Keeps a new list of presets in the daemon, made from the options this tab holds, which take it
+ * at once; the options frame brings it to every other tab. One refused because the options
+ * changed since says so
+ */
+export const savePresets = async (presets: Preset[]): Promise<Outcome<unknown>> => {
+  const set = { [PRESETS_KEY]: presets };
+  const outcome = await patchOverrides(app.optionsRevision, set, [], null);
+  if (!outcome.ok && changedUnder(outcome))
+    return { ...outcome, error: changedText([PRESETS_KEY]) };
+  if (outcome.ok && outcome.data) app.wrote(set, outcome.data.optionsRevision);
+  return outcome;
+};

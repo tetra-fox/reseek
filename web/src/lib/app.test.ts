@@ -38,7 +38,7 @@ describe("the app's bootstrap", () => {
         }
         if (path.endsWith("/api/v0/application")) return Response.json({ user: {} });
         if (path.endsWith("/api/v0/options"))
-          return Response.json({ soulseek: { username: "me" } });
+          return Response.json({ values: { soulseek: { username: "me" } }, revision: "r" });
         // more tabs than the daemon streams to
         return Response.json({ error: "Too many streams" }, { status: 429 });
       })
@@ -46,5 +46,6 @@ describe("the app's bootstrap", () => {
     await app.bootstrap();
     expect(app.phase).toBe("app");
     expect(app.options).toEqual({ soulseek: { username: "me" } });
+    expect(app.optionsRevision).toBe("r");
   });
 });

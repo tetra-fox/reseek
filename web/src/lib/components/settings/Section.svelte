@@ -196,12 +196,12 @@
 
   /**
    * What a write refused for options changed since `before` says, once the view is read again:
-   * the options that changed, but those `done` wrote. The drafts stay, the edited ones whose
-   * running value changed marked
+   * the options that changed, but those `done`, the writes of the same save before it, changed.
+   * The drafts stay, the edited ones whose running value changed marked
    */
   const changedUnderText = (before: ConfigView, done: Write[]) => {
-    const ours = done.map((w) => w.field.label);
-    return changedText(changedBetween(before, view).filter((name) => !ours.includes(name)));
+    const ours = new Set(done.map((w) => w.field.key));
+    return changedText(changedBetween(before, view).filter((key) => !ours.has(key)));
   };
 
   /** writes asked for and not yet done */
@@ -238,12 +238,15 @@
       }
       const done: Write[] = [];
       let restart: string[] = [];
+      // each file is written at the revision the one before it left
+      let revision = view.revision;
       for (const [file, list] of byFile) {
         const outcome = await patchFile(
           view,
           file,
           Object.fromEntries(list.filter((w) => !w.unset).map((w) => [w.field.key, w.set])),
-          list.filter((w) => w.unset).map((w) => w.field.key)
+          list.filter((w) => w.unset).map((w) => w.field.key),
+          revision
         );
         if (!outcome.ok) {
           // the files written before this one keep their change
@@ -263,6 +266,7 @@
           return outcome;
         }
         done.push(...list);
+        revision = outcome.data.optionsRevision;
         restart = [...restart, ...outcome.data.restartRequired];
       }
       toast(
@@ -292,7 +296,7 @@
       const writes = collect("runtime");
       if (!writes) return { ok: true as const, data: null };
       const outcome = await patchOverrides(
-        view,
+        view.revision,
         Object.fromEntries(writes.filter((w) => !w.unset).map((w) => [w.field.key, w.set])),
         writes.filter((w) => w.unset).map((w) => w.field.key),
         expiry.value

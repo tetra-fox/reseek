@@ -189,17 +189,15 @@
     BUDDIES,
     ...Object.keys(valueAt(view.data?.values, USER_DEFINED) ?? {}).toSorted()
   ]);
+  /** a share's audience is being written, and the options read again after it */
   let showing = $state(false);
   const showTo = async (r: Row, groups: string[] | null) => {
-    const data = view.data;
-    if (!data) return;
+    if (!view.data) return;
     showing = true;
-    const outcome = await writeFromPage(data, {
+    const outcome = await writeFromPage(view, {
       [VISIBLE_TO]: withAudience(visibleTo, r.alias, groups)
     });
     showing = false;
-    void view.load();
-    // the options are read again, so a second try is made against what changed
     if (!outcome.ok) return toast(outcome.error, "error");
     // every share on any host with the alias, as the daemon matches it
     for (const row of rows.rows)

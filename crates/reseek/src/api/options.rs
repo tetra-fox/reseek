@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 use super::extract::Json;
 use api_types::options::{
   ConfigFile, ConfigView, FilePatch, FileQuery, FileReplace, FileValidate, FileWritten,
-  OptionError, OptionsChanged, OptionsDocument, OptionsPatch, Validation,
+  OptionError, OptionsChanged, OptionsDocument, OptionsPatch, OverrideQuery, Validation,
 };
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
@@ -60,7 +60,7 @@ async fn get_options(
   State(app): State<AppState>,
   _caller: Authorized<AnyRole>,
 ) -> Json<OptionsDocument> {
-  Json(OptionsDocument(redact::values(&app.config.current())))
+  Json(view::document(&app.config.current()))
 }
 
 /// The options the daemon started with, which every restart-class option still runs with.
@@ -72,7 +72,7 @@ async fn get_startup(
   State(app): State<AppState>,
   _admin: Authorized<Administrator>,
 ) -> Json<OptionsDocument> {
-  Json(OptionsDocument(redact::values(&app.startup)))
+  Json(view::document(&app.startup))
 }
 
 /// Every option with where its value came from, the files, the overrides and what is pending.
@@ -176,22 +176,25 @@ async fn patch_options(
     keys = keys.join(", "),
     "runtime overrides changed"
   );
-  Ok(Json(view::changed(change.as_deref())).into_response())
+  let kept = kept(&app, patch.revision.as_deref());
+  Ok(Json(view::changed(change.as_deref(), &kept)).into_response())
 }
 
-/// Removes the runtime override of one key.
+/// Removes the runtime override of one key. A removal sent with a `revision` the options have
+/// changed since is refused with 409, the current revision as its detail.
 #[utoipa::path(
   delete, path = "/options/overrides/{key}", tag = "options",
-  params(("key" = String, Path, description = "the configuration key")),
+  params(("key" = String, Path, description = "the configuration key"), OverrideQuery),
   responses(
     (status = 200, body = OptionsChanged), (status = 403, body = api_types::ErrorBody),
-    (status = 404, body = api_types::ErrorBody)
+    (status = 404, body = api_types::ErrorBody), (status = 409, body = api_types::ErrorBody)
   )
 )]
 async fn delete_override(
   State(app): State<AppState>,
   admin: Authorized<Administrator>,
   Path(key): Path<String>,
+  Query(query): Query<OverrideQuery>,
 ) -> Result<Json<OptionsChanged>, ApiError> {
   remote(
     &app.config.current(),
@@ -200,12 +203,19 @@ async fn delete_override(
   if is_authentication(&key) {
     require_interactive(&admin.principal)?;
   }
-  let change = app.config.remove_override(&key).await?;
+  let read = query.revision.as_deref();
+  let change = app.config.remove_override(&key, read).await?;
   info!(
     by = admin.principal.subject,
     key, "runtime override removed"
   );
-  Ok(Json(view::changed(change.as_deref())))
+  Ok(Json(view::changed(change.as_deref(), &kept(&app, read))))
+}
+
+/// The revision a change that changed no value left: `read`, the one it was checked against and
+/// kept, or the current one for a change made without a check.
+fn kept(app: &AppState, read: Option<&str>) -> String {
+  read.map_or_else(|| app.config.current().revision.clone(), str::to_string)
 }
 
 /// A configuration file's text, secrets and all.
@@ -315,7 +325,10 @@ async fn patch_file(
   );
   Ok(Json(FileWritten {
     revision: written.revision,
-    changed: view::changed(written.change.as_deref()),
+    changed: view::changed(
+      written.change.as_deref(),
+      &kept(&app, patch.options_revision.as_deref()),
+    ),
   }))
 }
 
@@ -351,7 +364,7 @@ async fn put_file(
   );
   Ok(Json(FileWritten {
     revision: written.revision,
-    changed: view::changed(written.change.as_deref()),
+    changed: view::changed(written.change.as_deref(), &kept(&app, None)),
   }))
 }
 
@@ -559,7 +572,7 @@ mod tests {
     assert_eq!(answer.status, 200, "{:?}", answer.body);
     assert_eq!(answer.json()["applied"], json!(["search.filter_presets"]));
     assert_eq!(
-      app.send(get()).await.json()["search"]["filter_presets"],
+      app.send(get()).await.json()["values"]["search"]["filter_presets"],
       mine
     );
   }
@@ -668,6 +681,11 @@ mod tests {
     assert_eq!(first.status, 200, "{:?}", first.body);
     let now = view().await["revision"].clone();
     assert_ne!(now, revision);
+    assert_eq!(
+      first.json()["optionsRevision"],
+      now,
+      "the answer names the revision it left"
+    );
 
     let second = app
       .send(request(
@@ -694,6 +712,63 @@ mod tests {
       false,
       "neither went through"
     );
+    let removed = |revision: &serde_json::Value| {
+      request(
+        "DELETE",
+        &format!(
+          "/api/v0/options/overrides/rooms?revision={}",
+          revision.as_str().unwrap()
+        ),
+        None,
+      )
+    };
+    assert_eq!(app.send(removed(&revision)).await.status, 409);
+    assert_eq!(app.send(removed(&now)).await.status, 200);
+  }
+
+  #[tokio::test]
+  async fn writes_to_two_files_chain_the_revision_each_answer_names() {
+    let app = app(TRUSTED, &[]).await;
+    std::fs::create_dir(app.dir.path().join("config.d")).unwrap();
+    std::fs::write(
+      app.dir.path().join("config.d/10-rooms.toml"),
+      "rooms = [\"later\"]\n",
+    )
+    .unwrap();
+    app.state.config.reload().await.unwrap();
+    let view = app
+      .send(request("GET", "/api/v0/options/view", None))
+      .await
+      .json();
+    let write = |file: &str, set: serde_json::Value, revision: &serde_json::Value| {
+      let at = view["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["name"] == file)
+        .unwrap()["revision"]
+        .clone();
+      request(
+        "PATCH",
+        "/api/v0/options/file",
+        Some(json!({ "file": file, "set": set, "revision": at, "optionsRevision": revision })),
+      )
+    };
+    let first = app
+      .send(write(
+        "config.d/10-rooms.toml",
+        json!({ "rooms": ["mine"] }),
+        &view["revision"],
+      ))
+      .await;
+    assert_eq!(first.status, 200, "{:?}", first.body);
+    let next = first.json()["optionsRevision"].clone();
+    assert!(next.is_string(), "{:?}", first.body);
+    assert_ne!(next, view["revision"]);
+    let second = app
+      .send(write("config.toml", json!({ "debug": true }), &next))
+      .await;
+    assert_eq!(second.status, 200, "{:?}", second.body);
   }
 
   #[tokio::test]

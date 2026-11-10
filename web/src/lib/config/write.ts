@@ -8,37 +8,49 @@ import type { ConfigView } from "./fields";
 import { BLOCKING, sections, valueAt } from "./sections";
 
 /**
- * Writes `set` and `unset` into the configuration file `file`, at the revisions of the file and
- * of the options the view read
+ * Writes `set` and `unset` into the configuration file `file`, at the file's revision the view
+ * read and at `revision` of the options: the view's, or the one the write before this one left
  */
 export const patchFile = (
   view: ConfigView,
   file: string,
   set: Record<string, unknown>,
-  unset: string[]
+  unset: string[],
+  revision: string = view.revision
 ) =>
   call(() =>
     api.PATCH("/api/v0/options/file", {
       body: {
         file,
         revision: view.files.find((f) => f.name === file)?.revision ?? null,
-        optionsRevision: view.revision,
+        optionsRevision: revision,
         set,
         unset
       }
     })
   );
 
-/** Sets and removes runtime overrides lasting `expiresIn`, at the revision of the options the view read */
+/**
+ * Sets and removes runtime overrides lasting `expiresIn`, made against `revision` of the options,
+ * none when the options were never read
+ */
 export const patchOverrides = (
-  view: ConfigView,
+  revision: string | null,
   set: Record<string, unknown>,
   unset: string[],
   expiresIn: string | null
 ) =>
   call(() =>
     api.PATCH("/api/v0/options", {
-      body: { expiresIn, set, unset, revision: view.revision }
+      body: { expiresIn, set, unset, revision }
+    })
+  );
+
+/** Removes the runtime override of `key`, made against the revision of the options the view read */
+export const removeOverride = (view: ConfigView, key: string) =>
+  call(() =>
+    api.DELETE("/api/v0/options/overrides/{key}", {
+      params: { path: { key }, query: { revision: view.revision } }
     })
   );
 
@@ -58,33 +70,42 @@ export const changedUnder = (failure: Refused): boolean =>
 const PAGES = [{ under: "transfers.groups.", name: "Groups" }];
 
 /** What `key` is called where it is edited: its settings label, its page, or the key */
-const labelOf = (key: string) =>
+const nameOf = (key: string) =>
   [...sections, BLOCKING].flatMap((s) => s.fields).find((f) => f.key === key)?.label ??
   PAGES.find((page) => key.startsWith(page.under))?.name ??
   key;
 
-/** The options whose values differ between the views `before` and `after`, by their names */
-export const changedBetween = (before: ConfigView, after: ConfigView): string[] => [
-  ...new Set(
-    Object.keys(after.fields)
-      .filter((key) => !same(valueAt(before.values, key), valueAt(after.values, key)))
-      .map(labelOf)
-  )
-];
+/** The options whose values differ between the views `before` and `after` */
+export const changedBetween = (before: ConfigView, after: ConfigView): string[] =>
+  Object.keys(after.fields).filter(
+    (key) => !same(valueAt(before.values, key), valueAt(after.values, key))
+  );
 
-/** What a write `changedUnder` refused says: what changed, when known, and that the edits wait */
-export const changedText = (changed: string[]) =>
-  changed.length
-    ? `${listText(changed)} changed meanwhile. Check your changes and save again.`
+/** What a write `changedUnder` refused says: the options that changed, when known, and that the edits wait */
+export const changedText = (keys: string[]) => {
+  const names = [...new Set(keys.map(nameOf))];
+  return names.length
+    ? `${listText(names)} changed meanwhile. Check your changes and save again.`
     : "The settings changed meanwhile. Check your changes and save again.";
+};
+
+/** The options view as a page holds it, read again on demand */
+export type Views = { data: ConfigView | undefined; load: () => Promise<void> };
 
 /**
- * The failure of a write `changedUnder` refused, saying what changed since `view` as the daemon
- * now has it; the caller reads the view again before another try
+ * The failure of a write `changedUnder` refused, once `views` holds the options as they are now,
+ * saying what changed since `before`
  */
-export const refusedUnder = async (view: ConfigView, outcome: Refused): Promise<Refused> => {
-  const now = await call(() => api.GET("/api/v0/options/view"));
-  return { ...outcome, error: changedText(now.ok ? changedBetween(view, now.data) : []) };
+export const refusedUnder = async (
+  views: Views,
+  before: ConfigView,
+  failure: Refused
+): Promise<Refused> => {
+  await views.load();
+  return {
+    ...failure,
+    error: changedText(views.data ? changedBetween(before, views.data) : [])
+  };
 };
 
 /**
@@ -100,15 +121,29 @@ export const editabilityOf = (view: ConfigView, keys: string[]): Editability => 
 };
 
 /**
- * Writes a change made on a page outside Settings as `editabilityOf` says: to each key's file,
- * or as runtime overrides that last until removed. One refused because the options changed
- * since the view was read says what changed, and the caller reads the view again before another
- * try
+ * Writes a change made on a page outside Settings, from the options `views` holds, as
+ * `editabilityOf` says: to each key's file, or as runtime overrides that last until removed.
+ * Ends once `views` holds the options the write left, so the page's next change is made from
+ * them; one refused because the options changed since says what changed
  */
 export const writeFromPage = async (
-  view: ConfigView,
+  views: Views,
   set: Record<string, unknown>,
   unset: string[] = []
+): Promise<Outcome<null>> => {
+  const view = views.data;
+  if (!view) return { ok: false, error: "Settings are still loading", status: 0 };
+  const outcome = await written(view, set, unset);
+  if (!outcome.ok && changedUnder(outcome)) return refusedUnder(views, view, outcome);
+  if (outcome.ok) await views.load();
+  return outcome;
+};
+
+/** `set` and `unset` written from `view` as `writeFromPage` says, each write made from the last */
+const written = async (
+  view: ConfigView,
+  set: Record<string, unknown>,
+  unset: string[]
 ): Promise<Outcome<null>> => {
   const keys = [...Object.keys(set), ...unset];
   const edit = editabilityOf(view, keys);
@@ -120,8 +155,7 @@ export const writeFromPage = async (
       const held = clearing(view, key, "runtime");
       if (held) return { ok: false, error: `${key}: ${held}`, status: 0 };
     }
-    const outcome = await patchOverrides(view, set, unset, null);
-    if (!outcome.ok && changedUnder(outcome)) return refusedUnder(view, outcome);
+    const outcome = await patchOverrides(view.revision, set, unset, null);
     return outcome.ok ? { ok: true, data: null } : outcome;
   }
   const byFile = new Map<string, string[]>();
@@ -129,15 +163,17 @@ export const writeFromPage = async (
     const file = fileOf(view, key);
     byFile.set(file, [...(byFile.get(file) ?? []), key]);
   }
+  let revision = view.revision;
   for (const [file, inFile] of byFile) {
     const outcome = await patchFile(
       view,
       file,
       Object.fromEntries(inFile.filter((k) => k in set).map((k) => [k, set[k]])),
-      inFile.filter((k) => unset.includes(k))
+      inFile.filter((k) => unset.includes(k)),
+      revision
     );
-    if (!outcome.ok && changedUnder(outcome)) return refusedUnder(view, outcome);
     if (!outcome.ok) return outcome;
+    revision = outcome.data.optionsRevision;
   }
   return { ok: true, data: null };
 };

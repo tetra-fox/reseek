@@ -5700,7 +5700,7 @@
         "tags": [
           "options"
         ],
-        "summary": "Removes the runtime override of one key.",
+        "summary": "Removes the runtime override of one key. A removal sent with a `revision` the options have\nchanged since is refused with 409, the current revision as its detail.",
         "operationId": "delete_override",
         "parameters": [
           {
@@ -5708,6 +5708,15 @@
             "in": "path",
             "description": "the configuration key",
             "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "revision",
+            "in": "query",
+            "description": "the revision from the view; a removal made against another is refused with 409, and none\nmakes no check",
+            "required": false,
             "schema": {
               "type": "string"
             }
@@ -5733,6 +5742,15 @@
             }
           },
           "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
             "content": {
               "application/json": {
                 "schema": {
@@ -23004,11 +23022,12 @@
       },
       "OptionsChanged": {
         "type": "object",
-        "description": "What a change to the configuration did, by when each changed key takes effect.",
+        "description": "What a change to the configuration did, by when each changed key takes effect, and the\nrevision of the options it left.",
         "required": [
           "applied",
           "reconnectRequired",
-          "restartRequired"
+          "restartRequired",
+          "optionsRevision"
         ],
         "properties": {
           "applied": {
@@ -23017,6 +23036,10 @@
               "type": "string"
             },
             "description": "keys whose new value is in effect now"
+          },
+          "optionsRevision": {
+            "type": "string",
+            "description": "the revision of the options after the change, which the next change made from them names"
           },
           "reconnectRequired": {
             "type": "array",
@@ -23036,7 +23059,21 @@
       },
       "OptionsDocument": {
         "type": "object",
-        "description": "The options in effect, by their configuration keys, with every secret shown as `*****` and\ncredentials taken out of URLs."
+        "description": "The options in effect, with the revision a change made against them names.",
+        "required": [
+          "values",
+          "revision"
+        ],
+        "properties": {
+          "revision": {
+            "type": "string",
+            "description": "the revision of those values, new each time they change"
+          },
+          "values": {
+            "type": "object",
+            "description": "the values by their configuration keys, every secret shown as `*****` and credentials\ntaken out of URLs"
+          }
+        }
       },
       "OptionsPatch": {
         "type": "object",

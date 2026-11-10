@@ -12,6 +12,7 @@
   import { lasting, managerOfFiles } from "#lib/config/editability.js";
   import type { ConfigView } from "#lib/config/fields.js";
   import { valueAt } from "#lib/config/sections.js";
+  import { changedBetween, changedText, changedUnder, removeOverride } from "#lib/config/write.js";
   import { Busy } from "#lib/feedback/busy.svelte.js";
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
@@ -45,11 +46,14 @@
 
   const remove = (key: string) =>
     busy.run(async () => {
-      const outcome = await call(() =>
-        api.DELETE("/api/v0/options/overrides/{key}", { params: { path: { key } } })
-      );
-      if (outcome.ok) await onchanged();
-      return outcome;
+      const before = view;
+      const outcome = await removeOverride(view, key);
+      if (!outcome.ok && !changedUnder(outcome)) return outcome;
+      await onchanged();
+      // a refused removal names what changed under it, once the view is read again
+      return outcome.ok
+        ? outcome
+        : { ...outcome, error: changedText(changedBetween(before, view)) };
     }, `${key} restored to its configured value`);
 </script>
 

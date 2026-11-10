@@ -14,7 +14,7 @@
   import { clearing } from "#lib/config/editability.js";
   import type { ConfigView } from "#lib/config/fields.js";
   import { valueAt } from "#lib/config/sections.js";
-  import { writeFromPage } from "#lib/config/write.js";
+  import { type Views, writeFromPage } from "#lib/config/write.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { call } from "#lib/request.js";
   import { audienceText } from "#lib/system/shares.js";
@@ -51,6 +51,8 @@
     /** the group, null for a new one */
     group: GroupSummary | null;
     view: ConfigView;
+    /** where `view` comes from, read again once a save is written */
+    views: Views;
     /** the aliases of the shares there are, and of those the options name */
     aliases: string[];
     /** the names of the groups there are, which a new name can't take */
@@ -59,7 +61,7 @@
     onsaved: () => void;
   };
 
-  let { group, view, aliases, taken, onclose, onsaved }: Props = $props();
+  let { group, view, views, aliases, taken, onclose, onsaved }: Props = $props();
 
   // the form starts from the options as they were when it opened
   const start = untrack(() => {
@@ -182,12 +184,10 @@
     if ("error" in change) return void (error = change.error);
     if (!Object.keys(change.set).length && !change.unset.length) return onclose();
     saving = true;
-    const outcome = await writeFromPage(view, change.set, change.unset);
+    const outcome = await writeFromPage(views, change.set, change.unset);
     if (!outcome.ok) {
       saving = false;
       error = outcome.error;
-      // the options are read again, so a second try is made against what changed
-      onsaved();
       return;
     }
     // members stay in a group by its name, so they follow a renamed group

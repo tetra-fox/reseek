@@ -157,12 +157,24 @@
     return "Holds what no group above sets";
   };
 
-  /** Writes the options without the group `name`, its shares then seen by none of it */
-  const remove = async (name: string): Promise<Outcome<null>> => {
-    const data = view.data;
-    if (!data) return { ok: false, error: "Settings are still loading", status: 0 };
-    return writeFromPage(data, deletePatch(data.values, name).set);
+  /** the page's writes to the options, one at a time */
+  let writing: Promise<unknown> = Promise.resolve();
+  /**
+   * Runs `change` once the writes before it are done, so it is made from the options they left
+   * and two made in quick succession both land
+   */
+  const inTurn = <T>(change: () => Promise<T>): Promise<T> => {
+    const run = writing.then(change);
+    writing = run.catch(() => undefined);
+    return run;
   };
+
+  /** Writes the options without the group `name`, its shares then seen by none of it */
+  const remove = (name: string): Promise<Outcome<null>> =>
+    inTurn(() => {
+      const values = view.data?.values;
+      return writeFromPage(view, values ? deletePatch(values, name).set : {});
+    });
 
   /**
    * Shows `name` gone at once, with an Undo, and runs `commit` once the Undo is past; a commit
@@ -184,10 +196,10 @@
 
   /** Makes a group of the configuration under a name its members still hold */
   const make = async (name: string) => {
-    const data = view.data;
-    if (!data) return;
-    const groups = (valueAt(data.values, USER_DEFINED) ?? {}) as Record<string, unknown>;
-    const outcome = await writeFromPage(data, { [USER_DEFINED]: { ...groups, [name]: {} } });
+    const outcome = await inTurn(() => {
+      const groups = (valueAt(view.data?.values, USER_DEFINED) ?? {}) as Record<string, unknown>;
+      return writeFromPage(view, { [USER_DEFINED]: { ...groups, [name]: {} } });
+    });
     if (!outcome.ok) return toast(outcome.error, "error");
     toast(`Group ${name} created`);
     void list.load();
@@ -208,21 +220,18 @@
       call(() => api.DELETE("/api/v0/groups/{name}/members", { params: { path: { name } } }))
     );
 
-  /** the order's writes, one at a time, each after the view the one before it changed */
-  let writing: Promise<void> = Promise.resolve();
   /** the write a move is waiting to make, undefined while none waits */
   let timer: ReturnType<typeof setTimeout> | undefined;
   /** Writes the order shown, now rather than when the pause after the last move ends */
   const flush = () => {
     clearTimeout(timer);
     timer = undefined;
-    writing = writing.then(async () => {
-      const data = view.data;
-      if (!data || !reordered) return;
+    void inTurn(async () => {
+      if (!reordered) return;
       const sent = reordered;
-      const outcome = await writeFromPage(data, { [ORDER]: sent });
+      const outcome = await writeFromPage(view, { [ORDER]: sent });
       if (!outcome.ok) toast(`Could not save the order: ${outcome.error}`, "error");
-      await Promise.all([view.load(), list.load()]);
+      await list.load();
       if (reordered === sent || !outcome.ok) reordered = null;
     });
   };
@@ -447,6 +456,7 @@
   <GroupEditor
     group={editing === "new" ? null : editing}
     view={view.data}
+    views={view}
     {aliases}
     taken={(list.data?.groups ?? []).filter((g) => g.defined).map((g) => g.name)}
     onclose={() => (editing = null)}

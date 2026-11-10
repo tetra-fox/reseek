@@ -296,7 +296,7 @@ mod tests {
       "nothing refused is in effect"
     );
     assert!(matches!(
-      watcher.remove_override("server.port").await,
+      watcher.remove_override("server.port", None).await,
       Err(Error::NoOverride(_))
     ));
 
@@ -311,7 +311,7 @@ mod tests {
       .await
       .unwrap();
     let change = watcher
-      .remove_override("server.address")
+      .remove_override("server.address", None)
       .await
       .unwrap()
       .unwrap();

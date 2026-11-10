@@ -8,11 +8,16 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use utoipa::ToSchema;
 
-/// The options in effect, by their configuration keys, with every secret shown as `*****` and
-/// credentials taken out of URLs.
+/// The options in effect, with the revision a change made against them names.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, ToSchema)]
-#[schema(value_type = Object)]
-pub struct OptionsDocument(pub Value);
+pub struct OptionsDocument {
+  /// the values by their configuration keys, every secret shown as `*****` and credentials
+  /// taken out of URLs
+  #[schema(value_type = Object)]
+  pub values: Value,
+  /// the revision of those values, new each time they change
+  pub revision: String,
+}
 
 /// The layer whose value of a key is in effect, with what in that layer set it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -242,7 +247,8 @@ pub struct OptionsPatch {
   pub revision: Option<String>,
 }
 
-/// What a change to the configuration did, by when each changed key takes effect.
+/// What a change to the configuration did, by when each changed key takes effect, and the
+/// revision of the options it left.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct OptionsChanged {
@@ -252,6 +258,8 @@ pub struct OptionsChanged {
   pub reconnect_required: Vec<String>,
   /// keys whose new value takes effect after a restart
   pub restart_required: Vec<String>,
+  /// the revision of the options after the change, which the next change made from them names
+  pub options_revision: String,
 }
 
 /// Changes some keys of a configuration file, keeping its comments.
@@ -343,6 +351,15 @@ pub struct OptionError {
   pub key: Option<String>,
   /// what is wrong
   pub message: String,
+}
+
+/// The revision of the options the removal of an override was made against.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct OverrideQuery {
+  /// the revision from the view; a removal made against another is refused with 409, and none
+  /// makes no check
+  pub revision: Option<String>,
 }
 
 /// Which configuration file a call is about.

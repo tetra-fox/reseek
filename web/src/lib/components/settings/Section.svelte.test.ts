@@ -332,6 +332,49 @@ describe("a settings section", () => {
     vi.unstubAllGlobals();
   });
 
+  it("saves options of two files in one click, each write at the revision the last left", async () => {
+    const sent: { file: string; optionsRevision: string }[] = [];
+    let revision = "fixture";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (request: Request) => {
+        const body = await request.json();
+        sent.push(body);
+        if (body.optionsRevision !== revision) {
+          return Response.json(
+            { error: "The options changed since they were read", detail: revision },
+            { status: 409 }
+          );
+        }
+        revision = `after ${body.file}`;
+        return Response.json(written({ optionsRevision: revision }));
+      })
+    );
+    // the upload slots are set by a drop-in, the download slots by config.toml
+    const v = structuredClone(view);
+    v.files.push({ ...v.files[0], name: "config.d/10-limits.toml" });
+    v.fields["transfers.upload.slots"].file = "config.d/10-limits.toml";
+    const target = render(
+      sections.find((s) => s.id === "transfers")!,
+      v
+    );
+    const type = (key: string, text: string) => {
+      const input = target.querySelector<HTMLInputElement>(`[id="${key}"]`)!;
+      input.value = text;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      flushSync();
+    };
+    type("transfers.upload.slots", "7");
+    type("transfers.download.slots", "3");
+    [...target.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Save")!.click();
+    await vi.waitFor(() =>
+      expect(toasts.map((t) => t.text)).toContain("Transfers: 2 settings saved")
+    );
+    expect(sent.map((b) => b.optionsRevision)).toEqual(["fixture", `after ${sent[0].file}`]);
+    toasts.splice(0);
+    vi.unstubAllGlobals();
+  });
+
   it("keeps an edit and says what changed when the options changed since they were read", async () => {
     const asked: unknown[] = [];
     vi.stubGlobal(

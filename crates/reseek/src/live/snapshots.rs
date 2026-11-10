@@ -3,12 +3,11 @@
 
 use api_types::live::LiveFrame;
 use api_types::messaging::conversations::ConversationListQuery;
-use api_types::options::OptionsDocument;
 use tracing::warn;
 
 use super::Topic;
 use crate::app::AppState;
-use crate::config::redact;
+use crate::config::view;
 
 /// The snapshot frames of `topic`, in the order they are sent.
 pub async fn frames(topic: Topic, app: &AppState) -> Vec<LiveFrame> {
@@ -17,7 +16,7 @@ pub async fn frames(topic: Topic, app: &AppState) -> Vec<LiveFrame> {
       LiveFrame::ApplicationState(Box::new(api_types::state::State::clone(
         &app.state.current(),
       ))),
-      LiveFrame::ApplicationOptions(OptionsDocument(redact::values(&app.config.current()))),
+      LiveFrame::ApplicationOptions(view::document(&app.config.current())),
     ],
     Topic::Logs => vec![LiveFrame::LogsBuffer(app.logs.snapshot())],
     Topic::Activity => vec![LiveFrame::ActivityBuffer(app.activity.snapshot())],

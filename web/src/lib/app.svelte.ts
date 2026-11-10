@@ -11,6 +11,19 @@ import { users } from "#lib/users/users.svelte.js";
 
 export type AppState = Schemas["State"];
 export type Metrics = Schemas["TransferMetrics"];
+/** The options in effect, by their configuration keys, secrets hidden */
+export type Options = Schemas["OptionsDocument"]["values"];
+
+/** `values` with `value` at the dotted `key`, the objects on the way copied */
+const withValue = (values: Options, key: string, value: unknown): Options => {
+  const [head, ...rest] = key.split(".");
+  const inner = (values as Record<string, unknown>)[head];
+  const at =
+    rest.length && inner && typeof inner === "object"
+      ? withValue(inner as Options, rest.join("."), value)
+      : value;
+  return { ...values, [head]: at } as Options;
+};
 
 /**
  * Where the shell is: checking the session, showing the login, showing the app, or showing the
@@ -24,7 +37,10 @@ export type Phase = "initializing" | "login" | "app" | "lost";
  */
 class App {
   state = $state.raw<AppState | null>(null);
-  options = $state.raw<Schemas["OptionsDocument"] | null>(null);
+  /** the options in effect, by their configuration keys */
+  options = $state.raw<Options | null>(null);
+  /** the revision of `options`, which a change made from them names */
+  optionsRevision: string | null = null;
   metrics = $state.raw<Metrics | null>(null);
   phase = $state<Phase>("initializing");
   /** why the last bootstrap ended in `lost` */
@@ -38,7 +54,7 @@ class App {
 
   constructor() {
     live.on("application.state", (data) => (this.state = data));
-    live.on("application.options", (data) => (this.options = data));
+    live.on("application.options", (document) => this.#tookOptions(document));
     live.on("metrics.update", (data) => (this.metrics = data));
     // a broadcast from the Soulseek server's administrators, or a notice to us
     live.on("application.server_message", ({ message }) =>
@@ -86,9 +102,26 @@ class App {
       call(() => api.GET("/api/v0/options"))
     ]);
     if (state.ok) this.state = state.data;
-    if (options.ok) this.options = options.data;
+    if (options.ok) this.#tookOptions(options.data);
     return state.ok;
   };
+
+  #tookOptions(document: Schemas["OptionsDocument"]) {
+    this.options = document.values;
+    this.optionsRevision = document.revision;
+  }
+
+  /**
+   * Takes the values `set`, by their keys, that a write of ours put in effect at `revision`,
+   * ahead of the frame that brings them, so a change made right after it is made from them
+   */
+  wrote(set: Record<string, unknown>, revision: string) {
+    if (!this.options) return;
+    let values = this.options;
+    for (const [key, value] of Object.entries(set)) values = withValue(values, key, value);
+    this.options = values;
+    this.optionsRevision = revision;
+  }
 
   /** The session is gone: everything kept for it goes, and the login shows */
   signedOut() {
@@ -103,6 +136,7 @@ class App {
     uploads.clear();
     this.state = null;
     this.options = null;
+    this.optionsRevision = null;
     this.metrics = null;
     this.phase = "login";
   }

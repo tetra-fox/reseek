@@ -58,6 +58,7 @@ describe("search results", () => {
     searchOptions.layout = "tree";
     resultList.sort = null;
     app.options = null;
+    app.optionsRevision = null;
     session.principal = null;
     toasts.splice(0);
     live.stop();
@@ -73,7 +74,9 @@ describe("search results", () => {
       if (url.pathname.endsWith("/api/v0/users")) return { users: [], total: 0 };
       if (url.pathname.endsWith(`/searches/${ID}/responses`)) return stored;
       if (url.pathname.endsWith(`/searches/${ID}`)) return search({ id: ID });
-      if (url.pathname.endsWith("/api/v0/options")) return { applied: [], pending: [] };
+      if (url.pathname.endsWith("/api/v0/options")) {
+        return { applied: [], reconnectRequired: [], restartRequired: [], optionsRevision: "next" };
+      }
       return undefined;
     });
     searches.list.upsert(search({ id: ID }));
@@ -375,7 +378,8 @@ describe("search results", () => {
     app.options = {
       remote_configuration: true,
       search: { filter_presets: presets }
-    } as unknown as Schemas["OptionsDocument"];
+    } as unknown as Schemas["OptionsDocument"]["values"];
+    app.optionsRevision = "read";
     const one = response("alice", 1);
     const net = await open([one]);
     net.frame("search.response", { searchId: ID, response: one });
@@ -406,10 +410,14 @@ describe("search results", () => {
             { name: "No small files", filter: "No small files" },
             { name: "FLAC", filter: "FLAC" }
           ]
-        }
+        },
+        unset: [],
+        expiresIn: null,
+        revision: "read"
       }
     ]);
     expect(chips()).toEqual(["No small files", "FLAC"]);
+    expect(app.optionsRevision, "the tab takes what it wrote").toBe("next");
   });
 
   it("show a removed preset again once it is added back elsewhere", async () => {
@@ -420,7 +428,7 @@ describe("search results", () => {
       ({
         remote_configuration: true,
         search: { filter_presets: presets }
-      }) as unknown as Schemas["OptionsDocument"];
+      }) as unknown as Schemas["OptionsDocument"]["values"];
     app.options = options([big, flac]);
     const one = response("alice", 1);
     const net = await open([one]);

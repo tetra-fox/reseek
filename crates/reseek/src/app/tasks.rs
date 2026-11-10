@@ -7,7 +7,6 @@ use std::sync::Arc;
 
 use api_types::events::{Event, SessionRevokeReason, SessionRevoked};
 use api_types::live::LiveFrame;
-use api_types::options::OptionsDocument;
 use chrono::Utc;
 use soulseek_client::LogLimiter;
 use tokio::sync::broadcast::error::RecvError;
@@ -18,7 +17,7 @@ use tokio_util::sync::CancellationToken;
 
 use super::AppState;
 use crate::auth::{sessions, tokens};
-use crate::config::{Options, redact};
+use crate::config::{Options, view};
 use crate::live::Topic;
 use crate::logging::Logging;
 
@@ -51,14 +50,14 @@ async fn follow_configuration(app: AppState) {
         app.state.configured(&loaded);
       }
       change = changes.recv() => match change {
-        Ok(change) => app.live.publish(LiveFrame::ApplicationOptions(OptionsDocument(
-          redact::values(&change.current),
-        ))),
+        Ok(change) => app
+          .live
+          .publish(LiveFrame::ApplicationOptions(view::document(&change.current))),
         Err(RecvError::Lagged(missed)) => {
           debug!(missed, "options changes missed; pushing the current options");
-          app.live.publish(LiveFrame::ApplicationOptions(OptionsDocument(redact::values(
-            &app.config.current(),
-          ))));
+          app
+            .live
+            .publish(LiveFrame::ApplicationOptions(view::document(&app.config.current())));
         }
         Err(RecvError::Closed) => return,
       },

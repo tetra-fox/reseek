@@ -117,18 +117,20 @@
     const entry = shareEntry(path, alias, exclude);
     saving = true;
     const outcome = await patchFile(data, file, { [KEY]: [...entries, entry] }, []);
-    saving = false;
     if (!outcome.ok && changedUnder(outcome)) {
-      error = (await refusedUnder(data, outcome)).error;
-      // read again, so adding once more goes through
-      void view.load();
+      error = (await refusedUnder(view, data, outcome)).error;
+      saving = false;
       return;
     }
     if (!outcome.ok) {
+      saving = false;
       const detail = (outcome.body as { detail?: string | null } | undefined)?.detail;
       error = detail ?? outcome.error;
       return;
     }
+    // the next share is added to the shares as this one left them
+    await view.load();
+    saving = false;
     added = { path, exclude };
     onadded?.();
   };

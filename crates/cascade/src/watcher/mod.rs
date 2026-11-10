@@ -328,11 +328,18 @@ impl<T: Root> Watcher<T> {
       .await?
   }
 
-  /// Removes the runtime override for `key`.
-  pub async fn remove_override(&self, key: &str) -> Result<Option<Arc<Change<T>>>, Error> {
+  /// Removes the runtime override for `key`; refused when the values in effect changed since
+  /// `read`, the revision the removal was made against, when one is given.
+  pub async fn remove_override(
+    &self,
+    key: &str,
+    read: Option<&str>,
+  ) -> Result<Option<Arc<Change<T>>>, Error> {
     let key = key.to_string();
+    let read = read.map(str::to_string);
     self
       .blocking(move |state, shared| {
+        unchanged_since(shared, read.as_deref())?;
         if !state.layers.overrides.items().contains_key(&key) {
           return Err(Error::NoOverride(key));
         }

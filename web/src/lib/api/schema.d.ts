@@ -1283,7 +1283,10 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Removes the runtime override of one key. */
+        /**
+         * Removes the runtime override of one key. A removal sent with a `revision` the options have
+         *     changed since is refused with 409, the current revision as its detail.
+         */
         delete: operations["delete_override"];
         options?: never;
         head?: never;
@@ -6398,20 +6401,30 @@ export interface components {
             /** @description the override ends when the daemon stops */
             untilRestart: boolean;
         };
-        /** @description What a change to the configuration did, by when each changed key takes effect. */
+        /**
+         * @description What a change to the configuration did, by when each changed key takes effect, and the
+         *     revision of the options it left.
+         */
         OptionsChanged: {
             /** @description keys whose new value is in effect now */
             applied: string[];
+            /** @description the revision of the options after the change, which the next change made from them names */
+            optionsRevision: string;
             /** @description keys whose new value takes effect after the next reconnect */
             reconnectRequired: string[];
             /** @description keys whose new value takes effect after a restart */
             restartRequired: string[];
         };
-        /**
-         * @description The options in effect, by their configuration keys, with every secret shown as `*****` and
-         *     credentials taken out of URLs.
-         */
-        OptionsDocument: Record<string, unknown>;
+        /** @description The options in effect, with the revision a change made against them names. */
+        OptionsDocument: {
+            /** @description the revision of those values, new each time they change */
+            revision: string;
+            /**
+             * @description the values by their configuration keys, every secret shown as `*****` and credentials
+             *     taken out of URLs
+             */
+            values: Record<string, unknown>;
+        };
         /**
          * @description Sets and removes runtime overrides, which apply on top of every other layer until they
          *     expire or the files change the value under them.
@@ -13601,7 +13614,13 @@ export interface operations {
     };
     delete_override: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * @description the revision from the view; a removal made against another is refused with 409, and none
+                 *     makes no check
+                 */
+                revision?: string;
+            };
             header?: never;
             path: {
                 /** @description the configuration key */
@@ -13628,6 +13647,14 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

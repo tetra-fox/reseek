@@ -94,6 +94,60 @@ describe("the groups page", () => {
     unmount(component);
   });
 
+  it("makes two groups asked for at once, the second from the options the first left", async () => {
+    session.principal = { name: "me", role: "Administrator" } as never;
+    // a daemon that refuses a write made against options it has changed since
+    let options = view();
+    let changes = 0;
+    const net = fakeNetwork((url, method, body) => {
+      if (url.pathname.endsWith("/options/view")) return structuredClone(options);
+      if (url.pathname.endsWith("/groups")) {
+        const gone = (name: string) => ({ ...group(name), defined: false, members: 1 });
+        return { groups: [group("buddies", true), group("jazz"), gone("ska"), gone("dub")] };
+      }
+      if (url.pathname.endsWith("/shares")) return {};
+      if (method !== "PATCH") return undefined;
+      const sent = body as { optionsRevision?: string; revision?: string; set: object };
+      const read = url.pathname.endsWith("/file") ? sent.optionsRevision : sent.revision;
+      if (read !== options.revision) {
+        return {
+          status: 409,
+          body: { error: "The options changed since they were read", detail: options.revision }
+        };
+      }
+      options = structuredClone(options);
+      options.revision = `changed ${++changes}`;
+      const groups = (options.values as { transfers: { groups: Record<string, unknown> } })
+        .transfers.groups;
+      groups.user_defined = (sent.set as Record<string, unknown>)["transfers.groups.user_defined"];
+      return {
+        revision: "file",
+        optionsRevision: options.revision,
+        applied: [],
+        restartRequired: [],
+        reconnectRequired: []
+      };
+    });
+    const component = mount(GroupsPage, { target: document.body });
+    await flush();
+    await flush();
+    const create = [...document.querySelectorAll<HTMLButtonElement>("button")].filter(
+      (b) => b.textContent?.trim() === "Create group"
+    );
+    expect(create).toHaveLength(2);
+    for (const b of create) b.click();
+    await vi.waitFor(() =>
+      expect(toasts.map((t) => t.text)).toEqual(
+        expect.arrayContaining(["Group ska created", "Group dub created"])
+      )
+    );
+    const made = (options.values as { transfers: { groups: { user_defined: object } } }).transfers
+      .groups.user_defined;
+    expect(Object.keys(made).toSorted()).toEqual(["dub", "jazz", "rock", "ska"]);
+    expect(net.requests.filter((r) => r.method === "PATCH")).toHaveLength(2);
+    unmount(component);
+  });
+
   it("moves a group by its buttons, keeping focus on the button pressed", async () => {
     const { component } = await start();
     const order = () =>
