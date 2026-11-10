@@ -57,7 +57,8 @@ reqwest = { version = "0.13", default-features = false, features = ["rustls-no-p
 rusqlite = { version = "0.41", features = ["backup", "bundled", "trace"] }
 rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "logging", "std", "tls12"] }
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+# a float written and read back is the same float, to its last digit
+serde_json = { version = "1", features = ["float_roundtrip"] }
 serde_path_to_error = "0.1"
 serde_plain = "1"
 sha1 = "0.11"

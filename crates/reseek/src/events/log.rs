@@ -348,6 +348,21 @@ mod tests {
     assert_eq!(page.total, 4);
   }
 
+  #[tokio::test]
+  async fn a_speed_reads_back_to_the_last_digit() {
+    let (log, bus) = log().await;
+    let now: DateTime<Utc> = "2025-03-01T12:00:00Z".parse().unwrap();
+    let mut event = samples::sample(EventType::DownloadFileComplete, "x-", now).unwrap();
+    let Event::DownloadFileComplete(complete) = &mut event else {
+      unreachable!("the sample is of the type asked for");
+    };
+    // a significand above 2^53 that a parse dividing by a power of ten rounds twice
+    complete.transfer.average_speed = 120849.92817599585;
+    bus.raise_at(event.clone(), now);
+    written(&log, 1).await;
+    assert_eq!(log.page(query()).await.unwrap().items[0].event, event);
+  }
+
   #[test]
   fn the_user_an_event_is_about_is_found_where_its_data_names_one() {
     let data = |value| username_of(&serde_json::json!(value));
