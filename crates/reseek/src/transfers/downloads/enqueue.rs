@@ -246,7 +246,10 @@ impl Downloads {
     group.files = kept;
     let mut whole = true;
     for file in &group.files {
-      whole = whole && self.whole_here(&group.username, file).await;
+      if !self.whole_here(&group.username, file).await {
+        whole = false;
+        break;
+      }
     }
     self.admit(&group.username, whole).await?;
     let mut enqueued = self.make(job, group).await?;
