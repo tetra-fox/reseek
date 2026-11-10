@@ -15,12 +15,11 @@ const user = (name: string) => ({ kind: "user", name }) as const;
 const taking = () => fakeNetwork((_url, _method, body) => ({ revision: 1, pins: body }));
 
 /**
- * A daemon whose writes commit one by one when `answer` says, each with the next revision, whose
- * reads answer `read()`, and whose stream sends what `tell` is given
+ * A daemon whose writes commit one by one when `answer` says, each with the next revision after
+ * `revision`, whose reads answer `read()`, and whose stream sends what `tell` is given
  */
-const daemon = (read: () => unknown = () => undefined) => {
+const daemon = (read: () => unknown = () => undefined, revision = 0) => {
   const answers: (() => void)[] = [];
-  let revision = 0;
   const network = connected(
     (_url, method, body) =>
       method === "PUT"
@@ -43,7 +42,7 @@ const daemon = (read: () => unknown = () => undefined) => {
       network.frame("chat.pins", pins);
       await flush();
     },
-    /** a stream opened again without the frames missed, as after a restart */
+    /** a stream opened again without the frames missed, from the run `epoch` when given */
     reopen: network.greet
   };
 };
@@ -151,8 +150,19 @@ describe("the pins", () => {
     const { tell, reopen } = daemon();
     await tell({ revision: 50, pins: [room("jazz"), room("indie")] });
     // the daemon's database was put back from a backup, which counts from where it was
-    reopen();
+    reopen("second");
     await tell({ revision: 30, pins: [room("jazz")] });
+    expect(pins.list).toEqual([room("jazz")]);
+  });
+
+  it("takes the new run's list over a write the run before answered late", async () => {
+    const { answer, tell, reopen } = daemon(undefined, 50);
+    await tell({ revision: 50, pins: [room("jazz")] });
+    pins.set([room("indie")], true);
+    // the daemon restarts on a database put back from a backup, before the answer is read
+    reopen("second");
+    await tell({ revision: 30, pins: [room("jazz")] });
+    await answer(1);
     expect(pins.list).toEqual([room("jazz")]);
   });
 });

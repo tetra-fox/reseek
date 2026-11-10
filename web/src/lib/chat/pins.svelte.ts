@@ -14,7 +14,8 @@ export const samePin = (a: ChatPin, b: ChatPin) => a.kind === b.kind && a.name =
  * A change shows here at once. Writes go one at a time and only the newest list, so a run of
  * moves cannot reach the daemon out of order, and until they end this tab's list is the newest.
  * The daemon numbers every list it holds, and the stream, the reads and the writes can bring
- * those in any order, so a list older than the one held is dropped
+ * those in any order, so a list older than the one held is dropped. A daemon started again
+ * numbers its lists anew, so a write's answer that comes after another run greeted is not taken
  */
 class Pins {
   /** every pin, those of a room left or a conversation closed too, which the list leaves out */
@@ -93,6 +94,7 @@ class Pins {
     while (this.#next) {
       const body = this.#next;
       this.#next = null;
+      const epoch = live.epoch;
       const outcome = await call(() => api.PUT("/api/v0/chat/pins", { body }));
       if (!outcome.ok) {
         toast(outcome.error, "error");
@@ -100,7 +102,9 @@ class Pins {
         failed = true;
         break;
       }
-      this.#revision = outcome.data.revision;
+      // the run that greeted since then sent its lists with the hello, and its frames bring
+      // what this write did
+      if (live.epoch === epoch) this.#revision = outcome.data.revision;
     }
     this.#writing = false;
     const told = this.#told;
