@@ -134,12 +134,13 @@ impl Client {
     let options = self.options();
     let connection_options = options.distributed_connection_options.clone();
     let cancel = self.cancellation().child_token();
+    let stop = cancel.child_token();
     let direct = self.connect_to_peer_socket(
       endpoint,
       &username,
       Via::Direct.kind(),
       connection_options.clone(),
-      &cancel,
+      &stop,
     );
     let indirect = self.solicit(
       &username,
@@ -147,9 +148,9 @@ impl Client {
       PeerConnectionType::Distributed,
       connection_options.clone(),
       connection_options.connect_timeout,
-      &cancel,
+      &stop,
     );
-    let (conn, via) = race(direct, indirect).await.map_err(|errors| {
+    let (conn, via) = race(direct, indirect, &stop).await.map_err(|errors| {
       both_failed(
         format!(
           "Failed to establish a direct or indirect distributed connection to {username} ({endpoint})"

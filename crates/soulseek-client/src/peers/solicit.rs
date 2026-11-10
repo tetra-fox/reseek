@@ -186,32 +186,44 @@ impl Via {
   }
 }
 
-/// Runs both attempts and returns the first connection either makes, dropping the other; fails
-/// only when both have failed. When both are ready at once the user's connection is kept: the
-/// user already counts it as its connection to us, while ours has not introduced us yet.
+/// Runs both attempts, built to end promptly once `stop` is canceled, and returns the first
+/// connection either makes; fails only when both have failed. Once one has connected the other
+/// is stopped and run to its end rather than dropped, so a connection handed to it in the same
+/// instant comes back here instead of being lost. When both connected the user's connection is
+/// kept: the user already counts it as its connection to us, while ours has not introduced us
+/// yet.
 pub(crate) async fn race(
   direct: impl Future<Output = Result<Conn, ClientError>>,
   indirect: impl Future<Output = Result<Conn, ClientError>>,
+  stop: &CancellationToken,
 ) -> Result<(Conn, Via), (ClientError, ClientError)> {
   tokio::pin!(direct, indirect);
-  let mut direct_failed = None;
-  let mut indirect_failed = None;
+  let mut direct_ended = None;
+  let mut indirect_ended = None;
   loop {
+    let connected = matches!(direct_ended, Some(Ok(_))) || matches!(indirect_ended, Some(Ok(_)));
+    if connected || (direct_ended.is_some() && indirect_ended.is_some()) {
+      break;
+    }
     tokio::select! {
       biased;
-      result = &mut indirect, if indirect_failed.is_none() => match result {
-        Ok(conn) => return Ok((conn, Via::Indirect)),
-        Err(error) => indirect_failed = Some(error),
-      },
-      result = &mut direct, if direct_failed.is_none() => match result {
-        Ok(conn) => return Ok((conn, Via::Direct)),
-        Err(error) => direct_failed = Some(error),
-      },
+      ended = &mut indirect, if indirect_ended.is_none() => indirect_ended = Some(ended),
+      ended = &mut direct, if direct_ended.is_none() => direct_ended = Some(ended),
     }
-    match (direct_failed.take(), indirect_failed.take()) {
-      (Some(direct), Some(indirect)) => return Err((direct, indirect)),
-      (direct, indirect) => (direct_failed, indirect_failed) = (direct, indirect),
-    }
+  }
+  stop.cancel();
+  let direct = match direct_ended {
+    Some(ended) => ended,
+    None => direct.await,
+  };
+  let indirect = match indirect_ended {
+    Some(ended) => ended,
+    None => indirect.await,
+  };
+  match (direct, indirect) {
+    (_, Ok(conn)) => Ok((conn, Via::Indirect)),
+    (Ok(conn), Err(_)) => Ok((conn, Via::Direct)),
+    (Err(direct), Err(indirect)) => Err((direct, indirect)),
   }
 }
 
@@ -262,8 +274,9 @@ impl Client {
   }
 
   /// Asks the server to have `username` connect to us with a `connection_type` connection and
-  /// waits up to `timeout` for it to arrive, then takes the connection over with `options`. The
-  /// request is forgotten however this ends.
+  /// waits up to `timeout` for it to arrive, then takes the connection over with `options`. Once
+  /// `cancel` fires it ends at once, with a connection that arrived before it did. The request
+  /// is forgotten however this ends.
   pub(crate) async fn solicit(
     &self,
     username: &str,
@@ -285,13 +298,16 @@ impl Client {
     let pierced = self
       .waiter()
       .wait::<Conn>(key, Some(timeout), cancel.clone());
-    self
-      .write_server_message(&ServerRequest::ConnectToPeer(ConnectToPeerRequest {
-        token,
-        username: username.to_owned(),
-        connection_type,
-      }))
-      .await?;
+    let request = ServerRequest::ConnectToPeer(ConnectToPeerRequest {
+      token,
+      username: username.to_owned(),
+      connection_type,
+    });
+    // a write the server is slow to take is left when the wait is canceled
+    tokio::select! {
+      written = self.write_server_message(&request) => written?,
+      () = cancel.cancelled() => return Err(ClientError::Canceled),
+    }
     tracing::debug!(
       username,
       token,
@@ -320,36 +336,46 @@ pub(crate) fn both_failed(
 
 #[cfg(test)]
 mod tests {
-  use std::future::pending;
-
   use super::*;
 
   fn failed(message: &str) -> ClientError {
     ClientError::connection(ConnectionErrorKind::Other, message)
   }
 
+  /// an attempt that never connects and ends once `stop` is canceled
+  async fn stopped(stop: &CancellationToken) -> Result<Conn, ClientError> {
+    stop.cancelled().await;
+    Err(ClientError::Canceled)
+  }
+
   #[tokio::test]
   async fn the_first_success_wins_even_after_a_failure() {
     let (conn, _remote) = crate::conn::tests::pair(ConnectionOptions::default()).await;
     let id = conn.handle().id();
-    let result = race(async { Err(failed("refused")) }, async { Ok(conn) }).await;
+    let stop = CancellationToken::new();
+    let result = race(async { Err(failed("refused")) }, async { Ok(conn) }, &stop).await;
     let (won, via) = result.unwrap();
     assert_eq!(won.handle().id(), id);
     assert_eq!(via, Via::Indirect);
   }
 
   #[tokio::test]
-  async fn a_success_does_not_wait_for_the_other_attempt() {
+  async fn a_success_stops_the_other_attempt() {
     let (conn, _remote) = crate::conn::tests::pair(ConnectionOptions::default()).await;
-    let result = race(async { Ok(conn) }, pending()).await;
+    let stop = CancellationToken::new();
+    let result = race(async { Ok(conn) }, stopped(&stop), &stop).await;
     assert_eq!(result.unwrap().1, Via::Direct);
+    assert!(stop.is_cancelled());
   }
 
   #[tokio::test]
   async fn both_failing_reports_both() {
-    let result = race(async { Err(failed("direct")) }, async {
-      Err(failed("indirect"))
-    })
+    let stop = CancellationToken::new();
+    let result = race(
+      async { Err(failed("direct")) },
+      async { Err(failed("indirect")) },
+      &stop,
+    )
     .await;
     let (direct, indirect) = result.err().unwrap();
     assert_eq!(direct.to_string(), "direct");
@@ -362,9 +388,29 @@ mod tests {
     for _ in 0..64 {
       let (dialed, _a) = crate::conn::tests::pair(ConnectionOptions::default()).await;
       let (answered, _b) = crate::conn::tests::pair(ConnectionOptions::default()).await;
-      let result = race(async { Ok(dialed) }, async { Ok(answered) }).await;
+      let stop = CancellationToken::new();
+      let result = race(async { Ok(dialed) }, async { Ok(answered) }, &stop).await;
       assert_eq!(result.unwrap().1, Via::Indirect);
     }
+  }
+
+  #[tokio::test]
+  async fn an_answer_handed_over_as_dialing_connects_is_kept() {
+    let (dialed, _a) = crate::conn::tests::pair(ConnectionOptions::default()).await;
+    let (answered, _b) = crate::conn::tests::pair(ConnectionOptions::default()).await;
+    let id = answered.handle().id();
+    let waiter = crate::waiter::Waiter::new(Duration::from_secs(10));
+    let key = bob(PeerConnectionType::Peer).key(7);
+    let stop = CancellationToken::new();
+    let indirect = waiter.wait::<Conn>(key.clone(), None, stop.clone());
+    // the race polls the solicitation first, so the answer reaches its wait only after that
+    // poll, in the same poll that our dial connects
+    let direct = async {
+      assert!(waiter.offer(&key, answered).is_ok(), "the wait takes it");
+      Ok(dialed)
+    };
+    let (kept, via) = race(direct, indirect, &stop).await.unwrap();
+    assert_eq!((kept.handle().id(), via), (id, Via::Indirect));
   }
 
   fn bob(connection_type: PeerConnectionType) -> Solicitation {

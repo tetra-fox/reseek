@@ -144,13 +144,13 @@ impl Client {
     let own = self.own_username("establish a peer connection")?;
     let options = self.options().peer_connection_options.clone();
     let token = solicitation_token.unwrap_or_else(|| self.next_token());
-    let cancel = self.cancellation().child_token();
+    let stop = self.cancellation().child_token();
     let direct = self.connect_to_peer_socket(
       endpoint,
       username,
       Via::Direct.kind(),
       options.clone(),
-      &cancel,
+      &stop,
     );
     let indirect = self.solicit(
       username,
@@ -158,9 +158,9 @@ impl Client {
       PeerConnectionType::Peer,
       options.clone(),
       options.connect_timeout,
-      &cancel,
+      &stop,
     );
-    let (conn, via) = race(direct, indirect).await.map_err(|errors| {
+    let (conn, via) = race(direct, indirect, &stop).await.map_err(|errors| {
       both_failed(
         format!(
           "Failed to establish a direct or indirect message connection to {username} ({endpoint})"

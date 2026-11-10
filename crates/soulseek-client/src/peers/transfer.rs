@@ -36,12 +36,13 @@ impl Client {
     let own = self.own_username("establish a transfer connection")?;
     let options = self.options().transfer_connection_options.clone();
     let solicitation = self.next_token();
+    let stop = cancel.child_token();
     let direct = self.connect_to_peer_socket(
       endpoint,
       username,
       Via::Direct.kind(),
       options.clone(),
-      cancel,
+      &stop,
     );
     let indirect = self.solicit(
       username,
@@ -49,9 +50,9 @@ impl Client {
       PeerConnectionType::Transfer,
       options.clone(),
       options.connect_timeout,
-      cancel,
+      &stop,
     );
-    let (mut conn, via) = race(direct, indirect).await.map_err(|errors| {
+    let (mut conn, via) = race(direct, indirect, &stop).await.map_err(|errors| {
       both_failed(
         format!(
           "Failed to establish a direct or indirect transfer connection to {username} ({endpoint})"
@@ -87,13 +88,14 @@ impl Client {
     cancel: &CancellationToken,
   ) -> impl Future<Output = Result<Conn, ClientError>> + Send + 'static {
     let timeout = Some(self.options().transfer_connection_options.connect_timeout);
+    let stop = cancel.child_token();
     let direct = self.waiter().wait::<Conn>(
       WaitKey::DirectTransfer {
         username: username.to_owned(),
         remote_token,
       },
       timeout,
-      cancel.clone(),
+      stop.clone(),
     );
     let indirect = self.waiter().wait::<Conn>(
       WaitKey::IndirectTransfer {
@@ -102,12 +104,12 @@ impl Client {
         remote_token,
       },
       timeout,
-      cancel.clone(),
+      stop.clone(),
     );
     let awaited = AwaitedTransfer::register(self.peers_arc(), username, remote_token, filename);
     let username = username.to_owned();
     async move {
-      let (conn, via) = race(direct, indirect).await.map_err(|errors| {
+      let (conn, via) = race(direct, indirect, &stop).await.map_err(|errors| {
         both_failed(
           format!(
             "Failed to establish a direct or indirect transfer connection to {username} with remote token {remote_token} for {}",

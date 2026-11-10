@@ -229,8 +229,10 @@ impl Waiter {
   /// Registers a wait under `key` now and returns the future that resolves with the value the
   /// key is completed with. It fails with `Timeout` after `timeout`, or the default timeout when
   /// `None`, counted from now; with `Canceled` when `cancel` fires; or with the error the key is
-  /// faulted with. Dropping the future withdraws the wait. Register before sending the request,
-  /// so a fast reply cannot arrive first.
+  /// faulted with. A value completed before the timeout or cancel is noticed is still returned.
+  /// Dropping the future withdraws the wait, dropping a value completed but not yet returned:
+  /// a wait whose value must not be lost is canceled and run to its end instead. Register
+  /// before sending the request, so a fast reply cannot arrive first.
   pub fn wait<T: Send + 'static>(
     &self,
     key: WaitKey,
@@ -284,22 +286,35 @@ impl Waiter {
       id,
     };
     async move {
+      let mut settled = settled;
       let expired = async {
         match deadline {
           Some((deadline, _)) => sleep_until(deadline).await,
           None => pending().await,
         }
       };
-      let outcome = tokio::select! {
+      let ended = tokio::select! {
         biased;
-        outcome = settled => outcome,
+        outcome = &mut settled => Ok(outcome),
         () = expired => {
           let millis = deadline.map_or(0, |(_, timeout)| timeout.as_millis());
-          return Err(ClientError::Timeout(format!(
+          Err(ClientError::Timeout(format!(
             "The wait timed out after {millis} milliseconds"
-          )));
+          )))
         }
-        () = cancel.cancelled() => return Err(ClientError::Canceled),
+        () = cancel.cancelled() => Err(ClientError::Canceled),
+      };
+      let outcome = match ended {
+        Ok(outcome) => outcome,
+        // closed before giving up, so a value is either taken here or handed back to whoever
+        // offered it, never sent to a wait that has ended
+        Err(error) => {
+          settled.close();
+          match settled.try_recv() {
+            Ok(outcome) => Ok(outcome),
+            Err(_) => return Err(error),
+          }
+        }
       };
       match outcome {
         Ok(Ok(value)) => value.downcast::<T>().map(|value| *value).map_err(|_| {
