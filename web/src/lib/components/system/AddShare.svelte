@@ -15,6 +15,7 @@
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import { editability, fileOf, managerOf } from "#lib/config/editability.js";
   import { valueAt } from "#lib/config/sections.js";
+  import { changedUnder, patchFile, refusedUnder } from "#lib/config/write.js";
   import { Busy } from "#lib/feedback/busy.svelte.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
@@ -115,22 +116,17 @@
     const exclude = kind === "exclude";
     const entry = shareEntry(path, alias, exclude);
     saving = true;
-    const outcome = await call(() =>
-      api.PATCH("/api/v0/options/file", {
-        body: {
-          file,
-          revision: data.files.find((f) => f.name === file)?.revision ?? null,
-          set: { [KEY]: [...entries, entry] },
-          unset: []
-        }
-      })
-    );
+    const outcome = await patchFile(data, file, { [KEY]: [...entries, entry] }, []);
     saving = false;
+    if (!outcome.ok && changedUnder(outcome)) {
+      error = (await refusedUnder(data, outcome)).error;
+      // read again, so adding once more goes through
+      void view.load();
+      return;
+    }
     if (!outcome.ok) {
       const detail = (outcome.body as { detail?: string | null } | undefined)?.detail;
       error = detail ?? outcome.error;
-      // a file changed on disk is read again, so adding once more goes through
-      void view.load();
       return;
     }
     added = { path, exclude };

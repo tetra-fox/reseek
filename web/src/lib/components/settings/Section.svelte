@@ -3,7 +3,6 @@
   import { untrack } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
 
-  import { api } from "#lib/api/client.js";
   import { type NotifyMode, showsDesktop } from "#lib/chat/modes.js";
   import AddShare from "#lib/components/system/AddShare.svelte";
   import Button from "#lib/components/ui/Button.svelte";
@@ -23,13 +22,19 @@
   import { fieldMatches } from "#lib/config/find.js";
   import { asNixSettings } from "#lib/config/nix.js";
   import { type Field, type Section, valueAt } from "#lib/config/sections.js";
-  import { changedOnDisk, patchFile } from "#lib/config/write.js";
+  import {
+    changedBetween,
+    changedText,
+    changedUnder,
+    patchFile,
+    patchOverrides
+  } from "#lib/config/write.js";
   import { CopyButton } from "#lib/feedback/clipboard.svelte.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { listText, plural } from "#lib/format.js";
   import { same } from "#lib/lists/keyed.svelte.js";
   import { href } from "#lib/nav.js";
-  import { call, type Outcome } from "#lib/request.js";
+  import type { Outcome } from "#lib/request.js";
   import { UNTIL_RESTART } from "#lib/wording.js";
 
   import DesktopPermission from "./DesktopPermission.svelte";
@@ -39,7 +44,10 @@
   type Props = {
     section: Section;
     view: ConfigView;
-    /** reloads the view after a write, or after a write was refused because the file changed */
+    /**
+     * reloads the view after a write, or after a write was refused because the options or the file
+     * changed since it was read
+     */
     onchanged: () => Promise<void>;
     /** what the settings search holds: only the options it finds show */
     query?: string;
@@ -186,6 +194,16 @@
     moved = moved.filter((key) => !keys.includes(key));
   };
 
+  /**
+   * What a write refused for options changed since `before` says, once the view is read again:
+   * the options that changed, but those `done` wrote. The drafts stay, the edited ones whose
+   * running value changed marked
+   */
+  const changedUnderText = (before: ConfigView, done: Write[]) => {
+    const ours = done.map((w) => w.field.label);
+    return changedText(changedBetween(before, view).filter((name) => !ours.includes(name)));
+  };
+
   /** writes asked for and not yet done */
   let writing = $state(0);
   let last: Promise<unknown> = Promise.resolve();
@@ -229,11 +247,11 @@
         );
         if (!outcome.ok) {
           // the files written before this one keep their change
+          const before = view;
           await settle(done);
-          const moved = changedOnDisk(outcome, file);
-          if (moved) {
+          if (changedUnder(outcome)) {
             if (!done.length) await onchanged();
-            return { ...outcome, error: moved };
+            return { ...outcome, error: changedUnderText(before, done) };
           }
           const detail = (outcome.body as { detail?: string | null } | undefined)?.detail;
           errors = Object.fromEntries(
@@ -273,17 +291,17 @@
     write(async () => {
       const writes = collect("runtime");
       if (!writes) return { ok: true as const, data: null };
-      const outcome = await call(() =>
-        api.PATCH("/api/v0/options", {
-          body: {
-            expiresIn: expiry.value,
-            set: Object.fromEntries(
-              writes.filter((w) => !w.unset).map((w) => [w.field.key, w.set])
-            ),
-            unset: writes.filter((w) => w.unset).map((w) => w.field.key)
-          }
-        })
+      const outcome = await patchOverrides(
+        view,
+        Object.fromEntries(writes.filter((w) => !w.unset).map((w) => [w.field.key, w.set])),
+        writes.filter((w) => w.unset).map((w) => w.field.key),
+        expiry.value
       );
+      if (!outcome.ok && changedUnder(outcome)) {
+        const before = view;
+        await onchanged();
+        return { ...outcome, error: changedUnderText(before, []) };
+      }
       if (!outcome.ok) {
         const detail = (outcome.body as { detail?: string | null } | undefined)?.detail;
         errors = Object.fromEntries(

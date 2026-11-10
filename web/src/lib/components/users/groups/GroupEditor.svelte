@@ -186,7 +186,7 @@
     if (!outcome.ok) {
       saving = false;
       error = outcome.error;
-      // a file changed on disk is read again, so a second try goes through
+      // the options are read again, so a second try is made against what changed
       onsaved();
       return;
     }

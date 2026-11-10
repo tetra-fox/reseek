@@ -199,7 +199,7 @@
     });
     showing = false;
     void view.load();
-    // a file changed on disk is read again, so a second try goes through
+    // the options are read again, so a second try is made against what changed
     if (!outcome.ok) return toast(outcome.error, "error");
     // every share on any host with the alias, as the daemon matches it
     for (const row of rows.rows)

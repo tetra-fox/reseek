@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ConfigView } from "#lib/config/fields.js";
 import fixture from "#lib/config/fixtures/view.json";
 import { sections } from "#lib/config/sections.js";
+import { toasts } from "#lib/feedback/toast.svelte.js";
 import { written } from "#lib/testing/fixtures.js";
 import { flush } from "#lib/testing/flush.js";
 
@@ -328,6 +329,50 @@ describe("a settings section", () => {
     expect(target.querySelector('[aria-live="polite"]')!.textContent).toContain(
       "1 setting changed"
     );
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps an edit and says what changed when the options changed since they were read", async () => {
+    const asked: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (request: Request) => {
+        asked.push(await request.json());
+        return Response.json(
+          { error: "The options changed since they were read", detail: "second" },
+          { status: 409 }
+        );
+      })
+    );
+    const target = document.createElement("div");
+    document.body.append(target);
+    const props = $state({
+      section: sections.find((s) => s.id === "web")!,
+      view,
+      // another admin saved the same option first
+      onchanged: async () => {
+        const next = structuredClone(view);
+        next.revision = "second";
+        (next.values as { web: { port: number } }).web.port = 6005;
+        props.view = next;
+      }
+    });
+    mounted.push(mount(Section, { target, props }));
+    flushSync();
+    const port = () => target.querySelector<HTMLInputElement>('[id="web.port"]')!;
+    port().value = "6001";
+    port().dispatchEvent(new Event("input", { bubbles: true }));
+    flushSync();
+    [...target.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Save")!.click();
+    await vi.waitFor(() =>
+      expect(toasts.map((t) => t.text)).toContain(
+        "HTTP port changed meanwhile. Check your changes and save again."
+      )
+    );
+    expect(asked[0]).toMatchObject({ optionsRevision: "fixture" });
+    expect(port().value).toBe("6001");
+    expect(target.textContent).toContain("The running value has changed");
+    toasts.splice(0);
     vi.unstubAllGlobals();
   });
 
