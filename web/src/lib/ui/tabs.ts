@@ -34,11 +34,12 @@ export const SETTLE_MS = 250;
  * The tabs of this browser that follow the live stream, which agree on one of them to lead: the
  * one focused most recently, else, while none has been, the one loaded first. A tab joins as its
  * shell starts following the stream and quits when it stops, as at the login. While in, it says
- * it is there every `BEAT_MS` and at once as it gains focus, and goes when it closes, freezes or
- * is not heard from for `QUIET_MS`. A tab that joins asks the others to answer at once, and leads
- * nothing for `SETTLE_MS`, the time they have to answer. As focus moves, the tab focused leads at
- * once and the one before stands down when that tab's beat reaches it, so both lead for the time
- * the beat takes to cross the channel
+ * it is there every `BEAT_MS` and goes when it closes, freezes or is not heard from for
+ * `QUIET_MS`. A tab that joins asks the others to answer at once, and leads nothing for
+ * `SETTLE_MS`, the time they have to answer. Its focus counts only while its stream is
+ * connected, which it says at once, as it does each focus after: the tab that becomes first then
+ * leads at once and the one before stands down when that word reaches it, so both lead for the
+ * time a message takes to cross the channel, and there is no time where neither does
  */
 export class Tabs {
   /** sorts by when the page loaded, a random part keeping two loaded together apart */
@@ -55,6 +56,8 @@ export class Tabs {
   #spoke = 0;
   /** when this tab last gained focus, 0 for never */
   #focusedAt = 0;
+  /** this tab's stream is connected, so it can play and its focus counts */
+  #connected = false;
 
   constructor(channel: TabChannel, loadedAt: number, now: () => number = Date.now) {
     this.id = `${String(Math.round(loadedAt)).padStart(16, "0")}-${Math.random().toString(36).slice(2)}`;
@@ -69,9 +72,16 @@ export class Tabs {
     this.#ask();
   }
 
-  /** This tab gains focus, which puts it first; the others hear of it at once */
+  /** This tab gains focus, which puts it first once its stream is connected */
   focus() {
     this.#focusedAt = this.#now();
+    if (this.#in && this.#connected) this.#say("beat");
+  }
+
+  /** This tab's stream is connected, or no longer is; the others hear at once */
+  connected(on: boolean) {
+    if (on === this.#connected) return;
+    this.#connected = on;
     if (this.#in) this.#say("beat");
   }
 
@@ -82,14 +92,15 @@ export class Tabs {
     this.#say("bye");
   }
 
-  /** How long until this tab has listened long enough to lead, in ms */
+  /** How long until this tab has listened long enough to lead, in ms, at most `SETTLE_MS` */
   settling(): number {
-    return Math.max(0, SETTLE_MS - (this.#now() - this.#since));
+    // a clock set back since the tab asked would otherwise make it longer
+    return Math.min(SETTLE_MS, Math.max(0, SETTLE_MS - (this.#now() - this.#since)));
   }
 
   /**
-   * Says this tab is there; call every `BEAT_MS`. Silent longer than the others count it, as a
-   * suspended tab is whatever it showed, it asks again instead
+   * Says this tab is there; call every `BEAT_MS`. Silent longer than the others count a tab, as
+   * after a suspension whether it was shown or hidden, it asks again instead
    */
   beat() {
     if (!this.#in) return;
@@ -117,12 +128,17 @@ export class Tabs {
     if (this.#dropped()) this.#ask();
     const now = this.#now();
     if (now - this.#since < SETTLE_MS) return false;
-    const me = { id: this.id, focusedAt: this.#focusedAt };
+    const me = { id: this.id, focusedAt: this.#counted() };
     for (const [id, { at, focusedAt }] of this.#heard) {
       if (now - at > QUIET_MS) this.#heard.delete(id);
       else if (outranks({ id, focusedAt }, me)) return false;
     }
     return true;
+  }
+
+  /** the focus this tab ranks by: none while its stream is not connected */
+  #counted() {
+    return this.#connected ? this.#focusedAt : 0;
   }
 
   /** whether this tab has been silent longer than the others count it */
@@ -145,7 +161,7 @@ export class Tabs {
 
   #say(kind: TabMessage["kind"]) {
     this.#spoke = this.#now();
-    this.#channel.postMessage({ kind, id: this.id, focusedAt: this.#focusedAt });
+    this.#channel.postMessage({ kind, id: this.id, focusedAt: this.#counted() });
   }
 }
 

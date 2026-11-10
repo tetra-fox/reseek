@@ -121,18 +121,65 @@ describe("the tabs of one browser", () => {
   it("asks again from its timer after a suspension, however it showed meanwhile", () => {
     const clock = time();
     const channel = bus();
-    // loaded in the background, so it was never seen to hide
-    const background = new Tabs(channel(), 100, clock.now);
+    // loaded first, and in the background, so it was never seen to hide
+    const end = channel();
+    const asleep = new Tabs(end, 100, clock.now);
     const other = new Tabs(channel(), 200, clock.now);
-    background.join();
-    other.join();
-    clock.pass(SETTLE_MS, [background, other]);
+    for (const tab of [asleep, other]) {
+      tab.join();
+      tab.connected(true);
+    }
+    clock.pass(SETTLE_MS, [asleep, other]);
+    // suspended: it hears nothing and says nothing, while the other is focused
+    const hear = end.onmessage;
+    end.onmessage = null;
     clock.pass(QUIET_MS + BEAT_MS, [other]);
-    expect(other.leads()).toBe(true);
-    background.beat();
-    expect(other.leads()).toBe(false);
-    clock.pass(SETTLE_MS);
-    expect([background.leads(), other.leads()]).toEqual([true, false]);
+    other.focus();
+    end.onmessage = hear;
+    // its timer runs first on waking: it asks again rather than lead on what it last heard
+    asleep.beat();
+    expect([asleep.leads(), other.leads()]).toEqual([false, true]);
+    clock.pass(SETTLE_MS, [asleep, other]);
+    expect([asleep.leads(), other.leads()]).toEqual([false, true]);
+  });
+
+  it("let a focused tab joining beside the leader take over only as its stream connects", () => {
+    const clock = time();
+    const channel = bus();
+    const leader = new Tabs(channel(), 100, clock.now);
+    leader.join();
+    leader.connected(true);
+    leader.focus();
+    clock.pass(SETTLE_MS, [leader]);
+    // a new tab in the foreground, focused from the start, signed in
+    const joining = new Tabs(channel(), 200, clock.now);
+    joining.focus();
+    joining.join();
+    const pair = () => [leader.leads(), joining.leads()];
+    expect(pair()).toEqual([true, false]);
+    clock.pass(SETTLE_MS, [leader, joining]);
+    expect(pair()).toEqual([true, false]);
+    // its stream connects: it leads, and the leader stands down as it hears
+    joining.connected(true);
+    expect(pair()).toEqual([false, true]);
+  });
+
+  it("leave the leader playing while a focused tab joins and lands on the login", () => {
+    const clock = time();
+    const channel = bus();
+    const leader = new Tabs(channel(), 100, clock.now);
+    leader.join();
+    leader.connected(true);
+    leader.focus();
+    clock.pass(SETTLE_MS, [leader]);
+    const login = new Tabs(channel(), 200, clock.now);
+    login.focus();
+    login.join();
+    expect(leader.leads()).toBe(true);
+    // the session check finds no one signed in
+    clock.pass(SETTLE_MS, [leader, login]);
+    login.quit();
+    expect([leader.leads(), login.leads()]).toEqual([true, false]);
   });
 
   it("leave the sound to the tab focused last, as focus moves", () => {
@@ -140,8 +187,10 @@ describe("the tabs of one browser", () => {
     const channel = bus();
     const older = new Tabs(channel(), 100, clock.now);
     const newer = new Tabs(channel(), 200, clock.now);
-    older.join();
-    newer.join();
+    for (const tab of [older, newer]) {
+      tab.join();
+      tab.connected(true);
+    }
     clock.pass(SETTLE_MS, [older, newer]);
     newer.focus();
     expect([older.leads(), newer.leads()]).toEqual([false, true]);
@@ -157,9 +206,11 @@ describe("the tabs of one browser", () => {
     const background = new Tabs(channel(), 100, clock.now);
     const focused = new Tabs(channel(), 200, clock.now);
     focused.join();
+    focused.connected(true);
     focused.focus();
     clock.pass(SETTLE_MS, [focused]);
     background.join();
+    background.connected(true);
     clock.pass(SETTLE_MS, [background, focused]);
     expect([background.leads(), focused.leads()]).toEqual([false, true]);
   });
@@ -168,7 +219,10 @@ describe("the tabs of one browser", () => {
     const clock = time();
     const channel = bus();
     const [first, second, third] = [100, 200, 300].map((at) => new Tabs(channel(), at, clock.now));
-    for (const tab of [first, second, third]) tab.join();
+    for (const tab of [first, second, third]) {
+      tab.join();
+      tab.connected(true);
+    }
     clock.pass(SETTLE_MS, [first, second, third]);
     third.focus();
     clock.pass(BEAT_MS, [first, second, third]);

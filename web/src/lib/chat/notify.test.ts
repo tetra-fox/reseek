@@ -4,7 +4,7 @@ import type { Schemas } from "#lib/api/client.js";
 import { app } from "#lib/app.svelte.js";
 import { toasts } from "#lib/feedback/toast.svelte.js";
 import { fakeNetwork } from "#lib/testing/network.js";
-import { Tabs } from "#lib/ui/tabs.js";
+import { browserTabs, Tabs } from "#lib/ui/tabs.js";
 import { SUMMARY_TTL_MS, users } from "#lib/users/users.svelte.js";
 
 import type { NotifyMode } from "./modes";
@@ -192,6 +192,7 @@ describe("what a mode delivers", () => {
     const channel = new BroadcastChannel("reseek-tabs");
     const other = new Tabs(channel, performance.timeOrigin + 60_000);
     other.join();
+    other.connected(true);
     other.focus();
     await pause();
     notifier.other("sound", "Download finished", "", "download:1", "/downloads");
@@ -205,21 +206,29 @@ describe("what a mode delivers", () => {
     expect(played).toHaveBeenCalledOnce();
   });
 
-  it("plays nothing in another tab while the one focused last is looked at", async () => {
-    // only while hidden, the default: the tab focused last is visible and leads, so it is quiet,
-    // and so is a hidden tab
-    const visible = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+  it("plays nothing anywhere while the tab focused last is looked at", async () => {
+    // only while hidden, the default. Another tab, hidden, was focused before this one
+    const pause = () => new Promise((done) => setTimeout(done, 20));
     const channel = new BroadcastChannel("reseek-tabs");
     const other = new Tabs(channel, performance.timeOrigin + 60_000);
     other.join();
+    other.connected(true);
     other.focus();
-    await new Promise((done) => setTimeout(done, 20));
-    notifier.other("sound", "Download finished", "", "download:1", "/downloads");
+    await pause();
+    // this tab, its stream following, is focused and looked at: it leads, and stays quiet
+    const here = browserTabs()!;
+    here.connected(true);
+    here.focus();
+    await pause();
+    expect([here.leads(), document.visibilityState]).toEqual([true, "visible"]);
+    notifier.other("both", "Download finished", "", "download:1", "/downloads");
     expect(played).not.toHaveBeenCalled();
+    // and the hidden tab doesn't lead, so it plays nothing in this one's place
+    expect(other.leads()).toBe(false);
     other.leave();
     channel.close();
-    visible.mockRestore();
-    await new Promise((done) => setTimeout(done, 20));
+    here.connected(false);
+    await pause();
   });
 
   it("plays one sound for a burst of messages", () => {
