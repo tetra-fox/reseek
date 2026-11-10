@@ -84,6 +84,9 @@ pub(crate) struct Decoder {
   pub last_skipped: Option<String>,
   /// why decoding stopped before the end of the file, when it did
   pub stopped: Option<String>,
+  /// the sample frame reading is to go on from: the track's packets that end before it are
+  /// passed over without being decoded
+  skip_until: Option<u64>,
 }
 
 /// What filling a window gave.
@@ -181,6 +184,7 @@ impl Decoder {
       skipped: 0,
       last_skipped: None,
       stopped: None,
+      skip_until: None,
     })
   }
 
@@ -253,6 +257,7 @@ impl Decoder {
       pending.clear();
     }
     self.taken = 0;
+    self.skip_until = None;
     Ok(())
   }
 
@@ -274,11 +279,21 @@ impl Decoder {
     match sought {
       Ok(_) => {
         self.decoder.reset();
+        self.skip_until = None;
         Ok(true)
       }
       Err(Error::SeekError(SeekErrorKind::OutOfRange)) => Ok(false),
       Err(e) => Err(format!("seeking failed: {e}")),
     }
+  }
+
+  /// Reads on from the packet of the track that holds sample frame `frame`, or the first after
+  /// it, passing over the packets before it without decoding them, so getting there takes only
+  /// the time the container takes to read them. For a frame a seek cannot place; a codec that
+  /// decodes each packet on its own, as ALAC does, gives the same samples from there as when
+  /// every packet before was decoded.
+  pub fn skip_to_frame(&mut self, frame: u64) {
+    self.skip_until = Some(frame);
   }
 
   /// Decodes the next packet into `samples`, interleaved over every channel with each sample at
@@ -288,15 +303,7 @@ impl Decoder {
   pub fn next_interleaved(&mut self, samples: &mut Vec<i32>) -> Option<Range<u64>> {
     let (pts, dur) = self.step()?;
     self.decoder.last_decoded().copy_to_vec_interleaved(samples);
-    let (numer, denom) = self.ticks();
-    let rate = u128::from(self.claimed.sample_rate);
-    // a timestamp and a duration add to below 2^65, a tick's numerator is below 2^32 and the rate
-    // at most `MAX_RATE`, below 2^20, so the product fits
-    let frame = |ticks: u128| u64::try_from(ticks * numer * rate / denom).ok();
-    let frames = u128::try_from(pts).ok().and_then(|pts| {
-      let end = pts + u128::from(dur);
-      Some(frame(pts)?..frame(end)?)
-    });
+    let frames = self.frames_of(pts, dur);
     if frames.is_none() {
       debug!(pts, dur, "a packet's timestamp is out of range");
       self.stopped = Some("the file's timing is out of range".to_string());
@@ -309,6 +316,18 @@ impl Decoder {
   pub fn ticks_fit_frames(&self) -> bool {
     let (numer, denom) = self.ticks();
     denom % (numer * u128::from(self.claimed.sample_rate)) == 0
+  }
+
+  /// The sample frames a packet at timestamp `pts` lasting `dur` covers; `None` when they are out
+  /// of range.
+  fn frames_of(&self, pts: i64, dur: u64) -> Option<Range<u64>> {
+    let (numer, denom) = self.ticks();
+    let rate = u128::from(self.claimed.sample_rate);
+    // a timestamp and a duration add to below 2^65, a tick's numerator is below 2^32 and the rate
+    // at most `MAX_RATE`, below 2^20, so the product fits
+    let frame = |ticks: u128| u64::try_from(ticks * numer * rate / denom).ok();
+    let pts = u128::try_from(pts).ok()?;
+    Some(frame(pts)?..frame(pts + u128::from(dur))?)
   }
 
   /// A timestamp tick as a fraction of a second; one sample frame when the container gives none.
@@ -370,6 +389,16 @@ impl Decoder {
       };
       if packet.track_id != self.track {
         continue;
+      }
+      if let Some(until) = self.skip_until {
+        // a packet whose frames are out of range is decoded, which says so
+        let before = self
+          .frames_of(packet.pts.get(), packet.dur.get())
+          .is_some_and(|frames| frames.end <= until);
+        if before {
+          continue;
+        }
+        self.skip_until = None;
       }
       let decoded = match self.decoder.decode(&packet) {
         Ok(decoded) => decoded,
@@ -487,6 +516,25 @@ mod tests {
     let mut hint = Hint::new();
     hint.with_extension("m4a");
     Decoder::from_source(Box::new(std::io::Cursor::new(bytes)), &hint).unwrap()
+  }
+
+  #[test]
+  fn a_skip_decodes_only_from_the_packet_holding_the_frame() {
+    let bytes = crate::files::two_tracks();
+    assert_eq!(
+      opened(bytes.clone()).seek_frame(12_000),
+      Ok(false),
+      "no seek places a frame past where the second track ends"
+    );
+    let mut decoder = opened(bytes);
+    decoder.skip_to_frame(12_000);
+    let mut samples = Vec::new();
+    assert_eq!(decoder.next_interleaved(&mut samples), Some(8192..12_288));
+    assert_eq!(
+      decoder.decoded.1, 4096,
+      "the packets before it were not decoded"
+    );
+    assert_eq!(samples.len(), 4096 * 2);
   }
 
   #[test]

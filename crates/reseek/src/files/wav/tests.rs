@@ -231,10 +231,9 @@ fn a_range_past_the_last_packet_is_silence_as_in_the_whole() {
   );
 }
 
-#[test]
-fn a_range_past_where_another_track_ends_reads_the_audio() {
-  // a second track holding only the first packet again, so it ends 4096 frames in, and a seek
-  // that moves every track finds no place in it for a later frame
+/// The tone with a second track holding only the first packet again, so it ends 4096 frames in,
+/// and a seek that moves every track finds no place in it for a later frame.
+pub fn two_tracks() -> Vec<u8> {
   let trak_at = box_at(TONE, b"trak");
   let trak = TONE[trak_at..][..get(TONE, trak_at) as usize].to_vec();
   let trak_end = trak_at + trak.len();
@@ -248,6 +247,12 @@ fn a_range_past_where_another_track_ends_reads_the_audio() {
   let grown = get(&bytes, moov) + u32::try_from(second.len()).unwrap();
   put(&mut bytes, moov, grown);
   bytes.splice(trak_end..trak_end, second);
+  bytes
+}
+
+#[test]
+fn a_range_past_where_another_track_ends_reads_the_audio() {
+  let bytes = two_tracks();
   let audio = whole(&bytes).unwrap();
   assert_eq!(audio, whole(TONE).unwrap());
   let start = 44 + 12_000 * 4;

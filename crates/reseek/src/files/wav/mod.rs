@@ -253,8 +253,8 @@ fn body(opened: Opened, shown: String, start: u64, length: u64, speed: ServeSpee
   let head = Bytes::copy_from_slice(&opened.wav.header()[header]);
   let pcm = (pcm_length > 0).then(|| Pcm::new(opened, pcm_from, pcm_length));
   // each piece is read on the blocking pool, so a body nobody reads any more holds a thread
-  // only until the piece in hand is read, which for a range that cannot be sought is the walk
-  // from the start
+  // only until the piece in hand is read, which for a range that cannot be sought is the read
+  // of the packets before it
   let pieces = stream::unfold((pcm, speed, shown), |(pcm, speed, shown)| async move {
     let mut pcm = pcm?;
     let stepped = tokio::task::spawn_blocking(move || {
@@ -388,4 +388,4 @@ pub(super) async fn respond(
 }
 
 #[cfg(test)]
-mod tests;
+pub(super) mod tests;

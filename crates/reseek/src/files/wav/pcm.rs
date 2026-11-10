@@ -35,14 +35,16 @@ pub(super) enum Source {
 }
 
 impl Source {
-  /// Moves to sample frame `frame` of `format`, or for ALAC to the packet that holds it. False
-  /// when the container cannot place the frame: the audio is then at its start instead.
-  fn seek(&mut self, format: &Format, frame: u64) -> Result<bool, String> {
+  /// Moves to sample frame `frame` of `format`, or for ALAC to the packet that holds it, or the
+  /// first after it. Where the container cannot place the frame, the packets before it are read
+  /// from the start and passed over without being decoded, so a frame past the last packet is
+  /// silence and one past where another track ends is still audio.
+  fn seek(&mut self, format: &Format, frame: u64) -> Result<(), String> {
     match self {
       // the frames an AIFF states are clipped to the samples it holds, so every frame is there
       Self::Aiff(aiff, file) => file
         .seek(SeekFrom::Start(aiff.data_at + frame * format.block()))
-        .map(|_| true)
+        .map(drop)
         .map_err(|e| format!("seeking failed: {e}")),
       Self::Alac {
         decoder,
@@ -50,7 +52,7 @@ impl Source {
         reopen,
       } => {
         if decoder.seek_frame(frame)? {
-          return Ok(true);
+          return Ok(());
         }
         // symphonia 0.6.1's MP4 reader, when a seek finds no sample, may walk the file for more
         // fragments and drop the media data atom it was reading, so every later packet fails
@@ -62,7 +64,8 @@ impl Source {
           return Err("the file changed while it was read".to_string());
         }
         **decoder = reopened;
-        Ok(false)
+        decoder.skip_to_frame(frame);
+        Ok(())
       }
     }
   }
@@ -149,8 +152,8 @@ impl Pcm {
   }
 
   /// The next piece, `None` once every byte was given or after a piece that failed. Reads the
-  /// source until it has a piece, which blocks; when the range was not sought, that is every
-  /// packet before it.
+  /// source until it has a piece, which blocks; when the range could not be sought, that reads
+  /// every packet before it, without decoding them.
   pub(super) fn step(&mut self) -> Option<Result<Bytes, String>> {
     while self.at < self.end {
       if let Some((from, stretch)) = self.held.take() {
@@ -202,14 +205,8 @@ impl Pcm {
       Some(next) => next,
       None => {
         let first = self.at / block;
-        // when the frame could not be sought, the packets are read from the start and those
-        // before the range dropped, so a frame past the last packet is silence and one past
-        // where another track ends is still audio
-        if self.source.seek(&self.format, first)? {
-          first * block
-        } else {
-          0
-        }
+        self.source.seek(&self.format, first)?;
+        first * block
       }
     };
     let mut pcm = Vec::new();

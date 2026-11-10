@@ -61,6 +61,8 @@ pub use writing::{WriteGuard, Writing};
 
 #[cfg(test)]
 pub(crate) use aiff::tests::{aiff_c_file, aiff_file};
+#[cfg(test)]
+pub(crate) use wav::tests::two_tracks;
 
 /// How many pieces of an archive wait to be sent before its writer waits.
 const ARCHIVE_BACKLOG: usize = 8;
