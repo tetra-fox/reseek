@@ -1089,7 +1089,7 @@ export interface paths {
         /**
          * The event stream: `hello`, a snapshot of each topic that has one, then every frame of the
          *     topics as it happens. A client reconnecting with `Last-Event-ID` gets what it missed when it
-         *     is still kept, else fresh snapshots and `lagged`.
+         *     is still kept and the daemon has not restarted since, else fresh snapshots and `lagged`.
          */
         get: operations["stream"];
         put?: never;
@@ -5324,6 +5324,11 @@ export interface components {
         };
         /** @description The first frame of every stream. */
         Hello: {
+            /**
+             * @description this run of the daemon, new each time it starts. Every frame's id carries it, and a stream
+             *     resumes only from a frame of the same run, so a store that saw another run reads again
+             */
+            epoch: string;
             /** @description who the stream is for */
             principal: components["schemas"]["PrincipalSummary"];
             /** @description whether the frames missed since `Last-Event-ID` follow instead of fresh snapshots */

@@ -4929,7 +4929,7 @@
         "tags": [
           "live"
         ],
-        "summary": "The event stream: `hello`, a snapshot of each topic that has one, then every frame of the\ntopics as it happens. A client reconnecting with `Last-Event-ID` gets what it missed when it\nis still kept, else fresh snapshots and `lagged`.",
+        "summary": "The event stream: `hello`, a snapshot of each topic that has one, then every frame of the\ntopics as it happens. A client reconnecting with `Last-Event-ID` gets what it missed when it\nis still kept and the daemon has not restarted since, else fresh snapshots and `lagged`.",
         "operationId": "stream",
         "parameters": [
           {
@@ -20303,9 +20303,14 @@
           "version",
           "principal",
           "topics",
-          "resumed"
+          "resumed",
+          "epoch"
         ],
         "properties": {
+          "epoch": {
+            "type": "string",
+            "description": "this run of the daemon, new each time it starts. Every frame's id carries it, and a stream\nresumes only from a frame of the same run, so a store that saw another run reads again"
+          },
           "principal": {
             "$ref": "#/components/schemas/PrincipalSummary",
             "description": "who the stream is for"

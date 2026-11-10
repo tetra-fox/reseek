@@ -16,7 +16,7 @@ use tokio::time::{Instant, sleep_until};
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, error, trace, warn};
 
-use super::{Published, Registered, Topic, render};
+use super::{Published, Registered, Topic};
 use crate::sync::lock;
 
 /// How many frames a stream may fall behind by before it is closed as lagging.
@@ -238,7 +238,7 @@ async fn write(
       }
     }
   };
-  match render(last_id, &LiveFrame::Bye(Bye { reason })) {
+  match registered.render(last_id, &LiveFrame::Bye(Bye { reason })) {
     // the client may already be gone, which ends the stream all the same
     Ok(bytes) => drop(output.send(bytes).await),
     Err(e) => error!(error = %e, "goodbye frame not written"),

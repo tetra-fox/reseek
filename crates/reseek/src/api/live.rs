@@ -24,7 +24,7 @@ pub fn routes() -> OpenApiRouter<AppState> {
 
 /// The event stream: `hello`, a snapshot of each topic that has one, then every frame of the
 /// topics as it happens. A client reconnecting with `Last-Event-ID` gets what it missed when it
-/// is still kept, else fresh snapshots and `lagged`.
+/// is still kept and the daemon has not restarted since, else fresh snapshots and `lagged`.
 #[utoipa::path(
   get, path = "/live", tag = "live", params(LiveQuery),
   responses(
@@ -50,12 +50,9 @@ async fn stream(
       topic.role()
     )));
   }
-  let asked = headers.get("last-event-id").map(|value| {
-    value
-      .to_str()
-      .ok()
-      .and_then(|text| text.trim().parse::<u64>().ok())
-  });
+  let asked = headers
+    .get("last-event-id")
+    .map(|value| value.to_str().ok().and_then(|id| app.live.seen(id.trim())));
   let limit = app
     .config
     .current()
@@ -89,6 +86,7 @@ async fn stream(
     },
     topics: listed,
     resumed: registered.resumed,
+    epoch: app.live.epoch().to_string(),
   })];
   if !registered.resumed {
     for topic in &topics {
@@ -100,7 +98,7 @@ async fn stream(
   }
   let first = frames
     .iter()
-    .map(|frame| live::render(registered.at, frame))
+    .map(|frame| registered.render(registered.at, frame))
     .collect::<Result<Vec<_>, _>>()
     .map_err(ApiError::internal)?;
   span.in_scope(|| {
@@ -232,7 +230,7 @@ mod tests {
     let live = stream.next().await.unwrap();
     assert_eq!(live.event, "users.removed");
     assert_eq!(live.data, json!({ "username": "alice" }));
-    assert!(live.id > hello.id);
+    assert!(live.seq() > hello.seq());
     let empty = open(&app, "/api/v0/live")
       .await
       .until("application.options")
@@ -248,10 +246,12 @@ mod tests {
   async fn a_reconnect_replays_what_it_missed_or_gets_snapshots_and_lagged() {
     let app = app(TRUSTED, &[]).await;
     let mut first = open(&app, "/api/v0/live?topics=users").await;
-    let start = first.next().await.unwrap().id.unwrap();
-    assert!(
-      (1 << 32..1 << 48).contains(&start),
-      "the sequence starts at a random number"
+    let hello = first.next().await.unwrap();
+    let epoch = hello.data["epoch"].as_str().unwrap();
+    assert_eq!(
+      hello.id,
+      Some(format!("{epoch}-{}", hello.seq())),
+      "an id is the run's epoch and the sequence number"
     );
     removed(&app, "a");
     let seen = first.next().await.unwrap().id.unwrap();
@@ -264,31 +264,36 @@ mod tests {
         with(
           request("GET", "/api/v0/live?topics=users", None),
           "last-event-id",
-          &seen.to_string(),
+          &seen,
         ),
       )
       .await;
     let hello = again.next().await.unwrap();
     assert_eq!(hello.data["resumed"], true);
-    assert_eq!(hello.id, Some(seen));
+    assert_eq!(hello.id.as_ref(), Some(&seen));
     let b = again.next().await.unwrap();
     let c = again.next().await.unwrap();
     assert_eq!(
       (b.data["username"].clone(), c.data["username"].clone()),
       (json!("b"), json!("c"))
     );
-    assert!(b.id.unwrap() > seen && c.id > b.id);
+    assert!(b.seq() > hello.seq() && c.seq() > b.seq());
 
-    // below every number a sequence starts at, so older than anything the ring keeps; and
-    // above every number one reaches, as one from an earlier run of the daemon can be
-    for unknown in [(1u64 << 32) - 1, 1 << 50] {
+    // a number a ring this long cannot reach, the same number from another run of the daemon,
+    // and an id from before ids named the run
+    let (epoch, number) = seen.rsplit_once('-').unwrap();
+    for unknown in [
+      format!("{epoch}-1000000"),
+      format!("zzzzzzzzzzzzzzzz-{number}"),
+      number.to_string(),
+    ] {
       let mut late = app
         .stream_from(
           "127.0.0.1:1",
           with(
             request("GET", "/api/v0/live?topics=application,users", None),
             "last-event-id",
-            &unknown.to_string(),
+            &unknown,
           ),
         )
         .await;
@@ -306,6 +311,33 @@ mod tests {
       );
       assert_eq!(frames[0].data["resumed"], false, "{unknown}");
     }
+  }
+
+  #[tokio::test]
+  async fn a_stream_of_the_daemon_before_a_restart_is_not_resumed() {
+    let before = app(TRUSTED, &[]).await;
+    let mut stream = open(&before, "/api/v0/live?topics=users").await;
+    let greeted = stream.next().await.unwrap();
+    removed(&before, "a");
+    let seen = stream.next().await.unwrap();
+    let after = app(TRUSTED, &[]).await;
+    // the new run has published past the number seen, so its ring holds that number
+    for n in 0..=seen.seq() {
+      removed(&after, &n.to_string());
+    }
+    let mut again = after
+      .stream_from(
+        "127.0.0.1:1",
+        with(
+          request("GET", "/api/v0/live?topics=users", None),
+          "last-event-id",
+          seen.id.as_deref().unwrap(),
+        ),
+      )
+      .await;
+    let frames = again.until("lagged").await;
+    assert_eq!(frames[0].data["resumed"], false);
+    assert_ne!(frames[0].data["epoch"], greeted.data["epoch"]);
   }
 
   #[tokio::test]
@@ -472,7 +504,7 @@ mod tests {
         with(
           request("GET", "/api/v0/live?topics=metrics,events", None),
           "last-event-id",
-          &seen.to_string(),
+          &seen,
         ),
       )
       .await;

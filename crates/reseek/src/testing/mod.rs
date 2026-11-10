@@ -204,11 +204,19 @@ pub struct Stream {
 #[derive(Debug)]
 pub struct Sse {
   /// its `id:` line
-  pub id: Option<u64>,
+  pub id: Option<String>,
   /// its `event:` line
   pub event: String,
   /// its `data:` line, read as JSON
   pub data: serde_json::Value,
+}
+
+impl Sse {
+  /// The sequence number in its id.
+  pub fn seq(&self) -> u64 {
+    let id = self.id.as_deref().expect("the event has an id");
+    id.rsplit_once('-').unwrap().1.parse().unwrap()
+  }
 }
 
 impl Stream {
@@ -224,7 +232,7 @@ impl Stream {
         };
         for line in block.lines() {
           if let Some(id) = line.strip_prefix("id: ") {
-            sse.id = Some(id.parse().unwrap());
+            sse.id = Some(id.to_string());
           } else if let Some(event) = line.strip_prefix("event: ") {
             sse.event = event.to_string();
           } else if let Some(data) = line.strip_prefix("data: ") {

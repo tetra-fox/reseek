@@ -17,6 +17,7 @@ export const helloFrame = (topics: string[]) =>
   frame(1, "hello", {
     principal: { name: "reseek", role: "Administrator" },
     resumed: false,
+    epoch: "e2e",
     serverTime: at(30),
     topics,
     version: {

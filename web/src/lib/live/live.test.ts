@@ -41,7 +41,8 @@ const hello = (id: number, resumed = false) =>
     version: {},
     principal: { name: "admin", role: "Administrator" },
     topics: [],
-    resumed
+    resumed,
+    epoch: "first"
   });
 
 /** Lets the stream readers take what was written */

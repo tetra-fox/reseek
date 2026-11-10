@@ -65,6 +65,7 @@ export class Live {
   #stream: Stream | null = null;
   #replacing: Stream | null = null;
   #lastId: string | null = null;
+  #epoch: string | null = null;
   #running = false;
   /** when the recent losses happened, to tell a burst from an occasional drop */
   #failures: number[] = [];
@@ -78,9 +79,14 @@ export class Live {
     this.#deps = { ...defaults(), ...deps };
   }
 
-  /** The sequence number of the last frame handed to a listener */
+  /** The id of the last frame handed to a listener */
   get lastId() {
     return this.#lastId;
+  }
+
+  /** The run of the daemon the last stream greeted from, new each time it starts */
+  get epoch() {
+    return this.#epoch;
   }
 
   /** How often pages should poll right now, `null` while frames keep them current */
@@ -99,6 +105,7 @@ export class Live {
   stop() {
     this.#shut();
     this.#lastId = null;
+    this.#epoch = null;
     this.#following = [];
     this.principal = null;
   }
@@ -189,6 +196,7 @@ export class Live {
         this.#replacing = null;
       }
       this.principal = frame.data.principal;
+      this.#epoch = frame.data.epoch;
       this.#failures = [];
       this.#streak = 0;
       if (this.#warned) this.#deps.notice("Live connection restored", "info");

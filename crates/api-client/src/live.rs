@@ -22,11 +22,11 @@ use super::{Client, Error, Result, Route, refused};
 /// with its `retry` (`EventStream::dispatch`), so this matches it.
 const RETRY: Duration = Duration::from_secs(1);
 
-/// One frame of the event stream with its sequence number.
+/// One frame of the event stream with its id.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LiveEvent {
-  /// the frame's sequence number, which a reopened stream resumes after
-  pub id: Option<u64>,
+  /// the frame's id, which a reopened stream resumes after
+  pub id: Option<String>,
   /// the frame
   pub frame: LiveFrame,
 }
@@ -36,7 +36,7 @@ pub struct LiveEvent {
 pub struct Live {
   client: Client,
   topics: String,
-  last_event_id: Option<u64>,
+  last_event_id: Option<String>,
 }
 
 impl Client {
@@ -55,8 +55,8 @@ type Events =
   Pin<Box<dyn Stream<Item = std::result::Result<Event, EventStreamError<reqwest::Error>>> + Send>>;
 
 impl Live {
-  /// The same stream resuming after the frame with sequence number `id`.
-  pub fn resume_from(mut self, id: u64) -> Self {
+  /// The same stream resuming after the frame with the id `id`.
+  pub fn resume_from(mut self, id: String) -> Self {
     self.last_event_id = Some(id);
     self
   }
@@ -82,8 +82,8 @@ impl Live {
       .query(&[("topics", &self.topics)])
       .map_err(Refusal::from)?;
     let mut request = self.client.get(route).header("accept", "text/event-stream");
-    if let Some(id) = self.last_event_id {
-      request = request.header("last-event-id", id.to_string());
+    if let Some(id) = &self.last_event_id {
+      request = request.header("last-event-id", id);
     }
     let response = request.send().await.map_err(Error::from)?;
     if response.status().is_success() {
@@ -175,10 +175,10 @@ async fn next(mut state: Following) -> Option<(Result<LiveEvent>, Following)> {
         if let Some(retry) = event.retry {
           state.retry = retry;
         }
-        // an id that is no sequence number cannot be resumed after, so a reopened stream
-        // starts over with snapshots
-        let id = event.id.parse::<u64>().ok();
-        state.live.last_event_id = id;
+        // a frame without an id cannot be resumed after, so a reopened stream starts over with
+        // snapshots
+        let id = Some(event.id.clone()).filter(|id| !id.is_empty());
+        state.live.last_event_id = id.clone();
         let frame = match frame(&event) {
           Ok(frame) => frame,
           Err(e) => return Some((Err(e), state)),
@@ -241,6 +241,7 @@ mod tests {
       },
       topics: vec!["application".into()],
       resumed: false,
+      epoch: "e".into(),
     });
     serde_json::to_value(frame).unwrap()["data"].to_string()
   }
@@ -299,7 +300,7 @@ mod tests {
     let client = Client::new(&base).unwrap();
     let mut stream = client.live(&["application"]).open().await.unwrap();
     let first = stream.next().await.unwrap().unwrap();
-    assert_eq!(first.id, Some(7));
+    assert_eq!(first.id.as_deref(), Some("7"));
     let dropped = stream.next().await.unwrap().unwrap_err();
     assert_eq!(dropped.status(), None, "a connection closed unanswered");
     for status in [429, 503, 502] {

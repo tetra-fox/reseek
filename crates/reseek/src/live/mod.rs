@@ -1,6 +1,7 @@
 //! The event stream's hub: every frame published gets the next sequence number, is written once
 //! as server-sent-event text, kept a while for streams that reconnect, and queued for each
-//! open stream that follows one of its topics.
+//! open stream that follows one of its topics. A frame's id is the hub's epoch, new each time
+//! the daemon starts, and its sequence number, so a stream resumes only within one run.
 //!
 //! Frames are published with [`Live::publish`]. A stream registers with [`Live::open`], which
 //! also decides whether a stream that reconnects can be given what it missed.
@@ -41,6 +42,8 @@ pub struct Live {
 
 struct Hub {
   state: Mutex<HubState>,
+  /// this run of the hub, which every frame id starts with
+  epoch: String,
   /// canceled when the daemon shuts down, which closes every stream
   cancel: CancellationToken,
   /// who has a stream open, changed under the state's lock as streams open and close
@@ -57,7 +60,7 @@ pub struct Audience {
 }
 
 struct HubState {
-  /// the sequence number of the last frame published, the starting number before the first
+  /// the sequence number of the last frame published, 0 before the first
   last: u64,
   /// the sequence number of the last frame dropped from the ring
   evicted_through: u64,
@@ -70,18 +73,12 @@ struct HubState {
   last_metrics: Option<String>,
 }
 
-/// The lowest and highest first sequence numbers: past any one an earlier run of the daemon
-/// can have reached, and below 2^53 so a JavaScript client reads every id exactly.
-const FIRST_SEQ: std::ops::Range<u64> = 1 << 32..1 << 48;
-
 impl HubState {
-  /// A hub with nothing published, whose sequence starts at a random number, so an id kept
-  /// from an earlier run is not in its ring.
+  /// A hub with nothing published.
   fn new() -> Self {
-    let start = rand::random_range(FIRST_SEQ);
     Self {
-      last: start,
-      evicted_through: start,
+      last: 0,
+      evicted_through: 0,
       ring: VecDeque::new(),
       streams: HashMap::new(),
       next_stream: 0,
@@ -110,7 +107,8 @@ pub struct Opening {
   pub holder: String,
   /// how many streams one principal may hold
   pub limit: u32,
-  /// the last sequence number the client saw, when it is reconnecting
+  /// the last sequence number the client saw in this run, when it is reconnecting; see
+  /// [`Live::seen`]
   pub last_seen: Option<u64>,
   /// opened by someone at the UI rather than by a stored credential
   pub person: bool,
@@ -161,6 +159,7 @@ impl Live {
     Self {
       hub: Arc::new(Hub {
         state: Mutex::new(HubState::new()),
+        epoch: format!("{:016x}", rand::random::<u64>()),
         cancel,
         audience: watch::Sender::new(Audience::default()),
       }),
@@ -194,7 +193,7 @@ impl Live {
     let published = Arc::new(Published {
       seq,
       at: Instant::now(),
-      block: block(seq, &kind, &data),
+      block: block(&self.hub.id(seq), &kind, &data),
       topics,
       state,
     });
@@ -209,6 +208,21 @@ impl Live {
         queue.push(published.clone());
       }
     }
+  }
+
+  /// This run of the hub, which every frame id starts with.
+  pub fn epoch(&self) -> &str {
+    &self.hub.epoch
+  }
+
+  /// The sequence number in the frame id `id` when this run of the hub gave it; none for an id
+  /// of an earlier run or one that is not a frame id.
+  pub fn seen(&self, id: &str) -> Option<u64> {
+    let (epoch, seq) = id.split_once('-')?;
+    if epoch != self.hub.epoch {
+      return None;
+    }
+    seq.parse().ok()
   }
 
   /// Whether an open stream follows `topic`.
@@ -278,6 +292,11 @@ impl Hub {
   fn lock(&self) -> MutexGuard<'_, HubState> {
     lock(&self.state)
   }
+
+  /// The id of the frame numbered `seq` in this run.
+  fn id(&self, seq: u64) -> String {
+    format!("{}-{seq}", self.epoch)
+  }
 }
 
 impl HubState {
@@ -308,12 +327,15 @@ fn parts(frame: &LiveFrame) -> Result<(String, String), serde_json::Error> {
 }
 
 /// One server-sent event: its id, its type and its data.
-fn block(seq: u64, kind: &str, data: &str) -> Bytes {
-  Bytes::from(format!("id: {seq}\nevent: {kind}\ndata: {data}\n\n"))
+fn block(id: &str, kind: &str, data: &str) -> Bytes {
+  Bytes::from(format!("id: {id}\nevent: {kind}\ndata: {data}\n\n"))
 }
 
-/// `frame` as a server-sent event with the id `seq`, for the frames a stream writes itself.
-pub fn render(seq: u64, frame: &LiveFrame) -> Result<Bytes, serde_json::Error> {
-  let (kind, data) = parts(frame)?;
-  Ok(block(seq, &kind, &data))
+impl Registered {
+  /// `frame` as a server-sent event with the id of the frame numbered `seq`, for the frames a
+  /// stream writes itself.
+  pub fn render(&self, seq: u64, frame: &LiveFrame) -> Result<Bytes, serde_json::Error> {
+    let (kind, data) = parts(frame)?;
+    Ok(block(&self.hub.id(seq), &kind, &data))
+  }
 }

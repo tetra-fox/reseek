@@ -201,6 +201,9 @@ pub struct Hello {
   pub topics: Vec<String>,
   /// whether the frames missed since `Last-Event-ID` follow instead of fresh snapshots
   pub resumed: bool,
+  /// this run of the daemon, new each time it starts. Every frame's id carries it, and a stream
+  /// resumes only from a frame of the same run, so a store that saw another run reads again
+  pub epoch: String,
 }
 
 /// The data of a `lagged` frame, an empty object.
