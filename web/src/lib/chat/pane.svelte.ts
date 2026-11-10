@@ -130,12 +130,12 @@ export class MessagePane {
         })
       );
       // a message the server delivers again, as when it lost our acknowledgement, is unread
-      // once more with no message frame; the newest page read again marks it so
+      // once more wherever the pane holds it
       $effect(() =>
-        live.on("conversations.update", ({ conversation }) => {
-          if (conversation.username !== name || !this.loaded || this.hasNewer) return;
-          const held = this.messages.rows.filter((m) => m.unread).length;
-          if (conversation.unAcknowledgedMessageCount > held) void this.load();
+        live.on("conversations.update", ({ conversation, redelivered }) => {
+          if (conversation.username !== name || !redelivered) return;
+          const { unread } = fromPrivate(redelivered, this.#self());
+          this.messages.assign(String(redelivered.localId), { unread });
         })
       );
       return;

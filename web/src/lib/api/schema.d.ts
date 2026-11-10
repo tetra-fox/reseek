@@ -4340,6 +4340,7 @@ export interface components {
         ConversationUpdate: {
             /** @description the conversation, without its messages */
             conversation: components["schemas"]["Conversation"];
+            redelivered?: components["schemas"]["PrivateMessage"] | null;
         };
         /** @description The body of `POST /tokens`. At most one of `expiresIn` and `expiresAt` is given. */
         CreateToken: {

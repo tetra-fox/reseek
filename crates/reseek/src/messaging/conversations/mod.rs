@@ -147,22 +147,26 @@ impl Messaging {
       }
     }
     // clients announce a pushed message unless it came from the offline store, so a repeat is
-    // not pushed; the conversation update carries its unread count
-    if new {
+    // not pushed as one; the conversation update carries it, unread again, and its count
+    let redelivered = if new {
       self
         .live
         .publish(LiveFrame::ConversationsMessage(ConversationMessage {
           username: username.clone(),
           message: stored,
         }));
-    }
+      None
+    } else {
+      Some(stored)
+    };
     if !notice {
-      self.conversation_changed(&username).await;
+      self.conversation_changed(&username, redelivered).await;
     }
   }
 
-  /// Pushes the conversation with `username` as it is now, and the unread counts.
-  async fn conversation_changed(&self, username: &str) {
+  /// Pushes the conversation with `username` as it is now, with `redelivered` when the server
+  /// delivered that message again, and the unread counts.
+  async fn conversation_changed(&self, username: &str, redelivered: Option<PrivateMessage>) {
     let name = username.to_string();
     match self
       .db
@@ -174,6 +178,7 @@ impl Messaging {
           .live
           .publish(LiveFrame::ConversationsUpdate(ConversationUpdate {
             conversation,
+            redelivered,
           }));
       }
       Ok(None) => {}
@@ -347,7 +352,7 @@ impl Messaging {
         username: username.to_string(),
         message: sent,
       }));
-    self.conversation_changed(username).await;
+    self.conversation_changed(username, None).await;
     self.watch_peer(username);
     Ok(())
   }
@@ -376,7 +381,7 @@ impl Messaging {
       .await
       .map_err(internal)?;
     let told = self.acknowledge_ids(username, &ids).await;
-    self.conversation_changed(username).await;
+    self.conversation_changed(username, None).await;
     told
   }
 
@@ -393,7 +398,7 @@ impl Messaging {
       )));
     }
     let told = self.acknowledge_ids(username, &[id]).await;
-    self.conversation_changed(username).await;
+    self.conversation_changed(username, None).await;
     told
   }
 
@@ -428,7 +433,7 @@ impl Messaging {
       .await
       .map_err(internal)?;
     debug!(username, purge, "conversation closed");
-    self.conversation_changed(username).await;
+    self.conversation_changed(username, None).await;
     Ok(())
   }
 
@@ -460,7 +465,7 @@ impl Messaging {
       .write(move |conn| store::set_notify(conn, &name, notify))
       .await
       .map_err(internal)?;
-    self.conversation_changed(username).await;
+    self.conversation_changed(username, None).await;
     Ok(())
   }
 
@@ -531,11 +536,26 @@ mod tests {
     app.state.messaging.received(message(1, false)).await;
     app.state.messaging.received(message(1, true)).await;
     app.state.messaging.received(message(2, false)).await;
-    let pushed = |frames: Vec<crate::testing::Sse>| frames.last().unwrap().data["message"].clone();
-    let first = pushed(stream.until("conversations.message").await);
-    let next = pushed(stream.until("conversations.message").await);
-    assert_eq!(first["message"], "hello 1");
-    assert_eq!(next["message"], "hello 2", "the repeat is no news");
+    let pushed = |frames: &[crate::testing::Sse]| frames.last().unwrap().data["message"].clone();
+    let first = stream.until("conversations.message").await;
+    let next = stream.until("conversations.message").await;
+    assert_eq!(pushed(&first)["message"], "hello 1");
+    assert_eq!(pushed(&next)["message"], "hello 2", "the repeat is no news");
+    let redelivered: Vec<_> = next
+      .iter()
+      .filter(|frame| frame.event == "conversations.update")
+      .map(|frame| frame.data["redelivered"].clone())
+      .collect();
+    assert_eq!(redelivered.len(), 2, "{redelivered:?}");
+    assert_eq!(redelivered[0], serde_json::Value::Null);
+    assert_eq!(
+      (
+        &redelivered[1]["message"],
+        &redelivered[1]["isAcknowledged"]
+      ),
+      (&serde_json::json!("hello 1"), &serde_json::json!(false)),
+      "the update names the repeat"
+    );
   }
 
   #[tokio::test]

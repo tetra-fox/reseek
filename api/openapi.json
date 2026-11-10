@@ -18112,6 +18112,17 @@
           "conversation": {
             "$ref": "#/components/schemas/Conversation",
             "description": "the conversation, without its messages"
+          },
+          "redelivered": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PrivateMessage",
+                "description": "the message the server delivered again, unread once more, when that is what changed: a\nclient that holds it shows it unread, and does not announce it as new"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         }
       },

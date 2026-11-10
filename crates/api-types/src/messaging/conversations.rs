@@ -172,4 +172,7 @@ pub struct ConversationMessage {
 pub struct ConversationUpdate {
   /// the conversation, without its messages
   pub conversation: Conversation,
+  /// the message the server delivered again, unread once more, when that is what changed: a
+  /// client that holds it shows it unread, and does not announce it as new
+  pub redelivered: Option<PrivateMessage>,
 }

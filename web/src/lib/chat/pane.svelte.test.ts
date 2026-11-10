@@ -422,16 +422,15 @@ describe("a conversation's pane", () => {
     vi.unstubAllGlobals();
   });
 
-  it("marks a message unread again when the server delivers it again", async () => {
-    let acknowledged = true;
-    const said = (localId: number) => ({
+  it("marks a message unread again wherever it is held when the server delivers it again", async () => {
+    const said = (localId: number, isAcknowledged = true) => ({
       localId,
       id: localId,
       timestamp: new Date(Date.UTC(2026, 9, 27, 18, 0, localId)).toISOString(),
       username: "alice",
       direction: "In",
       message: `line ${localId}`,
-      isAcknowledged: localId === 1 || acknowledged,
+      isAcknowledged,
       wasReplayed: false,
       autoReply: false
     });
@@ -446,12 +445,14 @@ describe("a conversation's pane", () => {
     net.frame("hello", { principal: { name: "me", role: "Administrator" } } as never);
     await pane.load();
     expect(pane.ordered.map((m) => m.unread)).toEqual([false, false]);
-    // our acknowledgement was lost: message 2 comes again, and only the count says so
-    acknowledged = false;
+    const reads = net.requests.length;
+    // our acknowledgement of the older one was lost, so the server delivers it again
     net.frame("conversations.update", {
-      conversation: { username: "alice", unAcknowledgedMessageCount: 1 }
+      conversation: { username: "alice", unAcknowledgedMessageCount: 1 },
+      redelivered: said(1, false)
     } as never);
-    await vi.waitFor(() => expect(pane.ordered.map((m) => m.unread)).toEqual([false, true]));
+    await vi.waitFor(() => expect(pane.ordered.map((m) => m.unread)).toEqual([true, false]));
+    expect(net.requests).toHaveLength(reads);
     stop();
   });
 });
