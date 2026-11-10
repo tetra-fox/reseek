@@ -1,10 +1,10 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Schemas } from "#lib/api/client.js";
 import { app } from "#lib/app.svelte.js";
 import { toasts } from "#lib/feedback/toast.svelte.js";
 import { fakeNetwork } from "#lib/testing/network.js";
-import { SETTLE_MS, Tabs } from "#lib/ui/tabs.js";
+import { Tabs } from "#lib/ui/tabs.js";
 import { SUMMARY_TTL_MS, users } from "#lib/users/users.svelte.js";
 
 import type { NotifyMode } from "./modes";
@@ -88,12 +88,24 @@ describe("what a mode delivers", () => {
 
   // the app's start has the tabs agree on the one that plays, settled before the stream's frames
   beforeAll(async () => {
-    fakeNetwork(() => undefined);
+    // signed in, with the stream refused, so the app runs from the state it reads
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const request = input instanceof Request ? input : new Request(String(input), init);
+        const path = new URL(request.url).pathname;
+        if (path.endsWith("/api/v0/session")) {
+          return Response.json({ name: "admin", role: "Administrator", session: null });
+        }
+        if (path.endsWith("/api/v0/application")) return Response.json({ user: {} });
+        return Response.json({ error: "Too many streams" }, { status: 429 });
+      })
+    );
     await app.bootstrap();
-    app.signedOut();
+    expect(app.phase).toBe("app");
     vi.unstubAllGlobals();
-    await new Promise((done) => setTimeout(done, SETTLE_MS));
   });
+  afterAll(() => app.signedOut());
   beforeEach(() => {
     played.mockClear();
     shown.mockClear();
@@ -173,21 +185,41 @@ describe("what a mode delivers", () => {
     expect(played).toHaveBeenCalledOnce();
   });
 
-  it("plays the sound only in the oldest tab of the browser", async () => {
+  it("plays the sound only in the tab of the browser focused last", async () => {
     app.options = { chat: { notifications: { only_when_hidden: false } } } as never;
     const pause = () => new Promise((done) => setTimeout(done, 20));
-    // a tab opened before this one, on the channel the tabs share
+    // another tab on the channel the tabs share, opened after this one and then focused
     const channel = new BroadcastChannel("reseek-tabs");
-    const older = new Tabs(channel, 0);
+    const other = new Tabs(channel, performance.timeOrigin + 60_000);
+    other.join();
+    other.focus();
     await pause();
     notifier.other("sound", "Download finished", "", "download:1", "/downloads");
     expect(played).not.toHaveBeenCalled();
-    older.leave();
+    // it closes, and the sound comes back here
+    other.leave();
     channel.close();
     await pause();
     later();
     notifier.other("sound", "Download finished", "", "download:2", "/downloads");
     expect(played).toHaveBeenCalledOnce();
+  });
+
+  it("plays nothing in another tab while the one focused last is looked at", async () => {
+    // only while hidden, the default: the tab focused last is visible and leads, so it is quiet,
+    // and so is a hidden tab
+    const visible = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    const channel = new BroadcastChannel("reseek-tabs");
+    const other = new Tabs(channel, performance.timeOrigin + 60_000);
+    other.join();
+    other.focus();
+    await new Promise((done) => setTimeout(done, 20));
+    notifier.other("sound", "Download finished", "", "download:1", "/downloads");
+    expect(played).not.toHaveBeenCalled();
+    other.leave();
+    channel.close();
+    visible.mockRestore();
+    await new Promise((done) => setTimeout(done, 20));
   });
 
   it("plays one sound for a burst of messages", () => {

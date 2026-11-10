@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { app } from "./app.svelte";
 import { live } from "./live/live.svelte";
+import { browserTabs, SETTLE_MS, Tabs } from "./ui/tabs";
 
 describe("the app's bootstrap", () => {
   afterEach(() => {
@@ -47,5 +48,23 @@ describe("the app's bootstrap", () => {
     expect(app.phase).toBe("app");
     expect(app.options).toEqual({ soulseek: { username: "me" } });
     expect(app.optionsRevision).toBe("r");
+  });
+
+  it("leaves the sound to the tabs that are signed in while it shows the login", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json({ error: "Not signed in" }, { status: 401 }))
+    );
+    await app.bootstrap();
+    expect(app.phase).toBe("login");
+    // a tab opened after this one, signed in: this one is older, yet it has left the election
+    const channel = new BroadcastChannel("reseek-tabs");
+    const signedIn = new Tabs(channel, performance.timeOrigin + 60_000);
+    signedIn.join();
+    await new Promise((done) => setTimeout(done, SETTLE_MS + 20));
+    expect(signedIn.leads()).toBe(true);
+    expect(browserTabs()?.leads()).toBe(false);
+    signedIn.quit();
+    channel.close();
   });
 });

@@ -68,16 +68,21 @@ class App {
   bootstrap = async () => {
     const boot = ++this.#boot;
     this.phase = "initializing";
-    // every tab hears the same frames, so the tabs agree on the one that plays a sound while the
-    // session is checked, before the stream brings the first
-    browserTabs();
+    // the tabs following the stream agree on the one that plays a sound; this one joins now, so
+    // the wait for their answers overlaps the session check
+    browserTabs()?.join();
     const found = await session.check();
     if (boot !== this.#boot) return;
     if (found === "out") {
+      browserTabs()?.quit();
       this.phase = "login";
       return;
     }
     if (found === "unreachable") return this.#lost("Lost connection to reseek");
+    // the stream opens once the tabs have had their answers, so its first frame finds one leading
+    const settling = browserTabs()?.settling() ?? 0;
+    if (settling) await new Promise((done) => setTimeout(done, settling));
+    if (boot !== this.#boot) return;
     this.#follow();
     const first = await this.#firstState();
     if (boot !== this.#boot) return;
@@ -129,6 +134,7 @@ class App {
   /** The session is gone: everything kept for it goes, and the login shows */
   signedOut() {
     this.#boot += 1;
+    browserTabs()?.quit();
     for (const release of this.#release.splice(0)) release();
     live.stop();
     session.clear();
@@ -150,6 +156,7 @@ class App {
    */
   close() {
     this.#boot += 1;
+    browserTabs()?.quit();
     live.stop();
     this.phase = "initializing";
   }
@@ -187,6 +194,7 @@ class App {
   }
 
   #lost(reason: string) {
+    browserTabs()?.quit();
     this.lostReason = reason;
     this.phase = "lost";
   }
