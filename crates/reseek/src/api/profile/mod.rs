@@ -271,9 +271,10 @@ async fn put_profile_picture(
   let replaced = |e: std::io::Error| {
     ApiError::internal(format!("moving the picture to {}: {e}", path.display()))
   };
+  // the picture is one value, which no list of another's change is lost under, so its writes
+  // name no revision
   if tokio::fs::try_exists(&path).await.map_err(replaced)? {
     // the old picture stays in place until the option is written, which can still be refused
-    // the picture is one value, which no list of another's change is lost under
     match write(&app, &admin.principal, target, pointed, Vec::new(), None).await {
       Ok(_) => {}
       Err(Failed::Unwritten(e)) => {
@@ -290,7 +291,6 @@ async fn put_profile_picture(
     // the option is checked against a readable file, so the first picture goes in place first;
     // nothing pointed at it before and no other change runs, so only a refused write removes it
     tokio::fs::rename(&staged, &path).await.map_err(replaced)?;
-    // the picture is one value, which no list of another's change is lost under
     match write(&app, &admin.principal, target, pointed, Vec::new(), None).await {
       Ok(_) => {}
       Err(Failed::Unwritten(e)) => {
