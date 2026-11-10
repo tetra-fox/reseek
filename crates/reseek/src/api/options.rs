@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 use super::extract::Json;
 use api_types::options::{
   ConfigFile, ConfigView, FilePatch, FileQuery, FileReplace, FileValidate, FileWritten,
-  OptionError, OptionsChanged, OptionsDocument, OptionsPatch, OverrideQuery, Validation,
+  OptionError, OptionsChanged, OptionsDocument, OptionsPatch, RevisionQuery, Validation,
 };
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
@@ -184,7 +184,7 @@ async fn patch_options(
 /// changed since is refused with 409, the current revision as its detail.
 #[utoipa::path(
   delete, path = "/options/overrides/{key}", tag = "options",
-  params(("key" = String, Path, description = "the configuration key"), OverrideQuery),
+  params(("key" = String, Path, description = "the configuration key"), RevisionQuery),
   responses(
     (status = 200, body = OptionsChanged), (status = 403, body = api_types::ErrorBody),
     (status = 404, body = api_types::ErrorBody), (status = 409, body = api_types::ErrorBody)
@@ -194,7 +194,7 @@ async fn delete_override(
   State(app): State<AppState>,
   admin: Authorized<Administrator>,
   Path(key): Path<String>,
-  Query(query): Query<OverrideQuery>,
+  Query(query): Query<RevisionQuery>,
 ) -> Result<Json<OptionsChanged>, ApiError> {
   remote(
     &app.config.current(),
@@ -214,7 +214,7 @@ async fn delete_override(
 
 /// The revision a change that changed no value left: `read`, the one it was checked against and
 /// kept, or the current one for a change made without a check.
-fn kept(app: &AppState, read: Option<&str>) -> String {
+pub(super) fn kept(app: &AppState, read: Option<&str>) -> String {
   read.map_or_else(|| app.config.current().revision.clone(), str::to_string)
 }
 

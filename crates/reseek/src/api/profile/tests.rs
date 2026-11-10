@@ -43,7 +43,7 @@ async fn the_text_and_the_picture_round_trip_through_the_file() {
   let put = app
     .send(request("PUT", "/api/v0/profile", Some(text)))
     .await;
-  assert_eq!(put.status, 204, "{:?}", put.body);
+  assert_eq!(put.status, 200, "{:?}", put.body);
   let uploaded = upload(&app, png(1200, 300, BLUE), "image/png").await;
   assert_eq!(uploaded.status, 204, "{:?}", uploaded.body);
 
@@ -94,7 +94,7 @@ async fn interests_move_between_lists_in_one_write_but_are_never_in_both() {
   };
   let lists = json!({ "liked": ["jazz", "dub"], "hated": ["polka"] });
   let first = put(&lists).await;
-  assert_eq!(first.status, 204, "{:?}", first.body);
+  assert_eq!(first.status, 200, "{:?}", first.body);
   let changed = profile(&app).await;
   assert_eq!(changed["interests"], lists);
   let file = json!({ "layer": "file", "file": "config.toml" });
@@ -103,7 +103,7 @@ async fn interests_move_between_lists_in_one_write_but_are_never_in_both() {
 
   let moved = json!({ "liked": ["dub"], "hated": ["polka", "jazz"] });
   let second = put(&moved).await;
-  assert_eq!(second.status, 204, "{:?}", second.body);
+  assert_eq!(second.status, 200, "{:?}", second.body);
   let both = put(&json!({ "liked": ["jazz"], "hated": ["jazz"] })).await;
   assert_eq!(both.status, 400, "{:?}", both.body);
   assert_eq!(profile(&app).await["interests"], moved);
@@ -147,7 +147,7 @@ async fn a_managed_file_takes_the_profile_as_an_override() {
   let put = app
     .send(request("PUT", "/api/v0/profile", Some(text)))
     .await;
-  assert_eq!(put.status, 204, "{:?}", put.body);
+  assert_eq!(put.status, 200, "{:?}", put.body);
   let changed = profile(&app).await;
   assert_eq!(changed["description"], "from the page");
   assert_eq!(changed["sources"]["description"]["layer"], "runtime");
@@ -163,7 +163,7 @@ async fn a_managed_file_takes_the_profile_as_an_override() {
   let put = app
     .send(request("PUT", "/api/v0/profile/interests", Some(lists)))
     .await;
-  assert_eq!(put.status, 204, "{:?}", put.body);
+  assert_eq!(put.status, 200, "{:?}", put.body);
   assert_eq!(profile(&app).await["sources"]["liked"]["layer"], "runtime");
 }
 
@@ -269,7 +269,7 @@ async fn a_stored_api_key_changes_no_file_and_a_refused_upload_no_picture() {
   let managed = crate::testing::app(&keyed(), &[("RESEEK_CONFIG_MANAGED_BY", "nixos")]).await;
   let text = json!({ "description": "scripted" });
   let set = by_key(&managed, request("PUT", "/api/v0/profile", Some(text))).await;
-  assert_eq!(set.status, 204, "an override needs nobody at the UI");
+  assert_eq!(set.status, 200, "an override needs nobody at the UI");
 }
 
 #[tokio::test]
@@ -284,7 +284,7 @@ async fn a_write_removes_an_override_of_the_key_so_its_value_is_in_effect() {
   let put = app
     .send(request("PUT", "/api/v0/profile", Some(text)))
     .await;
-  assert_eq!(put.status, 204);
+  assert_eq!(put.status, 200);
   let set = json!({ "set": {
     "soulseek.picture": path.display().to_string(),
     "soulseek.description": "overridden",
@@ -301,7 +301,7 @@ async fn a_write_removes_an_override_of_the_key_so_its_value_is_in_effect() {
   let same = app
     .send(request("PUT", "/api/v0/profile", Some(text)))
     .await;
-  assert_eq!(same.status, 204);
+  assert_eq!(same.status, 200);
   let removed = app
     .send(request("DELETE", "/api/v0/profile/picture", None))
     .await;
@@ -319,6 +319,30 @@ async fn a_write_removes_an_override_of_the_key_so_its_value_is_in_effect() {
     .json();
   assert_eq!(view["overrides"], json!({}));
   app.state.config.reload().await.unwrap();
+}
+
+#[tokio::test]
+async fn interests_saved_from_a_profile_read_before_another_save_are_refused() {
+  let app = app(CONFIG, &[]).await;
+  let read = profile(&app).await["optionsRevision"].clone();
+  let put = async |lists: serde_json::Value, revision: &serde_json::Value| {
+    let uri = format!(
+      "/api/v0/profile/interests?revision={}",
+      revision.as_str().unwrap()
+    );
+    app.send(request("PUT", &uri, Some(lists))).await
+  };
+  // two admins read the profile, then each adds an interest to the lists they read
+  let first = put(json!({ "liked": ["jazz"], "hated": [] }), &read).await;
+  assert_eq!(first.status, 200, "{:?}", first.body);
+  let left = first.json()["optionsRevision"].clone();
+  assert_eq!(profile(&app).await["optionsRevision"], left);
+  let second = put(json!({ "liked": ["dub"], "hated": [] }), &read).await;
+  assert_eq!(second.status, 409, "{:?}", second.body);
+  assert_eq!(second.json()["detail"], left);
+  assert_eq!(profile(&app).await["interests"]["liked"], json!(["jazz"]));
+  let again = put(json!({ "liked": ["jazz", "dub"], "hated": [] }), &left).await;
+  assert_eq!(again.status, 200, "{:?}", again.body);
 }
 
 #[tokio::test]

@@ -353,12 +353,12 @@ pub struct OptionError {
   pub message: String,
 }
 
-/// The revision of the options the removal of an override was made against.
+/// The revision of the options a change named by its route was made against.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, utoipa::IntoParams)]
 #[into_params(parameter_in = Query)]
-pub struct OverrideQuery {
-  /// the revision from the view; a removal made against another is refused with 409, and none
-  /// makes no check
+pub struct RevisionQuery {
+  /// the revision the change was made against; a change made against another is refused with
+  /// 409, and none makes no check
   pub revision: Option<String>,
 }
 

@@ -5715,7 +5715,7 @@
           {
             "name": "revision",
             "in": "query",
-            "description": "the revision from the view; a removal made against another is refused with 409, and none\nmakes no check",
+            "description": "the revision the change was made against; a change made against another is refused with\n409, and none makes no check",
             "required": false,
             "schema": {
               "type": "string"
@@ -5838,8 +5838,19 @@
         "tags": [
           "profile"
         ],
-        "summary": "Changes the profile text other users read.",
+        "summary": "Changes the profile text other users read. A change sent with a `revision` the options have\nchanged since is refused with 409, the current revision as its detail.",
         "operationId": "put_profile",
+        "parameters": [
+          {
+            "name": "revision",
+            "in": "query",
+            "description": "the revision the change was made against; a change made against another is refused with\n409, and none makes no check",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -5851,8 +5862,14 @@
           "required": true
         },
         "responses": {
-          "204": {
-            "description": "changed"
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OptionsChanged"
+                }
+              }
+            }
           },
           "400": {
             "content": {
@@ -5898,8 +5915,19 @@
         "tags": [
           "profile"
         ],
-        "summary": "Replaces what we like and hate, each list in the order listed. The server is told what\nchanged, now when logged in and at the next login otherwise.",
+        "summary": "Replaces what we like and hate, each list in the order listed. The server is told what\nchanged, now when logged in and at the next login otherwise. A change sent with a `revision`\nthe options have changed since is refused with 409, the current revision as its detail.",
         "operationId": "put_interests",
+        "parameters": [
+          {
+            "name": "revision",
+            "in": "query",
+            "description": "the revision the change was made against; a change made against another is refused with\n409, and none makes no check",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -5911,8 +5939,14 @@
           "required": true
         },
         "responses": {
-          "204": {
-            "description": "changed"
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OptionsChanged"
+                }
+              }
+            }
           },
           "400": {
             "content": {
@@ -23154,7 +23188,8 @@
           "freeUploadSlot",
           "queueLength",
           "interests",
-          "sources"
+          "sources",
+          "optionsRevision"
         ],
         "properties": {
           "description": {
@@ -23172,6 +23207,10 @@
           "interests": {
             "$ref": "#/components/schemas/Interests",
             "description": "what we like and hate, which the server is told"
+          },
+          "optionsRevision": {
+            "type": "string",
+            "description": "the revision of the options this was read from, which a change made from it names"
           },
           "pictureUrl": {
             "type": [

@@ -69,7 +69,8 @@ async fn change_password(
       )
     })?;
   let set = BTreeMap::from([(PASSWORD.to_string(), Value::String(change.password))]);
-  write(&app, &admin.principal, target, set, Vec::new())
+  // the server has the password already, so it is saved whatever changed meanwhile
+  write(&app, &admin.principal, target, set, Vec::new(), None)
     .await
     .map_err(|e| {
       let e = ApiError::from(e);

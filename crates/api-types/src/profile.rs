@@ -53,6 +53,8 @@ pub struct OwnProfile {
   pub interests: Interests,
   /// the layer each value comes from
   pub sources: ProfileSources,
+  /// the revision of the options this was read from, which a change made from it names
+  pub options_revision: String,
 }
 
 /// The new text of our profile, the body of `PUT /profile`.

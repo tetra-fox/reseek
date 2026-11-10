@@ -12,14 +12,16 @@ mod recommendations;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use api_types::auth::Principal;
+use api_types::options::{OptionsChanged, RevisionQuery};
 use api_types::profile::{Interests, OwnProfile, ProfileSources, ProfileText};
 use axum::body::Body;
-use axum::extract::State;
+use axum::extract::{Query, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::Response;
-use cascade::{Lasts, Loaded, Source};
+use cascade::{Change, Lasts, Loaded, Source};
 use http_body_util::{BodyExt, LengthLimitError, Limited};
 use serde_json::Value;
 use tracing::{debug, info, warn};
@@ -29,7 +31,7 @@ use uuid::Uuid;
 
 use super::error::ApiError;
 use super::extract::{Json, essence};
-use super::options::remote;
+use super::options::{kept, remote};
 use crate::app::AppState;
 use crate::auth::{Administrator, AnyRole, Authorized, require_interactive};
 use crate::config::{Options, view};
@@ -90,14 +92,16 @@ async fn get_profile(
       liked: source_of(&current, LIKED),
       hated: source_of(&current, HATED),
     },
+    options_revision: current.revision.clone(),
   })
 }
 
-/// Changes the profile text other users read.
+/// Changes the profile text other users read. A change sent with a `revision` the options have
+/// changed since is refused with 409, the current revision as its detail.
 #[utoipa::path(
-  put, path = "/profile", tag = "profile", request_body = ProfileText,
+  put, path = "/profile", tag = "profile", request_body = ProfileText, params(RevisionQuery),
   responses(
-    (status = 204, description = "changed"), (status = 400, body = api_types::ErrorBody),
+    (status = 200, body = OptionsChanged), (status = 400, body = api_types::ErrorBody),
     (status = 401, body = api_types::ErrorBody), (status = 403, body = api_types::ErrorBody),
     (status = 409, body = api_types::ErrorBody)
   )
@@ -105,8 +109,9 @@ async fn get_profile(
 async fn put_profile(
   State(app): State<AppState>,
   admin: Authorized<Administrator>,
+  Query(query): Query<RevisionQuery>,
   Json(text): Json<ProfileText>,
-) -> Result<StatusCode, ApiError> {
+) -> Result<Json<OptionsChanged>, ApiError> {
   remote(
     &app.config.current(),
     "Blocked profile change; remote configuration is disabled",
@@ -115,17 +120,20 @@ async fn put_profile(
   let target = target(&app.config.current(), &admin.principal, DESCRIPTION, false)?;
   let description = Value::String(text.description);
   let set = BTreeMap::from([(DESCRIPTION.to_string(), description)]);
-  write(&app, &admin.principal, target, set, Vec::new()).await?;
+  let read = query.revision.as_deref();
+  let change = write(&app, &admin.principal, target, set, Vec::new(), read).await?;
   info!(by = admin.principal.subject, "profile text changed");
-  Ok(StatusCode::NO_CONTENT)
+  Ok(Json(view::changed(change.as_deref(), &kept(&app, read))))
 }
 
 /// Replaces what we like and hate, each list in the order listed. The server is told what
-/// changed, now when logged in and at the next login otherwise.
+/// changed, now when logged in and at the next login otherwise. A change sent with a `revision`
+/// the options have changed since is refused with 409, the current revision as its detail.
 #[utoipa::path(
   put, path = "/profile/interests", tag = "profile", request_body = Interests,
+  params(RevisionQuery),
   responses(
-    (status = 204, description = "changed"), (status = 400, body = api_types::ErrorBody),
+    (status = 200, body = OptionsChanged), (status = 400, body = api_types::ErrorBody),
     (status = 401, body = api_types::ErrorBody), (status = 403, body = api_types::ErrorBody),
     (status = 409, body = api_types::ErrorBody)
   )
@@ -133,8 +141,9 @@ async fn put_profile(
 async fn put_interests(
   State(app): State<AppState>,
   admin: Authorized<Administrator>,
+  Query(query): Query<RevisionQuery>,
   Json(interests): Json<Interests>,
-) -> Result<StatusCode, ApiError> {
+) -> Result<Json<OptionsChanged>, ApiError> {
   remote(
     &app.config.current(),
     "Blocked interests change; remote configuration is disabled",
@@ -155,12 +164,13 @@ async fn put_interests(
     (LIKED.to_string(), Value::from(interests.liked)),
     (HATED.to_string(), Value::from(interests.hated)),
   ]);
-  write(&app, &admin.principal, liked_to, set, Vec::new()).await?;
+  let read = query.revision.as_deref();
+  let change = write(&app, &admin.principal, liked_to, set, Vec::new(), read).await?;
   info!(
     by = admin.principal.subject,
     liked, hated, "interests changed"
   );
-  Ok(StatusCode::NO_CONTENT)
+  Ok(Json(view::changed(change.as_deref(), &kept(&app, read))))
 }
 
 /// The picture other users are sent with our profile.
@@ -263,8 +273,9 @@ async fn put_profile_picture(
   };
   if tokio::fs::try_exists(&path).await.map_err(replaced)? {
     // the old picture stays in place until the option is written, which can still be refused
-    match write(&app, &admin.principal, target, pointed, Vec::new()).await {
-      Ok(()) => {}
+    // the picture is one value, which no list of another's change is lost under
+    match write(&app, &admin.principal, target, pointed, Vec::new(), None).await {
+      Ok(_) => {}
       Err(Failed::Unwritten(e)) => {
         discard(&staged).await;
         return Err(e);
@@ -279,8 +290,9 @@ async fn put_profile_picture(
     // the option is checked against a readable file, so the first picture goes in place first;
     // nothing pointed at it before and no other change runs, so only a refused write removes it
     tokio::fs::rename(&staged, &path).await.map_err(replaced)?;
-    match write(&app, &admin.principal, target, pointed, Vec::new()).await {
-      Ok(()) => {}
+    // the picture is one value, which no list of another's change is lost under
+    match write(&app, &admin.principal, target, pointed, Vec::new(), None).await {
+      Ok(_) => {}
       Err(Failed::Unwritten(e)) => {
         discard(&path).await;
         return Err(e);
@@ -315,7 +327,7 @@ async fn delete_profile_picture(
   let _writing = app.profile_writes.lock().await;
   let target = target(&app.config.current(), &admin.principal, PICTURE, true)?;
   let unset = vec![PICTURE.to_string()];
-  write(&app, &admin.principal, target, BTreeMap::new(), unset).await?;
+  write(&app, &admin.principal, target, BTreeMap::new(), unset, None).await?;
   let path = profile::stored_path(&app.paths.data);
   match tokio::fs::remove_file(&path).await {
     Ok(()) => {}
@@ -417,35 +429,42 @@ impl From<Failed> for ApiError {
   }
 }
 
-/// Sets the keys of `set` and takes out those of `unset`, in one write at `target`. A runtime
-/// override of one of them from before is removed after the write, so the values written are
-/// the ones in effect.
+/// Sets the keys of `set` and takes out those of `unset`, in one write at `target`, refused when
+/// the options changed since `read`, the revision the change was made against, when one is
+/// given. A runtime override of one of them from before is removed after the write, so the
+/// values written are the ones in effect. Gives the last step that changed a value.
 async fn write(
   app: &AppState,
   by: &Principal,
   target: Target,
   set: BTreeMap<String, Value>,
   unset: Vec<String>,
-) -> Result<(), Failed> {
+  read: Option<&str>,
+) -> Result<Option<Arc<Change<Options>>>, Failed> {
   let keys: Vec<String> = set.keys().chain(&unset).cloned().collect();
+  let mut last = None;
+  // the removal of the overrides after a file write follows our own change, so it checks nothing
+  let mut removal_read = read;
   match target {
     Target::Override if !set.is_empty() => {
-      app
+      let change = app
         .config
-        .set_overrides(set, Vec::new(), &by.subject, Lasts::UntilRemoved, None)
+        .set_overrides(set, Vec::new(), &by.subject, Lasts::UntilRemoved, read)
         .await
         .map_err(|e| Failed::Unwritten(e.into()))?;
       debug!(keys = keys.join(", "), "profile set as a runtime override");
-      return Ok(());
+      return Ok(change);
     }
     // taking out a key no file sets only removes its override
     Target::Override => {}
     Target::File { name, revision } => {
-      app
+      last = app
         .config
-        .patch_file(&name, revision.as_deref(), None, set, unset)
+        .patch_file(&name, revision.as_deref(), read, set, unset)
         .await
-        .map_err(|e| Failed::Unwritten(e.into()))?;
+        .map_err(|e| Failed::Unwritten(e.into()))?
+        .change;
+      removal_read = None;
       debug!(
         keys = keys.join(", "),
         file = name,
@@ -460,20 +479,21 @@ async fn write(
     .collect();
   if !overridden.is_empty() {
     let removed = overridden.join(", ");
-    app
+    let change = app
       .config
       .set_overrides(
         BTreeMap::new(),
         overridden,
         &by.subject,
         Lasts::UntilRemoved,
-        None,
+        removal_read,
       )
       .await
       .map_err(|e| Failed::Overridden(e.into()))?;
+    last = change.or(last);
     debug!(keys = removed, "runtime override of the profile removed");
   }
-  Ok(())
+  Ok(last)
 }
 
 /// Writes `bytes` to a file of its own next to `path`, to be moved over it once the change is

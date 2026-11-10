@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { app } from "#lib/app.svelte.js";
 import fixture from "#lib/config/fixtures/view.json";
 import { session } from "#lib/session.svelte.js";
+import { changed } from "#lib/testing/fixtures.js";
 import { flush } from "#lib/testing/flush.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 import { ownProfile } from "#lib/users/profile.svelte.js";
@@ -22,7 +23,8 @@ const own = {
   freeUploadSlot: true,
   queueLength: 0,
   interests: { liked: ["jazz", "dub"], hated: ["polka"] },
-  sources: { description: file, picture: { layer: "default" }, liked: file, hated: file }
+  sources: { description: file, picture: { layer: "default" }, liked: file, hated: file },
+  optionsRevision: "read"
 };
 
 describe("your own profile page", () => {
@@ -104,8 +106,9 @@ describe("your own profile page", () => {
     saveButton().click();
     await flush();
     const puts = net.requests.filter((r) => r.method === "PUT");
-    expect(puts.map((r) => r.url.pathname)).toEqual(["/api/v0/profile/picture", "/api/v0/profile"]);
-    expect(puts[1].body).toEqual({ description: "plays bass\nlikes dub" });
+    expect(puts.map((r) => r.url.pathname)).toEqual(["/api/v0/profile", "/api/v0/profile/picture"]);
+    expect(puts[0].body).toEqual({ description: "plays bass\nlikes dub" });
+    expect(puts[0].url.searchParams.get("revision"), "made against the profile read").toBe("read");
   });
 
   it("saves once, and keeps text typed while it saves as a change", async () => {
@@ -139,7 +142,7 @@ describe("your own profile page", () => {
     release();
     await flush();
     const puts = net.requests.filter((r) => r.method === "PUT");
-    expect(puts.map((r) => r.url.pathname)).toEqual(["/api/v0/profile/picture", "/api/v0/profile"]);
+    expect(puts.map((r) => r.url.pathname)).toEqual(["/api/v0/profile", "/api/v0/profile/picture"]);
     expect(saveButton().disabled).toBe(false);
   });
 
@@ -159,13 +162,15 @@ describe("your own profile page", () => {
     pickPicture();
     saveButton().click();
     await flush();
-    expect(document.body.textContent).toContain("The configuration file changed on disk");
+    expect(document.body.textContent).toContain(
+      "Profile text changed meanwhile. Check your changes and save again."
+    );
 
     refuse = false;
     saveButton().click();
     await flush();
     const puts = net.requests.filter((r) => r.method === "PUT").map((r) => r.url.pathname);
-    expect(puts).toEqual(["/api/v0/profile/picture", "/api/v0/profile", "/api/v0/profile"]);
+    expect(puts).toEqual(["/api/v0/profile", "/api/v0/profile", "/api/v0/profile/picture"]);
   });
 
   it("saves interests as they change, each on one list only", async () => {
@@ -176,7 +181,7 @@ describe("your own profile page", () => {
       if (url.pathname.endsWith("/api/v0/profile") && method === "GET") return stored;
       if (url.pathname.endsWith("/api/v0/profile/interests")) {
         stored = { ...stored, interests: body as typeof own.interests };
-        return { status: 204 };
+        return changed();
       }
       return undefined;
     });

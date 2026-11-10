@@ -12,10 +12,11 @@
   import UserCard from "#lib/components/users/UserCard.svelte";
   import { editability } from "#lib/config/editability.js";
   import { valueAt } from "#lib/config/sections.js";
+  import { changedText, changedUnder } from "#lib/config/write.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { plural } from "#lib/format.js";
   import { Loader } from "#lib/loader.svelte.js";
-  import { call } from "#lib/request.js";
+  import { call, type Outcome } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
   import { ownName } from "#lib/users/actions.js";
   import {
@@ -31,6 +32,9 @@
   import PicturePicker from "./PicturePicker.svelte";
   import ProfileView from "./ProfileView.svelte";
 
+  /** the option that holds the profile text */
+  const DESCRIPTION = "soulseek.description";
+
   // everything about our own profile: what others are sent and the account behind it, with how
   // others see it always in view, beside the editors or above them on a phone
 
@@ -45,9 +49,7 @@
   const profile = $derived(ownProfile.data);
   const name = $derived(ownName() ?? "");
   const remote = $derived(valueAt(view.data?.values, "remote_configuration") === true);
-  const textEdit = $derived(
-    view.data ? editability(view.data, "soulseek.description", "page") : null
-  );
+  const textEdit = $derived(view.data ? editability(view.data, DESCRIPTION, "page") : null);
   const pictureEdit = $derived(
     view.data ? editability(view.data, "soulseek.picture", "page") : null
   );
@@ -126,9 +128,24 @@
   const save = async () => {
     saving = true;
     error = "";
-    const steps: { send: () => Promise<{ ok: boolean; error?: string }>; sent: () => void }[] = [];
+    const steps: { send: () => Promise<Outcome<unknown>>; sent: () => void }[] = [];
     const file = picked;
     const description = text;
+    // the text goes first, made against the options the profile was read from; the picture is
+    // one value, which no one else's change is lost under
+    const revision = profile?.optionsRevision;
+    if (saved !== null && description !== saved) {
+      steps.push({
+        send: () =>
+          call(() =>
+            api.PUT("/api/v0/profile", {
+              params: { query: { revision } },
+              body: { description }
+            })
+          ),
+        sent: () => (saved = description)
+      });
+    }
     if (file) {
       steps.push({
         send: () =>
@@ -152,16 +169,10 @@
       // the picture was taken away elsewhere already
       removed = false;
     }
-    if (saved !== null && description !== saved) {
-      steps.push({
-        send: () => call(() => api.PUT("/api/v0/profile", { body: { description } })),
-        sent: () => (saved = description)
-      });
-    }
     for (const { send, sent } of steps) {
       const outcome = await send();
       if (!outcome.ok) {
-        error = outcome.error ?? "Could not save the profile";
+        error = changedUnder(outcome) ? changedText([DESCRIPTION]) : outcome.error;
         break;
       }
       sent();

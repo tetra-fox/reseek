@@ -1340,7 +1340,10 @@ export interface paths {
          *     like and hate and where each comes from.
          */
         get: operations["get_profile"];
-        /** Changes the profile text other users read. */
+        /**
+         * Changes the profile text other users read. A change sent with a `revision` the options have
+         *     changed since is refused with 409, the current revision as its detail.
+         */
         put: operations["put_profile"];
         post?: never;
         delete?: never;
@@ -1359,7 +1362,8 @@ export interface paths {
         get?: never;
         /**
          * Replaces what we like and hate, each list in the order listed. The server is told what
-         *     changed, now when logged in and at the next login otherwise.
+         *     changed, now when logged in and at the next login otherwise. A change sent with a `revision`
+         *     the options have changed since is refused with 409, the current revision as its detail.
          */
         put: operations["put_interests"];
         post?: never;
@@ -6481,6 +6485,8 @@ export interface components {
             hasPicture: boolean;
             /** @description what we like and hate, which the server is told */
             interests: components["schemas"]["Interests"];
+            /** @description the revision of the options this was read from, which a change made from it names */
+            optionsRevision: string;
             /**
              * @description where the picture is fetched, a URL that changes whenever the picture does; null without one
              * @example /api/v0/profile/picture?v=2cea274d0bedc39ec4ab6ba9e59ec889e3ed6fb56a1cf088a64d9b383378dc97
@@ -13616,8 +13622,8 @@ export interface operations {
         parameters: {
             query?: {
                 /**
-                 * @description the revision from the view; a removal made against another is refused with 409, and none
-                 *     makes no check
+                 * @description the revision the change was made against; a change made against another is refused with
+                 *     409, and none makes no check
                  */
                 revision?: string;
             };
@@ -13755,7 +13761,13 @@ export interface operations {
     };
     put_profile: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * @description the revision the change was made against; a change made against another is refused with
+                 *     409, and none makes no check
+                 */
+                revision?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -13766,12 +13778,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description changed */
-            204: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["OptionsChanged"];
+                };
             };
             400: {
                 headers: {
@@ -13809,7 +13822,13 @@ export interface operations {
     };
     put_interests: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * @description the revision the change was made against; a change made against another is refused with
+                 *     409, and none makes no check
+                 */
+                revision?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -13820,12 +13839,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description changed */
-            204: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["OptionsChanged"];
+                };
             };
             400: {
                 headers: {

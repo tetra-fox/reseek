@@ -1,6 +1,7 @@
 import { api, type Schemas } from "#lib/api/client.js";
 import { type Editability, editability } from "#lib/config/editability.js";
 import type { ConfigView } from "#lib/config/fields.js";
+import { changedText, changedUnder } from "#lib/config/write.js";
 import { toast } from "#lib/feedback/toast.svelte.js";
 import { call } from "#lib/request.js";
 
@@ -43,8 +44,10 @@ export const withInterest = (lists: Interests, side: Side, interest: string): In
 /**
  * What we like and dislike, the lists of our own profile. A change shows at once and is saved as
  * it is made; each save replaces both lists, so they go out one at a time, in the order they
- * were made, and the last one decides what the configuration holds. Once none is left to go
- * out, the profile is read again and the lists are its own
+ * were made, and the last one decides what the configuration holds. The first is made against
+ * the options the profile was read from and each later one against those the one before left, so
+ * a change made elsewhere meanwhile refuses it rather than being replaced. Once none is left to
+ * go out, the profile is read again and the lists are its own
  */
 export class OwnInterests {
   /** the lists since a change, ahead of the profile */
@@ -52,6 +55,8 @@ export class OwnInterests {
   #saves: Promise<void> = Promise.resolve();
   /** saves made and not yet answered */
   #pending = 0;
+  /** the revision the last save left, which the next is made against, while saves go out */
+  #revision: string | null = null;
 
   constructor() {
     ownProfile.need();
@@ -83,14 +88,21 @@ export class OwnInterests {
     this.#changed = lists;
     this.#pending += 1;
     this.#saves = this.#saves.then(async () => {
-      const outcome = await call(() => api.PUT("/api/v0/profile/interests", { body: lists }));
+      const revision = this.#revision ?? ownProfile.data?.optionsRevision;
+      const outcome = await call(() =>
+        api.PUT("/api/v0/profile/interests", { params: { query: { revision } }, body: lists })
+      );
       this.#pending -= 1;
-      if (!outcome.ok) toast(outcome.error, "error");
+      if (outcome.ok) this.#revision = outcome.data.optionsRevision;
+      else toast(changedUnder(outcome) ? changedText([KEYS.liked]) : outcome.error, "error");
       if (this.#pending > 0) return;
       // after a failed last save, the profile holds what an earlier one saved, or what it had
       await ownProfile.loader.load();
       // a change made during that read is still on its way
-      if (this.#pending === 0) this.#changed = null;
+      if (this.#pending === 0) {
+        this.#changed = null;
+        this.#revision = null;
+      }
     });
   }
 }
