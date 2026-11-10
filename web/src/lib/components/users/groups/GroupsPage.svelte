@@ -455,8 +455,7 @@
   <!-- a group whose delete still waits on its Undo keeps its name taken -->
   <GroupEditor
     group={editing === "new" ? null : editing}
-    view={view.data}
-    views={view}
+    views={{ data: view.data, load: view.load }}
     {aliases}
     taken={(list.data?.groups ?? []).filter((g) => g.defined).map((g) => g.name)}
     onclose={() => (editing = null)}

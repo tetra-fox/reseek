@@ -75,10 +75,10 @@ const nameOf = (key: string) =>
   PAGES.find((page) => key.startsWith(page.under))?.name ??
   key;
 
-/** The options whose values differ between the views `before` and `after` */
-export const changedBetween = (before: ConfigView, after: ConfigView): string[] =>
+/** The options of the view `after` whose values differ from those in `before` */
+export const changedBetween = (before: unknown, after: ConfigView): string[] =>
   Object.keys(after.fields).filter(
-    (key) => !same(valueAt(before.values, key), valueAt(after.values, key))
+    (key) => !same(valueAt(before, key), valueAt(after.values, key))
   );
 
 /** What a write `changedUnder` refused says: the options that changed, when known, and that the edits wait */
@@ -104,7 +104,7 @@ export const refusedUnder = async (
   await views.load();
   return {
     ...failure,
-    error: changedText(views.data ? changedBetween(before, views.data) : [])
+    error: changedText(views.data ? changedBetween(before.values, views.data) : [])
   };
 };
 

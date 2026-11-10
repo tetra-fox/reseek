@@ -21,7 +21,7 @@
   } from "#lib/config/fields.js";
   import { fieldMatches } from "#lib/config/find.js";
   import { asNixSettings } from "#lib/config/nix.js";
-  import { type Field, type Section, valueAt } from "#lib/config/sections.js";
+  import { type Field, type Section, valueAt, withValueAt } from "#lib/config/sections.js";
   import {
     changedBetween,
     changedText,
@@ -196,12 +196,17 @@
 
   /**
    * What a write refused for options changed since `before` says, once the view is read again:
-   * the options that changed, but those `done`, the writes of the same save before it, changed.
-   * The drafts stay, the edited ones whose running value changed marked
+   * the options that differ from `before` with `done`, the writes of the same save before it, put
+   * in, so one of ours changed again elsewhere is still named. The drafts stay, the edited ones
+   * whose running value changed marked
    */
   const changedUnderText = (before: ConfigView, done: Write[]) => {
-    const ours = new Set(done.map((w) => w.field.key));
-    return changedText(changedBetween(before, view).filter((key) => !ours.has(key)));
+    let values: unknown = before.values;
+    for (const w of done) {
+      const key = w.field.key;
+      values = withValueAt(values, key, w.unset ? before.fields[key].default : w.set);
+    }
+    return changedText(changedBetween(values, view));
   };
 
   /** writes asked for and not yet done */

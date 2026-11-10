@@ -12,7 +12,7 @@
   import { lasting, managerOfFiles } from "#lib/config/editability.js";
   import type { ConfigView } from "#lib/config/fields.js";
   import { valueAt } from "#lib/config/sections.js";
-  import { changedBetween, changedText, changedUnder, removeOverride } from "#lib/config/write.js";
+  import { changedUnder, refusedUnder, removeOverride } from "#lib/config/write.js";
   import { Busy } from "#lib/feedback/busy.svelte.js";
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
@@ -48,12 +48,16 @@
     busy.run(async () => {
       const before = view;
       const outcome = await removeOverride(view, key);
-      if (!outcome.ok && !changedUnder(outcome)) return outcome;
-      await onchanged();
-      // a refused removal names what changed under it, once the view is read again
-      return outcome.ok
-        ? outcome
-        : { ...outcome, error: changedText(changedBetween(before, view)) };
+      if (outcome.ok) await onchanged();
+      if (outcome.ok || !changedUnder(outcome)) return outcome;
+      // the page's view, which the page reads again
+      const views = {
+        get data() {
+          return view;
+        },
+        load: onchanged
+      };
+      return refusedUnder(views, before, outcome);
     }, `${key} restored to its configured value`);
 </script>
 

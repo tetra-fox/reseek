@@ -50,9 +50,8 @@
   type Props = {
     /** the group, null for a new one */
     group: GroupSummary | null;
-    view: ConfigView;
-    /** where `view` comes from, read again once a save is written */
-    views: Views;
+    /** the options, read again once a save is written */
+    views: Views & { data: ConfigView };
     /** the aliases of the shares there are, and of those the options name */
     aliases: string[];
     /** the names of the groups there are, which a new name can't take */
@@ -61,7 +60,8 @@
     onsaved: () => void;
   };
 
-  let { group, view, views, aliases, taken, onclose, onsaved }: Props = $props();
+  let { group, views, aliases, taken, onclose, onsaved }: Props = $props();
+  const view = $derived(views.data);
 
   // the form starts from the options as they were when it opened
   const start = untrack(() => {

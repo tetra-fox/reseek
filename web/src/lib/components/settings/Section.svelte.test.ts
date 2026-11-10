@@ -375,6 +375,56 @@ describe("a settings section", () => {
     vi.unstubAllGlobals();
   });
 
+  it("names an option of ours changed again elsewhere between the files of one save", async () => {
+    let writes = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        ++writes === 1
+          ? Response.json(written({ optionsRevision: "ours" }))
+          : Response.json(
+              { error: "The options changed since they were read", detail: "theirs" },
+              { status: 409 }
+            )
+      )
+    );
+    const v = structuredClone(view);
+    v.files.push({ ...v.files[0], name: "config.d/10-limits.toml" });
+    v.fields["transfers.upload.slots"].file = "config.d/10-limits.toml";
+    const target = document.createElement("div");
+    document.body.append(target);
+    const props = $state({
+      section: sections.find((s) => s.id === "transfers")!,
+      view: v,
+      // config.toml goes first: our download slots were written, then another admin set them
+      // again before the drop-in's write
+      onchanged: async () => {
+        const next = structuredClone(v);
+        (next.values as { transfers: { download: { slots: number } } }).transfers.download.slots =
+          9;
+        props.view = next;
+      }
+    });
+    mounted.push(mount(Section, { target, props }));
+    flushSync();
+    const type = (key: string, text: string) => {
+      const input = target.querySelector<HTMLInputElement>(`[id="${key}"]`)!;
+      input.value = text;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      flushSync();
+    };
+    type("transfers.upload.slots", "7");
+    type("transfers.download.slots", "3");
+    [...target.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Save")!.click();
+    await vi.waitFor(() =>
+      expect(toasts.map((t) => t.text)).toEqual([
+        "Download slots changed meanwhile. Check your changes and save again."
+      ])
+    );
+    toasts.splice(0);
+    vi.unstubAllGlobals();
+  });
+
   it("keeps an edit and says what changed when the options changed since they were read", async () => {
     const asked: unknown[] = [];
     vi.stubGlobal(
