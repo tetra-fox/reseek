@@ -15,6 +15,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
 
 use super::Client;
+use super::disconnect::Cause;
 use super::session::{Edge, Link, Stage};
 use crate::conn::{Conn, ConnKind, MessageConn, ReadEvent, resolve};
 use crate::error::{ClientError, ConnectionErrorKind};
@@ -63,25 +64,54 @@ impl Client {
       () = cancel.cancelled() => return Err(ClientError::Canceled),
       guard = self.inner.state_lock.lock() => guard,
     };
-    // a disconnect still tearing down the previous session finishes first
+    // declared after the lock so it drops first: a queued connect never sees this one's session
+    // half made
+    let mut unfinished = Unfinished {
+      client: self,
+      armed: false,
+    };
     let mut state = self.inner.state.subscribe();
-    tokio::select! {
-      biased;
-      () = cancel.cancelled() => return Err(ClientError::Canceled),
-      _ = state.wait_for(|state| *state != ClientState::Disconnecting) => {}
-    }
     let attempt = cancel.child_token();
-    {
-      let mut session = self.inner.session();
-      // another caller connected while this one waited for the lock
-      if session.stage.state().is_logged_in() {
-        return Ok(());
+    loop {
+      {
+        let mut session = self.inner.session();
+        // transitions publish the state under the session lock, so a change after this read is
+        // one `changed` sees
+        state.borrow_and_update();
+        match &session.stage {
+          // the previous session is still being torn down; this waits for it below
+          Stage::Disconnecting { .. } => {}
+          // another connect logged in while this one waited for the lock: the same login joins
+          // it
+          Stage::LoggedIn {
+            username: current, ..
+          } => {
+            if current == username {
+              return Ok(());
+            }
+            return Err(ClientError::InvalidOperation(
+              "The client is already connected as another user".into(),
+            ));
+          }
+          // only a connect leaves disconnected, and connects take turns under the lock, so
+          // with no teardown under way and no login to join, the session is disconnected
+          _ => {
+            self
+              .inner
+              .transition(&mut session, Edge::Connect, "Connecting".into(), None)
+              .expect("a connect holding the lock starts from disconnected");
+            unfinished.armed = true;
+            session.attempt = Some(attempt.clone());
+            break;
+          }
+        }
       }
-      self
-        .inner
-        .transition(&mut session, Edge::Connect, "Connecting".into(), None)
-        .map_err(connect_refused)?;
-      session.attempt = Some(attempt.clone());
+      tokio::select! {
+        biased;
+        () = cancel.cancelled() => return Err(ClientError::Canceled),
+        // the client holds the sender for as long as this call can run
+        _ = state.changed() => {}
+      }
     }
     tracing::info!(address, port, %remote, username, "connecting to server");
     let result = self
@@ -89,6 +119,7 @@ impl Client {
       .await;
     self.inner.session().attempt = None;
     let Err(error) = result else {
+      unfinished.armed = false;
       return Ok(());
     };
     let error = if attempt.is_cancelled() {
@@ -393,6 +424,36 @@ fn validate_arguments(address: &str, username: &str, password: &str) -> Result<(
     return invalid("Password may not be null or an empty string");
   }
   Ok(())
+}
+
+/// Ends the session a `connect` began when the call is dropped before it returns, as a
+/// timeout around it does, so the session does not stay connecting or logging in with nothing
+/// moving it on
+struct Unfinished<'a> {
+  client: &'a Client,
+  /// the connect began a session and has not logged in
+  armed: bool,
+}
+
+impl Drop for Unfinished<'_> {
+  fn drop(&mut self) {
+    if !self.armed {
+      return;
+    }
+    // dropped outside a runtime, as after a `block_on` returns, nothing could run the teardown,
+    // and no connect can be queued behind this one either
+    let Ok(runtime) = tokio::runtime::Handle::try_current() else {
+      return;
+    };
+    if let Some(teardown) = self.client.inner.begin_disconnect(
+      Some("connect dropped"),
+      Some(ClientError::Canceled),
+      Cause::Requested,
+    ) {
+      let client = self.client.clone();
+      runtime.spawn(async move { teardown.finish(&client).await });
+    }
+  }
 }
 
 /// fails when the connect was canceled

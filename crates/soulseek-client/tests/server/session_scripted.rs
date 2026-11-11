@@ -6,7 +6,8 @@
 use std::time::Duration;
 
 use crate::support::{
-  FakeServer, PASSWORD, Session, USERNAME, disconnected, drain, next_event, options,
+  FakeServer, PASSWORD, Session, USERNAME, disconnected, drain, listening_options, login_success,
+  next_event, options,
 };
 use soulseek_client::{
   Client, ClientError, ClientOptions, ClientOptionsPatch, ClientState, ConnectionErrorKind, Event,
@@ -177,6 +178,124 @@ async fn disconnecting_cancels_a_connect_in_progress() {
   assert!(cause.is_none());
   assert_eq!(client.state(), ClientState::Disconnected);
   server.closed().await;
+}
+
+#[tokio::test]
+async fn a_connect_queued_behind_another_login_is_refused_for_another_name() {
+  let fake = FakeServer::start().await;
+  let client = Client::new(listening_options()).unwrap();
+  let first = connect(&client, &fake, CancellationToken::new());
+  let mut server = fake.accept().await;
+  server.read_login().await;
+  server.send(&login_success()).await;
+  first.await.unwrap().unwrap();
+
+  // both connects pass their first check while the disconnect stops the listener, so the second
+  // waits for the first to log in
+  let address = fake.address();
+  let host = address.ip().to_string();
+  let cancel = CancellationToken::new();
+  let serve = async {
+    let mut server = fake.accept().await;
+    server.read_login().await;
+    server.send(&login_success()).await;
+    server
+  };
+  let ((), same, other, _server) = tokio::join!(
+    client.disconnect(None, None),
+    client.connect(&host, address.port(), USERNAME, PASSWORD, &cancel),
+    client.connect(&host, address.port(), "someone_else", PASSWORD, &cancel),
+    serve,
+  );
+  same.unwrap();
+  assert!(
+    matches!(&other, Err(ClientError::InvalidOperation(message)) if message == "The client is already connected as another user"),
+    "{other:?}"
+  );
+  assert_eq!(client.username().as_deref(), Some(USERNAME));
+  drop(server);
+}
+
+#[tokio::test]
+async fn a_connect_queued_behind_a_login_that_ends_waits_and_connects_as_itself() {
+  let fake = FakeServer::start().await;
+  let client = Client::new(listening_options()).unwrap();
+  let first = connect(&client, &fake, CancellationToken::new());
+  let mut server = fake.accept().await;
+  server.read_login().await;
+  server.send(&login_success()).await;
+  first.await.unwrap().unwrap();
+
+  // both connects pass their first check while the disconnect stops the listener; the first
+  // logs in, and its session ends before the second takes its turn
+  let address = fake.address();
+  let host = address.ip().to_string();
+  let cancel = CancellationToken::new();
+  let serve = async {
+    let mut joined = fake.accept().await;
+    joined.read_login().await;
+    joined.send(&login_success()).await;
+    let mut queued = fake.accept().await;
+    let (login, _) = queued.read_login().await;
+    queued.send(&login_success()).await;
+    (joined, queued, login.username)
+  };
+  let joined_then_ended = async {
+    let joined = client
+      .connect(&host, address.port(), USERNAME, PASSWORD, &cancel)
+      .await;
+    client.disconnect(None, None).await;
+    joined
+  };
+  let ((), joined, queued, (_joined, _queued, name)) = tokio::join!(
+    client.disconnect(None, None),
+    joined_then_ended,
+    client.connect(&host, address.port(), "someone_else", PASSWORD, &cancel),
+    serve,
+  );
+  joined.unwrap();
+  queued.unwrap();
+  assert_eq!(name, "someone_else");
+  assert_eq!(client.username().as_deref(), Some("someone_else"));
+  drop(server);
+}
+
+#[tokio::test]
+async fn a_connect_dropped_while_another_waits_leaves_a_session_the_other_can_take() {
+  let fake = FakeServer::start().await;
+  let client = Client::new(listening_options()).unwrap();
+  let first = connect(&client, &fake, CancellationToken::new());
+  let mut server = fake.accept().await;
+  server.read_login().await;
+  server.send(&login_success()).await;
+  first.await.unwrap().unwrap();
+
+  let address = fake.address();
+  let host = address.ip().to_string();
+  let cancel = CancellationToken::new();
+  let serve = async {
+    let mut hung = fake.accept().await;
+    hung.read_login().await;
+    // never answers; the queued connect's session is answered
+    let mut second = fake.accept().await;
+    let (login, _) = second.read_login().await;
+    second.send(&login_success()).await;
+    (hung, second, login.username)
+  };
+  let dropped = tokio::time::timeout(
+    Duration::from_millis(300),
+    client.connect(&host, address.port(), "dropped", PASSWORD, &cancel),
+  );
+  let ((), timed_out, queued, (_hung, _second, name)) = tokio::join!(
+    client.disconnect(None, None),
+    dropped,
+    client.connect(&host, address.port(), "queued", PASSWORD, &cancel),
+    serve,
+  );
+  assert!(timed_out.is_err());
+  queued.unwrap();
+  assert_eq!(name, "queued");
+  drop(server);
 }
 
 #[tokio::test]
