@@ -10,9 +10,10 @@ use tokio::sync::broadcast;
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{Instrument, debug, error, info, info_span, warn};
 
+use super::phase::{Edge, Phase};
 use super::scanner::{self, Settings};
 use super::schedule::Schedule;
-use super::{ScanOrigin, Shares, repository, share, storage};
+use super::{ScanOrigin, SharedCounts, Shares, repository, share, storage};
 use crate::db::DbError;
 use crate::lock;
 use crate::options::{self, StorageMode};
@@ -51,6 +52,14 @@ pub(super) fn start<O: cascade::Root>(
   );
 }
 
+/// Whether the scan that follows the load `left` reads every file again, and what started it.
+fn handed(left: &Phase) -> (bool, ScanOrigin) {
+  match left {
+    Phase::Loading { force, origin, .. } => (*force, *origin),
+    _ => unreachable!("only a load hands its slot to a scan"),
+  }
+}
+
 impl Shares {
   /// Loads the index, or scans when it cannot be trusted. A loaded index is served at once:
   /// the shares are watched, the engine is marked initialized, and one scan reusing the loaded
@@ -59,7 +68,6 @@ impl Shares {
   /// a scan that holds it first is left to fill the index.
   async fn initialize(self: &Arc<Self>, force: bool, mode: StorageMode) {
     info!("Initializing shares");
-    self.publish(|status| status.ready = false);
     // the scan logs why it failed; these say that sharing is off because of it
     if force {
       warn!("Performing a forced re-scan of shares");
@@ -71,25 +79,29 @@ impl Shares {
       if !self.scan_at_startup(false).await {
         error!("Failed to initialize shares. Sharing is disabled");
       }
-    } else if let Some(cancel) = self.take_slot() {
-      // the load holds the scan slot, so no scan writes the index or the state under it
+    } else if let Some(cancel) = self.take_slot(Edge::Load) {
+      // the load holds the scan slot, so no scan writes the index or the state under it, and
+      // hands it to the scan that follows
       match self.load(mode).await {
-        Ok(settings) => {
+        Ok((settings, totals)) => {
+          let (force, origin) = handed(&self.hold(Edge::Loaded(Some(totals))));
+          let (shares, scanned) = (self.clone(), settings.clone());
           self.watch_shares(settings).await;
           self.initialized.send_replace(true);
-          let shares = self.clone();
           tokio::spawn(
-            async move { shares.run_scan(false, ScanOrigin::Startup, cancel).await }
-              .instrument(info_span!("scan", force = false)),
+            async move { shares.run_scan(force, origin, cancel, scanned).await }
+              .instrument(info_span!("scan", force)),
           );
           return;
         }
         Err(e) => {
           warn!(error = e, "Error initializing shares");
           info!("Re-attempting initialization");
+          let (_, origin) = handed(&self.hold(Edge::Loaded(None)));
           // the index that failed to load is not trusted, so no row of it is reused
+          let settings = Arc::new(self.scan_settings());
           let repaired = self
-            .run_scan(true, ScanOrigin::Startup, cancel)
+            .run_scan(true, origin, cancel, settings)
             .instrument(info_span!("scan", force = true))
             .await;
           if !repaired {
@@ -109,19 +121,25 @@ impl Shares {
   /// A scan run as part of starting up, waited for; true when it completed, or when a scan
   /// asked for over the API holds the slot and the startup scan is left to it.
   pub(super) async fn scan_at_startup(self: &Arc<Self>, force: bool) -> bool {
-    let Some(cancel) = self.take_slot() else {
+    let Some(cancel) = self.take_slot(Edge::Scan) else {
       debug!("a share scan already runs; the startup scan is left to it");
       return true;
     };
     self
-      .run_scan(force, ScanOrigin::Startup, cancel)
+      .run_scan(
+        force,
+        ScanOrigin::Startup,
+        cancel,
+        Arc::new(self.scan_settings()),
+      )
       .instrument(info_span!("scan", force))
       .await
   }
 
   /// Loads the index from its backup or its file and checks the last scan it records covers
-  /// the shares as configured now; says why when it cannot be used.
-  async fn load(&self, mode: StorageMode) -> Result<Arc<Settings>, String> {
+  /// the shares as configured now, returning the settings it covers and its totals; says why
+  /// when it cannot be used.
+  async fn load(&self, mode: StorageMode) -> Result<(Arc<Settings>, SharedCounts), String> {
     if self.in_memory {
       info!("Share cache StorageMode is 'Memory'. Attempting to load from backup...");
       let backup = self
@@ -165,16 +183,6 @@ impl Shares {
       .map_err(|e| e.to_string())?;
     let totals = counted.total();
     *lock(&self.covered) = Some(settings.clone());
-    self.publish(|status| {
-      status.scanning = false;
-      status.faulted = false;
-      status.ready = true;
-      status.loaded = true;
-      status.scan_pending = false;
-      status.progress = 1.0;
-      status.directories = totals.directories;
-      status.files = totals.files;
-    });
     info!(
       directories = totals.directories,
       files = totals.files,
@@ -185,7 +193,7 @@ impl Shares {
     self.changed.send_modify(|n| *n += 1);
     self.check_unmatched();
     self.refresh_browse_caches().await;
-    Ok(settings)
+    Ok((settings, totals))
   }
 
   /// Every hour, scans when `shares.cache.retention` finds a scan due.
@@ -204,7 +212,7 @@ impl Shares {
   /// Starts a scan when `shares.cache.retention` finds one due after the last complete,
   /// trusted scan; true when one was started.
   pub(super) async fn retention_tick(self: &Arc<Self>) -> bool {
-    if lock(&self.status).scanning {
+    if lock(&self.status).phase.holds_slot() {
       return false;
     }
     let schedule = (self.options)().cache.retention;
@@ -301,7 +309,7 @@ impl Shares {
       pending = true;
     }
     if pending {
-      self.publish(|status| status.scan_pending = true);
+      self.mark_pending();
     }
     self.check_unmatched();
   }

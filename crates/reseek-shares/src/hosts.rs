@@ -16,6 +16,7 @@ use api_types::shares::Share as ApiShare;
 use soulseek_client::LogLimiter;
 use tracing::{debug, info, warn};
 
+use super::phase::Phase;
 use super::{LOCAL_HOST, SharedCounts, Shares, View, repository, storage, visibility};
 use crate::db::{Database, DbError, Location, remove_database};
 use crate::lock;
@@ -163,7 +164,7 @@ impl Shares {
 
   /// Whether a scan of the local shares is running.
   pub fn scanning(&self) -> bool {
-    lock(&self.status).scanning
+    matches!(lock(&self.status).phase, Phase::Scanning { .. })
   }
 
   /// A number that grows each time the local index changed: a scan completed, the index was
@@ -343,7 +344,7 @@ impl Shares {
   /// visibility lists follow at once, the browse cache once the hosts have been still for a
   /// moment.
   fn hosts_changed(self: &Arc<Self>) {
-    self.publish(|_| {});
+    self.publish();
     self.check_unmatched();
     self.counts.send_replace(self.server_counts());
     if self

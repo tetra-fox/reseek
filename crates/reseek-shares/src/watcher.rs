@@ -19,6 +19,7 @@ use tokio::sync::mpsc;
 use tracing::{Instrument, debug, info, warn};
 
 use super::Shares;
+use super::phase::Edge;
 use super::repository::{self, DirectoryRows};
 use super::scanner::{self, Settings};
 use super::share::{self, Share};
@@ -393,12 +394,8 @@ async fn counted(shares: &Arc<Shares>) -> Result<(), DbError> {
     .count_shares(&shares.filled_from().shares)
     .await?
     .total();
-  shares.publish(|status| {
-    if !status.scanning {
-      status.directories = totals.directories;
-      status.files = totals.files;
-    }
-  });
+  // a load or scan under way counts the index itself when it ends
+  shares.transition(Edge::Counted(totals));
   shares.throttled(
     |s| &s.counts_throttle,
     |shares| async move {

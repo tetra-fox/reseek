@@ -26,6 +26,7 @@ mod hosts;
 mod init;
 pub mod options;
 pub mod patterns;
+mod phase;
 mod repository;
 mod scanner;
 mod scanning;
@@ -59,6 +60,7 @@ use tracing::{Instrument, debug, info, info_span, trace, warn};
 use crate::db::{Database, DbError};
 pub use folders::FolderError;
 pub use hosts::{HostError, remove_agent_hosts};
+use phase::{Edge, Phase, ScanResult};
 pub use repository::SCHEMA;
 pub use reseek_relay_proto::LOCAL_HOST;
 use scanner::{Outcome, Settings};
@@ -177,40 +179,13 @@ pub type ScanHook =
   Box<dyn Fn(ScanNotice) -> std::pin::Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>;
 
 /// The share state as this engine keeps it, told to [`Setup::publish`] as it changes.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Debug, Default)]
 struct Status {
+  /// where the engine is; written only by [`Shares::transition`]
+  phase: Phase,
+  /// the index may have drifted from the disk or from the share options, so a scan is due; set
+  /// and cleared in the database writes it follows
   scan_pending: bool,
-  scanning: bool,
-  ready: bool,
-  faulted: bool,
-  canceled: bool,
-  progress: f64,
-  directories: u32,
-  files: u32,
-  /// the shares were loaded or scanned once, so the host list is known
-  loaded: bool,
-}
-
-impl Status {
-  /// The state with the hosts of the relay agents `agents` and their totals `added`.
-  fn to_api(&self, agents: Vec<String>, added: SharedCounts) -> SharesState {
-    let listed = self.loaded || !agents.is_empty();
-    SharesState {
-      scan_pending: self.scan_pending,
-      scanning: self.scanning,
-      ready: self.ready,
-      faulted: self.faulted,
-      cancelled: self.canceled,
-      scan_progress: self.progress,
-      hosts: listed.then(|| {
-        std::iter::once(LOCAL_HOST.to_string())
-          .chain(agents)
-          .collect()
-      }),
-      directories: self.directories.saturating_add(added.directories),
-      files: self.files.saturating_add(added.files),
-    }
-  }
 }
 
 /// An action run at most once a minute: asked for again sooner, it runs once when the minute
@@ -282,8 +257,6 @@ pub struct Shares {
   applied: Mutex<options::Shares>,
   /// what the index holds: the settings of the last scan or load
   covered: Mutex<Option<Arc<Settings>>>,
-  /// the running scan's cancellation
-  running: Mutex<Option<CancellationToken>>,
   /// shared with the database writes that mark a scan suspect and that settle a scan's end,
   /// so `scan_pending` changes in the same write as the row it follows
   status: Arc<Mutex<Status>>,
@@ -367,7 +340,6 @@ impl Shares {
       quiet,
       shutdown,
       covered: Mutex::new(None),
-      running: Mutex::new(None),
       status: Arc::new(Mutex::new(Status::default())),
       counts: watch::Sender::new(SharedCounts::default()),
       initialized: watch::Sender::new(!setup.scan_at_startup),
@@ -639,16 +611,43 @@ impl Shares {
         Ok(())
       })
       .await?;
-    self.publish(|_| {});
+    self.publish();
     Ok(())
   }
 
-  /// Changes the share state and tells it to whoever the engine was opened for.
-  fn publish(&self, change: impl FnOnce(&mut Status)) {
-    let mut status = lock(&self.status);
-    change(&mut status);
+  /// Tells the share state, as it stands, to whoever the engine was opened for.
+  fn publish(&self) {
+    self.publish_with(&lock(&self.status));
+  }
+
+  /// Tells `status` while its lock is held, so the states arrive in the order they were made.
+  fn publish_with(&self, status: &Status) {
     let (agents, added) = self.agent_totals();
-    (self.state)(status.to_api(agents, added));
+    (self.state)(status.phase.to_api(status.scan_pending, agents, added));
+  }
+
+  /// Moves the engine's phase along `edge`, tells the new state and returns the phase it left;
+  /// `None`, changing nothing, when the phase does not take that edge. The one writer of the
+  /// phase.
+  fn transition(&self, edge: Edge) -> Option<Phase> {
+    let mut status = lock(&self.status);
+    let next = status.phase.after(&edge)?;
+    if matches!(
+      edge,
+      Edge::ScanEnded(ScanResult::Canceled | ScanResult::Failed)
+    ) {
+      status.scan_pending = true;
+    }
+    let left = std::mem::replace(&mut status.phase, next);
+    self.publish_with(&status);
+    Some(left)
+  }
+
+  /// Marks a rescan pending and tells the state.
+  fn mark_pending(&self) {
+    let mut status = lock(&self.status);
+    status.scan_pending = true;
+    self.publish_with(&status);
   }
 
   /// What a scan started now would go by: the configured shares and the current share

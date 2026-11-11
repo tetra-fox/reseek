@@ -24,6 +24,17 @@ fn shares_of(config: &Config) -> &options::Shares {
   &config.shares
 }
 
+/// whether no load or scan holds the scan slot
+fn idle(shares: &Shares) -> bool {
+  !lock(&shares.status).phase.holds_slot()
+}
+
+/// Ends the scan a test took the slot for as canceled, and frees the slot.
+fn free_slot(shares: &Shares) {
+  shares.hold(Edge::ScanEnded(ScanResult::Canceled));
+  shares.hold(Edge::Release);
+}
+
 /// An engine opened on the configuration file in `dir`, with what it says of its state.
 struct Engine {
   /// holds `config.toml` and the cache directory
@@ -72,7 +83,8 @@ impl Engine {
 /// What an engine in `dir` with its index in `cache` starts with, and where it tells its state.
 fn setup(dir: &Path, cache: &Path) -> (Setup, watch::Receiver<SharesState>) {
   std::fs::create_dir_all(cache).unwrap();
-  let (told, state) = watch::channel(Status::default().to_api(Vec::new(), SharedCounts::default()));
+  let (told, state) =
+    watch::channel(Phase::default().to_api(false, Vec::new(), SharedCounts::default()));
   let setup = Setup {
     cache: cache.to_path_buf(),
     backups: dir.join("backups"),
@@ -279,31 +291,101 @@ async fn a_share_hidden_from_a_user_is_answered_as_one_we_do_not_have() {
 async fn a_scan_is_one_at_a_time_and_only_a_running_one_cancels() {
   let (_files, engine) = shared_engine().await;
   let shares = &engine.shares;
-  let held = CancellationToken::new();
-  *lock(&shares.running) = Some(held.clone());
+  eventually(async || idle(shares)).await;
+  let held = shares.take_slot(Edge::Scan).unwrap();
   assert_eq!(
     shares.scan(false, ScanOrigin::Asked),
     Err(ScanConflict::Running)
   );
   assert_eq!(shares.cancel_scan(), Ok(()));
   assert!(held.is_cancelled());
-  *lock(&shares.running) = None;
+  free_slot(shares);
   assert_eq!(shares.cancel_scan(), Err(ScanConflict::NotRunning));
   assert_eq!(shares.scan(true, ScanOrigin::Asked), Ok(()));
-  eventually(async || lock(&shares.running).is_none()).await;
+  eventually(async || idle(shares)).await;
   assert!(engine.state().ready);
+}
+
+#[tokio::test]
+async fn a_scan_asked_for_while_the_index_loads_is_the_one_that_follows_it() {
+  let (_files, engine) = shared_engine().await;
+  let shares = &engine.shares;
+  eventually(async || idle(shares)).await;
+  let cancel = shares.take_slot(Edge::Load).unwrap();
+  assert_eq!(shares.scan(false, ScanOrigin::Asked), Ok(()));
+  assert!(
+    !engine.state().ready,
+    "nothing is served while the index loads"
+  );
+  assert!(
+    engine.state().scanning,
+    "the load shows as the start of its scan"
+  );
+  assert_eq!(shares.scan(true, ScanOrigin::Asked), Ok(()));
+  assert_eq!(shares.scan(false, ScanOrigin::Asked), Ok(()));
+  let left = shares.hold(Edge::Loaded(None));
+  assert!(
+    matches!(left, Phase::Loading { force: true, .. }),
+    "a forced ask is kept for the scan after the load"
+  );
+  assert_eq!(
+    shares.scan(false, ScanOrigin::Asked),
+    Err(ScanConflict::Running),
+    "once that scan runs, it is the one in progress"
+  );
+  assert_eq!(shares.cancel_scan(), Ok(()));
+  assert!(cancel.is_cancelled());
+  free_slot(shares);
+}
+
+#[tokio::test]
+async fn a_forced_scan_asked_for_during_the_startup_load_is_the_scan_after_it() {
+  let (files, engine) = shared_engine().await;
+  let (mut setup, _) = setup(engine.dir.path(), &engine.cache());
+  let notices = Arc::new(std::sync::Mutex::new(Vec::new()));
+  let heard = notices.clone();
+  setup.scans = Box::new(move |notice| {
+    lock(&heard).push(notice);
+    Box::pin(async {})
+  });
+  let again = Shares::open_with(
+    &engine.config,
+    shares_of,
+    setup,
+    CancellationToken::new(),
+    QUIET,
+  )
+  .await
+  .unwrap();
+  // the startup load runs on a task of its own, which this one lets go on a step at a time
+  while !matches!(lock(&again.status).phase, Phase::Loading { .. }) {
+    tokio::task::yield_now().await;
+  }
+  assert_eq!(again.scan(true, ScanOrigin::Asked), Ok(()));
+  again.initialized().await;
+  eventually(async || idle(&again)).await;
+  assert_eq!(
+    lock(&notices).first(),
+    Some(&ScanNotice::Started {
+      force: true,
+      origin: ScanOrigin::Asked
+    }),
+    "the scan after the load is the one asked for"
+  );
+  drop(files);
 }
 
 #[tokio::test]
 async fn filters_only_reordered_or_repeated_mark_no_scan_pending() {
   let (_files, engine) = shared_engine().await;
   let shares = &engine.shares;
-  eventually(async || lock(&shares.running).is_none()).await;
+  eventually(async || idle(shares)).await;
   let mut options = engine.config.current().values.shares.clone();
   options.filters = vec!["a$".into(), "b$".into()];
   shares.apply_options(&options);
   // a scan would clear what the first change marked
-  shares.publish(|status| status.scan_pending = false);
+  lock(&shares.status).scan_pending = false;
+  shares.publish();
   options.filters = vec!["b$".into(), "a$".into(), "b$".into()];
   shares.apply_options(&options);
   assert!(!engine.state().scan_pending);
@@ -324,7 +406,7 @@ async fn a_removed_share_marks_a_scan_pending_and_is_no_longer_watched() {
   );
   let engine = engine(&both).await;
   let shares = engine.shares.clone();
-  eventually(async || lock(&shares.running).is_none() && lock(&shares.watches).is_some()).await;
+  eventually(async || idle(&shares) && lock(&shares.watches).is_some()).await;
   let watched = |shares: &Shares| {
     lock(&shares.watches)
       .as_ref()
@@ -377,7 +459,7 @@ async fn mark_attributes(shares: &Shares) {
 async fn an_index_that_fails_to_load_is_scanned_again_without_reusing_rows() {
   let (files, engine) = shared_engine().await;
   let shares = engine.shares.clone();
-  eventually(async || lock(&shares.running).is_none()).await;
+  eventually(async || idle(&shares)).await;
   mark_attributes(&shares).await;
   shares
     .db
@@ -400,10 +482,10 @@ async fn a_restart_loads_the_backup_and_scans_once() {
   let again = engine.again(CancellationToken::new(), QUIET).await;
   again.initialized().await;
   assert!(
-    lock(&again.running).is_some(),
+    !idle(&again),
     "the scan after loading runs in the background"
   );
-  eventually(async || lock(&again.running).is_none()).await;
+  eventually(async || idle(&again)).await;
   let scans: i64 = again
     .db
     .read(|conn| conn.query_row("SELECT COUNT(*) FROM scans", [], |row| row.get(0)))
@@ -419,15 +501,17 @@ async fn a_scan_holding_the_slot_at_startup_is_not_overwritten_by_a_load() {
   let (files, engine) = shared_engine().await;
   let again = engine.again(CancellationToken::new(), QUIET).await;
   // a scan asked for over the API before the startup load ran
-  let held = again.take_slot().unwrap();
+  let held = again.take_slot(Edge::Scan).unwrap();
   again.initialized().await;
-  let status = lock(&again.status).clone();
   assert!(
-    !status.ready && !status.loaded,
+    matches!(
+      lock(&again.status).phase,
+      Phase::Scanning { before: None, .. }
+    ),
     "the index is left to the scan that holds the slot"
   );
-  drop(held);
-  *lock(&again.running) = None;
+  assert!(!held.is_cancelled());
+  free_slot(&again);
   drop(files);
 }
 
@@ -444,7 +528,7 @@ async fn watched_changes_are_applied_by_what_is_on_disk() {
     .await;
   shares.initialized().await;
   // the watches are in place again once the scan after loading is done
-  eventually(async || lock(&shares.running).is_none() && lock(&shares.watches).is_some()).await;
+  eventually(async || idle(&shares) && lock(&shares.watches).is_some()).await;
   let album = files.path().join("music/Album");
   std::fs::write(album.join("02.mp3"), "two").unwrap();
   eventually(async || names(&shares, "02").await == ["Music\\Album\\02.mp3"]).await;
@@ -464,7 +548,11 @@ async fn watched_changes_are_applied_by_what_is_on_disk() {
     names(&shares, "q").await.is_empty(),
     "an excluded directory stays out"
   );
-  eventually(async || lock(&shares.status).files == 2).await;
+  eventually(async || {
+    let status = lock(&shares.status);
+    matches!(status.phase, Phase::Idle { served: Some(served), .. } if served.files == 2)
+  })
+  .await;
   shutdown.cancel();
 }
 
@@ -472,18 +560,19 @@ async fn watched_changes_are_applied_by_what_is_on_disk() {
 async fn a_startup_scan_leaves_a_held_slot_to_its_scan() {
   let (files, engine) = shared_engine().await;
   let shares = engine.shares.clone();
-  eventually(async || lock(&shares.running).is_none()).await;
-  let held = shares.take_slot().unwrap();
+  eventually(async || idle(&shares)).await;
+  let held = shares.take_slot(Edge::Scan).unwrap();
   assert!(shares.scan_at_startup(false).await);
   assert!(
-    lock(&shares.running)
-      .as_ref()
+    lock(&shares.status)
+      .phase
+      .cancel()
       .is_some_and(|cancel| !cancel.is_cancelled()),
     "the slot is still the first scan's"
   );
-  assert!(shares.take_slot().is_none());
+  assert!(shares.take_slot(Edge::Scan).is_none());
   drop(held);
-  *lock(&shares.running) = None;
+  free_slot(&shares);
   drop(files);
 }
 
@@ -491,7 +580,7 @@ async fn a_startup_scan_leaves_a_held_slot_to_its_scan() {
 async fn lost_events_rescan_the_directory_and_drop_what_is_gone() {
   let (files, engine) = shared_engine().await;
   let shares = engine.shares.clone();
-  eventually(async || lock(&shares.running).is_none()).await;
+  eventually(async || idle(&shares)).await;
   let album = files.path().join("music/Album");
   std::fs::remove_file(album.join("01.mp3")).unwrap();
   std::fs::write(album.join("02.mp3"), "two").unwrap();
@@ -517,18 +606,20 @@ async fn lost_events_rescan_the_directory_and_drop_what_is_gone() {
 async fn a_faulted_scan_keeps_the_served_index_ready_and_marks_a_scan_pending() {
   let (files, engine) = shared_engine().await;
   let shares = engine.shares.clone();
-  eventually(async || lock(&shares.running).is_none()).await;
-  let before = lock(&shares.status).clone();
+  eventually(async || idle(&shares)).await;
+  let before = engine.state();
   assert!(before.ready);
-  shares.publish(|status| {
-    status.scanning = true;
-    status.ready = false;
-  });
-  shares.faulted("the index refused a write", &before);
+  shares.take_slot(Edge::Scan).unwrap();
+  assert!(
+    !engine.state().ready,
+    "a scan serves nothing of its own yet"
+  );
+  shares.faulted("the index refused a write");
   let shown = engine.state();
   assert!(shown.ready, "the index from before is still served");
   assert!(shown.faulted && shown.scan_pending && !shown.scanning);
   assert_eq!(shown.files, before.files);
+  shares.hold(Edge::Release);
   drop(files);
 }
 
@@ -541,7 +632,7 @@ async fn the_retention_check_rescans_only_without_a_recent_trusted_scan() {
   );
   let engine = engine(&config).await;
   let shares = engine.shares.clone();
-  eventually(async || lock(&shares.running).is_none()).await;
+  eventually(async || idle(&shares)).await;
   assert!(!shares.retention_tick().await, "the startup scan is recent");
   shares
     .db
@@ -552,7 +643,7 @@ async fn the_retention_check_rescans_only_without_a_recent_trusted_scan() {
     shares.retention_tick().await,
     "a suspect scan is no trusted one"
   );
-  eventually(async || lock(&shares.running).is_none()).await;
+  eventually(async || idle(&shares)).await;
 }
 
 #[tokio::test]
@@ -566,7 +657,7 @@ async fn changes_waiting_for_quiet_are_applied_when_the_watches_are_replaced() {
     )
     .await;
   shares.initialized().await;
-  eventually(async || lock(&shares.running).is_none() && lock(&shares.watches).is_some()).await;
+  eventually(async || idle(&shares) && lock(&shares.watches).is_some()).await;
   std::fs::write(files.path().join("music/Album/05.mp3"), "five").unwrap();
   // the notification needs a moment to reach the watcher before the watches are replaced
   tokio::time::sleep(Duration::from_millis(300)).await;
@@ -580,10 +671,15 @@ async fn changes_waiting_for_quiet_are_applied_when_the_watches_are_replaced() {
 async fn a_canceled_scan_leaves_the_engine_idle_at_full_progress() {
   let (files, engine) = shared_engine().await;
   let shares = engine.shares.clone();
-  eventually(async || lock(&shares.running).is_none()).await;
-  let cancel = shares.take_slot().unwrap();
+  eventually(async || idle(&shares)).await;
+  let cancel = shares.take_slot(Edge::Scan).unwrap();
   cancel.cancel();
-  assert!(!shares.run_scan(false, ScanOrigin::Asked, cancel).await);
+  let settings = Arc::new(shares.scan_settings());
+  assert!(
+    !shares
+      .run_scan(false, ScanOrigin::Asked, cancel, settings)
+      .await
+  );
   let shown = engine.state();
   assert!(shown.cancelled && shown.scan_pending && !shown.scanning);
   assert_eq!(shown.scan_progress, 1.0);
@@ -614,7 +710,7 @@ fn counts(shares: &Shares, alias: &str) -> (Option<u32>, Option<u32>) {
 async fn a_share_added_since_the_last_scan_is_not_counted_by_watched_changes() {
   let (files, engine) = shared_engine().await;
   let shares = engine.shares.clone();
-  eventually(async || lock(&shares.running).is_none()).await;
+  eventually(async || idle(&shares)).await;
   add_other(&engine, files.path());
   let album = files.path().join("music/Album");
   std::fs::write(album.join("02.mp3"), "two").unwrap();
@@ -638,7 +734,7 @@ async fn a_share_added_since_the_last_scan_is_not_counted_by_watched_changes() {
 async fn options_changed_while_a_scan_runs_stay_pending_and_uncounted() {
   let (files, engine) = shared_engine().await;
   let shares = engine.shares.clone();
-  eventually(async || lock(&shares.running).is_none()).await;
+  eventually(async || idle(&shares)).await;
   // the scan has made its settings and waits for the writer while the options change
   let (release, held) = std::sync::mpsc::channel::<()>();
   let (taken, writer_taken) = tokio::sync::oneshot::channel();
@@ -659,14 +755,14 @@ async fn options_changed_while_a_scan_runs_stay_pending_and_uncounted() {
   add_other(&engine, files.path());
   release.send(()).unwrap();
   hold.await.unwrap().unwrap();
-  eventually(async || lock(&shares.running).is_none()).await;
+  eventually(async || idle(&shares)).await;
   let shown = engine.state();
   assert!(shown.ready && !shown.scanning);
   assert!(shown.scan_pending, "the scan did not cover the share added");
   assert_eq!(counts(&shares, "Other"), (None, None));
   assert_eq!(counts(&shares, "Music"), (Some(2), Some(1)));
   shares.scan(false, ScanOrigin::Asked).unwrap();
-  eventually(async || lock(&shares.running).is_none()).await;
+  eventually(async || idle(&shares)).await;
   assert!(!engine.state().scan_pending);
   assert_eq!(counts(&shares, "Other"), (Some(1), Some(1)));
 }
@@ -690,7 +786,7 @@ async fn serves_an_agent(extra: &str) {
   std::fs::create_dir_all(agent_files.path().join("music/Other")).unwrap();
   std::fs::write(agent_files.path().join("music/Other/02.flac"), "agent").unwrap();
   agent.shares.scan(false, ScanOrigin::Asked).unwrap();
-  eventually(async || lock(&agent.shares.running).is_none() && agent.state().files == 2).await;
+  eventually(async || idle(&agent.shares) && agent.state().files == 2).await;
   let dump = agent_files.path().join("dump.db");
   agent.shares.dump(&dump).await.unwrap();
   let listed = agent.shares.local_shares();

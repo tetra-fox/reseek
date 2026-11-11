@@ -12,29 +12,39 @@ impl Shares {
       .this
       .upgrade()
       .expect("the engine is only made inside the Arc it refers to");
-    let cancel = self.take_slot().ok_or(ScanConflict::Running)?;
+    let Some(cancel) = self.take_slot(Edge::Scan) else {
+      // while the index loads, the scan that follows the load is the one asked for
+      return match self.transition(Edge::Join { force, origin }) {
+        Some(_) => Ok(()),
+        None => Err(ScanConflict::Running),
+      };
+    };
+    let settings = Arc::new(self.scan_settings());
     tokio::spawn(
-      async move { shares.run_scan(force, origin, cancel).await }
+      async move { shares.run_scan(force, origin, cancel, settings).await }
         .instrument(info_span!("scan", force)),
     );
     Ok(())
   }
 
-  /// Takes the one scan slot, with the token that cancels the scan; `None` while a scan holds
-  /// it.
-  pub(super) fn take_slot(&self) -> Option<CancellationToken> {
-    let mut running = lock(&self.running);
-    if running.is_some() {
-      return None;
-    }
+  /// Takes the one scan slot with `take`, a load or a scan, returning the token that cancels
+  /// the scan; `None` while a load or a scan holds it.
+  pub(super) fn take_slot(&self, take: fn(CancellationToken) -> Edge) -> Option<CancellationToken> {
     let cancel = self.shutdown.child_token();
-    *running = Some(cancel.clone());
-    Some(cancel)
+    self.transition(take(cancel.clone())).map(|_| cancel)
+  }
+
+  /// Takes `edge`, which only the load or the scan holding the slot takes, and always can;
+  /// returns the phase it left.
+  pub(super) fn hold(&self, edge: Edge) -> Phase {
+    self
+      .transition(edge)
+      .expect("the holder of the scan slot moves its own phase")
   }
 
   /// Asks the running scan to stop.
   pub fn cancel_scan(&self) -> Result<(), ScanConflict> {
-    match &*lock(&self.running) {
+    match lock(&self.status).phase.cancel() {
       Some(cancel) => {
         cancel.cancel();
         Ok(())
@@ -43,46 +53,45 @@ impl Shares {
     }
   }
 
-  /// Runs a scan whose slot is taken, telling the hook as it starts and ends, and frees the
-  /// slot once the hook was told of the end.
+  /// Runs a scan of `settings`, made as its slot was taken, telling the hook as it starts and
+  /// ends, and frees the slot once the hook was told of the end.
   pub(super) async fn run_scan(
     self: &Arc<Self>,
     force: bool,
     origin: ScanOrigin,
     cancel: CancellationToken,
+    settings: Arc<Settings>,
   ) -> bool {
     (self.scans)(ScanNotice::Started { force, origin }).await;
-    let ended = self.scan_now(force, cancel).await;
+    let ended = self.scan_now(force, cancel, settings).await;
     let completed = matches!(ended, ScanEnded::Completed(_));
     // the hook hears of the end while the slot is held, so no scan starts between the two
     (self.scans)(ScanNotice::Ended(ended)).await;
-    *lock(&self.running) = None;
+    self.hold(Edge::Release);
     completed
   }
 
   /// One scan of the configured shares, its outcome put into the state.
-  async fn scan_now(self: &Arc<Self>, force: bool, cancel: CancellationToken) -> ScanEnded {
+  async fn scan_now(
+    self: &Arc<Self>,
+    force: bool,
+    cancel: CancellationToken,
+    settings: Arc<Settings>,
+  ) -> ScanEnded {
     let started = Instant::now();
-    // a scan that does not complete leaves the index served before it, so its state stays
-    let before = lock(&self.status).clone();
-    self.publish(|status| {
-      status.scanning = true;
-      status.ready = false;
-      status.canceled = false;
-      status.progress = 0.0;
-      status.directories = 0;
-      status.files = 0;
-    });
     info!("Share scan started");
-    let settings = Arc::new(self.scan_settings());
     let reporter = {
       let shares = self.clone();
       move |progress: scanner::Progress| {
         let percent = |p: f64| (p * 100.0).round() as u32;
-        let changed = {
-          let status = lock(&shares.status);
-          percent(status.progress) != percent(progress.fraction)
-            || status.directories != progress.directories
+        let changed = match &lock(&shares.status).phase {
+          Phase::Scanning {
+            progress: shown, ..
+          } => {
+            percent(shown.fraction) != percent(progress.fraction)
+              || shown.directories != progress.directories
+          }
+          _ => false,
         };
         if changed {
           debug!(
@@ -90,11 +99,7 @@ impl Shares {
             files = progress.files,
             "Scanned shared directories"
           );
-          shares.publish(|status| {
-            status.progress = progress.fraction;
-            status.directories = progress.directories;
-            status.files = progress.files;
-          });
+          shares.hold(Edge::Progress(progress));
         }
       }
     };
@@ -123,16 +128,7 @@ impl Shares {
               debug!("the share options changed while the scan ran, so a rescan stays pending");
             }
             self.settle_pending(current).await;
-            self.publish(|status| {
-              status.scanning = false;
-              status.faulted = false;
-              status.canceled = false;
-              status.ready = true;
-              status.loaded = true;
-              status.progress = 1.0;
-              status.directories = totals.directories;
-              status.files = totals.files;
-            });
+            self.hold(Edge::ScanEnded(ScanResult::Completed(totals)));
             info!(
               directories = totals.directories,
               files = totals.files,
@@ -146,26 +142,17 @@ impl Shares {
             ScanEnded::Completed(totals)
           }
           Err(e) => {
-            self.faulted(&e.to_string(), &before);
+            self.faulted(&e.to_string());
             ScanEnded::Failed(e.to_string())
           }
         }
       }
       Ok(Outcome::Canceled) => {
-        self.publish(|status| {
-          status.scanning = false;
-          status.canceled = true;
-          status.faulted = false;
-          status.progress = 1.0;
-          status.scan_pending = true;
-          status.ready = before.ready;
-          status.directories = before.directories;
-          status.files = before.files;
-        });
+        self.hold(Edge::ScanEnded(ScanResult::Canceled));
         ScanEnded::Canceled
       }
       Err(e) => {
-        self.faulted(&e.to_string(), &before);
+        self.faulted(&e.to_string());
         ScanEnded::Failed(e.to_string())
       }
     };
@@ -212,17 +199,9 @@ impl Shares {
   }
 
   /// Puts a failed scan into the state: the cache served is what was there before.
-  pub(super) fn faulted(&self, error: &str, before: &Status) {
+  pub(super) fn faulted(&self, error: &str) {
     tracing::error!(error, "Failed to scan shares.");
-    self.publish(|status| {
-      status.scanning = false;
-      status.faulted = true;
-      status.scan_pending = true;
-      status.ready = before.ready;
-      status.directories = before.directories;
-      status.files = before.files;
-      status.progress = 0.0;
-    });
+    self.hold(Edge::ScanEnded(ScanResult::Failed));
   }
 
   /// Runs `action` now, or once a minute after it last ran when that is later; a run already
