@@ -111,9 +111,10 @@ describe("the tabs of one browser", () => {
     // suspended just under the time from its last beat, while the other went on
     clock.pass(QUIET_MS + 1, [standIn]);
     expect(standIn.leads()).toBe(true);
-    // woken before its timer runs: it asks again at once, and leads once settled
+    // woken before its timer runs: it asks again at once, the other leading while it settles,
+    // and leads once settled
     expect(woken.leads()).toBe(false);
-    expect(standIn.leads()).toBe(false);
+    expect(standIn.leads()).toBe(true);
     clock.pass(SETTLE_MS);
     expect([woken.leads(), standIn.leads()]).toEqual([true, false]);
   });
@@ -231,5 +232,82 @@ describe("the tabs of one browser", () => {
     // the leader closes: the one focused before it takes over, not the first loaded
     second.leave();
     expect([first.leads(), third.leads()]).toEqual([false, true]);
+  });
+
+  describe("as a tab already following asks again", () => {
+    /** Two tabs following the stream, `first` focused last and so leading */
+    const pair = () => {
+      const clock = time();
+      const channel = bus();
+      const ends = [channel(), channel()];
+      const [first, second] = ends.map((end, i) => new Tabs(end, 100 * (i + 1), clock.now));
+      for (const tab of [first, second]) {
+        tab.join();
+        tab.connected(true);
+      }
+      clock.pass(SETTLE_MS, [first, second]);
+      second.focus();
+      clock.pass(BEAT_MS, [first, second]);
+      first.focus();
+      return { clock, first, second, ends };
+    };
+
+    it("lets a tab back from a freeze take over after its settle, focused within it", () => {
+      const { clock, first, second } = pair();
+      expect([second.leads(), first.leads()]).toEqual([false, true]);
+      second.leave();
+      clock.pass(5_000, [first]);
+      second.back();
+      clock.pass(SETTLE_MS / 2, [first]);
+      second.focus();
+      expect([second.leads(), first.leads()]).toEqual([false, true]);
+      clock.pass(SETTLE_MS / 2 - 1);
+      expect([second.leads(), first.leads()]).toEqual([false, true]);
+      clock.pass(1);
+      expect([second.leads(), first.leads()]).toEqual([true, false]);
+    });
+
+    it("lets a tab woken from sleep with the newest focus take over after its settle", () => {
+      const { clock, first, second, ends } = pair();
+      // the leader sleeps, hearing and saying nothing, until the other counts it gone
+      const hear = ends[0].onmessage;
+      ends[0].onmessage = null;
+      clock.pass(QUIET_MS + BEAT_MS, [second]);
+      expect(second.leads()).toBe(true);
+      ends[0].onmessage = hear;
+      // its timer asks again; the newest focus is still its own
+      first.beat();
+      expect([first.leads(), second.leads()]).toEqual([false, true]);
+      clock.pass(SETTLE_MS - 1, [second]);
+      expect([first.leads(), second.leads()]).toEqual([false, true]);
+      clock.pass(1);
+      expect([first.leads(), second.leads()]).toEqual([true, false]);
+    });
+
+    it("lets a tab retried from the lost page take over after its settle", () => {
+      const { clock, first, second } = pair();
+      // lost: it quits, while its stream still counts as connected, and the retry joins again
+      first.quit();
+      expect(second.leads()).toBe(true);
+      first.join();
+      expect([first.leads(), second.leads()]).toEqual([false, true]);
+      clock.pass(SETTLE_MS - 1, [first, second]);
+      expect([first.leads(), second.leads()]).toEqual([false, true]);
+      clock.pass(1);
+      expect([first.leads(), second.leads()]).toEqual([true, false]);
+    });
+  });
+
+  it("put a connected tab above one whose stream is down, neither focused", () => {
+    const clock = time();
+    const channel = bus();
+    // loaded first, its stream down
+    const down = new Tabs(channel(), 100, clock.now);
+    const up = new Tabs(channel(), 200, clock.now);
+    down.join();
+    up.join();
+    up.connected(true);
+    clock.pass(SETTLE_MS, [down, up]);
+    expect([down.leads(), up.leads()]).toEqual([false, true]);
   });
 });

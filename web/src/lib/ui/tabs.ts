@@ -1,18 +1,27 @@
 /**
- * What the tabs of one browser tell each other: a tab that is there, one new, one that goes, each
- * with when the tab was last focused, 0 for never
+ * What the tabs of one browser tell each other: a tab that is there, one that asks the others to
+ * answer, one that goes, each with when the tab was last focused, 0 for never or while its stream
+ * is not connected, and whether its stream is
  */
-type TabMessage = { kind: "beat" | "hello" | "bye"; id: string; focusedAt: number };
+type TabMessage = {
+  kind: "beat" | "hello" | "bye";
+  id: string;
+  focusedAt: number;
+  connected: boolean;
+};
 
 /** A tab as the election ranks it */
-type Ranked = { id: string; focusedAt: number };
+type Ranked = { id: string; focusedAt: number; connected: boolean };
 
 /**
- * Whether `a` ranks above `b`: focused more recently, or, focused at the same time or neither
- * ever, loaded earlier
+ * Whether `a` ranks above `b`: focused more recently; at the same focus, or neither ever, the one
+ * whose stream is connected; then the one loaded earlier
  */
-const outranks = (a: Ranked, b: Ranked) =>
-  a.focusedAt !== b.focusedAt ? a.focusedAt > b.focusedAt : a.id < b.id;
+const outranks = (a: Ranked, b: Ranked) => {
+  if (a.focusedAt !== b.focusedAt) return a.focusedAt > b.focusedAt;
+  if (a.connected !== b.connected) return a.connected;
+  return a.id < b.id;
+};
 
 /** The part of a BroadcastChannel the tabs talk over */
 export type TabChannel = {
@@ -32,20 +41,30 @@ export const SETTLE_MS = 250;
 
 /**
  * The tabs of this browser that follow the live stream, which agree on one of them to lead: the
- * one focused most recently, else, while none has been, the one loaded first. A tab joins as its
- * shell starts following the stream and quits when it stops, as at the login. While in, it says
- * it is there every `BEAT_MS` and goes when it closes, freezes or is not heard from for
- * `QUIET_MS`. A tab that joins asks the others to answer at once, and leads nothing for
- * `SETTLE_MS`, the time they have to answer. Its focus counts only while its stream is
- * connected, which it says at once, as it does each focus after: the tab that becomes first then
- * leads at once and the one before stands down when that word reaches it, so both lead for the
- * time a message takes to cross the channel, and there is no time where neither does
+ * one focused most recently, else, while none has been, one whose stream is connected, the one of
+ * those loaded first. A tab joins as its shell starts following the stream and quits when it
+ * stops, as at the login. While in, it says it is there every `BEAT_MS` and goes when it closes,
+ * freezes or is not heard from for `QUIET_MS`. Its focus counts only while its stream is
+ * connected.
+ *
+ * A tab that asks the others to answer, as it joins, comes back or wakes, leads nothing for
+ * `SETTLE_MS`, the time they have to answer, and the others rank it nothing for `SETTLE_MS` from
+ * hearing it ask, so it takes over after its settle and the one before stands down when its own
+ * count ends. A tab that becomes first by a focus, or as its stream connects, says so at once:
+ * it leads at once and the one before stands down when that message reaches it. Either way both
+ * lead for the time a message takes to cross the channel, and there is no time where neither does
  */
 export class Tabs {
   /** sorts by when the page loaded, a random part keeping two loaded together apart */
   readonly id: string;
-  /** the other tabs, by id, with when each was last heard from and last focused */
-  readonly #heard = new Map<string, { at: number; focusedAt: number }>();
+  /**
+   * the other tabs, by id: when each was last heard from, when it last asked the others to answer
+   * (it ranks nothing for `SETTLE_MS` after), and what it ranks by
+   */
+  readonly #heard = new Map<
+    string,
+    { at: number; asked: number; focusedAt: number; connected: boolean }
+  >();
   readonly #channel: TabChannel;
   readonly #now: () => number;
   /** this tab follows the stream and takes part */
@@ -128,10 +147,11 @@ export class Tabs {
     if (this.#dropped()) this.#ask();
     const now = this.#now();
     if (now - this.#since < SETTLE_MS) return false;
-    const me = { id: this.id, focusedAt: this.#counted() };
-    for (const [id, { at, focusedAt }] of this.#heard) {
-      if (now - at > QUIET_MS) this.#heard.delete(id);
-      else if (outranks({ id, focusedAt }, me)) return false;
+    const me = { id: this.id, focusedAt: this.#counted(), connected: this.#connected };
+    for (const [id, other] of this.#heard) {
+      if (now - other.at > QUIET_MS) this.#heard.delete(id);
+      // a tab that asked a moment ago is settling and plays nothing yet
+      else if (now - other.asked >= SETTLE_MS && outranks({ id, ...other }, me)) return false;
     }
     return true;
   }
@@ -154,14 +174,24 @@ export class Tabs {
 
   #hear(message: TabMessage) {
     if (message.kind === "bye") return void this.#heard.delete(message.id);
-    this.#heard.set(message.id, { at: this.#now(), focusedAt: message.focusedAt });
+    const now = this.#now();
+    // a beat from a tab not asking keeps when it asked, or counts it at once
+    const asked =
+      message.kind === "hello" ? now : (this.#heard.get(message.id)?.asked ?? -Infinity);
+    const { focusedAt, connected } = message;
+    this.#heard.set(message.id, { at: now, asked, focusedAt, connected });
     // a tab that joins hears every other at once, rather than after a beat
     if (message.kind === "hello" && this.#in) this.#say("beat");
   }
 
   #say(kind: TabMessage["kind"]) {
     this.#spoke = this.#now();
-    this.#channel.postMessage({ kind, id: this.id, focusedAt: this.#counted() });
+    this.#channel.postMessage({
+      kind,
+      id: this.id,
+      focusedAt: this.#counted(),
+      connected: this.#connected
+    });
   }
 }
 

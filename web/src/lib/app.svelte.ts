@@ -1,5 +1,3 @@
-import { untrack } from "svelte";
-
 import { api, onUnauthorized, type Schemas } from "#lib/api/client.js";
 import { chat } from "#lib/chat/chat.svelte.js";
 import { withValueAt } from "#lib/config/sections.js";
@@ -56,8 +54,7 @@ class App {
     // a tab's focus counts toward playing the sounds only while its stream brings the frames
     $effect.root(() => {
       $effect(() => {
-        const on = live.status === "connected";
-        untrack(() => browserTabs()?.connected(on));
+        browserTabs()?.connected(live.status === "connected");
       });
     });
     session.onEnded(() => this.signedOut());
