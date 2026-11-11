@@ -358,12 +358,26 @@ describe("the tabs of one browser", () => {
       ends[1].onmessage = hear;
       // back on screen and focused before its timer runs: it asks, x leading while it settles
       y.focus();
+      expect([x.leads(), y.leads()]).toEqual([true, false]);
       const leaders = () => [x.leads(), y.leads()].filter(Boolean).length;
       for (let at = 0; at < SETTLE_MS; at += 50) {
         expect(leaders()).toBe(1);
-        clock.pass(50, [x, y]);
+        clock.pass(50);
       }
       expect([x.leads(), y.leads()]).toEqual([false, true]);
+    });
+
+    it("keeps a leader as the clock jumps past QUIET_MS before either timer runs", () => {
+      const { clock, x, y } = two();
+      clock.pass(QUIET_MS + 1);
+      x.beat();
+      y.beat();
+      const leaders = () => [x.leads(), y.leads()].filter(Boolean).length;
+      for (let at = 0; at < SETTLE_MS; at += 50) {
+        expect(leaders()).toBe(1);
+        clock.pass(50);
+      }
+      expect([x.leads(), y.leads()]).toEqual([true, false]);
     });
 
     it("counts at once a tab back from a freeze whose focus comes before it asks", () => {
