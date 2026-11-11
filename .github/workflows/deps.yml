@@ -1,6 +1,7 @@
 # Dependabot's pull requests: a test job runs `just ci` on the bump with a read-only token, and
 # a merge job that runs none of the bumped code merges the minor and patch bumps of cargo and
-# npm once it passes. The web hash follows the lockfile, which dependabot cannot change, so the
+# npm once it passes. ci does not build the image, so a bump of its base skips the run and is
+# merged by hand (dependabot.yml). The web hash follows the lockfile, which dependabot cannot change, so the
 # test job works it out and the merge job commits it. An action's bump is left for review: its
 # code runs where the release signing key is.
 #
@@ -36,10 +37,12 @@ jobs:
       - uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
         id: bump
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.bump.outputs.package-ecosystem != 'docker'
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
       - uses: ./.github/actions/setup-nix
+        if: steps.bump.outputs.package-ecosystem != 'docker'
       # the hash of the web dependencies follows the lockfile; nix reports it when it is empty
       - name: Update the web dependency hash
         id: hash
@@ -54,6 +57,7 @@ jobs:
           sed -i "s|hash = \"\"|hash = \"$hash\"|" nix/web.nix
           echo "hash=$hash" >> "$GITHUB_OUTPUT"
       - run: nix develop -c just ci
+        if: steps.bump.outputs.package-ecosystem != 'docker'
 
   merge:
     needs: test
