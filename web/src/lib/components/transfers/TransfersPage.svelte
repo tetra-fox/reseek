@@ -49,6 +49,7 @@
   import { downloads, uploads } from "#lib/transfers/transfers.svelte.js";
   import { unseen } from "#lib/transfers/unseen.svelte.js";
   import { Expansion } from "#lib/tree/expansion.svelte.js";
+  import { footBars } from "#lib/ui/footbars.svelte.js";
   import { blocking } from "#lib/users/block.svelte.js";
   import { users } from "#lib/users/users.svelte.js";
 
@@ -395,7 +396,11 @@
 {/if}
 
 {#if selected.size}
-  <div class="selection-bar" role="toolbar" aria-label="Selected transfers">
+  <div
+    class="selection-bar"
+    role="toolbar"
+    aria-label="Selected transfers"
+    {@attach footBars.attach}>
     <span class="text-sm">
       {formatCount(chosen.length)} selected · {formatBytes(chosen.reduce((n, t) => n + t.size, 0))}
     </span>

@@ -55,6 +55,7 @@
   import { session } from "#lib/session.svelte.js";
   import { content } from "#lib/shell/content.svelte.js";
   import { clock } from "#lib/ui/clock.svelte.js";
+  import { footBars } from "#lib/ui/footbars.svelte.js";
   import { viewport } from "#lib/ui/viewport.svelte.js";
   import { canManage, configBlocked, reach, setBuddy, setGroups } from "#lib/users/actions.js";
   import { blocking, toggleBlock, unblockMany } from "#lib/users/block.svelte.js";
@@ -570,7 +571,7 @@
 {/if}
 
 {#if list.selected.size}
-  <div class="selection-bar" role="toolbar" aria-label="Selected users">
+  <div class="selection-bar" role="toolbar" aria-label="Selected users" {@attach footBars.attach}>
     <span class="text-sm">{formatCount(picked.length)} selected</span>
     {#if blockable.length}
       <Button size="sm" variant="outline" onclick={() => blocking.ask(blockable)}>Block</Button>

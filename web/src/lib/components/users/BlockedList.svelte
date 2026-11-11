@@ -36,6 +36,7 @@
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
   import { clock } from "#lib/ui/clock.svelte.js";
+  import { footBars } from "#lib/ui/footbars.svelte.js";
   import { configBlocked } from "#lib/users/actions.js";
   import { blockEnded, unblock, unblockMany } from "#lib/users/block.svelte.js";
 
@@ -288,7 +289,7 @@
 {/if}
 
 {#if list.selected.size && write}
-  <div class="selection-bar" role="toolbar" aria-label="Selected blocks">
+  <div class="selection-bar" role="toolbar" aria-label="Selected blocks" {@attach footBars.attach}>
     <span class="text-sm">{formatCount(chosen.length)} selected</span>
     <Button size="sm" variant="outline" onclick={() => void unblockChosen()}>Unblock</Button>
     <Button size="sm" variant="ghost" onclick={() => list.clear()}>Clear</Button>

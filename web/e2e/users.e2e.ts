@@ -1,7 +1,8 @@
-import { expect, test, type Page, type Route } from "@playwright/test";
+import { expect, type Locator, test, type Page, type Route } from "@playwright/test";
 
+import { overlap } from "./support/boxes";
 import { fakeConnected, user } from "./support/fakes";
-import { textSize, visit } from "./support/login";
+import { refuseCopy, textSize, visit } from "./support/login";
 
 const alice = user("alice");
 
@@ -265,4 +266,67 @@ test("the directory goes by pages, and the address keeps the page", async ({ pag
   await page.getByRole("option", { name: "25 per page" }).click();
   // the first user shown stays in view: the 51st is on page 3 of 25
   await expect(page).toHaveURL(/#\/users\?page=3&per_page=25$/);
+});
+
+/**
+ * How far `bar`'s bottom edge is above the content area's, less the page's own padding there: 0
+ * or less when the bar rests at the foot
+ */
+const offFoot = (page: Page, bar: Locator) =>
+  bar.evaluate((node) => {
+    const area = node.closest("[data-content]")!;
+    const pad = parseFloat(getComputedStyle(area.querySelector("main")!).paddingBottom);
+    return area.getBoundingClientRect().bottom - node.getBoundingClientRect().bottom - pad;
+  });
+
+/** Directory users `user0` to `user{count - 1}`, refusing copies so a copy is a toast */
+const users = async (page: Page, count: number) => {
+  await refuseCopy(page);
+  await directory(
+    page,
+    Array.from({ length: count }, (_, n) => user(`user${n}`))
+  );
+  await visit(page, "/users");
+  return page.getByRole("grid", { name: "Users" });
+};
+
+/** A toast from copying user1's name, kept off the selection's bar resting at the foot */
+const toastClear = async (page: Page, grid: Locator) => {
+  const bar = page.getByRole("toolbar", { name: "Selected users" });
+  await expect(bar).toBeVisible();
+  // the bar rests at the content area's foot, where the toasts would lie, however long the list
+  await expect.poll(() => offFoot(page, bar)).toBeLessThanOrEqual(0.5);
+  await grid.getByRole("button", { name: "More for user1" }).click();
+  await page.getByRole("menuitem", { name: "Copy username" }).click();
+  const toast = page.getByRole("alert").filter({ hasText: "Could not copy" });
+  await expect(toast).toBeVisible();
+  await expect.poll(() => overlap(toast, bar)).toBeLessThanOrEqual(0);
+};
+
+// at 1280x720 six and seven users leave room under the list, less with seven, and eight make the
+// page scroll, so the bar sticks to the foot rather than resting there
+for (const count of [6, 7, 8]) {
+  test(`a toast keeps off the selection's bar under ${count} users`, async ({ page }) => {
+    const grid = await users(page, count);
+    await expect(grid.locator("[data-line]")).toHaveCount(count);
+    await grid.getByRole("checkbox", { name: "Select user0" }).check();
+    const scrolls = await page
+      .locator("[data-content]")
+      .evaluate((area) => area.scrollHeight > area.clientHeight);
+    expect(scrolls).toBe(count === 8);
+    await toastClear(page, grid);
+  });
+}
+
+// seven users fill no more than the screen, so the page doesn't scroll as the list grows back
+test("a toast keeps off the selection's bar after the list under it grows", async ({ page }) => {
+  const grid = await users(page, 7);
+  const search = page.getByRole("combobox", { name: "Search users" });
+  await search.fill("user1");
+  await expect(grid.locator("[data-line]")).toHaveCount(1);
+  await grid.getByRole("checkbox", { name: "Select user1" }).check();
+  await search.fill("");
+  await page.keyboard.press("Escape");
+  await expect(grid.locator("[data-line]")).toHaveCount(7);
+  await toastClear(page, grid);
 });

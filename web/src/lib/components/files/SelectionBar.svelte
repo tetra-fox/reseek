@@ -8,6 +8,7 @@
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import type { Enqueued } from "#lib/files/downloads.js";
   import { formatBytes, plural } from "#lib/format.js";
+  import { footBars } from "#lib/ui/footbars.svelte.js";
 
   type Props = {
     /** the selected files: how many, and their sizes */
@@ -37,7 +38,7 @@
 </script>
 
 <!-- what is selected in a list of files and what can be done with it, at the foot of the list -->
-<div class="selection-bar" role="toolbar" aria-label="Selected files">
+<div class="selection-bar" role="toolbar" aria-label="Selected files" {@attach footBars.attach}>
   <span class="text-sm tabular-nums">
     {plural(files.length, noun[0], noun[1])}{bytes ? `, ${formatBytes(bytes)}` : ""}
   </span>

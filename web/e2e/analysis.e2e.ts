@@ -3,6 +3,7 @@ import { expect, type Locator, type Page, test } from "@playwright/test";
 import type { Schemas } from "../src/lib/api/client";
 import { newId } from "../src/lib/ids";
 import { openSlot, rect, settled } from "./support/analysis";
+import { overlap } from "./support/boxes";
 import {
   ANALYZED_DOWNLOAD,
   fakeAnalysis,
@@ -403,6 +404,12 @@ test("queues a user's downloads, a folder and a selection for analysis", async (
   await grid.getByRole("checkbox", { name: "Select 1.flac" }).check();
   const bar = page.getByRole("toolbar", { name: "Selected transfers" });
   await expect(bar.getByRole("button", { name: "Cancel" })).toBeVisible();
+  // the stack of toasts moves up to rest above the bar, clear of its buttons: its lowest, the
+  // oldest, from alice's Analyze
+  const toast = page
+    .locator("[aria-live=polite] > *")
+    .filter({ hasText: "No files queued for analysis" });
+  await expect.poll(() => overlap(toast, bar)).toBeLessThanOrEqual(0);
   await expect(bar.getByRole("button", { name: "Analyze" })).toHaveCount(0);
   await grid.getByRole("checkbox", { name: "Select 3.flac" }).check();
   await bar.getByRole("button", { name: "Analyze" }).click();

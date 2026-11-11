@@ -6,14 +6,22 @@
   import Button from "#lib/components/ui/Button.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { dismiss, hold, toasts } from "#lib/feedback/toast.svelte.js";
+  import { footBars } from "#lib/ui/footbars.svelte.js";
   import { easeOutSoft, motionFast } from "#lib/ui/motion.js";
+  import { rem } from "#lib/ui/viewport.svelte.js";
 
   const motion = () => ({ duration: motionFast(), easing: easeOutSoft });
+
+  /** the stack's height, which decides whether it would lie on a toolbar at the content's foot */
+  let height = $state(0);
 </script>
 
-<!-- bottom center, newest on top, above the footer and the docked activity log -->
+<!-- bottom center, newest on top, above the footer, the docked activity log and a selection's
+     toolbar where they would lie on it -->
 <div
-  class="pointer-events-none fixed inset-x-4 bottom-[calc(var(--bottom-h)+1rem)] z-50 mx-auto flex max-w-md flex-col items-center gap-2"
+  class="pointer-events-none fixed inset-x-4 z-50 mx-auto flex max-w-md flex-col items-center gap-2 transition-[bottom] duration-(--motion-fast) ease-(--ease-out-soft)"
+  style:bottom={`calc(var(--bottom-h) + ${footBars.rest(rem.px, height)}px)`}
+  bind:offsetHeight={height}
   aria-live="polite">
   {#each toasts as t (t.id)}
     <div
