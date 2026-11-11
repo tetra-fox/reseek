@@ -14,7 +14,6 @@
   import UserPlusIcon from "@lucide/svelte/icons/user-plus";
   import UsersIcon from "@lucide/svelte/icons/users";
 
-  import { api } from "#lib/api/client.js";
   import LoadError from "#lib/components/LoadError.svelte";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
@@ -43,13 +42,12 @@
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
   import { userHref } from "#lib/nav.js";
-  import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
   import { clock } from "#lib/ui/clock.svelte.js";
   import { rem } from "#lib/ui/viewport.svelte.js";
   import { befriend, reach, setBuddy } from "#lib/users/actions.js";
   import { pictureOf } from "#lib/users/profile.svelte.js";
-  import type { UserSummary } from "#lib/users/users.svelte.js";
+  import { users, type UserSummary } from "#lib/users/users.svelte.js";
   import { BUDDY } from "#lib/wording.js";
 
   import Avatar from "./Avatar.svelte";
@@ -65,25 +63,15 @@
 
   const load = async () => {
     const turn = rows.reading();
-    const found: UserSummary[] = [];
-    for (let offset = 0; ;) {
-      const outcome = await call(() =>
-        api.GET("/api/v0/users", {
-          params: { query: { buddy: true, sort: "username", order: "asc", offset, limit: 500 } }
-        })
-      );
-      if (!outcome.ok) {
-        if (!rows.abandon(turn)) return;
-        error = outcome.error;
-        loaded = true;
-        return;
-      }
-      if (!rows.latest(turn)) return;
-      found.push(...outcome.data.users);
-      offset += outcome.data.users.length;
-      if (!outcome.data.users.length || offset >= outcome.data.total) break;
+    const outcome = await users.every({ buddy: true, sort: "username", order: "asc" });
+    if (!outcome.ok) {
+      if (!rows.abandon(turn)) return;
+      error = outcome.error;
+      loaded = true;
+      return;
     }
-    rows.reconcile(found, turn);
+    if (!rows.latest(turn)) return;
+    rows.reconcile(outcome.data, turn);
     error = "";
     loaded = true;
   };

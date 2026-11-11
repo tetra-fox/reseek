@@ -1,11 +1,18 @@
 import { SvelteMap } from "svelte/reactivity";
 
 import { api, byUser, type Schemas } from "#lib/api/client.js";
+import type { paths } from "#lib/api/schema.js";
 import { patch } from "#lib/lists/keyed.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
-import { call } from "#lib/request.js";
+import { call, type Outcome } from "#lib/request.js";
 
 export type UserSummary = Schemas["UserSummary"];
+
+/** Which users of the directory to read and in what order; the pages are the reader's */
+type DirectoryQuery = Omit<
+  NonNullable<paths["/api/v0/users"]["get"]["parameters"]["query"]>,
+  "offset" | "limit"
+>;
 
 /** How long a fetched summary is used before it is fetched again */
 export const SUMMARY_TTL_MS = 60_000;
@@ -49,24 +56,27 @@ class Users {
     return loading;
   }
 
-  /**
-   * The usernames blocked now, read a page at a time from the directory; their summaries are
-   * kept like any other. Null when the directory couldn't be read
-   */
-  blocked = async (): Promise<Set<string> | null> => {
-    const names = new Set<string>();
+  /** Every user the directory lists for `query`, read a page at a time; each summary is kept */
+  every = async (query: DirectoryQuery): Promise<Outcome<UserSummary[]>> => {
+    const found: UserSummary[] = [];
     for (let offset = 0; ;) {
       const outcome = await call(() =>
-        api.GET("/api/v0/users", { params: { query: { blocked: true, offset, limit: 500 } } })
+        api.GET("/api/v0/users", { params: { query: { ...query, offset, limit: 500 } } })
       );
-      if (!outcome.ok) return null;
-      for (const summary of outcome.data.users) {
-        this.#put(summary);
-        names.add(summary.username);
-      }
+      if (!outcome.ok) return outcome;
+      for (const summary of outcome.data.users) this.#put(summary);
+      found.push(...outcome.data.users);
       offset += outcome.data.users.length;
-      if (!outcome.data.users.length || offset >= outcome.data.total) return names;
+      if (!outcome.data.users.length || offset >= outcome.data.total) {
+        return { ok: true, data: found };
+      }
     }
+  };
+
+  /** The usernames blocked now; null when the directory couldn't be read */
+  blocked = async (): Promise<Set<string> | null> => {
+    const outcome = await this.every({ blocked: true });
+    return outcome.ok ? new Set(outcome.data.map((u) => u.username)) : null;
   };
 
   clear() {
