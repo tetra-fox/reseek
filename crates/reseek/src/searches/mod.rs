@@ -19,8 +19,8 @@ use std::time::Duration;
 
 use api_types::live::LiveFrame;
 use api_types::search::{
-  Search, SearchListQuery, SearchRequest, SearchResponse, SearchScope, SearchScopeType,
-  SearchStates,
+  Search, SearchListQuery, SearchOutcome, SearchRequest, SearchResponse, SearchScope,
+  SearchScopeType, SearchState,
 };
 use async_trait::async_trait;
 use cascade::Watcher;
@@ -238,8 +238,7 @@ impl Searches {
 
   /// Writes a search the client refused before sending it as errored and pushes it.
   async fn refused(&self, mut record: Search) {
-    record.state = SearchStates::Completed | SearchStates::Errored;
-    record.is_complete = true;
+    record.state = SearchState::Completed(SearchOutcome::Errored);
     record.ended_at = Some(record.started_at);
     let written = record.clone();
     match self
@@ -336,8 +335,7 @@ impl SearchService for Searches {
       search_text: normalized(&request.search_text),
       token: client.next_token(),
       scope: scope.clone(),
-      state: SearchStates::Requested,
-      is_complete: false,
+      state: SearchState::Requested,
       started_at: Utc::now(),
       ended_at: None,
       response_count: 0,

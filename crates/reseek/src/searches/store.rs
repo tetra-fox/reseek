@@ -4,7 +4,7 @@
 use std::io::{Read, Write};
 
 use api_types::search::{
-  Search, SearchListQuery, SearchResponse, SearchScope, SearchScopeType, SearchStates,
+  Search, SearchListQuery, SearchOutcome, SearchResponse, SearchScope, SearchScopeType, SearchState,
 };
 use api_types::transfers::SortOrder;
 use chrono::{DateTime, Utc};
@@ -36,13 +36,45 @@ fn count(row: &Row, i: usize) -> rusqlite::Result<u32> {
   Ok(u32::try_from(row.get::<_, i64>(i)?.max(0)).unwrap_or(u32::MAX))
 }
 
+/// The bit of a completed search in the stored state.
+const COMPLETED: u32 = 4;
+
+/// A search state as stored: the completed bit with one bit for how the search ended, or one bit
+/// for a state before that, as the column's comment lists them.
+fn state_bits(state: SearchState) -> u32 {
+  match state {
+    SearchState::Requested => 1,
+    SearchState::InProgress => 2,
+    SearchState::Queued => 256,
+    SearchState::Completed(outcome) => {
+      COMPLETED
+        | match outcome {
+          SearchOutcome::Cancelled => 8,
+          SearchOutcome::TimedOut => 16,
+          SearchOutcome::ResponseLimitReached => 32,
+          SearchOutcome::FileLimitReached => 64,
+          SearchOutcome::Errored => 128,
+        }
+    }
+  }
+}
+
+/// The state stored as `bits`, which [`state_bits`] wrote.
+fn state_from_bits(bits: u32) -> Option<SearchState> {
+  SearchState::ALL
+    .into_iter()
+    .find(|state| state_bits(*state) == bits)
+}
+
 /// The search in `row`, read with [`COLUMNS`], without its responses.
 fn search(row: &Row) -> rusqlite::Result<Search> {
   let id: String = row.get(0)?;
   let scope_type: SearchScopeType =
     enum_at(row, 3).map_err(|e| conversion(3, format!("search {id}: {e}")))?;
   let subjects: String = row.get(4)?;
-  let state = SearchStates::from_bits_retain(row.get::<_, u32>(5)?);
+  let bits: u32 = row.get(5)?;
+  let state = state_from_bits(bits)
+    .ok_or_else(|| conversion(5, format!("search {id}: {bits} is not a search state")))?;
   let ended_at: Option<String> = row.get(7)?;
   Ok(Search {
     id: id.parse().map_err(|e| conversion(0, e))?,
@@ -53,7 +85,6 @@ fn search(row: &Row) -> rusqlite::Result<Search> {
       subjects: serde_json::from_str(&subjects).map_err(|e| conversion(4, e))?,
     },
     state,
-    is_complete: state.contains(SearchStates::Completed),
     started_at: read_timestamp(&row.get::<_, String>(6)?)?,
     ended_at: ended_at.as_deref().map(read_timestamp).transpose()?,
     response_count: count(row, 8)?,
@@ -77,7 +108,7 @@ pub fn insert(conn: &Connection, search: &Search) -> rusqlite::Result<bool> {
       search.token,
       enum_text(search.scope.scope_type),
       subjects,
-      search.state.bits(),
+      state_bits(search.state),
       timestamp(search.started_at),
       search.ended_at.map(timestamp),
     ],
@@ -92,7 +123,7 @@ pub fn update(conn: &Connection, search: &Search) -> rusqlite::Result<bool> {
      locked_file_count = ?6 WHERE id = ?1",
     params![
       search.id.to_string(),
-      search.state.bits(),
+      state_bits(search.state),
       search.ended_at.map(timestamp),
       search.response_count,
       search.file_count,
@@ -110,7 +141,7 @@ pub fn finish(conn: &Connection, search: &Search, responses: &[u8]) -> rusqlite:
      locked_file_count = ?6, response_bytes = ?7, responses = ?8 WHERE id = ?1",
     params![
       search.id.to_string(),
-      search.state.bits(),
+      state_bits(search.state),
       search.ended_at.map(timestamp),
       search.response_count,
       search.file_count,
@@ -201,9 +232,9 @@ pub fn end_dangling(conn: &Connection, now: DateTime<Utc>) -> rusqlite::Result<u
      locked_file_count = 0, response_bytes = 0, responses = NULL \
      WHERE ended_at IS NULL OR state & ?3 = 0",
     params![
-      (SearchStates::Completed | SearchStates::TimedOut).bits(),
+      state_bits(SearchState::Completed(SearchOutcome::TimedOut)),
       timestamp(now),
-      SearchStates::Completed.bits(),
+      COMPLETED,
     ],
   )
 }
@@ -241,8 +272,7 @@ mod tests {
         scope_type: SearchScopeType::User,
         subjects: vec!["alice".into()],
       },
-      state: SearchStates::Requested,
-      is_complete: false,
+      state: SearchState::Requested,
       started_at: at.parse().unwrap(),
       ended_at: None,
       response_count: 0,
@@ -251,6 +281,31 @@ mod tests {
       response_bytes: 0,
       responses: None,
     }
+  }
+
+  #[test]
+  fn search_states_are_stored_as_the_bits_existing_rows_hold() {
+    use SearchOutcome::*;
+    assert_eq!(COMPLETED, 4);
+    let stored = [
+      (SearchState::Requested, 1),
+      (SearchState::InProgress, 2),
+      (SearchState::Queued, 256),
+      (SearchState::Completed(Cancelled), 4 | 8),
+      (SearchState::Completed(TimedOut), 4 | 16),
+      (SearchState::Completed(ResponseLimitReached), 4 | 32),
+      (SearchState::Completed(FileLimitReached), 4 | 64),
+      (SearchState::Completed(Errored), 4 | 128),
+    ];
+    for (state, bits) in stored {
+      assert_eq!(state_bits(state), bits, "{state}");
+      assert_eq!(state_from_bits(bits), Some(state), "{bits}");
+    }
+    assert_eq!(
+      state_from_bits(COMPLETED),
+      None,
+      "a completed search has an outcome"
+    );
   }
 
   #[tokio::test]
@@ -270,8 +325,7 @@ mod tests {
       Some(None),
       "nothing is stored while it runs"
     );
-    search.state = SearchStates::Completed | SearchStates::ResponseLimitReached;
-    search.is_complete = true;
+    search.state = SearchState::Completed(SearchOutcome::ResponseLimitReached);
     search.ended_at = Some("2026-10-26T10:00:15Z".parse().unwrap());
     search.response_count = 1;
     let blob = compress(&[]).unwrap();
@@ -315,10 +369,10 @@ mod tests {
     let db = db().await;
     let running = requested("2026-10-26T10:00:00Z");
     let mut lost = requested("2026-10-26T10:01:00Z");
-    lost.state = SearchStates::InProgress;
+    lost.state = SearchState::InProgress;
     lost.ended_at = Some("2026-10-26T10:02:00Z".parse().unwrap());
     let mut done = requested("2026-10-26T09:00:00Z");
-    done.state = SearchStates::Completed | SearchStates::TimedOut;
+    done.state = SearchState::Completed(SearchOutcome::TimedOut);
     done.ended_at = Some("2026-10-26T09:00:15Z".parse().unwrap());
     for search in [running.clone(), lost.clone(), done.clone()] {
       db.write(move |conn| insert(conn, &search)).await.unwrap();
@@ -335,10 +389,7 @@ mod tests {
     );
     let id = running.id;
     let ended = db.read(move |conn| get(conn, id)).await.unwrap().unwrap();
-    assert_eq!(
-      ended.state,
-      SearchStates::Completed | SearchStates::TimedOut
-    );
+    assert_eq!(ended.state, SearchState::Completed(SearchOutcome::TimedOut));
     assert_eq!(ended.ended_at, Some(now));
     let id = done.id;
     assert!(

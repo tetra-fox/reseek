@@ -36,7 +36,7 @@
   import { recent, togglePin } from "#lib/search/recent.svelte.js";
   import { HIDING, type HideKey, pipeline, type Result } from "#lib/search/results.js";
   import { Results } from "#lib/search/results.svelte.js";
-  import { openSearch, scopeLabel, searches } from "#lib/search/searches.svelte.js";
+  import { isDone, openSearch, scopeLabel, searches } from "#lib/search/searches.svelte.js";
   import { session } from "#lib/session.svelte.js";
   import {
     HIDE_DEFAULTS,
@@ -100,7 +100,7 @@
 
   const canWrite = $derived(session.can("ReadWrite"));
   const connected = $derived(app.isServerConnected);
-  const complete = $derived(!!search?.isComplete && !!search.endedAt);
+  const complete = $derived(!!search && isDone(search.state));
   const pinned = $derived(!!search && recent.pinned.includes(search.searchText));
 
   // a page opened before its frame arrived asks for the search; one that is gone goes back. One
@@ -367,7 +367,7 @@
             </Button>
           {/snippet}
         </Tooltip>
-        {#if search.isComplete}
+        {#if complete}
           <Tooltip text={iconsOnly ? "Delete" : undefined}>
             {#snippet child({ props })}
               <Button {...props} variant="danger" disabled={working} onclick={remove}>

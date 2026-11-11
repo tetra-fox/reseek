@@ -5,7 +5,7 @@
 use std::time::Duration;
 
 use crate::support::{FakeServer, Session, listening_options};
-use soulseek_client::{Event, SearchOptions, SearchScope, SearchState};
+use soulseek_client::{Event, SearchOptions, SearchOutcome, SearchScope, SearchState};
 use soulseek_proto::PeerMessage;
 use soulseek_proto::peer::SearchResponse;
 use tokio_util::sync::CancellationToken;
@@ -36,7 +36,7 @@ async fn an_answer_that_comes_while_the_request_is_written_is_taken() {
   };
   session
     .event(|event| match event {
-      Event::SearchStateChanged { search, .. } if search.state == SearchState::IN_PROGRESS => {
+      Event::SearchStateChanged { search, .. } if search.state == SearchState::InProgress => {
         Some(())
       }
       _ => None,
@@ -65,7 +65,7 @@ async fn an_answer_that_comes_while_the_request_is_written_is_taken() {
   let (search, responses) = searching.await.unwrap().unwrap();
   assert_eq!(
     search.state,
-    SearchState::COMPLETED | SearchState::RESPONSE_LIMIT_REACHED
+    SearchState::Completed(SearchOutcome::ResponseLimitReached)
   );
   assert_eq!(responses.len(), 1);
 }

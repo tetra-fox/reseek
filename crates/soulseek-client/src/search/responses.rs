@@ -10,12 +10,15 @@ use std::sync::Arc;
 use soulseek_proto::peer::SearchResponse;
 use tokio::time::Instant;
 
-use super::{Running, Search, SearchOptions, SearchState};
+use super::{Running, Search, SearchOptions, SearchOutcome, SearchState};
 use crate::lock;
 
-/// A search's state and what it has taken so far
+/// A search's state, what it has taken so far and how it ends once that is decided
 pub(super) struct Counts {
   pub(super) state: SearchState,
+  /// how the search ends, decided once by what comes first: a limit, the timeout, a cancel or a
+  /// failed send; responses are taken only while it is undecided
+  pub(super) outcome: Option<SearchOutcome>,
   pub(super) responses: u64,
   pub(super) files: u64,
   pub(super) locked_files: u64,
@@ -28,7 +31,8 @@ pub(super) struct Counts {
 impl Default for Counts {
   fn default() -> Self {
     Self {
-      state: SearchState::empty(),
+      state: SearchState::Requested,
+      outcome: None,
       responses: 0,
       files: 0,
       locked_files: 0,
@@ -49,7 +53,7 @@ pub(super) struct Accepted {
 /// not. The limit is decided with the counts, so no response is taken past it.
 pub(super) fn accept(search: &Running, response: SearchResponse) -> Result<Accepted, &'static str> {
   let mut counts = lock(&search.counts);
-  if counts.state != SearchState::IN_PROGRESS || search.outcome.borrow().is_some() {
+  if counts.state != SearchState::InProgress || counts.outcome.is_some() {
     return Err("the search is not taking responses");
   }
   if !counts.users.insert(response.username.clone()) {
@@ -60,9 +64,9 @@ pub(super) fn accept(search: &Running, response: SearchResponse) -> Result<Accep
   counts.locked_files += response.locked_files.len() as u64;
   counts.deadline = Instant::now() + search.options.search_timeout;
   if counts.responses >= u64::from(search.options.response_limit) {
-    search.complete(SearchState::RESPONSE_LIMIT_REACHED);
+    search.decide(&mut counts, SearchOutcome::ResponseLimitReached);
   } else if counts.files >= u64::from(search.options.file_limit) {
-    search.complete(SearchState::FILE_LIMIT_REACHED);
+    search.decide(&mut counts, SearchOutcome::FileLimitReached);
   }
   Ok(Accepted {
     snapshot: search.snapshot(&counts),
@@ -142,7 +146,7 @@ mod tests {
 
   fn running(response_limit: u32) -> Running {
     let counts = Counts {
-      state: SearchState::IN_PROGRESS,
+      state: SearchState::InProgress,
       ..Counts::default()
     };
     Running {
@@ -155,7 +159,7 @@ mod tests {
       },
       counts: std::sync::Mutex::new(counts),
       handler: std::sync::Mutex::new(Box::new(|_| {})),
-      outcome: tokio::sync::watch::channel(None).0,
+      ended: tokio::sync::watch::channel(false).0,
     }
   }
 
@@ -165,8 +169,8 @@ mod tests {
     let first = accept(&search, response(&["a.mp3"], &[])).unwrap();
     assert_eq!(first.snapshot.response_count, 1);
     assert_eq!(
-      *search.outcome.borrow(),
-      Some(SearchState::RESPONSE_LIMIT_REACHED)
+      lock(&search.counts).outcome,
+      Some(SearchOutcome::ResponseLimitReached)
     );
     assert!(accept(&search, from("carol", &["b.mp3"], &[])).is_err());
     assert_eq!(lock(&search.counts).responses, 1);
@@ -179,12 +183,12 @@ mod tests {
     assert!(accept(&search, response(&["b.mp3"], &[])).is_err());
     assert_eq!(lock(&search.counts).responses, 1);
     assert_eq!(lock(&search.counts).files, 1);
-    assert!(search.outcome.borrow().is_none());
+    assert!(lock(&search.counts).outcome.is_none());
     // another user still counts, and reaches the limit
     accept(&search, from("carol", &["c.mp3"], &[])).unwrap();
     assert_eq!(
-      *search.outcome.borrow(),
-      Some(SearchState::RESPONSE_LIMIT_REACHED)
+      lock(&search.counts).outcome,
+      Some(SearchOutcome::ResponseLimitReached)
     );
   }
 

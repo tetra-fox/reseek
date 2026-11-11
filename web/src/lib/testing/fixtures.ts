@@ -77,7 +77,6 @@ export const search = (fields: Partial<Schemas["Search"]> = {}): Schemas["Search
   searchText: "album",
   token: 1,
   state: "InProgress",
-  isComplete: false,
   startedAt: "2026-10-26T10:00:00Z",
   endedAt: null,
   responseCount: 0,

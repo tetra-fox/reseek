@@ -61,41 +61,6 @@ impl fmt::Display for ClientState {
   }
 }
 
-/// Writes the names of the flags of `value` in the order of `names`, joined with ", ", or
-/// "None" when none is set
-pub(crate) fn write_flags<F: bitflags::Flags + Copy>(
-  f: &mut fmt::Formatter<'_>,
-  value: F,
-  names: &[(F, &str)],
-) -> fmt::Result {
-  let mut first = true;
-  for (flag, name) in names {
-    if value.contains(*flag) {
-      if !first {
-        f.write_str(", ")?;
-      }
-      f.write_str(name)?;
-      first = false;
-    }
-  }
-  if first {
-    f.write_str("None")?;
-  }
-  Ok(())
-}
-
-/// Reads flag names joined with ", " back, as [`write_flags`] writes them; `None` for a name not
-/// in `names`
-pub(crate) fn parse_flags<F: bitflags::Flags + Copy>(text: &str, names: &[(F, &str)]) -> Option<F> {
-  if text == "None" {
-    return Some(F::empty());
-  }
-  text.split(", ").try_fold(F::empty(), |flags, part| {
-    let (flag, _) = names.iter().find(|(_, name)| *name == part)?;
-    Some(flags.union(*flag))
-  })
-}
-
 /// The server session read at one moment: which session it is, where it stands, and how the
 /// latest session to end ended. A subscriber that missed events compares it with the last
 /// session it handled to tell which edges it missed.

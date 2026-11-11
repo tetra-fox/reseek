@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use api_client::Client;
-use api_types::search::{Search, SearchRequest, SearchStates, SuspectReason};
+use api_types::search::{Search, SearchOutcome, SearchRequest, SearchState, SuspectReason};
 use soulseek_client::{ClientOptions, SearchReply};
 use soulseek_proto::FileAttributeType;
 use soulseek_proto::peer::{File, FileAttribute, SearchResponse};
@@ -68,7 +68,7 @@ async fn completed(api: &Client, id: Uuid) -> Search {
   let started = Instant::now();
   loop {
     let search = api.search(id, false).await.unwrap();
-    if search.is_complete {
+    if search.state.is_complete() {
       return search;
     }
     assert!(started.elapsed() < PATIENCE, "never completed: {search:?}");
@@ -106,7 +106,7 @@ async fn a_search_keeps_a_peers_files_and_ends_on_its_limit() {
   let limited = completed(&api, limited.id).await;
   assert_eq!(
     limited.state,
-    SearchStates::Completed | SearchStates::ResponseLimitReached
+    SearchState::Completed(SearchOutcome::ResponseLimitReached)
   );
   assert_eq!(
     (

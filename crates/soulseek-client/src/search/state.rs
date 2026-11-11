@@ -2,7 +2,6 @@
 //! the options that bound and filter it.
 
 use std::fmt;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -10,59 +9,72 @@ use soulseek_proto::SearchQuery;
 use soulseek_proto::peer::{File, SearchResponse};
 
 use super::SearchScope;
-use crate::state::{parse_flags, write_flags};
 
-bitflags::bitflags! {
-  /// Where a search is in its life. A search goes `Requested`, `Queued`, `InProgress`, then
-  /// `Completed` with exactly one reason.
-  #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-  pub struct SearchState: u32 {
-    /// accepted, its token taken
-    const REQUESTED = 1;
-    /// being sent to the server or sent; responses are taken
-    const IN_PROGRESS = 2;
-    /// over, with one of the reasons below
-    const COMPLETED = 4;
-    /// the caller canceled, or the client disconnected
-    const CANCELLED = 8;
-    /// no response came for the search timeout: the usual end of a search
-    const TIMED_OUT = 16;
-    /// as many responses as the search wanted arrived
-    const RESPONSE_LIMIT_REACHED = 32;
-    /// as many files as the search wanted arrived
-    const FILE_LIMIT_REACHED = 64;
-    /// the request could not be sent
-    const ERRORED = 128;
-    /// waiting for one of the searches that may run at once
-    const QUEUED = 256;
+/// Where a search is in its life: `Requested` when made, `Queued`, `InProgress`, then
+/// `Completed` with how it ended
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum SearchState {
+  /// accepted, its token taken
+  Requested,
+  /// waiting for one of the searches that may run at once
+  Queued,
+  /// being sent to the server or sent; responses are taken
+  InProgress,
+  /// over
+  Completed(SearchOutcome),
+}
+
+/// How a search ended
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum SearchOutcome {
+  /// the caller canceled, or the client disconnected
+  Cancelled,
+  /// no response came for the search timeout: the usual end of a search
+  TimedOut,
+  /// as many responses as the search wanted arrived
+  ResponseLimitReached,
+  /// as many files as the search wanted arrived
+  FileLimitReached,
+  /// the request could not be sent
+  Errored,
+}
+
+impl SearchState {
+  /// The state's name as the logs and the API write it, such as `"Completed, TimedOut"`.
+  pub fn as_str(self) -> &'static str {
+    match self {
+      Self::Requested => "Requested",
+      Self::Queued => "Queued",
+      Self::InProgress => "InProgress",
+      Self::Completed(SearchOutcome::Cancelled) => "Completed, Cancelled",
+      Self::Completed(SearchOutcome::TimedOut) => "Completed, TimedOut",
+      Self::Completed(SearchOutcome::ResponseLimitReached) => "Completed, ResponseLimitReached",
+      Self::Completed(SearchOutcome::FileLimitReached) => "Completed, FileLimitReached",
+      Self::Completed(SearchOutcome::Errored) => "Completed, Errored",
+    }
+  }
+
+  /// the search is over
+  pub fn is_complete(self) -> bool {
+    matches!(self, Self::Completed(_))
+  }
+
+  /// Whether a search moves from this state to `next`: in order, ending from the queue only
+  /// when canceled, and never again once completed.
+  pub(crate) fn leads_to(self, next: Self) -> bool {
+    matches!(
+      (self, next),
+      (Self::Requested, Self::Queued)
+        | (Self::Queued, Self::InProgress)
+        | (Self::Queued, Self::Completed(SearchOutcome::Cancelled))
+        | (Self::InProgress, Self::Completed(_))
+    )
   }
 }
 
-const NAMES: [(SearchState, &str); 9] = [
-  (SearchState::REQUESTED, "Requested"),
-  (SearchState::IN_PROGRESS, "InProgress"),
-  (SearchState::COMPLETED, "Completed"),
-  (SearchState::CANCELLED, "Cancelled"),
-  (SearchState::TIMED_OUT, "TimedOut"),
-  (SearchState::RESPONSE_LIMIT_REACHED, "ResponseLimitReached"),
-  (SearchState::FILE_LIMIT_REACHED, "FileLimitReached"),
-  (SearchState::ERRORED, "Errored"),
-  (SearchState::QUEUED, "Queued"),
-];
-
-/// the flag names joined with ", ", as in "Completed, TimedOut"; "None" for no flag
 impl fmt::Display for SearchState {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write_flags(f, *self, &NAMES)
-  }
-}
-
-/// reads the strings `Display` writes
-impl FromStr for SearchState {
-  type Err = String;
-
-  fn from_str(text: &str) -> Result<Self, Self::Err> {
-    parse_flags(text, &NAMES).ok_or_else(|| format!("not a search state: {text}"))
+    f.write_str(self.as_str())
   }
 }
 
@@ -171,35 +183,31 @@ mod tests {
   use super::*;
 
   #[test]
-  fn search_states_are_written_as_their_flag_names_and_read_back() {
+  fn a_search_moves_only_forward_and_ends_once() {
+    use SearchOutcome::*;
+    use SearchState::*;
     let states = [
-      (SearchState::REQUESTED, "Requested"),
-      (SearchState::QUEUED, "Queued"),
-      (SearchState::IN_PROGRESS, "InProgress"),
-      (
-        SearchState::COMPLETED | SearchState::CANCELLED,
-        "Completed, Cancelled",
-      ),
-      (
-        SearchState::COMPLETED | SearchState::TIMED_OUT,
-        "Completed, TimedOut",
-      ),
-      (
-        SearchState::COMPLETED | SearchState::RESPONSE_LIMIT_REACHED,
-        "Completed, ResponseLimitReached",
-      ),
-      (
-        SearchState::COMPLETED | SearchState::FILE_LIMIT_REACHED,
-        "Completed, FileLimitReached",
-      ),
-      (
-        SearchState::COMPLETED | SearchState::ERRORED,
-        "Completed, Errored",
-      ),
+      Requested,
+      Queued,
+      InProgress,
+      Completed(Cancelled),
+      Completed(TimedOut),
+      Completed(ResponseLimitReached),
+      Completed(FileLimitReached),
+      Completed(Errored),
     ];
-    for (state, text) in states {
-      assert_eq!(state.to_string(), text);
-      assert_eq!(text.parse::<SearchState>(), Ok(state));
+    let allowed: Vec<(SearchState, SearchState)> = std::iter::once((Requested, Queued))
+      .chain([(Queued, InProgress), (Queued, Completed(Cancelled))])
+      .chain(states[3..].iter().map(|end| (InProgress, *end)))
+      .collect();
+    for from in states {
+      for to in states {
+        assert_eq!(
+          from.leads_to(to),
+          allowed.contains(&(from, to)),
+          "{from} to {to}"
+        );
+      }
     }
   }
 }

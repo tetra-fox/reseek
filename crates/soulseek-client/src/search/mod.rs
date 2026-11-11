@@ -7,8 +7,8 @@ mod responses;
 mod state;
 
 pub use state::{
-  FileFilter, ResponseFilter, Search, SearchOptions, SearchResponseReceived, SearchState,
-  SearchStateChanged,
+  FileFilter, ResponseFilter, Search, SearchOptions, SearchOutcome, SearchResponseReceived,
+  SearchState, SearchStateChanged,
 };
 
 use std::collections::HashMap;
@@ -109,8 +109,8 @@ struct Running {
   options: SearchOptions,
   counts: Mutex<Counts>,
   handler: Mutex<Handler>,
-  /// set once, with the reason the search completed
-  outcome: watch::Sender<Option<SearchState>>,
+  /// set once the counts hold how the search ends, to wake the search
+  ended: watch::Sender<bool>,
 }
 
 impl Running {
@@ -126,21 +126,18 @@ impl Running {
     }
   }
 
-  /// Ends the search with `reason` unless it ended already, and returns the reason it ended
-  /// with.
-  fn complete(&self, reason: SearchState) -> SearchState {
-    let mut ended = reason;
-    self.outcome.send_if_modified(|outcome| match outcome {
-      Some(already) => {
-        ended = *already;
-        false
-      }
-      None => {
-        *outcome = Some(reason);
-        true
-      }
-    });
-    ended
+  /// Decides with the locked `counts` that the search ends with `outcome`, unless how it ends
+  /// was decided already, and returns how it ends. Every end is decided under the counts' lock,
+  /// so no response is taken once it is and a response taken first counts against the timeout.
+  fn decide(&self, counts: &mut Counts, outcome: SearchOutcome) -> SearchOutcome {
+    let decided = *counts.outcome.get_or_insert(outcome);
+    self.ended.send_replace(true);
+    decided
+  }
+
+  /// [`Running::decide`], taking the counts' lock
+  fn end(&self, outcome: SearchOutcome) -> SearchOutcome {
+    self.decide(&mut lock(&self.counts), outcome)
   }
 }
 
@@ -230,7 +227,7 @@ impl Searches {
       tracing::debug!(count = running.len(), "searches canceled");
     }
     for search in running {
-      search.complete(SearchState::CANCELLED);
+      search.end(SearchOutcome::Cancelled);
     }
   }
 
@@ -292,7 +289,7 @@ impl Client {
       options,
       counts: Mutex::new(Counts::default()),
       handler: Mutex::new(Box::new(handler)),
-      outcome: watch::channel(None).0,
+      ended: watch::channel(false).0,
     })?;
     let span = tracing::info_span!("search", token = search.token);
     self
@@ -307,30 +304,29 @@ impl Client {
     text: &str,
     cancel: &CancellationToken,
   ) -> Result<Search, ClientError> {
-    self.set_search_state(search, SearchState::REQUESTED);
-    self.set_search_state(search, SearchState::QUEUED);
+    self.set_search_state(search, SearchState::Queued);
     // another task can end the search while it waits for its turn or is being sent: a disconnect,
     // or, once it takes responses, a limit a response reached
-    let mut outcome = search.outcome.subscribe();
+    let mut ended = search.ended.subscribe();
     let limit = self.options().maximum_concurrent_searches;
     let slot = tokio::select! {
       biased;
-      () = ended(&mut outcome) => {
-        return Err(self.end_search(search, SearchState::CANCELLED, ClientError::Canceled));
+      () = was_ended(&mut ended) => {
+        return Err(self.end_search(search, SearchOutcome::Cancelled, ClientError::Canceled));
       }
       slot = self.searches().slots.acquire(limit, cancel) => match slot {
         Ok(slot) => slot,
-        Err(error) => return Err(self.end_search(search, SearchState::CANCELLED, error)),
+        Err(error) => return Err(self.end_search(search, SearchOutcome::Cancelled, error)),
       },
     };
     let requests = search.scope.requests(search.token, text);
     // an answer can come back as soon as the request is on its way, before the write is seen to
     // end, so the search takes responses from here
-    self.set_search_state(search, SearchState::IN_PROGRESS);
+    self.set_search_state(search, SearchState::InProgress);
     let sent = tokio::select! {
       biased;
       // ended meanwhile, by a disconnect or by a limit an early answer reached
-      () = ended(&mut outcome) => None,
+      () = was_ended(&mut ended) => None,
       sent = self.write_server_messages(&requests) => Some(sent),
     };
     match sent {
@@ -340,41 +336,42 @@ impl Client {
         lock(&search.counts).deadline = Instant::now() + search.options.search_timeout;
       }
       Some(Err(error)) => {
-        let error = match error {
-          error @ ClientError::Timeout(_) => error,
-          error => failed(&format!("search for {text}"), error),
-        };
-        return Err(self.end_search(search, SearchState::ERRORED, error));
+        if search.end(SearchOutcome::Errored) == SearchOutcome::Errored {
+          let error = match error {
+            error @ ClientError::Timeout(_) => error,
+            error => failed(&format!("search for {text}"), error),
+          };
+          return Err(self.end_search(search, SearchOutcome::Errored, error));
+        }
+        // a limit an early answer reached ended it first; the loop below ends with that
+        tracing::debug!(%error, "search ended before its request failed to send");
       }
       // the loop below ends at once with how it ended
       None => tracing::debug!("search ended while its request was sent"),
     }
-    let reason = loop {
+    let outcome = loop {
       let deadline = lock(&search.counts).deadline;
       tokio::select! {
         biased;
-        () = cancel.cancelled() => break SearchState::CANCELLED,
-        reason = outcome.wait_for(Option::is_some) => {
-          break reason
-            .expect("the search holds the sender")
-            .expect("waited for a reason");
-        }
+        () = cancel.cancelled() => break search.end(SearchOutcome::Cancelled),
+        // decided already, so this returns how
+        () = was_ended(&mut ended) => break search.end(SearchOutcome::Cancelled),
         () = sleep_until(deadline) => {
+          let mut counts = lock(&search.counts);
           // a response taken meanwhile moved the deadline
-          if lock(&search.counts).deadline <= Instant::now() {
-            break SearchState::TIMED_OUT;
+          if counts.deadline <= Instant::now() {
+            break search.decide(&mut counts, SearchOutcome::TimedOut);
           }
         }
       }
     };
-    let reason = search.complete(reason);
     // a response taken before the end is handed over before the search returns
     drop(lock(&search.handler));
     drop(slot);
-    if reason == SearchState::CANCELLED {
-      return Err(self.end_search(search, reason, ClientError::Canceled));
+    if outcome == SearchOutcome::Cancelled {
+      return Err(self.end_search(search, outcome, ClientError::Canceled));
     }
-    self.set_search_state(search, SearchState::COMPLETED | reason);
+    self.set_search_state(search, SearchState::Completed(outcome));
     let snapshot = search.snapshot(&lock(&search.counts));
     tracing::info!(
       state = %snapshot.state,
@@ -385,19 +382,30 @@ impl Client {
     Ok(snapshot)
   }
 
-  /// ends `search` with `reason` and returns `error`, which the caller fails with
-  fn end_search(&self, search: &Running, reason: SearchState, error: ClientError) -> ClientError {
-    search.complete(reason);
-    self.set_search_state(search, SearchState::COMPLETED | reason);
-    tracing::info!(state = %(SearchState::COMPLETED | reason), %error, "search ended");
+  /// ends `search` with `outcome`, or with how it was decided to end first, and returns
+  /// `error`, which the caller fails with
+  fn end_search(
+    &self,
+    search: &Running,
+    outcome: SearchOutcome,
+    error: ClientError,
+  ) -> ClientError {
+    let state = SearchState::Completed(search.end(outcome));
+    self.set_search_state(search, state);
+    tracing::info!(%state, %error, "search ended");
     error
   }
 
-  /// moves `search` to `state`, calling its callback and then raising the event
+  /// Moves `search` to `state`, calling its callback and then raising the event. Only the
+  /// search's own task moves it, along the edges [`SearchState::leads_to`] allows.
   fn set_search_state(&self, search: &Running, state: SearchState) {
     let (previous, snapshot) = {
       let mut counts = lock(&search.counts);
       let previous = counts.state;
+      assert!(
+        previous.leads_to(state),
+        "a search does not move from {previous} to {state}"
+      );
       counts.state = state;
       (previous, search.snapshot(&counts))
     };
@@ -471,11 +479,11 @@ impl Client {
   }
 }
 
-/// Resolves once the search was ended by another task: a disconnect, or a limit a response
-/// reached. The value's read guard is let go before this returns, since ending the search writes
-/// the value.
-async fn ended(outcome: &mut watch::Receiver<Option<SearchState>>) {
-  if outcome.wait_for(Option::is_some).await.is_err() {
+/// Resolves once how the search ends was decided, by another task (a disconnect, or a limit a
+/// response reached) or by the search's own. The value's read guard is let go before this
+/// returns.
+async fn was_ended(ended: &mut watch::Receiver<bool>) {
+  if ended.wait_for(|ended| *ended).await.is_err() {
     // the search holds the sender, so this cannot end without a value
     std::future::pending::<()>().await;
   }

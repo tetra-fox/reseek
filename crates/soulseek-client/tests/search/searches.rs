@@ -8,8 +8,8 @@ use std::time::Duration;
 use crate::support::soulfind::{self, Soulfind, User};
 use crate::support::{PATIENCE, next_event};
 use soulseek_client::{
-  ClientError, ClientOptions, Event, Search, SearchOptions, SearchReply, SearchResponseResolver,
-  SearchScope, SearchState,
+  ClientError, ClientOptions, Event, Search, SearchOptions, SearchOutcome, SearchReply,
+  SearchResponseResolver, SearchScope, SearchState,
 };
 use soulseek_proto::peer::{File, SearchResponse};
 use soulseek_proto::{RoomType, SearchQuery};
@@ -97,7 +97,7 @@ async fn network_and_room_searches_take_the_answers_and_end_when_they_stop() {
     let (done, responses) = search(&searcher, scope.clone(), quick()).await;
     assert_eq!(
       done.state,
-      SearchState::COMPLETED | SearchState::TIMED_OUT,
+      SearchState::Completed(SearchOutcome::TimedOut),
       "{scope:?}"
     );
     // the server is shared with other tests, whose users answer a network search as well
@@ -117,10 +117,9 @@ async fn network_and_room_searches_take_the_answers_and_end_when_they_stop() {
     assert_eq!(
       states,
       [
-        SearchState::REQUESTED,
-        SearchState::QUEUED,
-        SearchState::IN_PROGRESS,
-        SearchState::COMPLETED | SearchState::TIMED_OUT,
+        SearchState::Queued,
+        SearchState::InProgress,
+        SearchState::Completed(SearchOutcome::TimedOut),
       ]
     );
   }
@@ -153,7 +152,7 @@ async fn search_states(events: &mut tokio::sync::broadcast::Receiver<Event>) -> 
     })
     .await;
     states.push(state);
-    if state.contains(SearchState::COMPLETED) {
+    if state.is_complete() {
       return states;
     }
   }
@@ -167,7 +166,7 @@ async fn a_wishlist_search_goes_out_like_a_network_search() {
   let responder = responder(&server, "responder", 1).await;
   let searcher = server.login("searcher", soulfind::listening()).await;
   let (done, responses) = search(&searcher, SearchScope::Wishlist, quick()).await;
-  assert_eq!(done.state, SearchState::COMPLETED | SearchState::TIMED_OUT);
+  assert_eq!(done.state, SearchState::Completed(SearchOutcome::TimedOut));
   assert!(
     responses
       .iter()
@@ -191,7 +190,7 @@ async fn a_search_ends_once_it_has_enough_responses_or_files() {
   let (done, responses) = search(&searcher, SearchScope::Network, options).await;
   assert_eq!(
     done.state,
-    SearchState::COMPLETED | SearchState::RESPONSE_LIMIT_REACHED
+    SearchState::Completed(SearchOutcome::ResponseLimitReached)
   );
   assert_eq!(responses.len(), 1);
   let options = SearchOptions {
@@ -202,7 +201,7 @@ async fn a_search_ends_once_it_has_enough_responses_or_files() {
   let (done, _) = search(&searcher, SearchScope::Network, options).await;
   assert_eq!(
     done.state,
-    SearchState::COMPLETED | SearchState::FILE_LIMIT_REACHED
+    SearchState::Completed(SearchOutcome::FileLimitReached)
   );
   assert!(done.file_count >= 3);
 }
@@ -259,9 +258,7 @@ async fn searches_past_the_bound_wait_their_turn_and_a_token_is_taken_once() {
     }
   });
   next_event(&mut events, |event| match event {
-    Event::SearchStateChanged { search, .. } if search.state == SearchState::IN_PROGRESS => {
-      Some(())
-    }
+    Event::SearchStateChanged { search, .. } if search.state == SearchState::InProgress => Some(()),
     _ => None,
   })
   .await;
@@ -293,8 +290,7 @@ async fn searches_past_the_bound_wait_their_turn_and_a_token_is_taken_once() {
   // the second stays queued until the first is done
   let in_progress = next_event(&mut events, |event| match event {
     Event::SearchStateChanged { search, .. }
-      if search.state == SearchState::IN_PROGRESS
-        || search.state.contains(SearchState::COMPLETED) =>
+      if search.state == SearchState::InProgress || search.state.is_complete() =>
     {
       Some(search.token)
     }
@@ -345,16 +341,14 @@ async fn a_disconnect_cancels_every_search() {
   };
   let running = start(1);
   next_event(&mut events, |event| match event {
-    Event::SearchStateChanged { search, .. } if search.state == SearchState::IN_PROGRESS => {
-      Some(())
-    }
+    Event::SearchStateChanged { search, .. } if search.state == SearchState::InProgress => Some(()),
     _ => None,
   })
   .await;
   let queued = start(2);
   next_event(&mut events, |event| match event {
     Event::SearchStateChanged { search, .. }
-      if search.token == 2 && search.state == SearchState::QUEUED =>
+      if search.token == 2 && search.state == SearchState::Queued =>
     {
       Some(())
     }
@@ -378,14 +372,14 @@ async fn a_disconnect_cancels_every_search() {
     .await;
     assert_ne!(
       (token, state),
-      (2, SearchState::IN_PROGRESS),
+      (2, SearchState::InProgress),
       "the queued search is never sent"
     );
-    if state.contains(SearchState::COMPLETED) {
+    if state.is_complete() {
       ended.push((token, state));
     }
   }
   ended.sort_unstable_by_key(|(token, _)| *token);
-  let canceled = SearchState::COMPLETED | SearchState::CANCELLED;
+  let canceled = SearchState::Completed(SearchOutcome::Cancelled);
   assert_eq!(ended, [(1, canceled), (2, canceled)]);
 }

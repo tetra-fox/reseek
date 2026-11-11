@@ -262,7 +262,6 @@ export const fakeSearch = async (page: Page) => {
         searchText: "album",
         token: 1,
         state: "Completed, TimedOut",
-        isComplete: true,
         startedAt: "2026-10-26T10:00:00Z",
         endedAt: "2026-10-26T10:00:15Z",
         responseCount: 2,

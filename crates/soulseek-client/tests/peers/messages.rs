@@ -11,7 +11,7 @@ use crate::support::peer::{FakePeer, PeerSide};
 use crate::support::{Logs, PATIENCE, Session, listening_options};
 use soulseek_client::{
   ClientError, ClientOptions, Event, IncomingBrowse, MessageErrorKind, Resolvers, SearchOptions,
-  SearchScope, SearchState, WaitKey,
+  SearchOutcome, SearchScope, SearchState, WaitKey,
 };
 use soulseek_proto::peer::*;
 use soulseek_proto::{
@@ -510,7 +510,7 @@ async fn a_search_takes_one_response_per_user_and_only_under_its_connections_nam
   });
   session
     .event(|event| match event {
-      Event::SearchStateChanged { search, .. } if search.state == SearchState::IN_PROGRESS => {
+      Event::SearchStateChanged { search, .. } if search.state == SearchState::InProgress => {
         Some(())
       }
       _ => None,
@@ -546,7 +546,7 @@ async fn a_search_takes_one_response_per_user_and_only_under_its_connections_nam
     .unwrap();
   assert_eq!(
     search.state,
-    SearchState::COMPLETED | SearchState::TIMED_OUT
+    SearchState::Completed(SearchOutcome::TimedOut)
   );
   assert_eq!(responses.len(), 1, "{responses:?}");
   assert_eq!(responses[0].username, "bob");

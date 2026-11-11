@@ -14,9 +14,29 @@ import { remember } from "./recent.svelte";
 
 export type Search = Schemas["Search"];
 export type SearchScope = Schemas["SearchScope"];
+export type SearchState = Schemas["SearchState"];
 
-/** A search's state names the terminal flag once it is done */
-export const isDone = (state: string) => state.includes("Completed");
+/** Where a search is: waiting for its turn, running, or over in one of four ways */
+export type SearchStage = "waiting" | "running" | "found" | "cancelled" | "errored";
+
+const STAGES: Record<SearchState, SearchStage> = {
+  "Requested": "waiting",
+  "Queued": "waiting",
+  "InProgress": "running",
+  "Completed, TimedOut": "found",
+  "Completed, ResponseLimitReached": "found",
+  "Completed, FileLimitReached": "found",
+  "Completed, Cancelled": "cancelled",
+  "Completed, Errored": "errored"
+};
+
+export const searchStage = (state: SearchState) => STAGES[state];
+
+/** The search is over and its responses are stored */
+export const isDone = (state: SearchState) => {
+  const stage = STAGES[state];
+  return stage !== "waiting" && stage !== "running";
+};
 
 /** How many of a scope's subjects its label names before it counts the rest */
 const NAMED = 3;
@@ -43,7 +63,6 @@ const placeholder = (id: string, text: string, scope?: SearchScope): Search => (
   searchText: text,
   token: 0,
   state: "Requested",
-  isComplete: false,
   startedAt: new Date().toISOString(),
   endedAt: null,
   responseCount: 0,

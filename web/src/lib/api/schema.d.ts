@@ -7360,8 +7360,6 @@ export interface components {
              * @description the search's id, chosen by the client or generated
              */
             id: string;
-            /** @description `state` has `Completed`; the responses are stored by the time this is true */
-            isComplete: boolean;
             /**
              * Format: int32
              * @description locked files over the accepted responses
@@ -7392,8 +7390,8 @@ export interface components {
              * @description when the record was created
              */
             startedAt: string;
-            /** @description the search's state flags */
-            state: components["schemas"]["SearchStates"];
+            /** @description where the search is */
+            state: components["schemas"]["SearchState"];
             /**
              * Format: int32
              * @description the token that ties the peers' responses to this search
@@ -7531,10 +7529,10 @@ export interface components {
          */
         SearchScopeType: "network" | "user" | "room" | "rooms" | "buddies" | "wishlist";
         /**
-         * @description the names of the set state flags joined by ", "
-         * @example Completed, TimedOut
+         * @description The state of a search
+         * @enum {string}
          */
-        SearchStates: string;
+        SearchState: "Requested" | "Queued" | "InProgress" | "Completed, Cancelled" | "Completed, TimedOut" | "Completed, ResponseLimitReached" | "Completed, FileLimitReached" | "Completed, Errored";
         /**
          * @description How long a search waits for another response: a number of milliseconds, or a duration such
          *     as `"15s"` or `"1m 30s"`.

@@ -1,6 +1,5 @@
 //! Flag sets written as the names of their set flags joined by `", "`, in ascending bit order,
-//! with `"None"` for the empty set: a search's state such as `"Completed, TimedOut"`, and file
-//! attributes such as `"ReadOnly, Directory"`.
+//! with `"None"` for the empty set, such as the file attributes `"ReadOnly, Directory"`.
 
 use bitflags::Flags;
 
@@ -77,7 +76,6 @@ mod tests {
   use serde::de::DeserializeOwned;
 
   use crate::files::FilesystemAttributes as Fs;
-  use crate::search::SearchStates as Search;
 
   fn round_trip<F: Serialize + DeserializeOwned + PartialEq + Debug>(rows: &[(F, &str)]) {
     for (value, text) in rows {
@@ -92,18 +90,6 @@ mod tests {
     round_trip(&[
       (Fs::Directory | Fs::ReadOnly, "ReadOnly, Directory"),
       (Fs::ReparsePoint | Fs::Directory, "Directory, ReparsePoint"),
-    ]);
-    round_trip(&[
-      (Search::Requested, "Requested"),
-      (Search::Queued, "Queued"),
-      (Search::InProgress, "InProgress"),
-      (Search::TimedOut | Search::Completed, "Completed, TimedOut"),
-      (
-        Search::Completed | Search::ResponseLimitReached,
-        "Completed, ResponseLimitReached",
-      ),
-      (Search::Completed | Search::Errored, "Completed, Errored"),
-      (Search::empty(), "None"),
     ]);
   }
 }

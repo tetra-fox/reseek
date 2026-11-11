@@ -8,10 +8,13 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use api_types::live::LiveFrame;
-use api_types::search::{Search, SearchResponse, SearchResponseReceived, SearchStates};
+use api_types::search::{
+  Search, SearchOutcome, SearchResponse, SearchResponseReceived, SearchState,
+};
 use chrono::Utc;
 use reseek_shares::lock;
-use soulseek_client::{ClientError, SearchState};
+use soulseek_client::ClientError;
+use soulseek_client::SearchState as ClientState;
 use soulseek_proto::peer;
 use tokio::sync::{Notify, oneshot, watch};
 use tokio::time::Instant;
@@ -48,8 +51,19 @@ struct Progress {
 }
 
 /// The search's state as the API writes it, from the client's.
-fn state(state: SearchState) -> SearchStates {
-  SearchStates::from_bits_retain(state.bits())
+fn state(state: ClientState) -> SearchState {
+  match state {
+    ClientState::Requested => SearchState::Requested,
+    ClientState::Queued => SearchState::Queued,
+    ClientState::InProgress => SearchState::InProgress,
+    ClientState::Completed(outcome) => SearchState::Completed(match outcome {
+      soulseek_client::SearchOutcome::Cancelled => SearchOutcome::Cancelled,
+      soulseek_client::SearchOutcome::TimedOut => SearchOutcome::TimedOut,
+      soulseek_client::SearchOutcome::ResponseLimitReached => SearchOutcome::ResponseLimitReached,
+      soulseek_client::SearchOutcome::FileLimitReached => SearchOutcome::FileLimitReached,
+      soulseek_client::SearchOutcome::Errored => SearchOutcome::Errored,
+    }),
+  }
 }
 
 /// `file` as a search result shows it, with the size hint.
@@ -107,13 +121,13 @@ impl Running {
 
   /// The client moved the search to `next`. The first report says the client took it; the
   /// end is not taken here, but written with the responses once the client returns.
-  pub fn state_changed(&self, next: SearchState) {
+  pub fn state_changed(&self, next: ClientState) {
     let mut progress = lock(&self.progress);
     if let Some(accepted) = progress.accepted.take() {
       // the request waiting for this may have given up already
       let _ = accepted.send(Ok(()));
     }
-    if next.contains(SearchState::COMPLETED) {
+    if next.is_complete() {
       return;
     }
     progress.record.state = state(next);
@@ -239,18 +253,16 @@ impl Searches {
         std::mem::take(&mut progress.responses),
       )
     };
-    let reason = match result {
-      Ok(search) => state(search.state) - SearchStates::Completed,
+    record.state = match result {
+      Ok(search) => state(search.state),
       Err(ClientError::Canceled) if running.canceled.load(Ordering::Relaxed) => {
-        SearchStates::Cancelled
+        SearchState::Completed(SearchOutcome::Cancelled)
       }
       Err(error) => {
         warn!(%error, "search failed");
-        SearchStates::Errored
+        SearchState::Completed(SearchOutcome::Errored)
       }
     };
-    record.state = SearchStates::Completed | reason;
-    record.is_complete = true;
     record.ended_at = Some(Utc::now());
     let written = record.clone();
     let stored = self
@@ -303,8 +315,7 @@ mod tests {
         scope_type: SearchScopeType::Network,
         subjects: Vec::new(),
       },
-      state: SearchStates::Requested,
-      is_complete: false,
+      state: SearchState::Requested,
       started_at: Utc::now(),
       ended_at: None,
       response_count: 0,
@@ -328,21 +339,20 @@ mod tests {
       .unwrap();
     let (accepted, acceptance) = oneshot::channel();
     let running = Arc::new(Running::new(record, accepted));
-    running.state_changed(SearchState::IN_PROGRESS);
+    running.state_changed(ClientState::InProgress);
     acceptance.await.unwrap().unwrap();
     lock(&running.progress).moved = false;
 
-    let ended = SearchState::COMPLETED | SearchState::TIMED_OUT;
+    let ended = ClientState::Completed(soulseek_client::SearchOutcome::TimedOut);
     running.state_changed(ended);
     {
       let progress = lock(&running.progress);
-      assert_eq!(progress.record.state, SearchStates::InProgress);
-      assert!(!progress.record.is_complete);
+      assert_eq!(progress.record.state, SearchState::InProgress);
       assert!(!progress.moved, "nothing is staged to be written");
     }
     assert!(!*running.done.borrow());
     let stored = searches.get(id, false).await.unwrap();
-    assert!(!stored.is_complete, "the end is not written yet");
+    assert!(!stored.state.is_complete(), "the end is not written yet");
 
     let search = soulseek_client::Search {
       query: SearchQuery::parse("animals"),
@@ -358,9 +368,8 @@ mod tests {
     let stored = searches.get(id, true).await.unwrap();
     assert_eq!(
       stored.state,
-      SearchStates::Completed | SearchStates::TimedOut
+      SearchState::Completed(SearchOutcome::TimedOut)
     );
-    assert!(stored.is_complete);
     assert_eq!(stored.responses, Some(Vec::new()));
   }
 
@@ -377,7 +386,7 @@ mod tests {
       .unwrap();
     let (accepted, _acceptance) = oneshot::channel();
     let running = Arc::new(Running::new(record, accepted));
-    running.state_changed(SearchState::IN_PROGRESS);
+    running.state_changed(ClientState::InProgress);
     searches.running().insert(id, running.clone());
     let cancel = running.cancel.clone();
     let following = searches.clone();
@@ -393,7 +402,7 @@ mod tests {
     let stored = searches.get(id, false).await.unwrap();
     assert_eq!(
       stored.state,
-      SearchStates::Completed | SearchStates::Cancelled
+      SearchState::Completed(SearchOutcome::Cancelled)
     );
   }
 

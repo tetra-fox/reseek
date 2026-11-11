@@ -8,42 +8,103 @@ use utoipa::openapi::schema::{ObjectBuilder, OneOfBuilder, Schema, Type};
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
-use crate::flags::flag_names;
 use crate::transfers::SortOrder;
 
-bitflags::bitflags! {
-  /// The state of a search, written as the names of the set flags in ascending bit order
-  /// joined by `", "`: `"Requested"`, `"Queued"`, `"InProgress"`, and `"Completed, <reason>"`
-  /// with one of `Cancelled`, `TimedOut`, `ResponseLimitReached`, `FileLimitReached` or
-  /// `Errored`.
-  #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-  pub struct SearchStates: u32 {
-    /// the record exists and the request is not sent yet
-    const Requested = 1;
-    /// the request is being written to the server or was, and responses are accepted
-    const InProgress = 2;
-    /// finished, with one reason flag
-    const Completed = 4;
-    /// reason: canceled here
-    const Cancelled = 8;
-    /// reason: no response was accepted for the search's timeout
-    const TimedOut = 16;
-    /// reason: the response limit was reached
-    const ResponseLimitReached = 32;
-    /// reason: the file limit was reached
-    const FileLimitReached = 64;
-    /// reason: the request could not be sent, or the search failed
-    const Errored = 128;
-    /// waiting for one of the searches that may run at once to finish
-    const Queued = 256;
+/// The state of a search: `"Requested"`, `"Queued"`, `"InProgress"`, and once it is over
+/// `"Completed, <outcome>"`, such as `"Completed, TimedOut"`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum SearchState {
+  /// the record exists and the request is not sent yet
+  Requested,
+  /// waiting for one of the searches that may run at once to finish
+  Queued,
+  /// the request is being written to the server or was, and responses are accepted
+  InProgress,
+  /// finished; the responses are stored by the time a search is written in this state
+  Completed(SearchOutcome),
+}
+
+/// How a search finished.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum SearchOutcome {
+  /// canceled here
+  Cancelled,
+  /// no response was accepted for the search's timeout
+  TimedOut,
+  /// the response limit was reached
+  ResponseLimitReached,
+  /// the file limit was reached
+  FileLimitReached,
+  /// the request could not be sent, or the search failed
+  Errored,
+}
+
+impl SearchState {
+  /// every state, in the order a search goes through them
+  pub const ALL: [Self; 8] = [
+    Self::Requested,
+    Self::Queued,
+    Self::InProgress,
+    Self::Completed(SearchOutcome::Cancelled),
+    Self::Completed(SearchOutcome::TimedOut),
+    Self::Completed(SearchOutcome::ResponseLimitReached),
+    Self::Completed(SearchOutcome::FileLimitReached),
+    Self::Completed(SearchOutcome::Errored),
+  ];
+
+  /// The state as it is written.
+  pub fn as_str(self) -> &'static str {
+    match self {
+      Self::Requested => "Requested",
+      Self::Queued => "Queued",
+      Self::InProgress => "InProgress",
+      Self::Completed(SearchOutcome::Cancelled) => "Completed, Cancelled",
+      Self::Completed(SearchOutcome::TimedOut) => "Completed, TimedOut",
+      Self::Completed(SearchOutcome::ResponseLimitReached) => "Completed, ResponseLimitReached",
+      Self::Completed(SearchOutcome::FileLimitReached) => "Completed, FileLimitReached",
+      Self::Completed(SearchOutcome::Errored) => "Completed, Errored",
+    }
+  }
+
+  /// the search is over and its responses are stored
+  pub fn is_complete(self) -> bool {
+    matches!(self, Self::Completed(_))
   }
 }
 
-flag_names!(
-  SearchStates,
-  "the names of the set state flags joined by \", \"",
-  "Completed, TimedOut"
-);
+impl std::fmt::Display for SearchState {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.write_str(self.as_str())
+  }
+}
+
+impl Serialize for SearchState {
+  fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+    serializer.serialize_str(self.as_str())
+  }
+}
+
+impl<'de> Deserialize<'de> for SearchState {
+  fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+    let text = <std::borrow::Cow<'de, str>>::deserialize(deserializer)?;
+    Self::ALL
+      .into_iter()
+      .find(|state| state.as_str() == text)
+      .ok_or_else(|| serde::de::Error::custom(format!("`{text}` is not a search state")))
+  }
+}
+
+impl utoipa::PartialSchema for SearchState {
+  fn schema() -> RefOr<Schema> {
+    ObjectBuilder::new()
+      .schema_type(Type::String)
+      .description(Some("The state of a search"))
+      .enum_values(Some(Self::ALL.map(Self::as_str)))
+      .into()
+  }
+}
+
+impl ToSchema for SearchState {}
 
 /// Where a search is sent.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
@@ -93,10 +154,8 @@ pub struct Search {
   pub token: u32,
   /// where the search was sent
   pub scope: SearchScope,
-  /// the search's state flags
-  pub state: SearchStates,
-  /// `state` has `Completed`; the responses are stored by the time this is true
-  pub is_complete: bool,
+  /// where the search is
+  pub state: SearchState,
   /// when the record was created
   pub started_at: DateTime<Utc>,
   /// when the search finished, null while it runs
@@ -447,6 +506,31 @@ mod tests {
       attributes
     );
     assert!(serde_json::from_str::<FileAttributeType>("\"Duration\"").is_err());
+  }
+
+  #[test]
+  fn search_states_are_written_by_name_and_read_back() {
+    let written: Vec<String> = SearchState::ALL
+      .iter()
+      .map(|state| serde_json::to_string(state).unwrap())
+      .collect();
+    assert_eq!(
+      written,
+      [
+        "\"Requested\"",
+        "\"Queued\"",
+        "\"InProgress\"",
+        "\"Completed, Cancelled\"",
+        "\"Completed, TimedOut\"",
+        "\"Completed, ResponseLimitReached\"",
+        "\"Completed, FileLimitReached\"",
+        "\"Completed, Errored\"",
+      ]
+    );
+    for (state, json) in SearchState::ALL.into_iter().zip(&written) {
+      assert_eq!(serde_json::from_str::<SearchState>(json).unwrap(), state);
+    }
+    assert!(serde_json::from_str::<SearchState>("\"Completed\"").is_err());
   }
 }
 

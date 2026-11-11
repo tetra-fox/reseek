@@ -24738,7 +24738,6 @@
           "token",
           "scope",
           "state",
-          "isComplete",
           "startedAt",
           "responseCount",
           "fileCount",
@@ -24764,10 +24763,6 @@
             "type": "string",
             "format": "uuid",
             "description": "the search's id, chosen by the client or generated"
-          },
-          "isComplete": {
-            "type": "boolean",
-            "description": "`state` has `Completed`; the responses are stored by the time this is true"
           },
           "lockedFileCount": {
             "type": "integer",
@@ -24812,8 +24807,8 @@
             "description": "when the record was created"
           },
           "state": {
-            "$ref": "#/components/schemas/SearchStates",
-            "description": "the search's state flags"
+            "$ref": "#/components/schemas/SearchState",
+            "description": "where the search is"
           },
           "token": {
             "type": "integer",
@@ -25035,11 +25030,18 @@
           "wishlist"
         ]
       },
-      "SearchStates": {
+      "SearchState": {
         "type": "string",
-        "description": "the names of the set state flags joined by \", \"",
-        "examples": [
-          "Completed, TimedOut"
+        "description": "The state of a search",
+        "enum": [
+          "Requested",
+          "Queued",
+          "InProgress",
+          "Completed, Cancelled",
+          "Completed, TimedOut",
+          "Completed, ResponseLimitReached",
+          "Completed, FileLimitReached",
+          "Completed, Errored"
         ]
       },
       "SearchTimeout": {

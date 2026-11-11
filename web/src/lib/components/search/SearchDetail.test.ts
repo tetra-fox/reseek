@@ -123,7 +123,6 @@ describe("search results", () => {
       search({
         id: ID,
         state: "Completed, TimedOut",
-        isComplete: true,
         endedAt: "2026-10-26T10:00:15Z",
         responseCount: 3,
         fileCount: 6
@@ -169,7 +168,6 @@ describe("search results", () => {
       search({
         id: ID,
         state: "Completed, TimedOut",
-        isComplete: true,
         endedAt: "2026-10-26T10:00:15Z",
         responseCount: 3
       })
