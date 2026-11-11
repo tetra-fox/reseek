@@ -33,7 +33,13 @@
     type SortKey,
     TRANSFER_PLACEHOLDER
   } from "#lib/transfers/grid/view.js";
-  import { type ChipId, type Direction, isSucceeded, STATE_CHIPS } from "#lib/transfers/states.js";
+  import {
+    type ChipId,
+    type Direction,
+    isSucceeded,
+    STATE_CHIPS,
+    type TransferState
+  } from "#lib/transfers/states.js";
   import type { Expansion } from "#lib/tree/expansion.svelte.js";
   import { viewport } from "#lib/ui/viewport.svelte.js";
 
@@ -51,7 +57,7 @@
     text: string;
     /** a bulk action is running, or there is nothing to act on */
     disabled: boolean;
-    onbulk: (action: BulkAction, test: (state: string) => boolean, scope: string) => void;
+    onbulk: (action: BulkAction, test: (state: TransferState) => boolean, scope: string) => void;
     onadd: () => void;
     /** opens the message to every user in the list, on the uploads screen */
     onmessage: () => void;

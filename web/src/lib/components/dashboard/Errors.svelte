@@ -27,7 +27,7 @@
     getFileName,
     truncate
   } from "#lib/format.js";
-  import { endingText } from "#lib/transfers/states.js";
+  import { endingText, type TransferState } from "#lib/transfers/states.js";
 
   import AreaChart from "./AreaChart.svelte";
 
@@ -96,7 +96,7 @@
   /** the direction toggles' words, the values being the API's directions */
   const WHICH: Record<Which, string> = { Upload: "Uploads", Download: "Downloads", All: "All" };
   /** how a failed transfer ended, as the start of its line: "Failed", "Timed out" */
-  const endingWord = (state: string) => {
+  const endingWord = (state: TransferState) => {
     const word = endingText(state);
     return word.charAt(0).toUpperCase() + word.slice(1);
   };

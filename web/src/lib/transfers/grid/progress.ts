@@ -1,4 +1,10 @@
-import { isActive, isRetryable, isSucceeded, type Transfer } from "#lib/transfers/states.js";
+import {
+  isActive,
+  isMoving,
+  isRetryable,
+  isSucceeded,
+  type Transfer
+} from "#lib/transfers/states.js";
 
 /** How far a group of transfers has come, counting those still wanted: not failed or canceled */
 export type Progress = {
@@ -32,7 +38,7 @@ export const groupProgress = (transfers: Transfer[]): Progress => {
     }
     moved += Math.min(t.bytesTransferred, t.size);
     if (isActive(t.state)) running = true;
-    if (t.state === "InProgress" && t.remainingTime !== null && t.remainingTime !== undefined)
+    if (isMoving(t.state) && t.remainingTime !== null && t.remainingTime !== undefined)
       left = Math.max(left, t.remainingTime);
     else known = false;
   }

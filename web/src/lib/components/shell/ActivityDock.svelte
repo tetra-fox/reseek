@@ -36,6 +36,7 @@
   import { ListControl } from "#lib/lists/list.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { roomHref, userHref } from "#lib/nav.js";
+  import { isSucceeded } from "#lib/transfers/states.js";
   import { motionFast } from "#lib/ui/motion.js";
   import { viewport } from "#lib/ui/viewport.svelte.js";
 
@@ -182,9 +183,7 @@
     {#each shown as e, i (e.id)}
       {@const k = e.kind}
       {@const Icon =
-        k.type === "uploadEnded" && k.state !== "Completed, Succeeded"
-          ? CircleXIcon
-          : ICONS[k.type]}
+        k.type === "uploadEnded" && !isSucceeded(k.state) ? CircleXIcon : ICONS[k.type]}
       <div
         role="row"
         {...list.line(e, i)}
@@ -196,7 +195,7 @@
             class={[
               "size-3.5",
               k.type === "uploadEnded"
-                ? k.state === "Completed, Succeeded"
+                ? isSucceeded(k.state)
                   ? "text-success"
                   : "text-danger"
                 : "text-fg-muted"

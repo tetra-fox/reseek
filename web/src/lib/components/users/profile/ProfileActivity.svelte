@@ -10,7 +10,7 @@
   import { formatDate, getFileName, plural } from "#lib/format.js";
   import { Loader } from "#lib/loader.svelte.js";
   import { call } from "#lib/request.js";
-  import { endingText, isSucceeded } from "#lib/transfers/states.js";
+  import { endingText, isSucceeded, type TransferState } from "#lib/transfers/states.js";
 
   // a newest-first timeline of what happened with one user: transfers, messages by day, blocks
   let { username }: { username: string } = $props();
@@ -24,7 +24,7 @@
     id: string;
     direction: string;
     filename: string;
-    state: string;
+    state: TransferState;
     requestedAt: string;
     endedAt?: string | null;
     exception?: string | null;

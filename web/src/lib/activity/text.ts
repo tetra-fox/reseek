@@ -1,5 +1,5 @@
 import { plural } from "#lib/format.js";
-import { endingText } from "#lib/transfers/states.js";
+import { endingText, isSucceeded } from "#lib/transfers/states.js";
 
 import type { ActivityEntry, ActivityType } from "./activity.svelte";
 
@@ -70,7 +70,7 @@ export const activityParts = (e: ActivityEntry, size: (bytes: number) => string)
         ...who
       ];
     case "uploadEnded":
-      return k.state === "Completed, Succeeded"
+      return isSucceeded(k.state)
         ? [t("Finished uploading "), { kind: "file", path: k.filename }, t(" to "), ...who]
         : [
             t("Upload of "),

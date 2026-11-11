@@ -1,6 +1,6 @@
 import { live } from "#lib/live/live.svelte.js";
 
-import { ERRORED, type Direction, type Transfer } from "./states";
+import { type Direction, isFailed, isSucceeded, type Transfer } from "./states";
 
 type Counts = { succeeded: number; failed: number };
 
@@ -45,12 +45,7 @@ class Unseen {
   }
 
   #updated(t: Transfer) {
-    const outcome =
-      t.state === "Completed, Succeeded"
-        ? "succeeded"
-        : ERRORED.includes(t.state)
-          ? "failed"
-          : null;
+    const outcome = isSucceeded(t.state) ? "succeeded" : isFailed(t.state) ? "failed" : null;
     const direction = DIRECTIONS[t.direction as keyof typeof DIRECTIONS];
     if (!outcome || !direction) return;
     const key = `${t.id}:${outcome}`;

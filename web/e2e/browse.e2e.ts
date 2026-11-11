@@ -154,7 +154,7 @@ test("a file's row fills as it downloads, then flashes and shows it done", async
   await expect(row).toContainText("Queued");
 
   /** Lists the download in `state`, `percent` done, and has the screen read the list again */
-  const move = async (state: string, percent: number) => {
+  const move = async (state: Schemas["TransferStates"], percent: number) => {
     const t = transfer(`${MUSIC}\\Bootlegs\\B01.flac`, state, 1000, "carol");
     downloads = [{ ...t, id: "d1", percentComplete: percent, bytesTransferred: percent * 10 }];
     await page.mouse.move(0, 0);

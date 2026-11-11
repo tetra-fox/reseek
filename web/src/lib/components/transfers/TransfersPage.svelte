@@ -46,7 +46,8 @@
     type Direction,
     rowActions,
     STATE_CHIPS,
-    type Transfer
+    type Transfer,
+    type TransferState
   } from "#lib/transfers/states.js";
   import { downloads, uploads } from "#lib/transfers/transfers.svelte.js";
   import { unseen } from "#lib/transfers/unseen.svelte.js";
@@ -271,7 +272,7 @@
   };
 
   /** A header button: its scope over the filtered transfers */
-  const bulk = (action: BulkAction, test: (state: string) => boolean, scope: string) => {
+  const bulk = (action: BulkAction, test: (state: TransferState) => boolean, scope: string) => {
     const targets = filtered.filter((t) => test(t.state));
     if (action === "cancel") return cancel(targets);
     if (action === "remove") {

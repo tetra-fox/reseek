@@ -2,7 +2,7 @@ import { api, byUser, root } from "#lib/api/client.js";
 import { call, type Outcome } from "#lib/request.js";
 import { session } from "#lib/session.svelte.js";
 
-import type { Transfer } from "./states";
+import { isSucceeded, type Transfer } from "./states";
 
 /**
  * The URL that loads a finished download's file: shown in the browser (`inline`) or saved
@@ -40,7 +40,7 @@ export const encodePath = (relative: string) =>
  * download's path; null when none finished or it lies outside
  */
 export const localFolder = (transfers: Transfer[], downloads: string | null): string | null => {
-  const done = transfers.find((t) => t.state === "Completed, Succeeded" && t.localPath);
+  const done = transfers.find((t) => isSucceeded(t.state) && t.localPath);
   if (!done?.localPath || !downloads) return null;
   const sep = done.localPath.includes("\\") && !done.localPath.includes("/") ? "\\" : "/";
   const base = downloads.replace(/[\\/]+$/, "") + sep;

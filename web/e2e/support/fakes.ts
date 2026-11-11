@@ -512,7 +512,7 @@ export const user = (username: string, rest: Partial<Schemas["UserSummary"]> = {
 /** A download of `filename` from `username`, finished unless `state` says otherwise */
 export const transfer = (
   filename: string,
-  state = "Completed, Succeeded",
+  state: Schemas["TransferStates"] = "Completed, Succeeded",
   size = 1000,
   username = "alice"
 ) =>

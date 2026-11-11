@@ -8454,10 +8454,10 @@ export interface components {
          */
         TransferStateFilter: components["schemas"]["TransferStateCategory"] | components["schemas"]["TransferStates"];
         /**
-         * @description the names of the set state flags joined by ", "
-         * @example Completed, Succeeded
+         * @description where a transfer is
+         * @enum {string}
          */
-        TransferStates: string;
+        TransferStates: "Requested" | "Queued, Locally" | "Queued, Remotely" | "Initializing" | "InProgress" | "Completed, Succeeded" | "Completed, Cancelled" | "Completed, TimedOut" | "Completed, Errored" | "Completed, Rejected" | "Completed, Aborted";
         /** @description Aggregate figures over a set of finished transfers. */
         TransferSummary: {
             /**

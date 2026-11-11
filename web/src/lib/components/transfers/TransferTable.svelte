@@ -17,6 +17,7 @@
   import { type Group, groupingOf, type Item, treeOf } from "#lib/transfers/grid/view.js";
   import { type GroupHandlers, groupActions } from "#lib/transfers/groupActions.js";
   import type { Direction, Transfer } from "#lib/transfers/states.js";
+  import { isQueuedRemotely } from "#lib/transfers/states.js";
   import type { Transfers } from "#lib/transfers/transfers.svelte.js";
   import type { Expansion } from "#lib/tree/expansion.svelte.js";
   import type { TreeLine } from "#lib/tree/folders.js";
@@ -132,7 +133,7 @@
       const due = (table?.drawn() ?? []).find(
         (line) =>
           line.kind === "item" &&
-          line.item.state === "Queued, Remotely" &&
+          isQueuedRemotely(line.item.state) &&
           now - (asked.get(line.item.id) ?? 0) >= refreshMs
       );
       if (due?.kind !== "item") return;

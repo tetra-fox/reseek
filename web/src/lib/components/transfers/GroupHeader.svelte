@@ -15,7 +15,7 @@
   import { groupProgress } from "#lib/transfers/grid/progress.js";
   import type { Group } from "#lib/transfers/grid/view.js";
   import { type GroupHandlers, groupActions } from "#lib/transfers/groupActions.js";
-  import { isRetryable, type Direction } from "#lib/transfers/states.js";
+  import { type Direction, isEnded, isQueued, isRetryable } from "#lib/transfers/states.js";
   import type { Transfers } from "#lib/transfers/transfers.svelte.js";
   import { quota, waits } from "#lib/transfers/why.svelte.js";
   import type { Expansion } from "#lib/tree/expansion.svelte.js";
@@ -39,14 +39,14 @@
 
   const list = $derived(group.transfers);
   const bytes = $derived(list.reduce((n, t) => n + t.size, 0));
-  const done = $derived(list.filter((t) => t.state.includes("Completed")).length);
+  const done = $derived(list.filter((t) => isEnded(t.state)).length);
   const failed = $derived(list.filter((t) => isRetryable(t.state)).length);
   const progress = $derived(groupProgress(list));
   const folded = $derived(!expansion.isOpen(group.key));
   // a user's quota, from why the first of their queued uploads waits
   const waiting = $derived(
     direction === "upload" && group.kind === "user"
-      ? list.find((t) => t.state.includes("Queued"))
+      ? list.find((t) => isQueued(t.state))
       : undefined
   );
   $effect(() => {

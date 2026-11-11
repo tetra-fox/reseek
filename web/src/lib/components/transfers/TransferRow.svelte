@@ -47,7 +47,14 @@
     storeOf
   } from "#lib/transfers/actions.js";
   import { type ColumnId, fileInset } from "#lib/transfers/grid/columns.js";
-  import { type Direction, rowActions, stateChip, type Transfer } from "#lib/transfers/states.js";
+  import {
+    type Direction,
+    isMoving,
+    isQueued,
+    rowActions,
+    stateChip,
+    type Transfer
+  } from "#lib/transfers/states.js";
   import { downloads } from "#lib/transfers/transfers.svelte.js";
   import { placeText, waits, whyText } from "#lib/transfers/why.svelte.js";
   import { lineStart } from "#lib/tree/indent.js";
@@ -175,7 +182,7 @@
 {/snippet}
 
 {#snippet progress()}
-  {#if t.state === "InProgress"}
+  {#if isMoving(t.state)}
     <Progress
       value={t.percentComplete}
       label={`Progress of ${getFileName(t.filename)}`}
@@ -272,12 +279,12 @@
     {:else if column === "progress"}
       {@render progress()}
     {:else if column === "speed"}
-      {#if t.state === "InProgress"}
+      {#if isMoving(t.state)}
         <Sparkline points={speeds} />
         <span>{formatSpeed(t.averageSpeed)}</span>
       {/if}
     {:else if column === "eta"}
-      {t.state === "InProgress" && t.remainingTime !== null && t.remainingTime !== undefined
+      {isMoving(t.state) && t.remainingTime !== null && t.remainingTime !== undefined
         ? formatDuration(t.remainingTime / 1000)
         : NONE}
     {:else if column === "transferred"}
@@ -300,7 +307,7 @@
             {/snippet}
           </Tooltip>
         {/if}
-      {:else if t.state.includes("Queued")}
+      {:else if isQueued(t.state)}
         <Tooltip text={wait ? whyText(wait) : undefined}>
           {#snippet child({ props })}
             <span {...props} class="truncate" role="note" onpointerenter={() => void waits.load(t)}>

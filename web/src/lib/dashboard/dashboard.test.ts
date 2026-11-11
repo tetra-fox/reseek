@@ -79,7 +79,7 @@ describe("the outcome bars", () => {
     const n = (count: number) => ({ count }) as never;
     expect(
       outcomes({
-        Download: { Succeeded: n(10), Errored: n(2), TimedOut: n(1), Cancelled: n(3), None: n(8) },
+        Download: { Succeeded: n(10), Errored: n(2), TimedOut: n(1), Cancelled: n(3) },
         Upload: { Rejected: n(4), Aborted: n(1) },
         distinctUsers: 0
       } as never)

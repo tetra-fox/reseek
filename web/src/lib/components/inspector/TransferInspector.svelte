@@ -31,6 +31,7 @@
   import { act, denyAndBlock, open, storeOf } from "#lib/transfers/actions.js";
   import {
     type Direction,
+    isMoving,
     isQueued,
     rowActions,
     stateChip,
@@ -58,7 +59,7 @@
   const can = $derived(rowActions(t, direction));
   const write = $derived(session.can("ReadWrite"));
   const chip = $derived(stateChip(t));
-  const moving = $derived(t.state === "InProgress");
+  const moving = $derived(isMoving(t.state));
   const offered = $derived(rowAnalysis(t, direction));
   const analysis = $derived(offered?.target ?? null);
 

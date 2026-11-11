@@ -2,59 +2,95 @@ import type { Schemas } from "#lib/api/client.js";
 import { formatCount } from "#lib/format.js";
 
 export type Transfer = Schemas["Transfer"];
+export type TransferState = Schemas["TransferStates"];
 export type Direction = "download" | "upload";
 
+/** Where a transfer stands: before it moves, moving, or how it ended */
+type Stage = "requested" | "queued" | "starting" | "moving" | "succeeded" | "canceled" | "failed";
+
+type Facts =
+  | { stage: Exclude<Stage, "failed">; name: string }
+  | { stage: "failed"; name: string; outcome: string };
+
 /**
- * The outcomes of a failed transfer: a timeout, an error, a refusal or a size mismatch. A
- * cancel is not a failure, nor is an end with no outcome
+ * Each state's stage and its name alone, as it reads where the transfer's own figures don't
+ * belong. A failed state also names the outcome the reports count it under
  */
-export const FAILED_OUTCOMES = ["TimedOut", "Errored", "Rejected", "Aborted"];
-
-/** The states of a failed transfer */
-export const ERRORED = FAILED_OUTCOMES.map((outcome) => `Completed, ${outcome}`);
-
-/** It ended other than successfully, so it can be tried again */
-export const isRetryable = (state: string) =>
-  state.includes("Completed") && state !== "Completed, Succeeded";
-
-/** It is waiting or moving, so it can be stopped */
-export const isCancelable = (state: string) =>
-  [
-    "InProgress",
-    "Requested",
-    "Queued",
-    "Queued, Remotely",
-    "Queued, Locally",
-    "Initializing"
-  ].includes(state);
-
-/** It ended, so it can leave the list */
-export const isRemovable = (state: string) => state.includes("Completed");
-
-export const isQueued = (state: string) => state.includes("Queued");
-
-export const isSucceeded = (state: string) => state === "Completed, Succeeded";
-
-/** How a state reads where the transfer's own figures don't belong, as in its history */
-const NAMES: Record<string, string> = {
-  "InProgress": "In progress",
-  "Initializing": "Initializing",
-  "Requested": "Requested",
-  "Completed, Succeeded": "Succeeded",
-  "Completed, Errored": "Failed",
-  "Completed, Rejected": "Rejected",
-  "Completed, TimedOut": "Timed out",
-  "Completed, Cancelled": "Canceled"
+const FACTS: Record<TransferState, Facts> = {
+  "Requested": { stage: "requested", name: "Requested" },
+  "Queued, Locally": { stage: "queued", name: "Queued" },
+  "Queued, Remotely": { stage: "queued", name: "Queued" },
+  "Initializing": { stage: "starting", name: "Initializing" },
+  "InProgress": { stage: "moving", name: "In progress" },
+  "Completed, Succeeded": { stage: "succeeded", name: "Succeeded" },
+  "Completed, Cancelled": { stage: "canceled", name: "Canceled" },
+  "Completed, TimedOut": { stage: "failed", name: "Timed out", outcome: "TimedOut" },
+  "Completed, Errored": { stage: "failed", name: "Failed", outcome: "Errored" },
+  "Completed, Rejected": { stage: "failed", name: "Rejected", outcome: "Rejected" },
+  "Completed, Aborted": { stage: "failed", name: "Aborted", outcome: "Aborted" }
 };
 
+/**
+ * Every state, the transient ones first. Object.keys is typed string[], and the keys of FACTS are
+ * exactly the states
+ */
+export const TRANSFER_STATES = Object.keys(FACTS) as TransferState[];
+
+/**
+ * The report outcomes of a failed transfer: a timeout, an error, a refusal or a size mismatch. A
+ * cancel is not a failure
+ */
+export const FAILED_OUTCOMES = Object.values(FACTS).flatMap((f) =>
+  f.stage === "failed" ? [f.outcome] : []
+);
+
+const stageOf = (state: TransferState) => FACTS[state].stage;
+
+/** It ended, so it can leave the list */
+export const isEnded = (state: TransferState) => {
+  const stage = stageOf(state);
+  return stage === "succeeded" || stage === "canceled" || stage === "failed";
+};
+
+/** It ended other than successfully, so it can be tried again */
+export const isRetryable = (state: TransferState) => {
+  const stage = stageOf(state);
+  return stage === "canceled" || stage === "failed";
+};
+
+/** It is waiting or moving, so it can be stopped */
+export const isCancelable = (state: TransferState) => !isEnded(state);
+
+export const isSucceeded = (state: TransferState) => stageOf(state) === "succeeded";
+
+export const isFailed = (state: TransferState) => stageOf(state) === "failed";
+
+export const isCanceled = (state: TransferState) => stageOf(state) === "canceled";
+
+export const isQueued = (state: TransferState) => stageOf(state) === "queued";
+
+/** It waits here, for a slot or a retry, and can be moved in the local queue */
+export const isQueuedLocally = (state: TransferState) => state === "Queued, Locally";
+
+/** It waits in the peer's queue, which can be asked for its place */
+export const isQueuedRemotely = (state: TransferState) => state === "Queued, Remotely";
+
+export const isRequested = (state: TransferState) => stageOf(state) === "requested";
+
+/** It is starting or moving bytes */
+export const isActive = (state: TransferState) => {
+  const stage = stageOf(state);
+  return stage === "starting" || stage === "moving";
+};
+
+/** It is moving bytes */
+export const isMoving = (state: TransferState) => stageOf(state) === "moving";
+
 /** A state's name alone: "Queued", "Failed", "Timed out" */
-export const stateName = (state: string) =>
-  isQueued(state) ? "Queued" : (NAMES[state] ?? state.replace("Completed, ", ""));
+export const stateName = (state: TransferState) => FACTS[state].name;
 
 /** How an ended transfer's state reads in a sentence: "failed", "timed out", "canceled" */
-export const endingText = (state: string) => stateName(state).toLowerCase();
-
-export const isActive = (state: string) => state === "InProgress" || state === "Initializing";
+export const endingText = (state: TransferState) => stateName(state).toLowerCase();
 
 /**
  * What a file's row shows of its download behind it: waiting, moving with its bytes, done, or
@@ -62,22 +98,29 @@ export const isActive = (state: string) => state === "InProgress" || state === "
  */
 export type Fill = "waiting" | "moving" | "done" | "failed" | null;
 
+const FILLS: Record<Stage, Fill> = {
+  requested: "waiting",
+  queued: "waiting",
+  starting: "waiting",
+  moving: "moving",
+  succeeded: "done",
+  canceled: null,
+  failed: "failed"
+};
+
 export const fillOf = (t: Transfer | undefined, starting = false): Fill => {
   if (!t) return starting ? "waiting" : null;
-  if (t.state === "InProgress") return "moving";
-  if (isSucceeded(t.state)) return "done";
-  if (t.state === "Completed, Cancelled") return null;
-  return isRetryable(t.state) ? "failed" : "waiting";
+  return FILLS[stageOf(t.state)];
 };
 
 /** The state chips above the table, each with the states it stands for */
 export const STATE_CHIPS = [
   { id: "active", label: "Active", test: isActive },
-  { id: "queued", label: "Queued", test: (s: string) => isQueued(s) },
-  { id: "requested", label: "Requested", test: (s: string) => s === "Requested" },
+  { id: "queued", label: "Queued", test: isQueued },
+  { id: "requested", label: "Requested", test: isRequested },
   { id: "completed", label: "Succeeded", test: isSucceeded },
-  { id: "errored", label: "Failed", test: (s: string) => ERRORED.includes(s) },
-  { id: "canceled", label: "Canceled", test: (s: string) => s === "Completed, Cancelled" }
+  { id: "errored", label: "Failed", test: isFailed },
+  { id: "canceled", label: "Canceled", test: isCanceled }
 ] as const;
 
 export type ChipId = (typeof STATE_CHIPS)[number]["id"];
@@ -104,27 +147,32 @@ export const stateChip = (t: Transfer): { text: string; tone: Tone; title: strin
   const why = t.exception ?? null;
   const s = t.state;
   const name = stateName(s);
-  if (t.paused && !s.includes("Completed")) return { text: "Paused", tone: "neutral", title: null };
-  // whole percents rounded down, as a group's are, so a file never reads 100% before it is done
-  if (s === "InProgress")
-    return { text: `${Math.floor(t.percentComplete)}%`, tone: "accent", title: null };
-  if (s === "Completed, Succeeded") return { text: name, tone: "success", title: null };
-  if (s === "Initializing") return { text: name + tries, tone: "info", title: null };
-  if (isQueued(s)) {
-    const place = t.placeInQueue ? ` (#${formatCount(t.placeInQueue)})` : "";
-    return {
-      text: `${name}${place}${tries}`,
-      tone: t.attempts > 1 ? "warning" : "neutral",
-      title: s
-    };
+  if (t.paused && !isEnded(s)) return { text: "Paused", tone: "neutral", title: null };
+  switch (stageOf(s)) {
+    case "moving":
+      // whole percents rounded down, as a group's are, so a file never reads 100% before it is done
+      return { text: `${Math.floor(t.percentComplete)}%`, tone: "accent", title: null };
+    case "succeeded":
+      return { text: name, tone: "success", title: null };
+    case "starting":
+      return { text: name + tries, tone: "info", title: null };
+    case "queued": {
+      const place = t.placeInQueue ? ` (#${formatCount(t.placeInQueue)})` : "";
+      return {
+        text: `${name}${place}${tries}`,
+        tone: t.attempts > 1 ? "warning" : "neutral",
+        title: s
+      };
+    }
+    case "requested":
+      return { text: name + tries, tone: t.attempts > 1 ? "warning" : "neutral", title: null };
+    case "failed": {
+      const text = s === "Completed, Aborted" ? name : withReason(name, why);
+      return { text: text + tries, tone: "danger", title: why };
+    }
+    case "canceled":
+      return { text: name + tries, tone: "danger", title: why };
   }
-  if (s === "Requested") {
-    return { text: name + tries, tone: t.attempts > 1 ? "warning" : "neutral", title: null };
-  }
-  if (["Completed, Errored", "Completed, Rejected", "Completed, TimedOut"].includes(s))
-    return { text: withReason(name, why) + tries, tone: "danger", title: why };
-  if (s.startsWith("Completed, ")) return { text: name + tries, tone: "danger", title: why };
-  return { text: s, tone: "neutral", title: why };
 };
 
 /** What can be done to one transfer from its row, by its state and which way it goes */
@@ -142,10 +190,10 @@ export const rowActions = (t: Transfer, direction: Direction) => {
     remove: true,
     downloadAgain: download && succeeded,
     pause: download && isCancelable(s) && !t.paused,
-    resume: download && !!t.paused && !isRemovable(s),
-    reorder: download && s === "Queued, Locally" && !t.paused,
-    queuePosition: download && s === "Queued, Remotely",
-    deny: !download && !isRemovable(s),
+    resume: download && !!t.paused && !isEnded(s),
+    reorder: download && isQueuedLocally(s) && !t.paused,
+    queuePosition: download && isQueuedRemotely(s),
+    deny: !download && !isEnded(s),
     bump: !download && isQueued(s)
   };
 };

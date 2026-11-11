@@ -9,7 +9,7 @@ import { live } from "#lib/live/live.svelte.js";
 import { call, type Outcome } from "#lib/request.js";
 
 import { type BulkAction, summary } from "./bulk";
-import type { Direction, Transfer } from "./states";
+import { type Direction, isMoving, type Transfer } from "./states";
 
 /** How many speed samples a row's sparkline keeps */
 export const SPARK_POINTS = 20;
@@ -60,7 +60,7 @@ export class Transfers {
     live.on("transfers.updated", (t) => {
       if (!mine(t)) return;
       this.list.upsert(t);
-      if (t.state === "InProgress") {
+      if (isMoving(t.state)) {
         this.speeds.set(
           t.id,
           [...(this.speeds.get(t.id) ?? []), t.averageSpeed].slice(-SPARK_POINTS)

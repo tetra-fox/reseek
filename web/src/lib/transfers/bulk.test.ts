@@ -1,17 +1,25 @@
 import { describe, expect, it } from "vitest";
 
-import { STATES, transfer } from "#lib/testing/fixtures.js";
+import { transfer } from "#lib/testing/fixtures.js";
 
 import { activeAmong, bulkRequest, summary } from "./bulk";
+import { TRANSFER_STATES, type TransferState } from "./states";
 
 describe("bulk actions", () => {
-  const rows = STATES.map((state) => transfer({ state }));
-  const ids = (states: string[]) => rows.filter((t) => states.includes(t.state)).map((t) => t.id);
+  const rows = TRANSFER_STATES.map((state) => transfer({ state }));
+  const ids = (states: TransferState[]) =>
+    rows.filter((t) => states.includes(t.state)).map((t) => t.id);
 
   it("send only the transfers an action applies to", () => {
     expect(bulkRequest("retry", rows)).toEqual({
       action: "retry",
-      ids: ids(STATES.filter((s) => s.startsWith("Completed, ") && s !== "Completed, Succeeded"))
+      ids: ids([
+        "Completed, Cancelled",
+        "Completed, TimedOut",
+        "Completed, Errored",
+        "Completed, Rejected",
+        "Completed, Aborted"
+      ])
     });
     expect(bulkRequest("cancel", rows)).toEqual({
       action: "cancel",

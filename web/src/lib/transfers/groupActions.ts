@@ -27,7 +27,14 @@ import { act, folderOf, openFolder } from "./actions";
 import { PAUSE_WARNING } from "./bulk";
 import { encodePath } from "./content";
 import type { Group } from "./grid/view";
-import { type Direction, isCancelable, isRetryable, isSucceeded } from "./states";
+import {
+  type Direction,
+  isCancelable,
+  isEnded,
+  isQueued,
+  isRetryable,
+  isSucceeded
+} from "./states";
 import type { Transfers } from "./transfers.svelte";
 
 /** One of a group's actions. `text` shows its label beside the icon on a wide screen */
@@ -67,7 +74,7 @@ export const groupActions = (
   const jobId = group.kind === "job" ? group.key.replace(/^job:/, "") : null;
   const job = jobId && jobId !== "none" ? jobId : null;
   const pausable = list.filter((t) => isCancelable(t.state) && !t.paused);
-  const paused = list.filter((t) => t.paused && !t.state.includes("Completed"));
+  const paused = list.filter((t) => t.paused && !isEnded(t.state));
   const retryable = list.filter((t) => isRetryable(t.state));
 
   // saves the group's local folder as a zip; only finished files are in it
@@ -169,7 +176,7 @@ export const groupActions = (
         void act(
           store,
           "cancel",
-          list.filter((t) => t.state.includes("Queued")).map((t) => t.id)
+          list.filter((t) => isQueued(t.state)).map((t) => t.id)
         ),
       text: true
     },
