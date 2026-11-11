@@ -338,6 +338,7 @@
       bind:this={tree}
       {lines}
       {expansion}
+      place={`browse.${browser.username}`}
       label="Shared folders"
       columns={fileTemplate(columns)}
       width={fileWidth(columns)}

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
+  import { page } from "$app/state";
   import DownloadIcon from "@lucide/svelte/icons/download";
   import UploadIcon from "@lucide/svelte/icons/upload";
   import { untrack } from "svelte";
@@ -24,7 +25,7 @@
   import { heldOrder } from "#lib/lists/interaction.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
-  import { href } from "#lib/nav.js";
+  import { href, route } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
   import { useCrumbs } from "#lib/shell/crumbs.svelte.js";
   import { act, denyAndBlock, exportJson, open, openFolder } from "#lib/transfers/actions.js";
@@ -63,9 +64,9 @@
     direction: Direction;
     /** a state filter the screen opens with, from a link such as the dashboard's */
     filter?: string | null;
-    /** a download job whose downloads alone show, from its Show in Downloads link */
+    /** a download job whose downloads alone show, from its Show in Downloads link, taken once */
     job?: string | null;
-    /** a transfer the inspector opens on, from a link to it */
+    /** a transfer the inspector opens on, from a link to it, taken once */
     transfer?: string | null;
   };
   let { direction, filter = null, job = null, transfer = null }: Props = $props();
@@ -144,14 +145,36 @@
     const byMark =
       markLookup && view.filters.analysis ? marked(markLookup, view.filters.analysis) : null;
     return (t: Transfer) =>
-      (!job || t.jobId === job) && byState(t) && (!byMark || byMark(t)) && (!byText || byText(t));
+      (!jobShown || t.jobId === jobShown) &&
+      byState(t) &&
+      (!byMark || byMark(t)) &&
+      (!byText || byText(t));
   });
   const filtered = $derived(all.filter(keeps));
+
+  /** the download job whose downloads alone show, until its chip is cleared */
+  let jobShown = $state<string | null>(null);
+  // a link's job and transfer point once: the screen takes them, and they leave the address, so
+  // the screen comes back where it was left rather than to the link
+  $effect(() => {
+    if (!job && !transfer) return;
+    untrack(() => {
+      if (job) jobShown = job;
+      if (transfer) {
+        shownId = transfer;
+        inspector.show();
+      }
+      const { path, query } = route(page.url);
+      query.delete("job");
+      query.delete("transfer");
+      void goto(href(`${path}${query.size ? `?${query}` : ""}`), { replace: true, reset: false });
+    });
+  });
 
   // the chip of one job's downloads names the job
   let jobName = $state<string | null>(null);
   $effect(() => {
-    const id = job;
+    const id = jobShown;
     jobName = null;
     if (!id) return;
     let current = true;
@@ -162,12 +185,12 @@
     return () => (current = false);
   });
   const filters = $derived([
-    ...(job
+    ...(jobShown
       ? [
           {
             id: "job",
             label: jobName ?? "One download job",
-            clear: () => void goto(href("/downloads"))
+            clear: () => (jobShown = null)
           }
         ]
       : []),
@@ -176,14 +199,6 @@
       text = "";
     })
   ]);
-  // a link to one transfer opens the inspector on it
-  $effect(() => {
-    if (!transfer) return;
-    untrack(() => {
-      shownId = transfer;
-      inspector.show();
-    });
-  });
   const noun = $derived<Noun>(
     direction === "download" ? ["download", "downloads"] : ["upload", "uploads"]
   );

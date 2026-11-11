@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { afterNavigate, goto, onNavigate } from "$app/navigation";
+  import { goto, onNavigate } from "$app/navigation";
   import { page } from "$app/state";
   import { onMount, untrack } from "svelte";
   import { prefersReducedMotion } from "svelte/motion";
@@ -20,6 +20,7 @@
   import SendFilesDialog from "#lib/components/transfers/SendFilesDialog.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import BlockDialog from "#lib/components/users/BlockDialog.svelte";
+  import { keepsScroll } from "#lib/lists/scroll.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
   import {
     baseCrumbs,
@@ -44,6 +45,8 @@
   let { children } = $props();
 
   const at = $derived(route(page.url));
+  /** the content area's place is kept per route path; a new query on the same path keeps it */
+  const contentPlace = $derived(`content.${at.path}`);
 
   onMount(() => void app.bootstrap());
 
@@ -67,13 +70,6 @@
         if (page) page.style.viewTransitionName = "";
       });
     });
-  });
-
-  // the content area scrolls on its own, so a new screen starts it at the top as a page would
-  afterNavigate(({ from, to }) => {
-    if (from?.url && to?.url && route(from.url).path !== route(to.url).path) {
-      content.scroller?.scrollTo({ top: 0 });
-    }
   });
 
   // screens size their content from its height, and fixed layers keep clear of everything under
@@ -185,7 +181,8 @@
             bind:this={content.scroller}
             bind:clientHeight={contentHeight}
             class="relative min-h-0 min-w-0 flex-1 overflow-y-auto"
-            data-content>
+            data-content
+            {@attach keepsScroll(contentPlace)}>
             <main
               class={[
                 "mx-auto flex min-h-full w-full min-w-0 flex-col",

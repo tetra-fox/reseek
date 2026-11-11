@@ -5,7 +5,8 @@
   import { route } from "#lib/nav.js";
 
   // ?state=<filter> opens the list filtered, as the dashboard's figures link to it; ?job=<id>
-  // shows one download job's files, and ?transfer=<id> opens the inspector on one
+  // shows one download job's files, and ?transfer=<id> opens the inspector on one. The page takes
+  // those two once and drops them from the address
   const query = $derived(route(page.url).query);
   const filter = $derived(query.get("state"));
   const job = $derived(query.get("job"));

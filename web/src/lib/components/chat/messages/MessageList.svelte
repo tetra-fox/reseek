@@ -6,6 +6,7 @@
   import { tick, untrack } from "svelte";
   import { fly } from "svelte/transition";
 
+  import { paneKey } from "#lib/chat/chat.svelte.js";
   import {
     actionable,
     type Line,
@@ -21,6 +22,7 @@
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { formatDay, plural } from "#lib/format.js";
   import { freezesWhileUsed, interaction } from "#lib/lists/interaction.svelte.js";
+  import { markOf, Saver, type ScrollMark } from "#lib/lists/scroll.svelte.js";
   import { ListWindow } from "#lib/lists/virtual.svelte.js";
   import { MESSAGES } from "#lib/ui/bindings.js";
   import { isPressed, keysAria, keyStep } from "#lib/ui/keys.js";
@@ -43,6 +45,14 @@
   let { pane, watch, onreply, onread }: Props = $props();
 
   const notices = $derived(isNotices(pane.target));
+  /**
+   * where the log was left when it was not at the newest messages, by the message at its top;
+   * a log left at the bottom is forgotten, and starts at the newest again. One list per pane
+   */
+  // svelte-ignore state_referenced_locally
+  const place = `chat.${paneKey(pane.target.kind, pane.target.name)}`;
+  const saver = new Saver(place);
+  $effect(() => () => saver.flush());
 
   /** this close to the bottom counts as at the bottom */
   const NEAR = 48;
@@ -208,6 +218,13 @@
     if (menuFor === null && to instanceof Node && !box?.contains(to)) active = null;
   };
 
+  /** The message line at the top of the view, and how far below the view's top it starts */
+  const leftAt = (): ScrollMark | null => {
+    const offset = shown.offset;
+    const top = shown.drawn.find((d) => d.start + d.size > offset && d.line.kind === "message");
+    return top ? { key: top.key, index: top.index, delta: top.start - offset, top: offset } : null;
+  };
+
   /** Reads whether the view is at the bottom */
   const seen = () => {
     if (box) atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < NEAR;
@@ -274,7 +291,12 @@
       if (at !== null && (line?.kind !== "message" || line.message.localId !== at)) {
         toast("That message is no longer stored");
       }
-      if (index === -1) toBottom();
+      // without a message to show, the log opens where it was left, if that is still in the page
+      const left = at === null ? markOf(place) : null;
+      const back = left ? lines.findIndex((l) => l.key === left.key) : -1;
+      const start = shown.startOf(back);
+      if (left && back !== -1 && start !== undefined) shown.scrollToOffset(start - left.delta);
+      else if (index === -1) toBottom();
       else shown.scrollTo(index, "center");
       await tick();
       readIfSeen();
@@ -313,6 +335,7 @@
   const scrolled = async () => {
     if (!box) return;
     seen();
+    if (placed) saver.note(atBottom ? null : leftAt());
     if (atBottom) {
       fresh = 0;
       readIfSeen();

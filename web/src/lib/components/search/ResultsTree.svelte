@@ -284,6 +284,7 @@
   {lines}
   {expansion}
   label="Search results"
+  place={`search.${searchId}.tree`}
   columns={fileTemplate(columns)}
   width={fileWidth(columns)}
   {selected}

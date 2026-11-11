@@ -8,6 +8,8 @@ import {
 } from "@tanstack/virtual-core";
 import { untrack } from "svelte";
 
+import { landing, markOf, Return, Saver } from "./scroll.svelte";
+
 type Options = VirtualizerOptions<HTMLElement, HTMLElement>;
 
 /** What a list tells its window: its lines, their sizes, and how far to draw past the view */
@@ -38,6 +40,11 @@ export type WindowSpec<L> = Pick<Options, "estimateSize"> &
      * stays where it was on screen; without it, what is in view moves down with them
      */
     anchor?: (line: L) => boolean;
+    /**
+     * The name the box is remembered under: where it is left is kept, and it starts there again,
+     * on the same line even where lines came or went
+     */
+    place?: string;
   };
 
 /** A line in the window: the list's line with where it is drawn */
@@ -65,6 +72,8 @@ export class ListWindow<L> {
   #pending = false;
   /** bumped whenever the options change, after which the virtualizer reads the DOM again */
   #updates = $state(0);
+  /** the return to where the box was left, while one is under way */
+  #back: Return | null = null;
 
   #lines: () => L[];
   #key: (line: L) => string;
@@ -117,9 +126,11 @@ export class ListWindow<L> {
     let shown: L[] = [];
     /** where the box scrolls to once the DOM holds the lines that keep the view still */
     let kept: number | null = null;
+    let place: string | undefined;
+    let saver: Saver | null = null;
     // before the DOM updates, so the lines drawn are those of the new count and keys
     $effect.pre(() => {
-      const { sizes: next, onchange: changed, anchor, ...options } = spec();
+      const { sizes: next, onchange: changed, anchor, place: name, ...options } = spec();
       const all = lines();
       const element = this.#element;
       untrack(() => {
@@ -140,13 +151,27 @@ export class ListWindow<L> {
           sizes = next;
           this.#virtualizer.measure();
         }
-        if (held) {
-          const index = all.findIndex((line) => key(line) === held.key);
+        if (name !== place) {
+          saver?.flush();
+          place = name;
+          saver = name ? new Saver(name) : null;
+          this.#back = name ? new Return(markOf(name)) : null;
+        }
+        // a box scrolled since the return last put it ends the return, before it puts it again
+        if (element) this.#back?.holds(element);
+        const mark = this.#back?.mark;
+        const at = mark
+          ? landing(
+              mark,
+              all.map((line) => key(line))
+            )
+          : held && { index: all.findIndex((line) => key(line) === held.key), delta: held.delta };
+        if (at) {
           // reading the items makes the virtualizer measure the new lines
           this.#virtualizer.getVirtualItems();
-          const start = this.#virtualizer.measurementsCache[index]?.start;
+          const start = this.#virtualizer.measurementsCache[at.index]?.start;
           if (start !== undefined) {
-            kept = Math.max(0, start - held.delta);
+            kept = Math.max(0, start - at.delta);
             this.#virtualizer.scrollOffset = kept;
           }
         }
@@ -160,8 +185,15 @@ export class ListWindow<L> {
       void this.#updates;
       void this.#element;
       untrack(() => {
+        const element = this.#element;
+        // asked before the virtualizer moves the box, which may already take it to `kept`
+        const back = this.#back?.mark ? this.#back : null;
+        const going = !!element && !!back && back.holds(element);
         this.#virtualizer._willUpdate();
-        if (kept !== null && this.#element) this.#element.scrollTop = kept;
+        // a box not attached yet takes it once it is
+        if (kept === null || !element) return;
+        if (back && going) back.put(element, kept);
+        else if (!back) element.scrollTop = kept;
         kept = null;
       });
     });
@@ -174,9 +206,19 @@ export class ListWindow<L> {
         this.#pending = false;
         this.#version++;
         onchange?.();
+        if (saver && !this.#back?.mark) {
+          const top = this.#virtualizer.scrollOffset ?? 0;
+          const at = this.#inView(shown, () => true);
+          const index = at ? (this.#at.get(at.key) ?? 0) : 0;
+          // a list left at its top is forgotten, so it opens at the top over rows that came since
+          saver.note(
+            top === 0 ? null : { key: at?.key ?? null, index, delta: at?.delta ?? 0, top }
+          );
+        }
       });
     });
     $effect(() => this.#virtualizer._didMount());
+    $effect(() => () => saver?.flush());
   }
 
   /** Notes a change the virtualizer reported, for the effect above to take in */
@@ -201,7 +243,11 @@ export class ListWindow<L> {
   /** For `{@attach}` on the scroll box */
   attach = (node: HTMLElement) => {
     this.#element = node;
+    // a scroll the return did not make ends it
+    const scrolled = () => this.#back?.holds(node);
+    node.addEventListener("scroll", scrolled, { passive: true });
     return () => {
+      node.removeEventListener("scroll", scrolled);
       if (this.#element === node) this.#element = null;
     };
   };

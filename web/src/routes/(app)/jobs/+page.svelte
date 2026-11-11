@@ -4,7 +4,7 @@
   import JobsPage from "#lib/components/jobs/JobsPage.svelte";
   import { route } from "#lib/nav.js";
 
-  // `?job=<id>` opens that job's parts, as links from the notifications and the schedules do
+  // `?job=<id>` opens that job's parts, as links from the notifications do; the page takes it once
   const shown = $derived(route(page.url).query.get("job"));
 </script>
 

@@ -35,6 +35,8 @@
     expansion: Expansion;
     /** names the tree for assistive technology */
     label: string;
+    /** the name its scroll position is remembered under, for a tree a screen comes back to */
+    place?: string;
     /** the item rows' columns, as a grid template */
     columns: string;
     /** the selected items' ids; without it nothing in the tree can be selected */
@@ -113,6 +115,7 @@
     lines,
     expansion,
     label,
+    place,
     columns,
     selected,
     idOf,
@@ -252,6 +255,7 @@
       scrollMargin: rowsTop,
       scrollPaddingStart: rowsTop,
       sizes: row,
+      place,
       // a control in a line that scrolled out of the window gives focus back to the tree
       onchange: () => list.scrolled()
     })

@@ -530,6 +530,7 @@
         bind:this={tree}
         class={[loading && "opacity-60"]}
         {lines}
+        place={`files.${root}.${path}`}
         {expansion}
         label={`Files in /${root}/${path}`}
         columns={COLUMNS}

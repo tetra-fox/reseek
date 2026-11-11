@@ -180,6 +180,7 @@
     lines={tree.lines}
     {expansion}
     label={direction === "download" ? "Downloads" : "Uploads"}
+    place={`transfers.${direction}`}
     columns={grid.template}
     width={grid.width}
     {selected}

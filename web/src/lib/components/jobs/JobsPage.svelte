@@ -67,18 +67,17 @@
       document.getElementById(`job-${id}`)?.scrollIntoView({ block: "center" })
     );
   };
-  // a link to a job opens it once its row is there, which a cold load waits for
-  let focused: string | null = null;
+  // a link to a job opens it once its row is there, which a cold load waits for. The link points
+  // once: it leaves the address, so Jobs comes back where it was left rather than to the job
   $effect(() => {
-    if (!shown || shown === focused || !jobs.rows.get(shown)) return;
-    focused = shown;
-    untrack(() => focus(shown));
+    if (!shown || !jobs.rows.get(shown)) return;
+    const id = shown;
+    untrack(() => {
+      focus(id);
+      void goto(href("/jobs"), { replace: true, reset: false });
+    });
   });
   const toggle = (id: string) => (opened = opened === id ? null : id);
-  const show = (id: string) => {
-    focus(id);
-    void goto(href(`/jobs?job=${id}`), { replace: true });
-  };
 
   const flip = <T>(list: T[], value: T) =>
     list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
@@ -121,7 +120,7 @@
 </script>
 
 <div class="flex flex-col gap-section">
-  <SchedulesCard onshow={show} />
+  <SchedulesCard onshow={focus} />
 
   <div class="flex flex-wrap items-center gap-inline" bind:this={toolbar}>
     <Input

@@ -194,6 +194,7 @@
   {lines}
   {expansion}
   label="Search results"
+  place={`search.${searchId}.list`}
   columns={grid.template}
   width={grid.width}
   height="max(20rem, calc(var(--content-h) - 16rem))"

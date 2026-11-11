@@ -35,6 +35,7 @@
   import { freezesWhileUsed, heldOrder, interaction } from "#lib/lists/interaction.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
   import { RowDrag } from "#lib/lists/rowdrag.svelte.js";
+  import { keepsScroll } from "#lib/lists/scroll.svelte.js";
   import { chatHref, publicFeedHref, roomHref } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
   import { CHAT } from "#lib/ui/bindings.js";
@@ -251,7 +252,8 @@
     aria-activedescendant={list.activeId}
     tabindex="0"
     {@attach list.attach}
-    {@attach freezesWhileUsed}>
+    {@attach freezesWhileUsed}
+    {@attach keepsScroll("chat.list")}>
     {#each lines as line, i (line.key)}
       {#if line.kind === "header"}
         <div role="row" {...list.line(line, i)} class="rounded-control pt-1.5 pb-0.5">

@@ -1,3 +1,4 @@
+import { goto } from "$app/navigation";
 import { type ComponentProps, flushSync, mount, unmount } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -6,6 +7,7 @@ import { toasts } from "#lib/feedback/toast.svelte.js";
 import { UNDO_MS } from "#lib/feedback/undo.js";
 import { inspectorPrefs, SETTLE_MS } from "#lib/inspector/inspector.svelte.js";
 import { interaction } from "#lib/lists/interaction.svelte.js";
+import { remember } from "#lib/lists/scroll.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { session } from "#lib/session.svelte.js";
 import { transfer } from "#lib/testing/fixtures.js";
@@ -19,6 +21,7 @@ import { downloads } from "#lib/transfers/transfers.svelte.js";
 import TransfersPage from "./TransfersPage.svelte";
 
 vi.mock("$app/state", () => ({ page: { url: new URL("http://localhost/#/downloads") } }));
+vi.mock("$app/navigation", () => ({ goto: vi.fn() }));
 
 /** the grouped listing the daemon answers, one directory per transfer */
 const grouped = (rows: Transfer[]) =>
@@ -135,6 +138,59 @@ describe("the transfers table", () => {
     await flushFaked();
     expect(order()).toEqual([early.id, a.id, b.id, c.id]);
     expect(row(a.id)).toBe(first);
+  });
+
+  it("comes back on the row it was left at, where rows arrived above it meanwhile", async () => {
+    // jsdom keeps no scroll offset and lays out no content: each box keeps the offset it is
+    // given, over content taller than any offset here
+    const offsets = new WeakMap<Element, number>();
+    const own = Object.getOwnPropertyDescriptor(Element.prototype, "scrollTop")!;
+    const ownHeight = Object.getOwnPropertyDescriptor(Element.prototype, "scrollHeight")!;
+    Object.defineProperty(Element.prototype, "scrollHeight", { configurable: true, value: 1e5 });
+    Object.defineProperty(Element.prototype, "scrollTop", {
+      configurable: true,
+      get(this: Element) {
+        return offsets.get(this) ?? 0;
+      },
+      set(this: Element, top: number) {
+        offsets.set(this, top);
+      }
+    });
+    try {
+      const name = (n: number) => `x\\${n + 100}.flac`;
+      listing = Array.from({ length: 40 }, (_, n) => transfer({ filename: name(n * 2) }));
+      await start();
+      // a scroll the table did not make itself, which ends any return to where an earlier test
+      // left it
+      grid().scrollTop = 36 * 20 + 10;
+      grid().dispatchEvent(new Event("scroll"));
+      await flushFaked();
+      const left = grid().scrollTop;
+      unmount(component!);
+      unmount(hostPane!);
+
+      // five rows that sort before the one at the top came while the screen was away
+      listing = [
+        ...Array.from({ length: 5 }, (_, n) => transfer({ filename: name(n * 2 + 1) })),
+        ...listing
+      ];
+      await start();
+      expect(grid().scrollTop - left).toBe(5 * 36);
+
+      // left at the top, it opens at the top again, over the rows that came meanwhile
+      grid().scrollTop = 0;
+      grid().dispatchEvent(new Event("scroll"));
+      await flushFaked();
+      unmount(component!);
+      unmount(hostPane!);
+      listing = [transfer({ filename: name(-1) }), ...listing];
+      await start();
+      expect(grid().scrollTop).toBe(0);
+    } finally {
+      Object.defineProperty(Element.prototype, "scrollTop", own);
+      Object.defineProperty(Element.prototype, "scrollHeight", ownHeight);
+      remember("transfers.download", null);
+    }
   });
 
   describe("keys", () => {
@@ -493,5 +549,12 @@ describe("the transfers table", () => {
     expect(row("a")).not.toBeNull();
     expect(row("b")).toBeNull();
     expect(document.body.textContent).toContain("One download job");
+    // the link points once: it leaves the address, and the chip holds the filter
+    expect(goto).toHaveBeenCalledWith("#/downloads", { replace: true, reset: false });
+    document
+      .querySelector<HTMLButtonElement>('[aria-label="Remove filter One download job"]')!
+      .click();
+    await flushFaked();
+    expect(row("b")).not.toBeNull();
   });
 });

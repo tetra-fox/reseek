@@ -21,6 +21,7 @@
   import { formatCount, formatSpeed, plural } from "#lib/format.js";
   import { freezesWhileUsed, heldOrder, interaction } from "#lib/lists/interaction.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
+  import { keepsScroll } from "#lib/lists/scroll.svelte.js";
   import { userHref } from "#lib/nav.js";
   import type { Outcome } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
@@ -214,7 +215,8 @@
     aria-activedescendant={list.activeId}
     tabindex="0"
     {@attach list.attach}
-    {@attach freezesWhileUsed}>
+    {@attach freezesWhileUsed}
+    {@attach keepsScroll(`chat.members.${members.name}`)}>
     {#each lines as line, i (line.key)}
       {#if line.kind === "header"}
         <div

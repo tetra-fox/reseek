@@ -155,6 +155,7 @@
     () => ({
       estimateSize: () => 2.5 * rem.px,
       overscan: 10,
+      place: "users.buddies",
       scrollMargin: headerHeight,
       scrollPaddingStart: headerHeight,
       sizes: rem.px,
