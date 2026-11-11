@@ -368,3 +368,21 @@ export const treeLines = <T>(
   walk(roots, 0);
   return lines;
 };
+
+/**
+ * What Select all ticks in a tree's lines: the items that can be ticked, and those inside a
+ * folder whose line is closed, as its tick takes them; with `folderId`, for a tree whose folders
+ * are picked like items, the folders on the lines in place of what they hold
+ */
+export const selectAllIds = <T>(
+  lines: TreeLine<T>[],
+  idOf: (item: T) => string,
+  tickable: (item: T) => boolean,
+  folderId?: (node: FolderNode<T>) => string
+): string[] =>
+  lines.flatMap((line, at) => {
+    if (line.kind === "item") return tickable(line.item) ? [idOf(line.item)] : [];
+    if (folderId) return [folderId(line.node)];
+    const closed = (lines[at + 1]?.depth ?? -1) <= line.depth;
+    return closed ? itemsUnder(line.node).filter(tickable).map(idOf) : [];
+  });
