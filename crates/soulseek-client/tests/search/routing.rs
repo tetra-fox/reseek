@@ -7,8 +7,10 @@ use std::net::{IpAddr, Ipv4Addr};
 use std::sync::{Arc, Mutex};
 
 use crate::support::soulfind::{self, Soulfind, User};
-use crate::support::{Logs, free_port};
-use soulseek_client::{ClientOptions, Event, SearchReply, SearchResponseResolver, SearchScope};
+use crate::support::{PATIENCE, free_port};
+use soulseek_client::{
+  ClientOptions, Event, SearchOptions, SearchReply, SearchResponseResolver, SearchScope,
+};
 use soulseek_proto::peer::{File, SearchRequest, SearchResponse};
 use soulseek_proto::{PeerMessage, SearchQuery};
 use tokio_util::sync::CancellationToken;
@@ -110,36 +112,31 @@ async fn delivered(responder: &mut User, token: u32) -> Arc<SearchReply> {
     .await
 }
 
-/// waits until the searcher's peer dispatcher has seen the answer to `token` from `responder`
-async fn arrived(logs: &Logs, responder: &str, token: u32) {
-  logs
-    .wait_for(&[
-      "search response for no active search",
-      &format!("username=\"{responder}\""),
-      &format!("token={token}"),
-    ])
-    .await;
-}
-
 #[tokio::test]
 async fn an_encoded_answer_is_sent_as_it_is() {
-  let logs = Logs::capture();
   let Some(server) = soulfind::server() else {
     return;
   };
-  let (mut responder, searcher, _asked) = responder_and_searcher(&server, 1, Made::Encoded).await;
-  searcher
-    .client
-    .send_search_request(
-      &SearchScope::User(vec![responder.username.clone()]),
-      21,
-      "x",
-    )
+  let (responder, searcher, _asked) = responder_and_searcher(&server, 1, Made::Encoded).await;
+  // the search ends with the one answer it waits for
+  let options = SearchOptions {
+    response_limit: 1,
+    filter_responses: false,
+    ..SearchOptions::default()
+  };
+  let cancel = CancellationToken::new();
+  let searched = searcher.client.search(
+    "encoded",
+    SearchScope::User(vec![responder.username.clone()]),
+    Some(21),
+    options,
+    &cancel,
+  );
+  let (_, responses) = tokio::time::timeout(PATIENCE, searched)
     .await
+    .expect("the search ends")
     .unwrap();
-  let reply = delivered(&mut responder, 21).await;
-  assert!(matches!(*reply, SearchReply::Encoded(_)));
-  arrived(&logs, &responder.username, 21).await;
+  assert_eq!(responses, vec![response(&responder.username, 21, 1)]);
 }
 
 #[tokio::test]

@@ -41,6 +41,11 @@ impl Client {
     }
   }
 
+  /// whether a request of ours waits for `username`'s user info
+  pub(crate) fn user_info_awaited(&self, username: &str) -> bool {
+    self.waiter().has_wait(&info_key(username))
+  }
+
   /// A peer's user info could not be read, being too long or malformed: the request waiting for
   /// it fails with `error` now rather than timing out
   pub(crate) fn user_info_unreadable(&self, username: &str, error: ClientError) {

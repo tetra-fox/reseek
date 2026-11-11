@@ -26,6 +26,7 @@ use soulseek_proto::ServerRequest;
 use tokio::sync::{broadcast, watch};
 use tokio_util::sync::CancellationToken;
 
+use crate::browse::FolderRequests;
 use crate::conn::MessageConn;
 use crate::distributed::DistributedNetwork;
 use crate::error::ClientError;
@@ -82,6 +83,7 @@ struct Inner {
   endpoints: endpoint::Endpoints,
   transfers: Arc<Transfers>,
   searches: Searches,
+  folder_requests: FolderRequests,
   /// how many connections peers opened to our listener so far
   inbound: watch::Sender<u64>,
   /// canceled when the client is disposed or dropped
@@ -128,6 +130,7 @@ impl Client {
       endpoints: endpoint::Endpoints::new(options.limits.user_endpoint_cache_size),
       transfers: Arc::new(Transfers::new(&options)),
       searches: Searches::new(options.maximum_concurrent_searches),
+      folder_requests: FolderRequests::default(),
       options: RwLock::new(Arc::new(options)),
       state: watch::Sender::new(ClientState::DISCONNECTED),
       session: Mutex::new(Session::default()),
@@ -273,6 +276,10 @@ impl Client {
 
   pub(crate) fn searches(&self) -> &Searches {
     &self.inner.searches
+  }
+
+  pub(crate) fn folder_requests(&self) -> &FolderRequests {
+    &self.inner.folder_requests
   }
 
   pub(crate) fn tokens(&self) -> &TokenGenerator {

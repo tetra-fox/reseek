@@ -183,6 +183,11 @@ impl Searches {
     self.running().contains_key(&token)
   }
 
+  /// whether any search of ours is running
+  pub(crate) fn any_running(&self) -> bool {
+    !self.running().is_empty()
+  }
+
   /// Takes `token`, or a fresh one, for `search`, in one step so two callers cannot both take
   /// one token
   fn register(

@@ -207,34 +207,54 @@ fn cut_short(message: PeerMessage) -> Vec<u8> {
   frame
 }
 
+/// a frame of `code` whose payload is `len` zero bytes
+fn zeros(code: PeerCode, len: usize) -> Vec<u8> {
+  let mut frame = (len as u32 + 4).to_le_bytes().to_vec();
+  frame.extend(code.code().to_le_bytes());
+  frame.resize(frame.len() + len, 0);
+  frame
+}
+
 #[tokio::test]
 async fn responses_nobody_asked_for_are_dropped_before_inflating() {
   let logs = Logs::capture();
   let session = session().await;
-  // anyone can connect and give any name; nothing was asked of this one
+  // anyone can connect and give any name; nothing was asked of this one and no search runs
   let mut mallory = session.peer("mallory").await;
   let mut frames = cut_short(PeerMessage::BrowseResponse(BrowseResponse {
     directories: Vec::new(),
     locked_directories: Vec::new(),
   }));
-  frames.extend(cut_short(PeerMessage::FolderContentsResponse(
-    FolderContentsResponse {
-      token: 1,
-      directory_name: "@@share\\music".into(),
-      directories: Vec::new(),
-    },
-  )));
+  // answers of a mebibyte each, which reading in would have held for as long as they took
+  let unasked = [
+    PeerCode::FolderContentsResponse,
+    PeerCode::InfoResponse,
+    PeerCode::SearchResponse,
+  ];
+  for code in unasked {
+    frames.extend(zeros(code, 1 << 20));
+  }
+  frames.extend(PeerMessage::InfoRequest.encode());
   mallory.send(&frames).await;
+  // the request after them is answered, so they were passed over whole
+  assert!(matches!(
+    mallory.read_peer().await,
+    PeerMessage::InfoResponse(_)
+  ));
   logs
     .wait_for(&["browse response nobody follows", "skipped"])
     .await;
-  logs
-    .wait_for(&[
-      "folder contents response nobody waits for",
-      "dropped before inflating",
-    ])
-    .await;
-  // inflating either would have found it cut short
+  for code in unasked {
+    assert_eq!(
+      logs
+        .lines_with(&["frame skipped", &format!("code={}", code.code())])
+        .len(),
+      1,
+      "{code:?} is skipped unread: {}",
+      logs.text()
+    );
+  }
+  // reading any of them would have found it cut short or malformed
   assert!(
     logs.lines_with(&["malformed message rejected"]).is_empty(),
     "{}",

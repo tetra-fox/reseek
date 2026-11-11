@@ -9,7 +9,7 @@ use crate::support::scripted::{BOB, Scripted};
 use crate::support::soulfind::{self, User};
 use crate::support::{Logs, PATIENCE, free_port, listening_options};
 use soulseek_client::{BrowseOptions, BrowseProgress, ClientError, ClientOptions, Event};
-use soulseek_proto::peer::{BrowseResponse, Directory, File, UserInfo};
+use soulseek_proto::peer::{BrowseResponse, Directory, File, FolderContentsResponse, UserInfo};
 use soulseek_proto::{
   LIMIT_USER_INFO_PICTURE_BYTES, Limits, PeerCode, PeerMessage, RemoteFilename,
 };
@@ -303,6 +303,7 @@ async fn user_info_too_large_to_read_fails_the_request() {
 
 #[tokio::test]
 async fn a_folder_request_waits_only_as_long_as_it_is_told_to() {
+  let logs = Logs::capture();
   let mut scripted = Scripted::start().await;
   let client = scripted.client().clone();
   let started = tokio::time::Instant::now();
@@ -318,16 +319,66 @@ async fn a_folder_request_waits_only_as_long_as_it_is_told_to() {
       .await
   });
   let mut bob = scripted.connected().await;
-  assert!(matches!(
-    bob.read_peer().await,
-    PeerMessage::FolderContentsRequest(_)
-  ));
+  let PeerMessage::FolderContentsRequest(request) = bob.read_peer().await else {
+    panic!("no folder request");
+  };
   let folder = tokio::time::timeout(PATIENCE, folder)
     .await
     .unwrap()
     .unwrap();
   assert!(matches!(folder, Err(ClientError::Timeout(_))), "{folder:?}");
   assert!(started.elapsed() < Duration::from_secs(2));
+  // nothing waits on bob any more, so the late answer is passed over from its header
+  let late = PeerMessage::FolderContentsResponse(FolderContentsResponse {
+    token: request.token,
+    directory_name: request.directory_name,
+    directories: Vec::new(),
+  });
+  bob.send(&late.encode()).await;
+  let code = format!("code={}", PeerCode::FolderContentsResponse.code());
+  logs.wait_for(&["frame skipped", &code]).await;
+}
+
+#[tokio::test]
+async fn a_folder_under_a_token_nobody_asked_for_is_dropped_before_inflating() {
+  let logs = Logs::capture();
+  let mut scripted = Scripted::start().await;
+  let client = scripted.client().clone();
+  let folder = tokio::spawn(async move {
+    client
+      .get_directory_contents(BOB, "@@music", None, None, &CancellationToken::new())
+      .await
+  });
+  let mut bob = scripted.connected().await;
+  let PeerMessage::FolderContentsRequest(request) = bob.read_peer().await else {
+    panic!("no folder request");
+  };
+  let answer = |token| {
+    PeerMessage::FolderContentsResponse(FolderContentsResponse {
+      token,
+      directory_name: request.directory_name.clone(),
+      directories: vec![Directory {
+        name: "@@music".into(),
+        files: vec![mp3("@@music\\one.mp3")],
+      }],
+    })
+    .encode()
+  };
+  // bob was asked, so the frame is read, but its token is not the one asked under
+  bob.send(&answer(request.token.wrapping_add(1))).await;
+  logs
+    .wait_for(&[
+      "folder contents response nobody waits for",
+      "dropped before inflating",
+    ])
+    .await;
+  bob.send(&answer(request.token)).await;
+  let folder = tokio::time::timeout(PATIENCE, folder)
+    .await
+    .unwrap()
+    .unwrap()
+    .unwrap();
+  assert_eq!(folder.len(), 1);
 }
 
 #[tokio::test]

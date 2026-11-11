@@ -3,7 +3,8 @@
 //! that brings it until the whole response is in, reporting progress as it arrives. A folder comes
 //! back as the folder and every folder below it.
 
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use soulseek_proto::peer::{
@@ -15,11 +16,53 @@ use tokio_util::sync::CancellationToken;
 use crate::client::{Client, failed, non_blank};
 use crate::error::{ClientError, ConnectionErrorKind};
 use crate::events::Event;
+use crate::lock;
 use crate::peers::{IncomingBrowse, write_peer};
 use crate::waiter::WaitKey;
 
 /// how long a folder request waits for its answer unless told otherwise
 const FOLDER_CONTENTS_TIMEOUT: Duration = Duration::from_secs(15);
+
+/// How many folder requests of ours wait on each user. A folder's token is inside its
+/// compressed payload, so this is what lets a folder nobody asked that user for be skipped from
+/// its header.
+#[derive(Default)]
+pub(crate) struct FolderRequests(Mutex<HashMap<String, usize>>);
+
+impl FolderRequests {
+  /// counts a request to `username` until the returned guard is dropped
+  fn hold(&self, username: &str) -> FolderRequest<'_> {
+    *lock(&self.0).entry(username.to_owned()).or_default() += 1;
+    FolderRequest {
+      requests: self,
+      username: username.to_owned(),
+    }
+  }
+
+  /// whether a folder request of ours to `username` waits
+  pub(crate) fn any(&self, username: &str) -> bool {
+    lock(&self.0).contains_key(username)
+  }
+}
+
+/// one folder request counted in [`FolderRequests`] while it waits
+struct FolderRequest<'a> {
+  requests: &'a FolderRequests,
+  username: String,
+}
+
+impl Drop for FolderRequest<'_> {
+  fn drop(&mut self) {
+    let mut counts = lock(&self.requests.0);
+    let count = counts
+      .get_mut(&self.username)
+      .expect("a held request is counted");
+    *count -= 1;
+    if *count == 0 {
+      counts.remove(&self.username);
+    }
+  }
+}
 
 /// How far a browse response has come
 #[derive(Clone, Debug, PartialEq)]
@@ -205,6 +248,7 @@ impl Client {
     let verb = format!("get the contents of {directory} from {username}");
     self.require_logged_in(&verb)?;
     let token = token.unwrap_or_else(|| self.next_token());
+    let _asking = self.folder_requests().hold(username);
     let answer = self.waiter().wait::<FolderContentsResponse>(
       WaitKey::PeerToken {
         code: PeerCode::FolderContentsResponse,
