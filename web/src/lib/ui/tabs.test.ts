@@ -326,7 +326,7 @@ describe("the tabs of one browser", () => {
       return { clock, x, y, ends };
     };
 
-    it("asks again on its first word, whatever says it, after a suspension with no word", () => {
+    it("asks again as its stream is found dead, after a suspension with no word", () => {
       const { clock, x, y, ends } = two();
       y.focus();
       expect([x.leads(), y.leads()]).toEqual([false, true]);
@@ -345,6 +345,25 @@ describe("the tabs of one browser", () => {
       expect([x.leads(), y.leads()]).toEqual([true, false]);
       clock.pass(5 * BEAT_MS, [x, y]);
       expect([x.leads(), y.leads()]).toEqual([true, false]);
+    });
+
+    it("asks again as it gains focus, after a suspension with no word", () => {
+      const { clock, x, y, ends } = two();
+      y.focus();
+      // suspended without a freeze: no bye, and it hears nothing while x is focused
+      const hear = ends[1].onmessage;
+      ends[1].onmessage = null;
+      x.focus();
+      clock.pass(QUIET_MS + BEAT_MS, [x]);
+      ends[1].onmessage = hear;
+      // back on screen and focused before its timer runs: it asks, x leading while it settles
+      y.focus();
+      const leaders = () => [x.leads(), y.leads()].filter(Boolean).length;
+      for (let at = 0; at < SETTLE_MS; at += 50) {
+        expect(leaders()).toBe(1);
+        clock.pass(50, [x, y]);
+      }
+      expect([x.leads(), y.leads()]).toEqual([false, true]);
     });
 
     it("counts at once a tab back from a freeze whose focus comes before it asks", () => {
