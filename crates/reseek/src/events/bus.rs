@@ -136,14 +136,6 @@ impl EventBus {
       );
     }
   }
-
-  /// Removes the subscriber `name` for `only`; nothing happens when there is none.
-  pub fn unsubscribe(&self, name: &str, only: Option<EventType>) {
-    let removed = lock(&self.inner.subscribers).remove(&(name.to_string(), only));
-    if let Some(task) = removed {
-      task.abort();
-    }
-  }
 }
 
 /// A subscriber's task: takes each event it wants and runs the handler on it in turn.
@@ -284,8 +276,6 @@ mod tests {
       .await
       .unwrap();
     assert_eq!(got, Some("second"));
-    bus.unsubscribe("scripts", None);
-    bus.unsubscribe("never subscribed", None);
   }
 
   #[tokio::test]
