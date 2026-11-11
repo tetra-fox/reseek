@@ -50,21 +50,30 @@ const browseCarol = async (page: Page, opened?: string) => {
   return tree;
 };
 
-/** Whether the element plays the animation `name` now */
-const animates = (locator: Locator, name: string) =>
-  locator.evaluate(
-    (e, wanted) => e.getAnimations().some((a) => (a as CSSAnimation).animationName === wanted),
-    name
-  );
+/**
+ * Notes, from now on, the name of every animation that starts in `locator`, for a check that an
+ * entrance played however soon it ended
+ */
+const watchAnimations = (locator: Locator) =>
+  locator.evaluate((box: HTMLElement) => {
+    const started: string[] = [];
+    Object.assign(window, { started });
+    box.addEventListener("animationstart", (e) => started.push(e.animationName));
+  });
+
+/** The names `watchAnimations` noted */
+const started = (page: Page) =>
+  page.evaluate(() => (window as unknown as { started: string[] }).started);
 
 test("a folder opens in place with its files under it, and they come in", async ({ page }) => {
   const tree = await browseCarol(page);
   const albums = folder(tree, "\\Albums");
   await expect(fileLine(tree, "\\Albums\\A01.flac")).toHaveCount(0);
+  await watchAnimations(tree);
   await albums.click();
   const first = fileLine(tree, "\\Albums\\A01.flac");
   await expect(first).toBeVisible();
-  expect(await animates(first, "line-in")).toBe(true);
+  await expect.poll(() => started(page)).toContain("line-in");
   // the folder's files come right after its line, before the next folder's
   const keys = await tree
     .locator("[role=rowgroup] [data-line]")
@@ -151,8 +160,19 @@ test("a file's row fills as it downloads, then flashes and shows it done", async
   const before = await width();
   await move("InProgress", 80);
   await expect.poll(width).toBeGreaterThan(before * 2);
+  // the flash is over in a moment: every fill the row shows from here on is noted as it changes
+  await row.evaluate((line) => {
+    const fills: string[] = [];
+    Object.assign(window, { fills });
+    new MutationObserver(() => {
+      const fill = line.querySelector("[data-fill]")?.getAttribute("data-fill");
+      if (fill && fills.at(-1) !== fill) fills.push(fill);
+    }).observe(line, { subtree: true, childList: true, attributeFilter: ["data-fill"] });
+  });
   await move("Completed, Succeeded", 100);
-  await expect(row.locator("[data-fill]")).toHaveAttribute("data-fill", "flash");
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { fills: string[] }).fills))
+    .toContain("flash");
   await expect(row.locator("[data-fill]")).toHaveCount(0);
   await expect(row.getByLabel("Downloaded")).toBeVisible();
 });
