@@ -5,7 +5,7 @@
 //! file in the cache directory as it arrives, at most the configured size, and checked and
 //! loaded as the agent's host. Only then is the agent ready, and the agent's socket told so.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Instant as Clock;
 
 use api_types::events::{Event, RelayAgentSharesUpdated};
@@ -39,6 +39,38 @@ struct Loading<'a> {
 impl Drop for Loading<'_> {
   fn drop(&mut self) {
     lock(&self.controller.registry).syncing.remove(&self.agent);
+  }
+}
+
+/// The file a share upload is written to. The call removes it once the upload is loaded or
+/// refused; a call dropped before then, when its agent goes away mid-upload, removes it on the
+/// blocking pool.
+struct UploadFile(Option<PathBuf>);
+
+impl UploadFile {
+  fn path(&self) -> &Path {
+    self
+      .0
+      .as_deref()
+      .expect("the file is there until it is removed")
+  }
+
+  /// Removes the file, unless it was renamed into place as the host's index.
+  async fn remove(mut self) {
+    let file = self.0.take().expect("the file is removed once");
+    let removed = file.clone();
+    if let Err(e) = tokio::task::spawn_blocking(move || remove_database(&removed)).await {
+      warn!(file = %file.display(), error = %e, "uploaded share database not deleted");
+    }
+  }
+}
+
+impl Drop for UploadFile {
+  fn drop(&mut self) {
+    if let Some(file) = self.0.take() {
+      // a call is dropped from the runtime, which must not wait for the disk
+      tokio::task::spawn_blocking(move || remove_database(&file));
+    }
   }
 }
 
@@ -145,18 +177,14 @@ impl Controller {
       controller: self,
       agent: name.clone(),
     };
-    let file = self.shares.upload_file(&name);
-    let received = self.read_upload(&name, &mut form, &file).await;
+    let file = UploadFile(Some(self.shares.upload_file(&name)));
+    let received = self.read_upload(&name, &mut form, file.path()).await;
     let loaded = match received {
-      Ok(shares) => self.load(&name, socket, shares, &file).await,
+      Ok(shares) => self.load(&name, socket, shares, file.path()).await,
       Err(e) => Err(e),
     };
     self.count("shares", if loaded.is_ok() { "loaded" } else { "refused" });
-    // the upload, unless it was renamed into place as the host's index
-    let removed = file.clone();
-    if let Err(e) = tokio::task::spawn_blocking(move || remove_database(&removed)).await {
-      warn!(file = %file.display(), error = %e, "uploaded share database not deleted");
-    }
+    file.remove().await;
     loaded
   }
 

@@ -1,6 +1,7 @@
 //! An agent's socket served without a network, on a clock the test moves: an agent whose
-//! shares are being scanned is waited for past the two minutes, but not past its deferral, and
-//! an agent whose configuration no longer admits it is disconnected.
+//! shares are being scanned is waited for past the two minutes, but not past its deferral, an
+//! agent whose configuration no longer admits it is disconnected, and a share upload cut off
+//! partway leaves no file behind.
 
 use std::collections::BTreeMap;
 use std::net::IpAddr;
@@ -10,9 +11,10 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 
 use api_types::relay::{RELAY_PROTOCOL, RelayEnvelope, RelayMessage};
+use axum::extract::FromRequest;
 use axum::extract::ws::Message;
 use cascade::Lasts;
-use futures_util::{Sink, Stream};
+use futures_util::{Sink, Stream, StreamExt};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use uuid::Uuid;
@@ -233,4 +235,64 @@ async fn an_agent_is_disconnected_once_its_networks_or_secret_no_longer_admit_it
   settle().await;
   assert_eq!(closed(&mut from_socket), Some(Some(frames::close::KICKED)));
   assert!(controller.agents().is_empty(), "its secret rotated");
+}
+
+#[tokio::test]
+async fn a_share_upload_cut_off_partway_leaves_no_file_behind() {
+  let config = format!(
+    "[relay]\nenabled = true\nmode = \"controller\"\n\
+     [relay.agents.nas]\ninstance_name = \"nas\"\nsecret = \"{SECRET}\"\n"
+  );
+  let app = app(&config, &[]).await;
+  let controller = app.state.relay.controller.clone().unwrap();
+  let home: IpAddr = [127, 0, 0, 1].into();
+  let _socket = log_in(&controller, home, SECRET).await;
+  let begun = controller.begin_shares("nas", 0, crate::shares::Shares::schema_version(), 1024);
+  let RelayMessage::SharesToken { token, .. } = read(&Message::Text(begun.into())) else {
+    panic!("no share token");
+  };
+  let caller = AgentCredential {
+    agent: "nas".into(),
+    credential: Key::derive(SECRET, "nas").credential(Purpose::Shares, &token.to_string()),
+    address: home,
+  };
+  // the database part starts, then nothing more comes
+  let start = "--cut\r\nContent-Disposition: form-data; name=\"database\"\r\n\r\nSQLite";
+  let body = futures_util::stream::iter([Ok::<_, std::io::Error>(start.as_bytes().to_vec())])
+    .chain(futures_util::stream::pending());
+  let request = axum::http::Request::builder()
+    .header("content-type", "multipart/form-data; boundary=cut")
+    .body(axum::body::Body::from_stream(body))
+    .unwrap();
+  let form = axum::extract::Multipart::from_request(request, &())
+    .await
+    .unwrap();
+  let cache = controller.shares.upload_file("nas");
+  let cache = cache.parent().unwrap().to_owned();
+  let uploads = || {
+    std::fs::read_dir(&cache)
+      .unwrap()
+      .filter_map(Result::ok)
+      .filter(|entry| entry.file_name().to_string_lossy().ends_with(".db.tmp"))
+      .count()
+  };
+  let upload = tokio::spawn({
+    let controller = controller.clone();
+    async move { controller.receive_shares(token, caller, form).await }
+  });
+  let waited = tokio::time::timeout(Duration::from_secs(10), async {
+    while uploads() == 0 {
+      tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+  });
+  waited.await.expect("the upload's file is written");
+  // the agent goes away: the call is dropped
+  upload.abort();
+  assert!(upload.await.unwrap_err().is_cancelled());
+  let removed = tokio::time::timeout(Duration::from_secs(10), async {
+    while uploads() > 0 {
+      tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+  });
+  removed.await.expect("the cut-off upload's file is removed");
 }
