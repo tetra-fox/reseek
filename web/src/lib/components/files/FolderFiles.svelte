@@ -10,6 +10,7 @@
   import { fileColumns, fileTemplate, fileWidth } from "#lib/files/columns.js";
   import { asItem, type Enqueued, enqueue } from "#lib/files/downloads.js";
   import { fileMatches, parseFilters } from "#lib/files/filters.js";
+  import { getFileName } from "#lib/format.js";
   import { session } from "#lib/session.svelte.js";
   import { Expansion } from "#lib/tree/expansion.svelte.js";
   import {
@@ -100,6 +101,7 @@
     height="min(55vh, 32rem)"
     {selected}
     idOf={(f) => f.filename}
+    nameOf={(line) => (line.kind === "folder" ? line.node.label : getFileName(line.item.filename))}
     onopen={write ? (f) => void downloadNow([f]) : undefined}>
     {#snippet header(all)}
       <FileHeader {columns} {all} />
