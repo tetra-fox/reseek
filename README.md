@@ -1,7 +1,11 @@
 # reseek
 
 Soulseek client & daemon
-<!-- badges: ci, latest release, ghcr, license -->
+
+[![ci](https://github.com/tetra-fox/reseek/actions/workflows/ci.yml/badge.svg)](https://github.com/tetra-fox/reseek/actions/workflows/ci.yml)
+[![latest release](https://img.shields.io/github/v/release/tetra-fox/reseek?include_prereleases)](https://github.com/tetra-fox/reseek/releases)
+[![ghcr](https://img.shields.io/badge/ghcr.io-tetra--fox%2Freseek-blue?logo=docker)](https://github.com/tetra-fox/reseek/pkgs/container/reseek)
+[![license](https://img.shields.io/github/license/tetra-fox/reseek)](LICENSE)
 
 ## Features
 
@@ -124,6 +128,10 @@ It only dials out, so it needs no open port. On NixOS, `services.reseek-agent` r
 ### Desktop
 
 Soon.
+
+## Backing up
+
+reseek keeps what it knows in the `.db` files under `<app dir>/data`, one SQLite database each for users, chat, transfers and so on, and your settings in `config.toml`, `config.d/` and `data/overrides.toml`. Copy them while reseek is stopped: a database copied while it runs can be caught mid-write. If you can't stop it, `sqlite3 data/users.db "VACUUM INTO '/backup/users.db'"` makes a consistent copy of one database while it's open. The databases don't refer to each other, so there's nothing to keep in step between them and copying them one at a time is fine. The copies in `data/backups` are taken before an upgrade changes a database; they aren't kept up to date.
 
 ## Authentication
 
