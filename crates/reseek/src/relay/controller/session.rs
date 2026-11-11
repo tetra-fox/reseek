@@ -59,10 +59,17 @@ fn deferred(now: Instant, until: Instant) -> Instant {
 
 /// How a socket ended.
 struct Ended {
-  /// the close code sent, `None` when the agent closed or the socket failed
+  /// the close code we sent or the agent's close frame carried; `None` when there was none
   code: Option<u16>,
   reason: &'static str,
 }
+
+/// The socket failed or ended without a close frame, as when the agent's process or its
+/// network went away.
+const LOST: Ended = Ended {
+  code: None,
+  reason: "connection_lost",
+};
 
 impl Controller {
   /// Serves the agent socket `socket`, opened from `address`, until it closes.
@@ -129,10 +136,7 @@ impl Session {
       issued: opened,
     }));
     if socket.send(Message::Text(challenge.into())).await.is_err() {
-      return Ended {
-        code: None,
-        reason: "closed",
-      };
+      return LOST;
     }
     let mut heard = opened;
     let mut ping = tokio::time::interval_at(opened + PING_EVERY, PING_EVERY);
@@ -150,14 +154,14 @@ impl Session {
           Outbound::Frame(text) => {
             if let Err(e) = socket.send(Message::Text(text.into())).await {
               debug!(error = %e, "frame not written to the agent's socket");
-              return Ended { code: None, reason: "closed" };
+              return LOST;
             }
           }
           Outbound::Close(code, reason) => return closing(&mut socket, code, reason).await,
         },
         _ = ping.tick() => {
           if socket.send(Message::Ping(Default::default())).await.is_err() {
-            return Ended { code: None, reason: "closed" };
+            return LOST;
           }
         }
         frame = socket.next() => {
@@ -165,9 +169,9 @@ impl Session {
             Some(Ok(frame)) => frame,
             Some(Err(e)) => {
               debug!(error = %e, "agent socket failed");
-              return Ended { code: None, reason: "closed" };
+              return LOST;
             }
-            None => return Ended { code: None, reason: "closed" },
+            None => return LOST,
           };
           heard = Instant::now();
           match frame {
@@ -180,7 +184,12 @@ impl Session {
                 return ended;
               }
             }
-            Message::Close(_) => return Ended { code: None, reason: "closed" },
+            Message::Close(frame) => {
+              return Ended {
+                code: frame.map(|frame| frame.code),
+                reason: "agent_closed",
+              };
+            }
             Message::Ping(_) | Message::Pong(_) => {}
             Message::Binary(_) => debug!("binary frame from an agent ignored"),
           }
@@ -311,10 +320,7 @@ impl Session {
         log_refusal(&name, &login, reason, configured.map(|a| a.cidr), &ours);
         let refusal = frames::encode(None, RelayMessage::LoginFailed { reason });
         if socket.send(Message::Text(refusal.into())).await.is_err() {
-          return Some(Ended {
-            code: None,
-            reason: "closed",
-          });
+          return Some(LOST);
         }
         return Some(closing(socket, close::UNAUTHORIZED, "unauthorized").await);
       }
@@ -337,10 +343,7 @@ impl Session {
       },
     );
     if socket.send(Message::Text(accepted.into())).await.is_err() {
-      return Some(Ended {
-        code: None,
-        reason: "closed",
-      });
+      return Some(LOST);
     }
     let record = RelayAgentState {
       name: name.clone(),
