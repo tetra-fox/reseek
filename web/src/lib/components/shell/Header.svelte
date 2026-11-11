@@ -117,7 +117,8 @@
         {#if !hidden}
           <!-- a leaving crumb goes at once: svelte 5.57 never removes a batch of leaving each items
              whose outros mix instant and animated ones, as a crumb's cached outro could here, so
-             they stayed on screen. TODO: give crumbs an outro again once svelte fixes it -->
+             they stayed on screen (https://github.com/sveltejs/svelte/issues/19041). TODO: give
+             crumbs an outro again once a release fixes it -->
           <!-- the screen's own steps keep their width, so a long last step never squeezes them -->
           <li
             class={[
