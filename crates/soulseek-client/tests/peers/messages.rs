@@ -291,10 +291,16 @@ async fn ignored_and_unknown_messages_leave_the_connection_up() {
 
 #[tokio::test]
 async fn a_frame_longer_than_any_message_closes_the_connection() {
+  let logs = Logs::capture();
   let session = session().await;
   let mut bob = bob(&session).await;
   bob.send(&u32::MAX.to_le_bytes()).await;
   bob.closed().await;
+  // a peer can send this as often as it reconnects, so it is no warning, and the close says why
+  logs
+    .wait_for(&["connection closed", "message length out of range"])
+    .await;
+  assert!(logs.lines_with(&[" WARN "]).is_empty(), "{}", logs.text());
 }
 
 #[tokio::test]

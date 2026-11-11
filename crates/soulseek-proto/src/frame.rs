@@ -44,7 +44,8 @@ pub struct Frame<'a> {
 
 /// Reads the length and code as soon as they are buffered, before the payload arrives (the
 /// browse progress hook needs them). `Ok(None)` means more bytes are needed. A length below the
-/// code width or above the limit is an error and the connection should be closed.
+/// code width or above the limit is an error and the connection should be closed; the caller
+/// logs it, since a peer can send such lengths as often as it likes.
 pub fn header(
   kind: FrameKind,
   buf: &[u8],
@@ -56,12 +57,10 @@ pub fn header(
   let len = u32::from_le_bytes(*prefix);
   let code_width = kind.code_width();
   if (len as usize) < code_width {
-    tracing::warn!(?kind, len, "frame shorter than its code, rejected");
     return Err(DecodeError::FrameTooShort { len, code_width });
   }
   let limit = limits.frame_bytes(kind);
   if len > limit {
-    tracing::warn!(?kind, len, limit, "frame over the length limit, rejected");
     return Err(DecodeError::FrameTooLarge { len, limit });
   }
   let Some(code) = buf.get(4..4 + code_width) else {
