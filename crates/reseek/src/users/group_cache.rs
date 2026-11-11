@@ -412,6 +412,26 @@ impl Directory {
     lock(&self.groups.asked).clear();
   }
 
+  /// Makes `change` to the groups or buddy standing of `usernames`, then has the shares forget
+  /// their browse views when it changed which shares any of them sees, so the view they had is
+  /// not rewritten with the shares for no one.
+  pub(super) fn regroup<'a>(
+    &self,
+    usernames: impl IntoIterator<Item = &'a str> + Clone,
+    change: impl FnOnce(),
+  ) {
+    let before: Vec<_> = usernames
+      .clone()
+      .into_iter()
+      .map(|u| self.sees(u))
+      .collect();
+    change();
+    let after = usernames.into_iter().map(|u| self.sees(u));
+    if after.ne(before) {
+      self.shares.forget_browse_views();
+    }
+  }
+
   /// `username` left the group `from`, for the group `to` when given.
   pub(super) fn membership_moved(&self, username: &str, from: &str, to: Option<&str>) {
     self.groups.update(username, false, |facts| {

@@ -292,7 +292,7 @@ impl Shares {
     if previous.visible_to != current.visible_to {
       info!("Share visibility changed");
       self.recount_for_server();
-      self.drop_browse_views();
+      self.forget_browse_views();
     }
     if previous.follow_symlinks != current.follow_symlinks {
       info!(

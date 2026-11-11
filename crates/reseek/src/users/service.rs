@@ -84,7 +84,7 @@ impl Directory {
       .await
       .map_err(internal)?;
     if let Some(buddy) = buddy {
-      self.buddies.set(username, buddy);
+      self.regroup([username], || self.buddies.set(username, buddy));
     }
     self.changed(username).await;
     Ok(())
@@ -226,7 +226,7 @@ impl Directory {
     self
       .change(username, Change::Groups(groups.clone()))
       .await?;
-    self.memberships_changed(username, groups);
+    self.regroup([username], || self.memberships_changed(username, groups));
     Ok(())
   }
 
@@ -256,8 +256,12 @@ impl Directory {
       .write(move |conn| store::move_members(conn, &from_name, &to_name))
       .await
       .map_err(internal)?;
+    self.regroup(moved.iter().map(String::as_str), || {
+      for username in &moved {
+        self.membership_moved(username, from, Some(to));
+      }
+    });
     for username in &moved {
-      self.membership_moved(username, from, Some(to));
       self.changed(username).await;
     }
     Ok(moved.len() as u64)
@@ -271,8 +275,12 @@ impl Directory {
       .write(move |conn| store::let_go(conn, &name))
       .await
       .map_err(internal)?;
+    self.regroup(members.iter().map(String::as_str), || {
+      for username in &members {
+        self.membership_moved(username, group, None);
+      }
+    });
     for username in &members {
-      self.membership_moved(username, group, None);
       self.changed(username).await;
     }
     Ok(members.len() as u64)
@@ -310,8 +318,10 @@ impl Directory {
       )));
     }
     self.blocks.unset(username);
-    self.buddies.set(username, None);
-    self.memberships_changed(username, Vec::new());
+    self.regroup([username], || {
+      self.buddies.set(username, None);
+      self.memberships_changed(username, Vec::new());
+    });
     if purge {
       let removed = transfers::remove_all(&self.transfers, username)
         .await

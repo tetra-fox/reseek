@@ -61,6 +61,7 @@ use crate::config::{Options, SoulseekInterests};
 use crate::db::{Database, DbError, Location};
 use crate::events::EventBus;
 use crate::live::Live;
+use crate::shares::Shares;
 use crate::state::StateOwner;
 use crate::sync::lock;
 use blocking::Blocks;
@@ -94,6 +95,8 @@ pub struct Directory {
   state: StateOwner,
   live: Live,
   events: EventBus,
+  /// the shares, told when a user's groups change what they see
+  shares: Arc<Shares>,
   toucher: Toucher,
   blocks: Blocks,
   /// what each user's groups are worked out from
@@ -137,6 +140,8 @@ pub struct Parts {
   pub live: Live,
   /// the events the directory raises
   pub events: EventBus,
+  /// the shares, whose browse views follow which shares each user sees
+  pub shares: Arc<Shares>,
 }
 
 impl Directory {
@@ -155,6 +160,7 @@ impl Directory {
       state,
       live,
       events,
+      shares,
     } = parts;
     let db = Database::open(&store::SCHEMA, location)
       .await
@@ -192,6 +198,7 @@ impl Directory {
       state,
       live,
       events,
+      shares,
       toucher,
       blocks,
       groups: GroupCache::new(memberships),
@@ -203,6 +210,7 @@ impl Directory {
       impersonations: Impersonations::default(),
       interests_told: tokio::sync::Mutex::new(SoulseekInterests::default()),
     });
+    // nothing is kept for a browse yet
     directory.check_share_groups(&options);
     tokio::spawn(
       directory
@@ -537,8 +545,9 @@ impl Directory {
 
   /// Warns of each share listed in `shares.visible_to` for a group no member can see it through,
   /// when it comes to be listed so, and says so when it no longer is: such a group shows the
-  /// share to no one.
-  fn check_share_groups(&self, options: &Options) {
+  /// share to no one. Returns whether any came or went, which changes what the members of
+  /// those groups see.
+  fn check_share_groups(&self, options: &Options) -> bool {
     let now = groups::unknown_share_groups(options);
     let mut before = lock(&self.unknown_share_groups);
     for (alias, group) in now.difference(&before) {
@@ -555,7 +564,9 @@ impl Directory {
         group, "a share in shares.visible_to no longer names that group"
       );
     }
+    let changed = now != *before;
     *before = now;
+    changed
   }
 
   /// Takes every configuration change: the blacklist is compiled again, the blocklist file
@@ -572,7 +583,9 @@ impl Directory {
         Ok(change) => {
           let options = &change.current.values;
           self.blocks.configure(options);
-          self.check_share_groups(options);
+          if self.check_share_groups(options) {
+            self.shares.forget_browse_views();
+          }
           if change
             .changed
             .iter()
@@ -595,6 +608,9 @@ impl Directory {
           );
           let options = self.config.current().values.clone();
           self.blocks.configure(&options);
+          if self.check_share_groups(&options) {
+            self.shares.forget_browse_views();
+          }
           self.reload_blocklist(&options).await;
           self.interests_changed().await;
         }

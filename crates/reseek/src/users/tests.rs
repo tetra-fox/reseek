@@ -652,6 +652,30 @@ async fn a_buddy_change_keeps_what_it_leaves_out_and_sets_what_they_see() {
 }
 
 #[tokio::test]
+async fn a_change_to_what_a_user_sees_forgets_the_kept_browse_views() {
+  let config = format!("{CONFIG}[shares.visible_to]\nPrivate = [\"friends\"]\n");
+  let app = app(&config, &[]).await;
+  let (users, shares) = (&app.state.users, &app.state.shares);
+  let everyone = shares.view(&std::collections::BTreeSet::new());
+  let file = || shares.browse_cache(&everyone);
+  let first = file();
+  users.set_groups("bob", vec!["vip".into()]).await.unwrap();
+  users
+    .set_buddy("bob", BuddyChange::default())
+    .await
+    .unwrap();
+  assert_eq!(file(), first, "no share is shown to vip or buddies");
+  users
+    .set_groups("bob", vec!["vip".into(), "friends".into()])
+    .await
+    .unwrap();
+  let second = file();
+  assert_ne!(second, first, "bob sees Private now");
+  users.let_go_members("friends").await.unwrap();
+  assert_ne!(file(), second, "and no longer");
+}
+
+#[tokio::test]
 async fn two_buddy_changes_made_at_once_both_hold() {
   let app = app(CONFIG, &[]).await;
   let users = &app.state.users;

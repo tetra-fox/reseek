@@ -524,9 +524,10 @@ impl Shares {
     }
   }
 
-  /// Forgets every view that hides something, after who sees which share changed: one a peer
-  /// still has is written again at its next browse, and the files of the others are removed.
-  fn drop_browse_views(&self) {
+  /// Forgets every view that hides something, after who sees which share changed, through the
+  /// shares' visibility or a user's groups: one a peer still has is written again at its next
+  /// browse, and the files of the others are removed.
+  pub fn forget_browse_views(&self) {
     let generation = {
       let mut views = lock(&self.browse_views);
       views.kept.clear();
