@@ -58,15 +58,7 @@
 {#if shows("tick")}
   <span role="gridcell" class="flex">
     {#if !file.locked}
-      <Checkbox
-        aria-label={`Select ${name}`}
-        checked={selected}
-        onclick={(e) => {
-          // a click is handled here, with Shift for a range; Space toggles through the change
-          e.preventDefault();
-          ontick(e.shiftKey);
-        }}
-        onCheckedChange={(on) => on !== selected && ontick(false)} />
+      <Checkbox aria-label={`Select ${name}`} checked={selected} {ontick} />
     {/if}
   </span>
 {/if}

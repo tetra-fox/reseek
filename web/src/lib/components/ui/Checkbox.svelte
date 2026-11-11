@@ -13,13 +13,18 @@
     "aria-label"?: string;
     "disabled"?: boolean;
     "class"?: string;
-    "onclick"?: (e: MouseEvent) => void;
+    /**
+     * A list row's tick, in place of `onCheckedChange`: a click ticks the row, with Shift the rows
+     * from the last one ticked, and Space ticks it alone
+     */
+    "ontick"?: (range: boolean) => void;
   };
 
   let {
     checked,
     indeterminate = false,
     onCheckedChange,
+    ontick,
     class: className,
     ...rest
   }: Props = $props();
@@ -30,7 +35,14 @@
 <Checkbox.Root
   {checked}
   {indeterminate}
-  {onCheckedChange}
+  onCheckedChange={ontick ? (on) => on !== checked && ontick(false) : onCheckedChange}
+  onclick={ontick &&
+    ((e: MouseEvent) => {
+      // the click is handled here, for its Shift, and the box's own toggle skipped; Space still
+      // toggles it through the change
+      e.preventDefault();
+      ontick(e.shiftKey);
+    })}
   class={cn(
     "relative inline-flex size-4 shrink-0 items-center justify-center rounded-[0.25rem] border border-input bg-surface align-middle text-accent-fg shadow-xs transition-colors duration-(--motion-fast) after:absolute after:-inset-x-1 after:-inset-y-1.5 disabled:opacity-50 data-[state=checked]:border-accent data-[state=checked]:bg-accent data-[state=indeterminate]:border-accent data-[state=indeterminate]:bg-accent",
     className

@@ -222,14 +222,7 @@
     {@const fileName = getFileName(row.file.filename)}
     {@const folder = folderOf(row)}
     <span role="gridcell" class="flex px-2">
-      <Checkbox
-        aria-label={`Select ${fileName}`}
-        checked={selected.has(row.key)}
-        onclick={(e) => {
-          e.preventDefault();
-          tick(e.shiftKey);
-        }}
-        onCheckedChange={(on) => on !== selected.has(row.key) && tick(false)} />
+      <Checkbox aria-label={`Select ${fileName}`} checked={selected.has(row.key)} ontick={tick} />
     </span>
     <span role="gridcell" class="flex min-w-0 items-center gap-1.5 px-2">
       <span class="min-w-0 truncate"><Username name={row.username} folder={row.folder} /></span>

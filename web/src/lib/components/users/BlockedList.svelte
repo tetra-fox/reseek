@@ -215,12 +215,7 @@
               <Checkbox
                 aria-label={`Select ${b.username}`}
                 checked={list.selected.has(b.username)}
-                onclick={(e) => {
-                  e.preventDefault();
-                  list.tick(b.username, e.shiftKey);
-                }}
-                onCheckedChange={(on) =>
-                  on !== list.selected.has(b.username) && list.toggle(b.username)} />
+                ontick={(range) => list.tick(b.username, range)} />
             {/if}
           </span>
           <span role="gridcell" class="flex min-w-0 items-center gap-1.5 px-2">

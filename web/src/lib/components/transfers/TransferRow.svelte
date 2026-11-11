@@ -233,13 +233,7 @@
       <Checkbox
         aria-label={`Select ${getFileName(t.filename)}`}
         checked={selected}
-        onclick={(e) => {
-          // a click is handled here, with Shift for a range, and the checkbox's own toggle is
-          // skipped; Space on it toggles through onCheckedChange
-          e.preventDefault();
-          onselect(e.shiftKey);
-        }}
-        onCheckedChange={(on) => on !== selected && onselect(false)} />
+        ontick={onselect} />
     {:else if column === "file"}
       {#if viewport.phone}
         <!-- a phone gives the name the row's width, with the size and progress under it -->
