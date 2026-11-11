@@ -199,3 +199,24 @@ test("an address typed over a chat asks nothing of its name", async ({ page }) =
   await expect(page.locator('[id="soulseek.description"]')).toBeVisible();
   expect(asked.filter((path) => /conversations\/(system|settings)/.test(path))).toEqual([]);
 });
+
+test.describe("on a phone", () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+
+  test("a first long press on a message's time opens its menu", async ({ page }) => {
+    await fakeChat(page);
+    await visit(page, "/chat");
+    await open(page, "/chat/rooms/indie");
+    const log = page.getByRole("log");
+    await expect(log.getByText("anyone have the new boards of canada rip?")).toBeVisible();
+    const time = log.locator("[data-message] time:visible").last();
+    const box = (await time.boundingBox())!;
+    const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    // held past the long press, which `tap` is not
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [point] });
+    await page.waitForTimeout(800);
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await expect(page.getByRole("menuitem", { name: "Copy text" })).toBeVisible();
+  });
+});

@@ -69,6 +69,19 @@ describe("the message list", () => {
     await flush();
   };
 
+  it("mounts a message's tooltips once the pointer or focus first comes to it", async () => {
+    history(3);
+    await open();
+    const row = (id: number) => document.querySelector<HTMLElement>(`[data-message="${id}"]`)!;
+    // bits-ui marks the element of a mounted trigger with its state
+    const tipped = (id: number) => row(id).querySelector("time")!.hasAttribute("data-state");
+    expect([tipped(1), tipped(2), tipped(3)]).toEqual([false, false, false]);
+    row(3).dispatchEvent(new Event("pointerenter"));
+    row(2).dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    await flush();
+    expect([tipped(1), tipped(2), tipped(3)]).toEqual([false, true, true]);
+  });
+
   it("reads page after page to the start while the scrollbar is held at the top", async () => {
     const { pages } = history(250);
     // jsdom measures every line as 0 high, which would draw them all

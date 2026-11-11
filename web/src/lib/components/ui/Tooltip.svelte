@@ -22,6 +22,11 @@
      * and the element stays out of the tab order unless it is focusable itself
      */
     clipped?: boolean;
+    /**
+     * the element renders without a trigger while true: a row of a long list sets it until the
+     * pointer or focus first comes to the row, since each trigger joins bits-ui's registry
+     */
+    dormant?: boolean;
     /** the element the tooltip belongs to, which spreads `props` */
     child: Snippet<[{ props: Record<string, unknown> }]>;
   };
@@ -32,6 +37,7 @@
     dense = false,
     spoken = false,
     clipped = false,
+    dormant = false,
     child: render
   }: Props = $props();
 
@@ -66,21 +72,21 @@
   });
 </script>
 
-<!-- always a trigger, disabled without text, so the element isn't remounted when a tooltip comes
-     and goes. The spoken text follows it without a line break, which would render as a space -->
-<Tooltip.Trigger {tether} {payload} {disabled}>
-  {#snippet child({ props })}
-    <!-- type is for bits-ui's own button, and disabled only means there's nothing to show -->
-    {@const {
-      "type": _type,
-      "disabled": _disabled,
-      "data-disabled": _dataDisabled,
-      "tabindex": tabindex,
-      ...own
-    } = props}
-    <!-- the trigger makes its element a tab stop, which dense and clipped leave to the element -->
-    {@render render({
-      props: { ...own, ...(dense || clipped ? {} : { tabindex }), ...(clipped ? measuring : {}) }
-    })}
-  {/snippet}
-</Tooltip.Trigger>{#if spoken && text !== undefined}<span class="sr-only">{text}</span>{/if}
+<!-- a trigger once awake, disabled without text, so the element isn't remounted when a tooltip
+     comes and goes. The spoken text follows it without a line break, which would render as a space -->
+{#if dormant}{@render render({ props: {} })}{:else}<Tooltip.Trigger {tether} {payload} {disabled}>
+    {#snippet child({ props })}
+      <!-- type is for bits-ui's own button, and disabled only means there's nothing to show -->
+      {@const {
+        "type": _type,
+        "disabled": _disabled,
+        "data-disabled": _dataDisabled,
+        "tabindex": tabindex,
+        ...own
+      } = props}
+      <!-- the trigger makes its element a tab stop, which dense and clipped leave to the element -->
+      {@render render({
+        props: { ...own, ...(dense || clipped ? {} : { tabindex }), ...(clipped ? measuring : {}) }
+      })}
+    {/snippet}
+  </Tooltip.Trigger>{/if}{#if spoken && text !== undefined}<span class="sr-only">{text}</span>{/if}

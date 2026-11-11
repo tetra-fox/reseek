@@ -60,6 +60,16 @@
   }: Props = $props();
 
   let shownHidden = $state(false);
+  /** a mouse, a pen or focus has come to the row, which then mounts its tooltips */
+  let awake = $state(false);
+  const wake = () => (awake = true);
+  /**
+   * A touch shows no tooltip, and mounting them would replace the element it landed on before
+   * its pointerdown, which the browser then sends nowhere, losing a long press
+   */
+  const pointed = (e: PointerEvent) => {
+    if (e.pointerType !== "touch") wake();
+  };
   const action = $derived(notice ? null : actionOf(m.text));
   const text = $derived(action ?? m.text);
 
@@ -134,6 +144,8 @@
   bind:this={row}
   role="article"
   onkeydown={keydown}
+  onpointerenter={pointed}
+  onfocusin={wake}
   onpointerdown={pressed}
   onpointerup={released}
   onpointercancel={released}
@@ -159,7 +171,7 @@
     {#if head}
       <Avatar name={m.author} pictureUrl={pictureOf(m.author)} class="mt-0.5 size-9 text-sm" />
     {:else}
-      <Tooltip text={formatDate(m.timestamp)} dense>
+      <Tooltip text={formatDate(m.timestamp)} dense dormant={!awake}>
         {#snippet child({ props })}
           <time
             {...props}
@@ -179,7 +191,7 @@
       <div class="flex items-baseline gap-2 leading-5">
         <Username name={m.author} card class="text-sm font-semibold" />
         {#if m.self}<span class="shrink-0 text-xs text-fg-subtle">you</span>{/if}
-        <Tooltip text={formatDate(m.timestamp)} dense>
+        <Tooltip text={formatDate(m.timestamp)} dense dormant={!awake}>
           {#snippet child({ props })}
             <time
               {...props}
@@ -188,7 +200,7 @@
           {/snippet}
         </Tooltip>
         {#if m.replayed}
-          <Tooltip text="Held by the server until you connected" dense>
+          <Tooltip text="Held by the server until you connected" dense dormant={!awake}>
             {#snippet child({ props })}
               <span {...props} class="min-w-0 truncate text-xs text-fg-subtle italic"
                 >sent while offline</span>
@@ -196,7 +208,7 @@
           </Tooltip>
         {/if}
         {#if m.automatic}
-          <Tooltip text="Your away reply" dense>
+          <Tooltip text="Your away reply" dense dormant={!awake}>
             {#snippet child({ props })}
               <span {...props} class="min-w-0 truncate text-xs text-fg-subtle italic"
                 >sent automatically</span>
@@ -245,7 +257,7 @@
         menu ? "flex" : "hidden"
       ]}>
       {#each actions as action (action.label)}
-        <Tooltip text={action.label}>
+        <Tooltip text={action.label} dormant={!awake}>
           {#snippet child({ props })}
             <Button
               {...props}
