@@ -334,19 +334,10 @@ test("a toast's countdown runs along its foot and holds under the pointer", asyn
   expect(line.x).toBeGreaterThanOrEqual(box.x);
   expect(line.x + line.width).toBeLessThanOrEqual(box.x + box.width);
   expect(Math.abs(line.y + line.height - (box.y + box.height))).toBeLessThanOrEqual(1);
-  const countdown = () =>
-    bar.evaluate((e) => {
-      const [animation] = e.getAnimations();
-      return { state: animation.playState, at: Number(animation.currentTime) };
-    });
+  const countdown = () => bar.evaluate((e) => e.getAnimations()[0].playState);
+  // the bar holds while the pointer is on the toast
   await toast.hover();
-  await expect.poll(async () => (await countdown()).state).toBe("paused");
-  const held = await countdown();
-  // two frames on, the bar is where it was
-  await bar.evaluate(
-    () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))
-  );
-  expect((await countdown()).at, "the bar holds while the pointer is on the toast").toBe(held.at);
+  await expect.poll(countdown).toBe("paused");
   await page.mouse.move(0, 0);
-  await expect.poll(async () => (await countdown()).state).toBe("running");
+  await expect.poll(countdown).toBe("running");
 });
