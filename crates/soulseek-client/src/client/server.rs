@@ -41,10 +41,11 @@ use soulseek_proto::{DecodeError, PeerConnectionType, ServerCode, ServerRequest,
 use super::Client;
 use super::disconnect::Cause;
 use super::request::{interest_key, room_key, room_user_key, user_key};
+use super::session::{Edge, Stage};
 use crate::distributed::Command;
 use crate::error::{ClientError, ConnectionErrorKind, RoomErrorKind};
 use crate::events::{Event, PrivateMessage, RoomMembers};
-use crate::state::{ClientState, ServerInfo};
+use crate::state::ServerInfo;
 use crate::waiter::WaitKey;
 
 /// codes the server no longer sends; seeing one is worth telling apart from a new code
@@ -435,17 +436,18 @@ impl Client {
     } = &response
     {
       let mut session = self.inner.session();
-      if self.state() == ClientState::CONNECTED | ClientState::LOGGING_IN
-        && let Some(username) = session.logging_in_as.take()
-      {
+      if matches!(session.stage, Stage::LoggingIn { .. }) {
         self.inner.merge_server_info(|info| {
           info.is_supporter = Some(*is_supporter);
           info.own_public_ip = Some(*ip);
         });
-        session.username = Some(username);
+      }
+      if let Err(refused) =
         self
           .inner
-          .transition(&mut session, ClientState::READY, "Logged in".into(), None);
+          .transition(&mut session, Edge::Accept, "Logged in".into(), None)
+      {
+        tracing::debug!(state = %refused, "a login reply outside a login is not taken");
       }
     }
     self.complete(WaitKey::Server(ServerCode::Login), response);

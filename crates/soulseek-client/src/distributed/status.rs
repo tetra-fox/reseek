@@ -11,7 +11,6 @@ use soulseek_proto::server::{AcceptChildren, BranchLevel, BranchRoot, HaveNoPare
 use tokio::time::Instant;
 
 use super::tree::Tree;
-use crate::state::ClientState;
 
 /// how long changes are coalesced before the server is told
 const DEBOUNCE: Duration = Duration::from_secs(5);
@@ -74,7 +73,7 @@ impl Tree {
     let Some(client) = self.client() else {
       return;
     };
-    if client.state() != ClientState::READY {
+    if !client.state().is_logged_in() {
       return;
     }
     let options = client.options();
@@ -103,7 +102,7 @@ impl Tree {
         self.last_status_at = Some(Instant::now());
         self.publish(true);
       }
-      Err(error) if client.state() == ClientState::READY => {
+      Err(error) if client.state().is_logged_in() => {
         tracing::warn!(%error, "Failed to update distributed status");
       }
       Err(error) => tracing::debug!(%error, "Failed to update distributed status"),
@@ -137,7 +136,7 @@ impl Tree {
     if client.options().enable_distributed_network
       && !self.has_parent()
       && !self.is_branch_root
-      && client.state() == ClientState::READY
+      && client.state().is_logged_in()
     {
       tracing::warn!("No distributed parent connected.  Requesting a list of candidates.");
       self.update_status(true).await;

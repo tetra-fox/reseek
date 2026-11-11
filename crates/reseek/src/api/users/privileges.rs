@@ -6,7 +6,6 @@ use api_types::state::Privileges;
 use api_types::users::{PrivilegesGift, UsernameQuery};
 use axum::extract::State;
 use axum::http::StatusCode;
-use soulseek_client::ClientState;
 use tracing::{info, warn};
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
@@ -21,7 +20,7 @@ const DAY: u64 = 86_400;
 
 /// Refuses a call that needs the server while we are not logged in.
 fn logged_in(app: &AppState) -> Result<(), ApiError> {
-  if app.network.client().state() != ClientState::READY {
+  if !app.network.client().state().is_logged_in() {
     return Err(ApiError::unavailable(Some(
       "Not logged in to the Soulseek server".to_string(),
     )));

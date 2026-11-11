@@ -55,10 +55,7 @@ async fn the_login_and_the_configuration_sent_after_it() {
   assert_eq!(login.minor_version, PROTOCOL_MINOR_VERSION);
   assert_eq!(login.hash.expose(), "bb6de2fa07892f34b0e1f62df88f3384");
   assert_eq!(port, 50_000);
-  assert_eq!(
-    client.state(),
-    ClientState::CONNECTED | ClientState::LOGGING_IN
-  );
+  assert_eq!(client.state(), ClientState::LoggingIn);
   server.send(&crate::support::login_success()).await;
 
   assert_eq!(
@@ -160,7 +157,7 @@ async fn canceling_the_connect_while_logging_in() {
     disconnected(&drain(&mut events)).1,
     Some(ClientError::Canceled)
   ));
-  assert_eq!(client.state(), ClientState::DISCONNECTED);
+  assert_eq!(client.state(), ClientState::Disconnected);
   server.closed().await;
 }
 
@@ -178,7 +175,7 @@ async fn disconnecting_cancels_a_connect_in_progress() {
   let (message, cause) = disconnected(&drain(&mut events));
   assert_eq!(message, "user asked");
   assert!(cause.is_none());
-  assert_eq!(client.state(), ClientState::DISCONNECTED);
+  assert_eq!(client.state(), ClientState::Disconnected);
   server.closed().await;
 }
 
@@ -202,7 +199,7 @@ async fn the_server_closing_the_connection_ends_the_session() {
       .starts_with(&format!("Failed to read 4 bytes from {address}")),
     "{cause}"
   );
-  assert_eq!(session.client.state(), ClientState::DISCONNECTED);
+  assert_eq!(session.client.state(), ClientState::Disconnected);
   assert_eq!(session.client.username(), None);
   assert_eq!(session.client.address(), None);
   assert_eq!(session.client.ip_endpoint(), None);
@@ -246,7 +243,7 @@ async fn a_busy_listen_port_fails_the_connect_before_the_server_is_contacted() {
     .unwrap()
     .unwrap_err();
   assert!(matches!(error, ClientError::Listen { .. }), "{error:?}");
-  assert_eq!(client.state(), ClientState::DISCONNECTED);
+  assert_eq!(client.state(), ClientState::Disconnected);
   // nothing reached the server
   let accepted = tokio::time::timeout(Duration::from_millis(200), fake.accept()).await;
   assert!(accepted.is_err());

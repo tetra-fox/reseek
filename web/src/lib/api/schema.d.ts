@@ -7561,10 +7561,10 @@ export interface components {
             queued: string[];
         };
         /**
-         * @description the names of the set flags joined by ", "
-         * @example Connected, LoggedIn
+         * @description The state of the connection to the Soulseek server.
+         * @enum {string}
          */
-        ServerConnectionState: string;
+        ServerConnectionState: "Disconnected" | "Connecting" | "Connected" | "Connected, LoggingIn" | "Connected, LoggedIn" | "Disconnecting";
         /**
          * @description A message from the Soulseek server itself, a broadcast to every user or a notice to us,
          *     the data of an `application.server_message` frame.
@@ -7587,19 +7587,19 @@ export interface components {
              * @example 1.2.3.4:2271
              */
             ipEndPoint?: string | null;
-            /** @description `state` has `Connected` */
+            /** @description `state` is `Connected`, `Connected, LoggingIn` or `Connected, LoggedIn` */
             isConnected: boolean;
-            /** @description `state` has `Connecting` */
+            /** @description `state` is `Connecting` */
             isConnecting: boolean;
-            /** @description `state` has `LoggedIn` */
+            /** @description `state` is `Connected, LoggedIn` */
             isLoggedIn: boolean;
-            /** @description `state` has `LoggingIn` */
+            /** @description `state` is `Connected, LoggingIn` */
             isLoggingIn: boolean;
-            /** @description `state` has `Connecting`, `Disconnecting` or `LoggingIn` */
+            /** @description `state` is `Connecting`, `Connected, LoggingIn` or `Disconnecting` */
             isTransitioning: boolean;
             /** @description how other users reach our peer listener */
             listen: components["schemas"]["ListenState"];
-            /** @description the client's state flags */
+            /** @description where the connection stands */
             state: components["schemas"]["ServerConnectionState"];
         };
         /** @description An active browser session, an entry of `GET /sessions`. */

@@ -25102,9 +25102,14 @@
       },
       "ServerConnectionState": {
         "type": "string",
-        "description": "the names of the set flags joined by \", \"",
-        "examples": [
-          "Connected, LoggedIn"
+        "description": "The state of the connection to the Soulseek server.",
+        "enum": [
+          "Disconnected",
+          "Connecting",
+          "Connected",
+          "Connected, LoggingIn",
+          "Connected, LoggedIn",
+          "Disconnecting"
         ]
       },
       "ServerMessage": {
@@ -25156,23 +25161,23 @@
           },
           "isConnected": {
             "type": "boolean",
-            "description": "`state` has `Connected`"
+            "description": "`state` is `Connected`, `Connected, LoggingIn` or `Connected, LoggedIn`"
           },
           "isConnecting": {
             "type": "boolean",
-            "description": "`state` has `Connecting`"
+            "description": "`state` is `Connecting`"
           },
           "isLoggedIn": {
             "type": "boolean",
-            "description": "`state` has `LoggedIn`"
+            "description": "`state` is `Connected, LoggedIn`"
           },
           "isLoggingIn": {
             "type": "boolean",
-            "description": "`state` has `LoggingIn`"
+            "description": "`state` is `Connected, LoggingIn`"
           },
           "isTransitioning": {
             "type": "boolean",
-            "description": "`state` has `Connecting`, `Disconnecting` or `LoggingIn`"
+            "description": "`state` is `Connecting`, `Connected, LoggingIn` or `Disconnecting`"
           },
           "listen": {
             "$ref": "#/components/schemas/ListenState",
@@ -25180,7 +25185,7 @@
           },
           "state": {
             "$ref": "#/components/schemas/ServerConnectionState",
-            "description": "the client's state flags"
+            "description": "where the connection stands"
           }
         }
       },

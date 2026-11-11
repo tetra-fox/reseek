@@ -15,6 +15,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
 
 use super::Client;
+use super::session::{Edge, Link, Stage};
 use crate::conn::{Conn, ConnKind, MessageConn, ReadEvent, resolve};
 use crate::error::{ClientError, ConnectionErrorKind};
 use crate::inbound;
@@ -62,27 +63,25 @@ impl Client {
       () = cancel.cancelled() => return Err(ClientError::Canceled),
       guard = self.inner.state_lock.lock() => guard,
     };
-    // another caller connected while this one waited for the lock
-    if self.state() == ClientState::READY {
-      return Ok(());
-    }
     // a disconnect still tearing down the previous session finishes first
     let mut state = self.inner.state.subscribe();
     tokio::select! {
       biased;
       () = cancel.cancelled() => return Err(ClientError::Canceled),
-      _ = state.wait_for(|state| !state.contains(ClientState::DISCONNECTING)) => {}
+      _ = state.wait_for(|state| *state != ClientState::Disconnecting) => {}
     }
     let attempt = cancel.child_token();
     {
       let mut session = self.inner.session();
+      // another caller connected while this one waited for the lock
+      if session.stage.state().is_logged_in() {
+        return Ok(());
+      }
+      self
+        .inner
+        .transition(&mut session, Edge::Connect, "Connecting".into(), None)
+        .map_err(connect_refused)?;
       session.attempt = Some(attempt.clone());
-      self.inner.transition(
-        &mut session,
-        ClientState::CONNECTING,
-        "Connecting".into(),
-        None,
-      );
     }
     tracing::info!(address, port, %remote, username, "connecting to server");
     let result = self
@@ -103,19 +102,12 @@ impl Client {
     Err(error)
   }
 
+  /// refuses a connect while a session is under way; a disconnect under way is waited for
   fn check_not_connected(&self) -> Result<(), ClientError> {
-    let state = self.state();
-    if state.intersects(ClientState::CONNECTING | ClientState::LOGGING_IN) {
-      return Err(ClientError::InvalidOperation(
-        "A connection is already in the process of being established".into(),
-      ));
+    match self.state() {
+      ClientState::Disconnected | ClientState::Disconnecting => Ok(()),
+      state => Err(connect_refused(state)),
     }
-    if state.contains(ClientState::CONNECTED) {
-      return Err(ClientError::InvalidOperation(
-        "The client is already connected".into(),
-      ));
-    }
-    Ok(())
   }
 
   async fn connect_session(
@@ -130,8 +122,11 @@ impl Client {
     if options.enable_listener {
       let listener = self.start_listener(&options)?;
       let mut session = self.inner.session();
-      self.check_attempt(attempt, ClientState::CONNECTING)?;
-      session.listener = Some(listener);
+      check_canceled(attempt)?;
+      let Stage::Connecting { listener: place } = &mut session.stage else {
+        return Err(ended_while_connecting(session.stage.state()));
+      };
+      *place = Some(listener);
     }
 
     let conn = Conn::connect(
@@ -145,21 +140,29 @@ impl Client {
     let server = conn.into_message(FrameKind::Server, options.limits.frame_limits())?;
     {
       let mut session = self.inner.session();
-      if let Err(error) = self.check_attempt(attempt, ClientState::CONNECTING) {
+      let link = Link {
+        server: server.clone(),
+        address: address.to_owned(),
+        ip_endpoint: remote,
+      };
+      let reached = check_canceled(attempt).and_then(|()| {
+        self
+          .inner
+          .transition(
+            &mut session,
+            Edge::Reach(link),
+            format!("Connected to {remote}"),
+            None,
+          )
+          .map(drop)
+          .map_err(ended_while_connecting)
+      });
+      if let Err(error) = reached {
         server
           .handle()
           .disconnect(error.to_string(), Some(error.clone()));
         return Err(error);
       }
-      session.server = Some(server.clone());
-      session.address = Some(address.to_owned());
-      session.ip_endpoint = Some(remote);
-      self.inner.transition(
-        &mut session,
-        ClientState::CONNECTED,
-        format!("Connected to {remote}"),
-        None,
-      );
     }
     tracing::debug!(%remote, "connected to server");
     self.start_server_reading(&server);
@@ -167,25 +170,6 @@ impl Client {
     self.login(username, password, &options, attempt).await?;
     self.send_configuration_messages().await?;
     spawn_ping(server);
-    Ok(())
-  }
-
-  /// fails when the attempt was canceled or a disconnect moved the state on
-  fn check_attempt(
-    &self,
-    attempt: &CancellationToken,
-    expected: ClientState,
-  ) -> Result<(), ClientError> {
-    if attempt.is_cancelled() {
-      return Err(ClientError::Canceled);
-    }
-    let state = self.state();
-    if state != expected {
-      return Err(ClientError::connection(
-        ConnectionErrorKind::Other,
-        format!("the server session ended while connecting (state: {state})"),
-      ));
-    }
     Ok(())
   }
 
@@ -198,14 +182,16 @@ impl Client {
   ) -> Result<(), ClientError> {
     {
       let mut session = self.inner.session();
-      self.check_attempt(attempt, ClientState::CONNECTED)?;
-      session.logging_in_as = Some(username.to_owned());
-      self.inner.transition(
-        &mut session,
-        ClientState::CONNECTED | ClientState::LOGGING_IN,
-        "Logging in".into(),
-        None,
-      );
+      check_canceled(attempt)?;
+      self
+        .inner
+        .transition(
+          &mut session,
+          Edge::LogIn(username.to_owned()),
+          "Logging in".into(),
+          None,
+        )
+        .map_err(ended_while_connecting)?;
     }
     let reply = self.inner.waiter.wait::<LoginResponse>(
       WaitKey::Server(ServerCode::Login),
@@ -229,8 +215,13 @@ impl Client {
       .await?;
     match reply.await {
       Ok(LoginResponse::Success { greeting, ip, .. }) => {
-        // the dispatcher logged the session in as it read the reply
-        self.check_attempt(attempt, ClientState::READY)?;
+        // the dispatcher logged the session in as it read the reply, unless a disconnect came
+        // first
+        check_canceled(attempt)?;
+        let state = self.state();
+        if !state.is_logged_in() {
+          return Err(ended_while_connecting(state));
+        }
         tracing::info!(username, public_ip = %ip, "logged in");
         tracing::debug!(greeting, "server greeting");
         Ok(())
@@ -402,6 +393,32 @@ fn validate_arguments(address: &str, username: &str, password: &str) -> Result<(
     return invalid("Password may not be null or an empty string");
   }
   Ok(())
+}
+
+/// fails when the connect was canceled
+fn check_canceled(attempt: &CancellationToken) -> Result<(), ClientError> {
+  if attempt.is_cancelled() {
+    return Err(ClientError::Canceled);
+  }
+  Ok(())
+}
+
+/// the error of a connect whose session a disconnect moved on to `state`
+fn ended_while_connecting(state: ClientState) -> ClientError {
+  ClientError::connection(
+    ConnectionErrorKind::Other,
+    format!("the server session ended while connecting (state: {state})"),
+  )
+}
+
+/// the refusal of a connect while the session is in `state`
+fn connect_refused(state: ClientState) -> ClientError {
+  let message = if state.is_transitioning() {
+    "A connection is already in the process of being established"
+  } else {
+    "The client is already connected"
+  };
+  ClientError::InvalidOperation(message.into())
 }
 
 /// what a failed connect reports: its own outcomes as they are, anything else as a connect

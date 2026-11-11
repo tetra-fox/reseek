@@ -45,9 +45,7 @@ impl Client {
   /// fails unless connected and logging in or logged in, naming what was attempted
   pub(super) fn require_logging_in_or_logged_in(&self, verb: &str) -> Result<(), ClientError> {
     let state = self.state();
-    if state.contains(ClientState::CONNECTED)
-      && state.intersects(ClientState::LOGGING_IN | ClientState::LOGGED_IN)
-    {
+    if matches!(state, ClientState::LoggingIn | ClientState::LoggedIn) {
       return Ok(());
     }
     Err(ClientError::InvalidOperation(format!(

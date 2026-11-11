@@ -15,12 +15,15 @@ mod reconfigure;
 mod request;
 mod rooms;
 mod server;
+mod session;
 mod users;
 
 pub(crate) use request::{failed, non_blank};
 
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, MutexGuard, RwLock, Weak};
+
+use session::{Edge, Released, Stage};
 
 use soulseek_proto::ServerRequest;
 use tokio::sync::{broadcast, watch};
@@ -31,7 +34,6 @@ use crate::conn::MessageConn;
 use crate::distributed::DistributedNetwork;
 use crate::error::ClientError;
 use crate::events::{EVENT_CAPACITY, Event};
-use crate::listener::Listener;
 use crate::lock;
 use crate::options::ClientOptions;
 use crate::peers::PeerConnections;
@@ -90,24 +92,28 @@ struct Inner {
   lifetime: CancellationToken,
 }
 
-/// What exists only while a server session does, and which session that is
-#[derive(Default)]
+/// The server session: which one it is, where it stands with what exists there, and how the
+/// last one ended
 struct Session {
   /// counts the sessions begun; the current or last one's number
   number: u64,
-  /// the current or last session reached the server
-  reached: bool,
+  stage: Stage,
   /// how the latest session to end ended, kept across the next one
   last_end: Option<SessionEnd>,
-  /// the `connect` in progress, canceled by an explicit disconnect
+  /// the `connect` call in progress, canceled by an explicit disconnect; the call can go on
+  /// after the login, so it is not part of a stage
   attempt: Option<CancellationToken>,
-  listener: Option<Listener>,
-  server: Option<MessageConn>,
-  /// the username of the login whose reply has not arrived yet
-  logging_in_as: Option<String>,
-  username: Option<String>,
-  address: Option<String>,
-  ip_endpoint: Option<SocketAddr>,
+}
+
+impl Default for Session {
+  fn default() -> Self {
+    Self {
+      number: 0,
+      stage: Stage::Disconnected { reached: false },
+      last_end: None,
+      attempt: None,
+    }
+  }
 }
 
 impl Client {
@@ -132,7 +138,7 @@ impl Client {
       searches: Searches::new(options.maximum_concurrent_searches),
       folder_requests: FolderRequests::default(),
       options: RwLock::new(Arc::new(options)),
-      state: watch::Sender::new(ClientState::DISCONNECTED),
+      state: watch::Sender::new(ClientState::Disconnected),
       session: Mutex::new(Session::default()),
       state_lock: tokio::sync::Mutex::new(()),
       server_info: Mutex::new(ServerInfo::default()),
@@ -167,26 +173,29 @@ impl Client {
     let session = self.inner.session();
     SessionStatus {
       number: session.number,
-      state: *self.inner.state.borrow(),
-      reached: session.reached,
-      username: session.username.clone(),
+      state: session.stage.state(),
+      reached: session.stage.reached(),
+      username: session.stage.username().map(str::to_owned),
       last_end: session.last_end.clone(),
     }
   }
 
   /// the server address as given to `connect`, while connected
   pub fn address(&self) -> Option<String> {
-    self.inner.session().address.clone()
+    let session = self.inner.session();
+    session.stage.link().map(|link| link.address.clone())
   }
 
   /// the server endpoint the address resolved to, while connected
   pub fn ip_endpoint(&self) -> Option<SocketAddr> {
-    self.inner.session().ip_endpoint
+    let session = self.inner.session();
+    session.stage.link().map(|link| link.ip_endpoint)
   }
 
   /// our username, while logged in
   pub fn username(&self) -> Option<String> {
-    self.inner.session().username.clone()
+    let session = self.inner.session();
+    session.stage.username().map(str::to_owned)
   }
 
   /// the tuning values the server has sent so far
@@ -376,12 +385,14 @@ impl Inner {
   }
 
   fn server(&self) -> Result<MessageConn, ClientError> {
-    self.session().server.clone().ok_or_else(|| {
-      ClientError::InvalidOperation(format!(
+    let session = self.session();
+    match session.stage.link() {
+      Some(link) => Ok(link.server.clone()),
+      None => Err(ClientError::InvalidOperation(format!(
         "Invalid attempt to send to a disconnected or transitioning connection (current state: {})",
-        *self.state.borrow()
-      ))
-    })
+        session.stage.state()
+      ))),
+    }
   }
 
   fn check_not_disposed(&self) -> Result<(), ClientError> {
@@ -396,55 +407,53 @@ impl Inner {
     let _ = self.events.send(event);
   }
 
-  /// Moves to `next` and raises its events. The caller holds the session lock, which keeps
-  /// transitions and their events in one order.
+  /// Takes `edge` and raises its events, or refuses it and changes nothing. The caller holds
+  /// the session lock, which keeps transitions and their events in one order. This is the one
+  /// place the session's stage and the published state change.
   fn transition(
     &self,
     session: &mut Session,
-    next: ClientState,
+    edge: Edge,
     message: String,
     error: Option<ClientError>,
-  ) {
-    let previous_state = self.state.send_replace(next);
-    tracing::debug!(%previous_state, state = %next, message, "client state changed");
+  ) -> Result<Released, ClientState> {
+    let released = session.stage.advance(edge)?;
+    let state = session.stage.state();
+    let previous_state = self.state.send_replace(state);
+    tracing::debug!(%previous_state, %state, message, "client state changed");
     self.emit(Event::StateChanged {
       previous_state,
-      state: next,
+      state,
       message: message.clone(),
       error: error.clone(),
     });
-    if next == ClientState::CONNECTING {
-      session.number += 1;
-      session.reached = false;
-    } else if next == ClientState::CONNECTED {
-      session.reached = true;
-      self.emit(Event::Connected {
+    match &session.stage {
+      Stage::Connecting { .. } => session.number += 1,
+      Stage::Connected { .. } => self.emit(Event::Connected {
         session: session.number,
-      });
-    } else if next == ClientState::READY {
-      let username = session
-        .username
-        .clone()
-        .expect("a login names the session before it is ready");
-      self.emit(Event::LoggedIn {
+      }),
+      Stage::LoggedIn { username, .. } => self.emit(Event::LoggedIn {
         session: session.number,
-        username,
-      });
-    } else if next == ClientState::DISCONNECTED {
-      let at = std::time::SystemTime::now();
-      session.last_end = Some(SessionEnd {
-        session: session.number,
-        message: message.clone(),
-        error: error.clone(),
-        at,
-      });
-      self.emit(Event::Disconnected {
-        session: session.number,
-        message,
-        error,
-        at,
-      });
+        username: username.clone(),
+      }),
+      Stage::Disconnected { .. } => {
+        let at = std::time::SystemTime::now();
+        session.last_end = Some(SessionEnd {
+          session: session.number,
+          message: message.clone(),
+          error: error.clone(),
+          at,
+        });
+        self.emit(Event::Disconnected {
+          session: session.number,
+          message,
+          error,
+          at,
+        });
+      }
+      Stage::LoggingIn { .. } | Stage::Disconnecting { .. } => {}
     }
+    Ok(released)
   }
 
   fn merge_server_info(&self, merge: impl FnOnce(&mut ServerInfo)) {
@@ -465,8 +474,9 @@ impl Drop for Inner {
       .session
       .get_mut()
       .unwrap_or_else(std::sync::PoisonError::into_inner);
-    if let Some(server) = session.server.take() {
-      server
+    if let Some(link) = session.stage.link() {
+      link
+        .server
         .handle()
         .disconnect("Client is being disposed", Some(ClientError::Disposed));
     }

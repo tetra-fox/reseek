@@ -445,7 +445,7 @@ impl Upload {
   /// that it failed, so it queues the file again. Best effort and bounded; skipped while the
   /// client disconnects or once it is disposed, but not because the server session was lost.
   async fn tell_peer(&mut self, error: &ClientError) {
-    if self.client.state().contains(ClientState::DISCONNECTING)
+    if self.client.state() == ClientState::Disconnecting
       || self.client.cancellation().is_cancelled()
     {
       tracing::debug!(

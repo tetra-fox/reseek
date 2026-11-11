@@ -90,7 +90,7 @@ fn initial(loaded: &Loaded<Options>, paths: &Paths) -> State {
     server: ServerState {
       address: None,
       ip_end_point: None,
-      state: ServerConnectionState::empty(),
+      state: ServerConnectionState::Disconnected,
       is_connected: false,
       is_connecting: false,
       is_logged_in: false,

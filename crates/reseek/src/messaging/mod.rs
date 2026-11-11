@@ -29,7 +29,7 @@ use api_types::messaging::NotifyLevel;
 use cascade::Watcher;
 use chrono::Utc;
 use reseek_shares::lock;
-use soulseek_client::{Client, ClientState, Event};
+use soulseek_client::{Client, Event};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -230,7 +230,7 @@ impl Messaging {
   }
 
   fn logged_in_now(&self) -> bool {
-    self.client().state().contains(ClientState::LOGGED_IN)
+    self.client().state().is_logged_in()
   }
 
   /// Hands a client event about a message, a room, a login or a disconnect to the messaging

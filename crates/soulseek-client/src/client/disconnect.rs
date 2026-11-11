@@ -7,11 +7,10 @@
 
 use uuid::Uuid;
 
+use super::session::{Edge, Released};
 use super::{Client, Inner};
-use crate::conn::{Disconnect, MessageConn};
+use crate::conn::Disconnect;
 use crate::error::{ClientError, ConnectionErrorKind};
-use crate::listener::Listener;
-use crate::state::ClientState;
 use crate::waiter::Scope;
 
 /// What ended the session, which decides whether a `connect` in progress is canceled
@@ -29,8 +28,7 @@ pub(super) enum Cause {
 pub(super) struct Teardown {
   message: String,
   error: Option<ClientError>,
-  listener: Option<Listener>,
-  server: Option<MessageConn>,
+  released: Released,
 }
 
 impl Client {
@@ -68,12 +66,8 @@ impl Inner {
     cause: Cause,
   ) -> Option<Teardown> {
     let mut session = self.session();
-    let state = *self.state.borrow();
-    if state.intersects(ClientState::DISCONNECTED | ClientState::DISCONNECTING) {
-      return None;
-    }
     if let Cause::ServerLost(id) = cause
-      && session.server.as_ref().map(|server| server.handle().id()) != Some(id)
+      && session.stage.link().map(|link| link.server.handle().id()) != Some(id)
     {
       return None;
     }
@@ -82,12 +76,10 @@ impl Inner {
       (None, Some(error)) => error.to_string(),
       (None, None) => "Client disconnected".to_owned(),
     };
-    self.transition(
-      &mut session,
-      ClientState::DISCONNECTING,
-      message.clone(),
-      None,
-    );
+    // refused when already disconnected or disconnecting: there is nothing to tear down
+    let released = self
+      .transition(&mut session, Edge::Disconnect, message.clone(), None)
+      .ok()?;
     if let Cause::Requested = cause
       && let Some(attempt) = &session.attempt
     {
@@ -106,8 +98,7 @@ impl Inner {
     Some(Teardown {
       message,
       error,
-      listener: session.listener.take(),
-      server: session.server.take(),
+      released,
     })
   }
 }
@@ -118,8 +109,7 @@ impl Teardown {
     let Self {
       message,
       error,
-      listener,
-      server,
+      released: Released { listener, server },
     } = self;
     if let Some(listener) = listener {
       listener.stop().await;
@@ -139,10 +129,8 @@ impl Teardown {
       Some(error) => tracing::warn!(message, %error, "disconnected from server"),
     }
     let mut session = inner.session();
-    session.logging_in_as = None;
-    session.username = None;
-    session.address = None;
-    session.ip_endpoint = None;
-    inner.transition(&mut session, ClientState::DISCONNECTED, message, error);
+    inner
+      .transition(&mut session, Edge::Finish, message, error)
+      .expect("only the teardown that began a disconnect ends it");
   }
 }

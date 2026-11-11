@@ -23,7 +23,7 @@ async fn login_raises_its_transitions_before_anything_the_server_sends_after_it(
   let mut events = client.subscribe();
   server.connect(&client, &username, PASSWORD).await.unwrap();
 
-  assert_eq!(client.state(), ClientState::READY);
+  assert_eq!(client.state(), ClientState::LoggedIn);
   assert_eq!(client.username(), Some(username));
   assert_eq!(client.address(), Some(server.address().ip().to_string()));
   assert_eq!(client.ip_endpoint(), Some(server.address()));
@@ -67,23 +67,23 @@ async fn login_raises_its_transitions_before_anything_the_server_sends_after_it(
     transitions(&seen),
     [
       (
-        ClientState::DISCONNECTED,
-        ClientState::CONNECTING,
+        ClientState::Disconnected,
+        ClientState::Connecting,
         "Connecting".into()
       ),
       (
-        ClientState::CONNECTING,
-        ClientState::CONNECTED,
+        ClientState::Connecting,
+        ClientState::Connected,
         format!("Connected to {}", server.address())
       ),
       (
-        ClientState::CONNECTED,
-        ClientState::CONNECTED | ClientState::LOGGING_IN,
+        ClientState::Connected,
+        ClientState::LoggingIn,
         "Logging in".into()
       ),
       (
-        ClientState::CONNECTED | ClientState::LOGGING_IN,
-        ClientState::READY,
+        ClientState::LoggingIn,
+        ClientState::LoggedIn,
         "Logged in".into()
       ),
     ]
@@ -131,7 +131,7 @@ async fn connecting_twice_is_refused() {
   assert!(
     matches!(&error, ClientError::InvalidOperation(message) if message == "The client is already connected")
   );
-  assert_eq!(alice.client.state(), ClientState::READY);
+  assert_eq!(alice.client.state(), ClientState::LoggedIn);
 }
 
 #[tokio::test]
@@ -155,7 +155,7 @@ async fn a_wrong_password_is_rejected_with_the_server_reason() {
   let (message, cause) = disconnected(&drain(&mut events));
   assert_eq!(message, "The server rejected login attempt: INVALIDPASS");
   assert!(matches!(cause, Some(ClientError::LoginRejected(_))));
-  assert_eq!(client.state(), ClientState::DISCONNECTED);
+  assert_eq!(client.state(), ClientState::Disconnected);
   assert_eq!(client.username(), None);
 }
 
@@ -181,8 +181,8 @@ async fn a_second_login_with_our_name_kicks_us() {
     .await;
   assert_eq!(message, "Kicked from server");
   assert!(matches!(cause, Some(ClientError::KickedFromServer)));
-  assert_eq!(first.client.state(), ClientState::DISCONNECTED);
-  assert_eq!(second.state(), ClientState::READY);
+  assert_eq!(first.client.state(), ClientState::Disconnected);
+  assert_eq!(second.state(), ClientState::LoggedIn);
 }
 
 #[tokio::test]
@@ -263,9 +263,9 @@ async fn a_refused_connection_is_a_connect_error() {
       .map(|(_, state, _)| *state)
       .collect::<Vec<_>>(),
     [
-      ClientState::CONNECTING,
-      ClientState::DISCONNECTING,
-      ClientState::DISCONNECTED
+      ClientState::Connecting,
+      ClientState::Disconnecting,
+      ClientState::Disconnected
     ]
   );
   assert!(matches!(
@@ -285,7 +285,7 @@ async fn the_server_connection_never_times_out() {
   tokio::time::pause();
   tokio::time::sleep(Duration::from_secs(3600)).await;
   tokio::time::resume();
-  assert_eq!(alice.client.state(), ClientState::READY);
+  assert_eq!(alice.client.state(), ClientState::LoggedIn);
   let status: soulseek_proto::server::UserStatus = alice
     .ask(
       user_key(ServerCode::GetStatus, &alice.username),

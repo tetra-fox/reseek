@@ -100,7 +100,7 @@ impl Session {
       .filter(|end| end.session == status.number);
     let phase = if ended.is_some() {
       Phase::Ended
-    } else if status.state.contains(ClientState::LOGGED_IN) {
+    } else if status.state.is_logged_in() {
       Phase::LoggedIn
     } else if status.reached {
       Phase::Connected
@@ -452,27 +452,35 @@ async fn user_status(app: &AppState, status: &soulseek_proto::server::UserStatus
 /// `State.server` and our username as the client has them in `state`.
 fn server_state(app: &AppState, state: ClientState) {
   let client = app.network.client();
-  let disconnected = state.contains(ClientState::DISCONNECTED);
-  let address = if disconnected { None } else { client.address() };
-  let ip_end_point = if disconnected {
-    None
-  } else {
-    client.ip_endpoint().map(|e| e.to_string())
-  };
   let username = client.username();
+  let (address, ip_end_point) = (
+    client.address(),
+    client.ip_endpoint().map(|e| e.to_string()),
+  );
   app.state.update(|current| {
     let server = &mut current.server;
     server.address = address;
     server.ip_end_point = ip_end_point;
-    server.state = ServerConnectionState::from_bits_retain(state.bits().into());
-    server.is_connected = state.contains(ClientState::CONNECTED);
-    server.is_connecting = state.contains(ClientState::CONNECTING);
-    server.is_logged_in = state.contains(ClientState::LOGGED_IN);
-    server.is_logging_in = state.contains(ClientState::LOGGING_IN);
-    server.is_transitioning = state
-      .intersects(ClientState::CONNECTING | ClientState::DISCONNECTING | ClientState::LOGGING_IN);
+    server.state = connection_state(state);
+    server.is_connected = state.is_connected();
+    server.is_connecting = state == ClientState::Connecting;
+    server.is_logged_in = state.is_logged_in();
+    server.is_logging_in = state == ClientState::LoggingIn;
+    server.is_transitioning = state.is_transitioning();
     current.user.username = username;
   });
+}
+
+/// The client's session state as the API writes it.
+fn connection_state(state: ClientState) -> ServerConnectionState {
+  match state {
+    ClientState::Disconnected => ServerConnectionState::Disconnected,
+    ClientState::Connecting => ServerConnectionState::Connecting,
+    ClientState::Connected => ServerConnectionState::Connected,
+    ClientState::LoggingIn => ServerConnectionState::LoggingIn,
+    ClientState::LoggedIn => ServerConnectionState::LoggedIn,
+    ClientState::Disconnecting => ServerConnectionState::Disconnecting,
+  }
 }
 
 /// The TCP connection to the server is up, before the login: the watchdog stops without
@@ -535,7 +543,7 @@ pub async fn follow_shared_counts(app: AppState) {
     }
     let current = *counts.borrow_and_update();
     let client = app.network.client();
-    if client.state() != ClientState::READY {
+    if !client.state().is_logged_in() {
       continue;
     }
     if let Err(e) = client
@@ -841,8 +849,8 @@ mod tests {
       number,
       state,
       reached,
-      username: state.contains(ClientState::LOGGED_IN).then(|| "me".into()),
-      last_end: if state.contains(ClientState::DISCONNECTED) {
+      username: state.is_logged_in().then(|| "me".into()),
+      last_end: if state == ClientState::Disconnected {
         Some(end(number))
       } else {
         number.checked_sub(1).filter(|n| *n > 0).map(end)
@@ -860,7 +868,7 @@ mod tests {
   #[test]
   fn caught_up_disconnect_lost_in_a_lag() {
     let mut session = logged_in(1);
-    let missed = session.catch_up(&status(1, ClientState::DISCONNECTED, true));
+    let missed = session.catch_up(&status(1, ClientState::Disconnected, true));
     assert!(
       matches!(missed.as_slice(), [Missed::Ended { reached: true, .. }]),
       "{missed:?}"
@@ -872,7 +880,7 @@ mod tests {
   #[test]
   fn caught_up_reconnect_and_login_inside_one_lag() {
     let mut session = logged_in(1);
-    let missed = session.catch_up(&status(2, ClientState::READY, true));
+    let missed = session.catch_up(&status(2, ClientState::LoggedIn, true));
     assert!(
       matches!(
         missed.as_slice(),
@@ -893,7 +901,7 @@ mod tests {
   fn caught_up_session_that_came_and_went() {
     let mut session = Session::default();
     session.advance(1, Phase::Ended);
-    let missed = session.catch_up(&status(2, ClientState::DISCONNECTED, true));
+    let missed = session.catch_up(&status(2, ClientState::Disconnected, true));
     assert!(
       matches!(missed.as_slice(), [Missed::Ended { reached: true, .. }]),
       "{missed:?}"
@@ -905,14 +913,14 @@ mod tests {
     let mut session = logged_in(3);
     assert!(
       session
-        .catch_up(&status(3, ClientState::READY, true))
+        .catch_up(&status(3, ClientState::LoggedIn, true))
         .is_empty()
     );
     // a disconnect under way is not taken for over, and its reach is known when it ends
     let mut session = logged_in(3);
     assert!(
       session
-        .catch_up(&status(3, ClientState::DISCONNECTING, true))
+        .catch_up(&status(3, ClientState::Disconnecting, true))
         .is_empty()
     );
     assert_eq!(session.advance(3, Phase::Ended), Some(Phase::LoggedIn));

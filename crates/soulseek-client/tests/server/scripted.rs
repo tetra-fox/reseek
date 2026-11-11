@@ -150,7 +150,10 @@ async fn unhandled_and_obsolete_codes_are_logged_and_the_connection_stays_up() {
       .len(),
     1
   );
-  assert_eq!(session.client.state(), soulseek_client::ClientState::READY);
+  assert_eq!(
+    session.client.state(),
+    soulseek_client::ClientState::LoggedIn
+  );
 }
 
 #[tokio::test]
@@ -166,7 +169,10 @@ async fn a_malformed_message_is_dropped_and_the_connection_stays_up() {
   frame.extend(payload);
   session.server.send_bytes(&frame).await;
   session.settle().await;
-  assert_eq!(session.client.state(), soulseek_client::ClientState::READY);
+  assert_eq!(
+    session.client.state(),
+    soulseek_client::ClientState::LoggedIn
+  );
 }
 
 #[tokio::test]

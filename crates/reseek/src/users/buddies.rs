@@ -13,7 +13,7 @@ use api_types::live::LiveFrame;
 use api_types::users::{Buddy, BuddyChange, UserPresence};
 use reseek_shares::lock;
 use rusqlite::Connection;
-use soulseek_client::{Client, ClientState};
+use soulseek_client::Client;
 use soulseek_proto::SERVER_USERNAME;
 use tracing::{Instrument, debug, info};
 
@@ -153,7 +153,7 @@ impl Directory {
     let Some(client) = self.client.get().cloned() else {
       return;
     };
-    if client.state() != ClientState::READY {
+    if !client.state().is_logged_in() {
       return;
     }
     let (this, username) = (self.clone(), username.to_string());

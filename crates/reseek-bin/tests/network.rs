@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
 use api_types::options::OptionsPatch;
+use api_types::state::ServerConnectionState;
 use serde_json::json;
 use support::soulfind;
 use support::{ACCOUNT, Daemon, PATIENCE, daemon, logged_in, quiet, signed_in, until};
@@ -33,7 +34,7 @@ async fn the_daemon_logs_in_with_its_shares_counted_and_connects_when_asked() {
   let client = signed_in(&daemon).await;
   let state = until(&client, "logged in", logged_in).await;
   assert_eq!(state.user.username.as_deref(), Some(name.as_str()));
-  assert_eq!(state.server.state.to_string(), "Connected, LoggedIn");
+  assert_eq!(state.server.state, ServerConnectionState::LoggedIn);
   assert!(state.server.address.is_some() && state.server.ip_end_point.is_some());
   assert!(
     !state.connection_watchdog.is_enabled,
@@ -59,7 +60,7 @@ async fn the_daemon_logs_in_with_its_shares_counted_and_connects_when_asked() {
     .await
     .unwrap();
   let state = until(&client, "disconnected", |s| !s.server.is_connected).await;
-  assert_eq!(state.server.state.to_string(), "Disconnected");
+  assert_eq!(state.server.state, ServerConnectionState::Disconnected);
   assert_eq!(state.user.username, None);
   assert!(!state.connection_watchdog.is_enabled);
   tokio::time::sleep(Duration::from_millis(500)).await;

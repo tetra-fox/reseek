@@ -23,7 +23,6 @@ use crate::conn::{Disconnect, MessageConn, ReadEvent};
 use crate::error::{ClientError, ConnectionErrorKind};
 use crate::events::{DistributedParent, Event};
 use crate::peers::{Via, both_failed, race};
-use crate::state::ClientState;
 use crate::waiter::{Scope, WaitKey};
 
 /// What frames from a connection to a parent, or a would-be one, are for
@@ -307,7 +306,7 @@ impl Tree {
       tracing::debug!("Parent connection solicitation ignored; distributed network is not enabled");
       return;
     }
-    if client.state() != ClientState::READY {
+    if !client.state().is_logged_in() {
       return;
     }
     if self.has_parent() {

@@ -120,10 +120,7 @@ impl Searches {
   /// How often the server lets the wishlist search, while logged in and once it said.
   pub fn wishlist_interval(&self) -> Option<Duration> {
     let client = self.network.client();
-    if !client
-      .state()
-      .contains(soulseek_client::ClientState::LOGGED_IN)
-    {
+    if !client.state().is_logged_in() {
       return None;
     }
     client

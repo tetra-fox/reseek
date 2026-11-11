@@ -5,7 +5,6 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::flags::flag_names;
 use crate::relay::RelayState;
 
 /// The daemon's state, as `GET /application` returns it and `application.state` frames carry
@@ -97,31 +96,25 @@ pub struct VersionInfo {
   pub is_development: bool,
 }
 
-bitflags::bitflags! {
-  /// The state of the connection to the Soulseek server, written as the names of the set
-  /// flags such as `"Connected, LoggedIn"`, or `"None"` before the first change.
-  #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-  pub struct ServerConnectionState: u32 {
-    /// not connected
-    const Disconnected = 1;
-    /// the TCP connection is up
-    const Connected = 2;
-    /// the server accepted our login
-    const LoggedIn = 4;
-    /// the TCP connection is being made
-    const Connecting = 8;
-    /// the login was sent and is not answered yet
-    const LoggingIn = 16;
-    /// the connection is being closed
-    const Disconnecting = 32;
-  }
+/// The state of the connection to the Soulseek server.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
+pub enum ServerConnectionState {
+  /// not connected
+  #[default]
+  Disconnected,
+  /// the TCP connection is being made
+  Connecting,
+  /// the TCP connection is up and no login was sent
+  Connected,
+  /// the login was sent and is not answered yet
+  #[serde(rename = "Connected, LoggingIn")]
+  LoggingIn,
+  /// the server accepted our login
+  #[serde(rename = "Connected, LoggedIn")]
+  LoggedIn,
+  /// the connection is being closed
+  Disconnecting,
 }
-
-flag_names!(
-  ServerConnectionState,
-  "the names of the set flags joined by \", \"",
-  "Connected, LoggedIn"
-);
 
 /// The connection to the Soulseek server.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, ToSchema)]
@@ -132,17 +125,17 @@ pub struct ServerState {
   /// the server's resolved `ip:port` while connected
   #[schema(example = "1.2.3.4:2271")]
   pub ip_end_point: Option<String>,
-  /// the client's state flags
+  /// where the connection stands
   pub state: ServerConnectionState,
-  /// `state` has `Connected`
+  /// `state` is `Connected`, `Connected, LoggingIn` or `Connected, LoggedIn`
   pub is_connected: bool,
-  /// `state` has `Connecting`
+  /// `state` is `Connecting`
   pub is_connecting: bool,
-  /// `state` has `LoggedIn`
+  /// `state` is `Connected, LoggedIn`
   pub is_logged_in: bool,
-  /// `state` has `LoggingIn`
+  /// `state` is `Connected, LoggingIn`
   pub is_logging_in: bool,
-  /// `state` has `Connecting`, `Disconnecting` or `LoggingIn`
+  /// `state` is `Connecting`, `Connected, LoggingIn` or `Disconnecting`
   pub is_transitioning: bool,
   /// how other users reach our peer listener
   pub listen: ListenState,
@@ -377,4 +370,26 @@ pub struct ConfigurationState {
   pub last_reload_error: Option<String>,
   /// when that reload failed, null once a reload succeeds
   pub last_reload_at: Option<DateTime<Utc>>,
+}
+
+#[cfg(test)]
+mod tests {
+  use super::ServerConnectionState as S;
+
+  #[test]
+  fn server_connection_states_are_written_by_name() {
+    let rows = [
+      (S::Disconnected, "Disconnected"),
+      (S::Connecting, "Connecting"),
+      (S::Connected, "Connected"),
+      (S::LoggingIn, "Connected, LoggingIn"),
+      (S::LoggedIn, "Connected, LoggedIn"),
+      (S::Disconnecting, "Disconnecting"),
+    ];
+    for (state, text) in rows {
+      let json = format!("\"{text}\"");
+      assert_eq!(serde_json::to_string(&state).unwrap(), json);
+      assert_eq!(serde_json::from_str::<S>(&json).unwrap(), state);
+    }
+  }
 }

@@ -15,7 +15,7 @@ use api_types::state::ConnectionWatchdogState;
 use cascade::Watcher;
 use chrono::Utc;
 use reseek_shares::{backoff, lock};
-use soulseek_client::{Client, ClientError, ClientState};
+use soulseek_client::{Client, ClientError};
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, error, info, info_span, warn};
@@ -201,7 +201,7 @@ impl Watchdog {
     while self.is_enabled() {
       let failed = inner.failures.load(Ordering::Relaxed);
       // connected already, as when asked to connect while connected
-      if inner.client.state().contains(ClientState::CONNECTED) {
+      if inner.client.state().is_connected() {
         self.stop(false);
         return;
       }

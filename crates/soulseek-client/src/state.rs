@@ -4,47 +4,60 @@
 use std::fmt;
 use std::net::{Ipv4Addr, SocketAddr};
 
-bitflags::bitflags! {
-  /// Where the client is in its server session. Only these combinations occur: `DISCONNECTED`,
-  /// `CONNECTING`, `CONNECTED`, `CONNECTED | LOGGING_IN`, `CONNECTED | LOGGED_IN` and
-  /// `DISCONNECTING`.
-  #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-  pub struct ClientState: u8 {
-    /// no server connection
-    const DISCONNECTED = 1;
-    /// the TCP connection to the server is up
-    const CONNECTED = 2;
-    /// the server accepted our login
-    const LOGGED_IN = 4;
-    /// the TCP connect to the server is in progress
-    const CONNECTING = 8;
-    /// the login was sent and its reply has not arrived
-    const LOGGING_IN = 16;
-    /// the session is being torn down
-    const DISCONNECTING = 32;
-  }
+/// Where the client is in its server session. A session goes `Connecting`, `Connected`,
+/// `LoggingIn`, `LoggedIn`, and from any of those to `Disconnecting` and `Disconnected`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ClientState {
+  /// no server connection
+  Disconnected,
+  /// the TCP connect to the server is in progress
+  Connecting,
+  /// the TCP connection to the server is up and no login was sent yet
+  Connected,
+  /// the login was sent and its reply has not arrived
+  LoggingIn,
+  /// the server accepted our login: server requests can be made
+  LoggedIn,
+  /// the session is being torn down
+  Disconnecting,
 }
 
 impl ClientState {
-  /// connected and logged in, the state server requests need
-  pub const READY: Self = Self::CONNECTED.union(Self::LOGGED_IN);
+  /// The state's name as the logs and the API write it: `"Connected, LoggingIn"` and
+  /// `"Connected, LoggedIn"` for the two that hold a connection and a login.
+  pub fn as_str(self) -> &'static str {
+    match self {
+      Self::Disconnected => "Disconnected",
+      Self::Connecting => "Connecting",
+      Self::Connected => "Connected",
+      Self::LoggingIn => "Connected, LoggingIn",
+      Self::LoggedIn => "Connected, LoggedIn",
+      Self::Disconnecting => "Disconnecting",
+    }
+  }
+
+  /// the server accepted our login
+  pub fn is_logged_in(self) -> bool {
+    self == Self::LoggedIn
+  }
+
+  /// the TCP connection to the server is up: connected, logging in or logged in
+  pub fn is_connected(self) -> bool {
+    matches!(self, Self::Connected | Self::LoggingIn | Self::LoggedIn)
+  }
+
+  /// on the way from one settled state to another: connecting, logging in or disconnecting
+  pub fn is_transitioning(self) -> bool {
+    matches!(
+      self,
+      Self::Connecting | Self::LoggingIn | Self::Disconnecting
+    )
+  }
 }
 
-/// the flag names joined with ", ", as in "Connected, LoggedIn"
 impl fmt::Display for ClientState {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write_flags(
-      f,
-      *self,
-      &[
-        (Self::DISCONNECTED, "Disconnected"),
-        (Self::CONNECTED, "Connected"),
-        (Self::LOGGED_IN, "LoggedIn"),
-        (Self::CONNECTING, "Connecting"),
-        (Self::LOGGING_IN, "LoggingIn"),
-        (Self::DISCONNECTING, "Disconnecting"),
-      ],
-    )
+    f.write_str(self.as_str())
   }
 }
 

@@ -2,7 +2,7 @@
 //! sessions, so it is told both lists at every login, and what changed whenever they change
 //! while logged in. A change made while logged out reaches the server at the next login.
 
-use soulseek_client::{Client, ClientState};
+use soulseek_client::Client;
 use tracing::{debug, warn};
 
 use super::Directory;
@@ -70,7 +70,7 @@ impl Directory {
   /// Tells the server what changed in the lists, when logged in.
   pub(super) async fn interests_changed(&self) {
     match self.client.get() {
-      Some(client) if client.state() == ClientState::READY => {
+      Some(client) if client.state().is_logged_in() => {
         let mut told = self.interests_told.lock().await;
         self.tell(client, &mut told).await;
       }

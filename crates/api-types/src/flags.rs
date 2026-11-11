@@ -1,7 +1,6 @@
 //! Flag sets written as the names of their set flags joined by `", "`, in ascending bit order,
-//! with `"None"` for the empty set: the server connection state such as `"Connected, LoggedIn"`,
-//! a search's state such as `"Completed, TimedOut"`, and file attributes such as
-//! `"ReadOnly, Directory"`.
+//! with `"None"` for the empty set: a search's state such as `"Completed, TimedOut"`, and file
+//! attributes such as `"ReadOnly, Directory"`.
 
 use bitflags::Flags;
 
@@ -79,7 +78,6 @@ mod tests {
 
   use crate::files::FilesystemAttributes as Fs;
   use crate::search::SearchStates as Search;
-  use crate::state::ServerConnectionState as Server;
 
   fn round_trip<F: Serialize + DeserializeOwned + PartialEq + Debug>(rows: &[(F, &str)]) {
     for (value, text) in rows {
@@ -91,14 +89,6 @@ mod tests {
 
   #[test]
   fn flag_sets_are_written_by_name_in_bit_order() {
-    round_trip(&[
-      (Server::Connected | Server::LoggedIn, "Connected, LoggedIn"),
-      (
-        Server::LoggingIn | Server::Connected,
-        "Connected, LoggingIn",
-      ),
-      (Server::empty(), "None"),
-    ]);
     round_trip(&[
       (Fs::Directory | Fs::ReadOnly, "ReadOnly, Directory"),
       (Fs::ReparsePoint | Fs::Directory, "Directory, ReparsePoint"),

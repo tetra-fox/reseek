@@ -17,7 +17,7 @@ impl Client {
   /// fails unless logged in, naming what was attempted
   pub(crate) fn require_logged_in(&self, verb: &str) -> Result<(), ClientError> {
     let state = self.state();
-    if state == ClientState::READY {
+    if state.is_logged_in() {
       return Ok(());
     }
     Err(not_logged_in(verb, state))

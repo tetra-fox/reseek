@@ -8,7 +8,6 @@ use api_types::profile::PasswordChange;
 use axum::extract::State;
 use axum::http::StatusCode;
 use serde_json::Value;
-use soulseek_client::ClientState;
 use tracing::{error, info};
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
@@ -52,7 +51,7 @@ async fn change_password(
     return Err(ApiError::bad_request("The password may not be blank"));
   }
   let client = app.network.client();
-  if client.state() != ClientState::READY {
+  if !client.state().is_logged_in() {
     return Err(ApiError::unavailable(Some(
       "Not logged in to the Soulseek server".to_string(),
     )));

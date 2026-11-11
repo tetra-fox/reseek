@@ -8,7 +8,6 @@ use super::Client;
 use crate::error::ClientError;
 use crate::options::ClientOptions;
 use crate::patch::{self, ClientOptionsPatch};
-use crate::state::ClientState;
 
 impl Client {
   /// Applies `patch`. Returns whether some of the change only takes effect after reconnecting,
@@ -21,7 +20,7 @@ impl Client {
     let _reconfiguring = self.inner.state_lock.lock().await;
     let old = self.inner.options();
     let new = Arc::new(patch.apply(&old)?);
-    let connected = self.state().contains(ClientState::READY);
+    let connected = self.state().is_logged_in();
     let reconnect_required = connected && patch::reconnect_required(&old, &new);
     self.inner.set_options(new.clone());
     self
@@ -68,7 +67,8 @@ impl Client {
     old: &ClientOptions,
     new: &Arc<ClientOptions>,
   ) -> Result<(), ClientError> {
-    let Some(running) = self.inner.session().listener.take() else {
+    let running = self.inner.session().stage.listener().and_then(Option::take);
+    let Some(running) = running else {
       return Ok(());
     };
     if !new.enable_listener {
@@ -102,16 +102,13 @@ impl Client {
       tracing::warn!(%error, "listener not moved; listener options reverted");
       self.revert_listener_options(old, new);
     }
-    let mut session = self.inner.session();
     // a disconnect while the listener moved took the session; the listener goes with it
-    if self
-      .state()
-      .intersects(ClientState::DISCONNECTED | ClientState::DISCONNECTING)
-    {
-      drop(session);
-      moved.stop().await;
-    } else {
-      session.listener = Some(moved);
+    let left = match self.inner.session().stage.listener() {
+      Some(place) => place.replace(moved),
+      None => Some(moved),
+    };
+    if let Some(left) = left {
+      left.stop().await;
     }
     error.map_or(Ok(()), Err)
   }

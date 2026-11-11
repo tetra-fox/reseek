@@ -8,7 +8,6 @@
 use std::sync::Arc;
 
 use cascade::Loaded;
-use soulseek_client::ClientState;
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{debug, info, warn};
 
@@ -76,7 +75,7 @@ async fn apply(app: &AppState, applied: &Options, current: &Arc<Loaded<Options>>
   }
   // the reconnect-class keys changed since the session began; while disconnected the next
   // connect takes them without a flag
-  let connected = network.client().state().contains(ClientState::CONNECTED);
+  let connected = network.client().state().is_connected();
   if (connected && !current.pending_reconnect.is_empty()) || reconnect_required {
     let already = app.state.current().pending_reconnect;
     app.state.update(|state| state.pending_reconnect = true);

@@ -247,7 +247,7 @@ async fn bad_room_names_and_empty_messages_are_refused_before_anything_is_sent()
     alice.client.send_room_message("room", "").await,
     Err(ClientError::InvalidArgument(_))
   ));
-  assert_eq!(alice.client.state(), ClientState::READY);
+  assert_eq!(alice.client.state(), ClientState::LoggedIn);
 }
 
 #[tokio::test]
