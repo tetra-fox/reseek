@@ -119,17 +119,6 @@
     }
   }
 
-  --animate-row-in: row-in var(--motion-slow) var(--ease-out-soft);
-
-  /* a row that just arrived: in from a little above, its tint fading */
-  @keyframes row-in {
-    from {
-      opacity: 0;
-      translate: 0 -0.25rem;
-      background-color: var(--color-accent-soft);
-    }
-  }
-
   --animate-line-in: line-in var(--motion-slow) var(--ease-out-soft);
 
   /* a line a folder or section showed as it opened: in from a little above */
