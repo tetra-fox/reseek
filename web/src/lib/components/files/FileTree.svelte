@@ -399,11 +399,12 @@
   const pinnedId = (index: number) => `${list.uid}-pinned-${index}`;
   const focusedPin = $derived(pinned.find((pin) => pin.line.key === list.focusedKey));
   const activeId = $derived(focusedPin ? pinnedId(focusedPin.index) : list.activeId);
-  /** opaque tints, so the lines scrolling under a pinned folder line don't show through */
-  const folderTint = (node: FolderNode<T>) =>
-    folderId && selected?.has(folderId(node))
-      ? "bg-[color-mix(in_srgb,var(--color-accent-soft)_60%,var(--color-surface))]"
-      : "bg-[color-mix(in_srgb,var(--color-surface-muted)_50%,var(--color-surface))]";
+  /**
+   * A folder line's tint, opaque so the lines scrolling under its pinned copy don't show through;
+   * the line's state tints it over this as any line's
+   */
+  const folderTint =
+    "bg-[color-mix(in_srgb,var(--color-surface-muted)_50%,var(--color-surface))] line-tint-opaque";
 </script>
 
 {#snippet folderLine(line: TreeLine<T> & { kind: "folder" })}
@@ -481,7 +482,7 @@
         class={[
           "group absolute inset-x-0 flex items-center list-row",
           framed && "pr-1",
-          folderTint(pin.line.node)
+          folderTint
         ]}
         id={pinnedId(pin.index)}
         style:top={`calc(100% + ${pin.top}px)`}
@@ -492,6 +493,7 @@
         aria-expanded={expansion.isOpen(pin.line.node.key)}
         data-line={pin.line.key}
         data-focused={list.isFocused(pin.line) || undefined}
+        aria-selected={folderId && selected ? selected.has(folderId(pin.line.node)) : undefined}
         data-pinned="true">
         {@render folderLine(pin.line)}
       </div>
@@ -512,7 +514,7 @@
             "group absolute inset-x-0 top-0 flex items-center list-row",
             framed && "pr-1",
             !folderId && "cursor-pointer",
-            folderTint(line.node),
+            folderTint,
             arrivals.isFresh(line.key) && "animate-line-in",
             lineClass?.(line)
           ]}

@@ -92,7 +92,7 @@ const token = (block: string, name: string): Oklch => {
  */
 const selectedAlpha = (() => {
   const mix =
-    /\[aria-selected="true"\] \{\s*background-color: color-mix\(in oklab, var\(--color-accent-soft\) ([\d.]+)%, transparent\);/.exec(
+    /\[aria-selected="true"\] \{\s*background-color: color-mix\(\s*in oklab,\s*var\(--color-accent-soft\) ([\d.]+)%,\s*var\(--line-under, transparent\)\s*\);/.exec(
       rule("@utility line-tint")
     );
   if (!mix) throw new Error("line-tint's selected row is not a mix of accent-soft and transparent");

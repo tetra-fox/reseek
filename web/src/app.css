@@ -484,7 +484,7 @@
 }
 
 /* a list line's tint: hovered, its menu open, the page it leads to, and selected, which hover
-   deepens and never hides */
+   deepens and never hides. The selected tint is see-through, mixed on --line-under */
 @utility line-tint {
   @media (hover: hover) {
     &[data-super-hover-active] {
@@ -498,13 +498,23 @@
     background-color: var(--color-surface-muted);
   }
   &[aria-selected="true"] {
-    background-color: color-mix(in oklab, var(--color-accent-soft) 60%, transparent);
+    background-color: color-mix(
+      in oklab,
+      var(--color-accent-soft) 60%,
+      var(--line-under, transparent)
+    );
   }
   @media (hover: hover) {
     &[aria-selected="true"][data-super-hover-active] {
       background-color: var(--color-accent-soft);
     }
   }
+}
+
+/* with line-tint, for a line drawn over other lines, as a pinned folder line is: its selected
+   tint is mixed on the surface, so the lines under it don't show through */
+@utility line-tint-opaque {
+  --line-under: var(--color-surface);
 }
 
 /* a line whose small controls stay a little shorter than the line less its divider, so on a short
