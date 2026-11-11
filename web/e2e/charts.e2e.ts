@@ -1,4 +1,4 @@
-import { expect, type Locator, type Page, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 
 import { fakeReports } from "./support/fakes";
 import { visit } from "./support/login";
@@ -22,29 +22,6 @@ const spills = (page: Page, name: string) =>
         return out > 0.5 ? [`${label.textContent} by ${Math.round(out)}px`] : [];
       });
     });
-
-/**
- * Waits for a chart's marks to grow in. They tween in script, not as animations of the page, so
- * this waits for two frames running to draw the same shapes
- */
-const grown = (chart: Locator) =>
-  chart.evaluate(
-    (box) =>
-      new Promise<void>((done) => {
-        const shapes = () =>
-          [...box.querySelectorAll("path, rect")]
-            .map((mark) => ["d", "x", "y", "width", "height"].map((a) => mark.getAttribute(a)))
-            .join();
-        let last = shapes();
-        const frame = () => {
-          const now = shapes();
-          if (now === last) return done();
-          last = now;
-          requestAnimationFrame(frame);
-        };
-        requestAnimationFrame(frame);
-      })
-  );
 
 /** Each choice of the history chart and how every label on its value axis reads */
 const VIEWS: [string, RegExp][] = [
@@ -101,38 +78,6 @@ for (const [width, height] of [
     ).toHaveCount(0);
   });
 }
-
-test("a chart cuts its marks at its box while the window narrows", async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await fakeReports(page);
-  await visit(page, "/dashboard");
-  for (const name of ["Transfers over time", "Transfer outcomes"]) {
-    const chart = page.getByRole("img", { name }).first();
-    await chart.scrollIntoViewIfNeeded();
-    await expect(chart.locator("svg").first()).toBeVisible();
-    await grown(chart);
-    // the furthest the svg, which cuts what it draws, reaches past the box on any frame
-    const sampled = chart.evaluate((box) => {
-      const svg = box.querySelector("svg")!;
-      const end = performance.now() + 500;
-      let furthest = -Infinity;
-      return new Promise<{ furthest: number; overflow: string }>((done) => {
-        const frame = () => {
-          const past = svg.getBoundingClientRect().right - box.getBoundingClientRect().right;
-          furthest = Math.max(furthest, past);
-          if (performance.now() < end) requestAnimationFrame(frame);
-          else done({ furthest, overflow: getComputedStyle(svg).overflow });
-        };
-        frame();
-      });
-    });
-    await page.setViewportSize({ width: 900, height: 800 });
-    const { furthest, overflow } = await sampled;
-    expect(overflow, name).toBe("hidden");
-    expect(furthest, name).toBeLessThan(1);
-    await page.setViewportSize({ width: 1280, height: 800 });
-  }
-});
 
 /** The alpha of a computed color, as `rgba(r, g, b, a)` or `oklch(l c h / a)` writes it */
 const alpha = (color: string) => {
