@@ -376,6 +376,36 @@ async fn a_forced_scan_asked_for_during_the_startup_load_is_the_scan_after_it() 
 }
 
 #[tokio::test]
+async fn a_scan_requested_while_one_runs_stays_pending_after_it() {
+  let (_files, engine) = shared_engine().await;
+  let shares = &engine.shares;
+  eventually(async || idle(shares)).await;
+  // a scan that has written its row when a drift from the disk is reported, then completes
+  const STARTED: i64 = i64::MAX - 1;
+  shares.take_slot(Edge::Scan).unwrap();
+  shares
+    .db
+    .write(|conn| repository::insert_scan(conn, STARTED, "{}"))
+    .await
+    .unwrap();
+  shares.request_scan().await.unwrap();
+  shares
+    .db
+    .write(|conn| repository::end_scan(conn, STARTED, STARTED))
+    .await
+    .unwrap();
+  shares.settle_pending(true).await;
+  shares.hold(Edge::ScanEnded(ScanResult::Completed(
+    SharedCounts::default(),
+  )));
+  shares.hold(Edge::Release);
+  assert!(
+    engine.state().scan_pending,
+    "the scan may have read the file before it drifted"
+  );
+}
+
+#[tokio::test]
 async fn filters_only_reordered_or_repeated_mark_no_scan_pending() {
   let (_files, engine) = shared_engine().await;
   let shares = &engine.shares;
@@ -494,6 +524,99 @@ async fn a_restart_loads_the_backup_and_scans_once() {
   assert_eq!(scans, 2, "the loaded scan and the one after loading");
   assert_eq!(names(&again, "album").await, ["Music\\Album\\01.mp3"]);
   drop(files);
+}
+
+#[tokio::test]
+async fn a_backup_from_before_a_migration_is_migrated_and_loaded() {
+  let (files, engine) = shared_engine().await;
+  let backup = storage::backup_path(&engine.cache());
+  // the backup as the release before the scan state column wrote it
+  rusqlite::Connection::open(&backup)
+    .unwrap()
+    .execute_batch(
+      "ALTER TABLE scans DROP COLUMN state; DELETE FROM schema_migrations WHERE version = 2;",
+    )
+    .unwrap();
+  let again = engine.again(CancellationToken::new(), QUIET).await;
+  again.initialized().await;
+  assert!(
+    !idle(&again),
+    "the backup was loaded and the scan after loading runs, not a full scan in its place"
+  );
+  eventually(async || idle(&again)).await;
+  let scans: i64 = again
+    .db
+    .read(|conn| conn.query_row("SELECT COUNT(*) FROM scans", [], |row| row.get(0)))
+    .await
+    .unwrap();
+  assert_eq!(scans, 2, "the loaded scan and the one after loading");
+  drop(files);
+}
+
+/// A backup whose recorded checksum of migration `version` differs from this program's, as
+/// after a migration file was changed once it ran: the start that finds it scans a fresh index,
+/// and the start after that loads the backup the scan wrote.
+async fn a_backup_that_does_not_migrate_is_scanned_over_and_replaced(version: u32) {
+  let (files, engine) = shared_engine().await;
+  let backup = storage::backup_path(&engine.cache());
+  let conn = rusqlite::Connection::open(&backup).unwrap();
+  if version == 1 {
+    conn
+      .execute_batch(
+        "ALTER TABLE scans DROP COLUMN state; DELETE FROM schema_migrations WHERE version = 2;",
+      )
+      .unwrap();
+  }
+  conn
+    .execute(
+      "UPDATE schema_migrations SET checksum = 'changed' WHERE version = ?1",
+      [version],
+    )
+    .unwrap();
+  drop(conn);
+
+  let (stop, scans) = (CancellationToken::new(), async |shares: &Shares| -> i64 {
+    shares
+      .db
+      .read(|conn| conn.query_row("SELECT COUNT(*) FROM scans", [], |row| row.get(0)))
+      .await
+      .unwrap()
+  });
+  let repaired = engine.again(stop.clone(), QUIET).await;
+  repaired.initialized().await;
+  assert!(
+    matches!(
+      lock(&repaired.status).phase,
+      Phase::Idle {
+        served: Some(_),
+        ended: Some(phase::Ended::Completed)
+      }
+    ),
+    "the repair scan filled a fresh index"
+  );
+  assert_eq!(scans(&repaired).await, 1, "nothing of the backup was kept");
+  stop.cancel();
+
+  let next = engine.again(CancellationToken::new(), QUIET).await;
+  next.initialized().await;
+  assert!(!idle(&next), "the backup the repair wrote was loaded");
+  eventually(async || idle(&next)).await;
+  assert_eq!(
+    scans(&next).await,
+    2,
+    "the repair scan and the one after loading"
+  );
+  drop(files);
+}
+
+#[tokio::test]
+async fn a_backup_whose_first_migration_differs_is_scanned_over_and_replaced() {
+  a_backup_that_does_not_migrate_is_scanned_over_and_replaced(1).await;
+}
+
+#[tokio::test]
+async fn a_backup_whose_last_migration_differs_is_scanned_over_and_replaced() {
+  a_backup_that_does_not_migrate_is_scanned_over_and_replaced(2).await;
 }
 
 #[tokio::test]

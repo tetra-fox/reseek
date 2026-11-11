@@ -20,7 +20,38 @@ mod writes;
 pub use writes::*;
 
 /// `shares.<host>.db`: the scans, directories, files and the filename index.
-pub static SCHEMA: Schema = db::schema!("shares", ["0001_initial"]);
+pub static SCHEMA: Schema = db::schema!("shares", ["0001_initial", "0002_scan_state"]);
+
+/// Where a scan's row stands.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ScanState {
+  /// it runs, or the program stopped while it ran
+  Running,
+  /// it completed, and the index holds what it found
+  Finished,
+  /// an error stopped it
+  Failed,
+  /// it was asked to stop
+  Canceled,
+}
+
+impl ScanState {
+  /// the state as the row stores it
+  pub fn as_str(self) -> &'static str {
+    match self {
+      Self::Running => "running",
+      Self::Finished => "finished",
+      Self::Failed => "failed",
+      Self::Canceled => "canceled",
+    }
+  }
+
+  fn parse(text: &str) -> Option<Self> {
+    [Self::Running, Self::Finished, Self::Failed, Self::Canceled]
+      .into_iter()
+      .find(|state| state.as_str() == text)
+  }
+}
 
 /// One scan as recorded.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -29,7 +60,8 @@ pub struct Scan {
   pub started_at: i64,
   /// the share options it ran with, as JSON
   pub options: String,
-  /// when it ended, `None` while it runs or when it never finished
+  pub state: ScanState,
+  /// when it finished, `None` unless it did
   pub ended_at: Option<i64>,
   /// the index may have drifted from the disk since
   pub suspect: bool,
@@ -107,9 +139,17 @@ pub fn bytes_path(bytes: Vec<u8>) -> PathBuf {
 }
 
 fn scan(row: &rusqlite::Row) -> rusqlite::Result<Scan> {
+  let state: String = row.get(4)?;
   Ok(Scan {
     started_at: row.get(0)?,
     options: row.get(1)?,
+    state: ScanState::parse(&state).ok_or_else(|| {
+      rusqlite::Error::FromSqlConversionFailure(
+        4,
+        rusqlite::types::Type::Text,
+        format!("`{state}` is not a scan state").into(),
+      )
+    })?,
     ended_at: row.get(2)?,
     suspect: row.get(3)?,
   })
@@ -118,17 +158,18 @@ fn scan(row: &rusqlite::Row) -> rusqlite::Result<Scan> {
 pub fn latest_scan(conn: &Connection) -> rusqlite::Result<Option<Scan>> {
   conn
     .query_row(
-      "SELECT timestamp, options, \"end\", suspect FROM scans ORDER BY timestamp DESC LIMIT 1",
+      "SELECT timestamp, options, \"end\", suspect, state FROM scans \
+       ORDER BY timestamp DESC LIMIT 1",
       [],
       scan,
     )
     .optional()
 }
 
-/// When the last scan that completed and is not suspect started, in epoch milliseconds.
+/// When the last scan that finished and is not suspect started, in epoch milliseconds.
 pub fn latest_trusted_scan(conn: &Connection) -> rusqlite::Result<Option<i64>> {
   conn.query_row(
-    "SELECT MAX(timestamp) FROM scans WHERE \"end\" IS NOT NULL AND suspect = 0",
+    "SELECT MAX(timestamp) FROM scans WHERE state = 'finished' AND suspect = 0",
     [],
     |row| row.get(0),
   )
@@ -526,14 +567,55 @@ pub(super) mod tests {
   }
 
   #[tokio::test]
+  async fn scans_from_before_the_state_column_are_finished_or_failed() {
+    let first: &'static Schema = Box::leak(Box::new(Schema {
+      migrations: &SCHEMA.migrations[..1],
+      ..SCHEMA
+    }));
+    let dir = tempfile::tempdir().unwrap();
+    let location = crate::db::Location::on_disk(dir.path());
+    let old = crate::db::Database::open(first, &location).await.unwrap();
+    old
+      .write(|conn| {
+        conn.execute_batch(
+          "INSERT INTO scans (timestamp, options, \"end\") VALUES (10, '{}', 12); \
+           INSERT INTO scans (timestamp, options) VALUES (20, '{}');",
+        )
+      })
+      .await
+      .unwrap();
+    drop(old);
+    let db = crate::db::Database::open(&SCHEMA, &location).await.unwrap();
+    let (latest, trusted) = db
+      .read(|conn| Ok((latest_scan(conn)?.unwrap(), latest_trusted_scan(conn)?)))
+      .await
+      .unwrap();
+    assert_eq!(
+      latest.state,
+      ScanState::Failed,
+      "a scan without an end did not complete"
+    );
+    assert_eq!(trusted, Some(10));
+  }
+
+  #[tokio::test]
   async fn scans_are_recorded_and_read_back() {
     let db = index().await;
     db.write(|conn| {
       insert_scan(conn, 10, "{}")?;
+      assert_eq!(latest_scan(conn)?.unwrap().state, ScanState::Running);
+      stop_scan(conn, 10, ScanState::Failed)?;
+      assert_eq!(latest_scan(conn)?.unwrap().state, ScanState::Failed);
+      assert_eq!(
+        latest_trusted_scan(conn)?,
+        None,
+        "a failed scan is not trusted"
+      );
       insert_scan(conn, 20, "{\"a\":1}")?;
       end_scan(conn, 20, 25)?;
       mark_latest_suspect(conn)?;
       let latest = latest_scan(conn)?.unwrap();
+      assert_eq!(latest.state, ScanState::Finished);
       assert_eq!(latest.ended_at, Some(25));
       assert!(latest.suspect);
       assert_eq!(

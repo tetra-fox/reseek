@@ -11,9 +11,10 @@ use tokio::sync::broadcast::error::RecvError;
 use tracing::{Instrument, debug, error, info, info_span, warn};
 
 use super::phase::{Edge, Phase};
+use super::repository::{self, ScanState};
 use super::scanner::{self, Settings};
 use super::schedule::Schedule;
-use super::{ScanOrigin, SharedCounts, Shares, repository, share, storage};
+use super::{ScanOrigin, SharedCounts, Shares, share, storage};
 use crate::db::DbError;
 use crate::lock;
 use crate::options::{self, StorageMode};
@@ -152,9 +153,9 @@ impl Shares {
         .map_err(|e| format!("Share cache backup was not checked: {e}"))?
         .map_err(|e| format!("Share cache backup is missing, corrupt, or is out of date: {e}"))?;
       info!("Share cache backup validated. Attempting to restore...");
-      storage::restore(&self.db, &backup)
-        .await
-        .map_err(|e| format!("Share cache backup could not be restored: {e}"))?;
+      storage::restore(&self.db, &backup).await.map_err(|e| {
+        format!("Share cache backup not used; the scan that follows writes a new one: {e}")
+      })?;
       info!("Share cache successfully restored from backup");
     } else if mode == StorageMode::Disk {
       info!("Share cache StorageMode is 'Disk'. Attempting to validate...");
@@ -165,8 +166,11 @@ impl Shares {
       .await
       .map_err(|e| e.to_string())?
       .ok_or("Shares not yet scanned")?;
-    if latest.ended_at.is_none() {
-      return Err("Previous share scan did not complete".into());
+    match latest.state {
+      ScanState::Finished => {}
+      ScanState::Running => return Err("Previous share scan was interrupted".into()),
+      ScanState::Failed => return Err("Previous share scan failed".into()),
+      ScanState::Canceled => return Err("Previous share scan was canceled".into()),
     }
     if latest.suspect {
       return Err("Previous share scan was marked as suspect".into());

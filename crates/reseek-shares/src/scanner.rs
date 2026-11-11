@@ -14,7 +14,7 @@ use tokio::sync::{Mutex, mpsc};
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, info, warn};
 
-use super::repository;
+use super::repository::{self, ScanState};
 use super::share::Share;
 use super::walk::{Read, directories, read_from_disk};
 use crate::db::{Database, DbError};
@@ -157,12 +157,43 @@ pub async fn scan(
   cancel: CancellationToken,
   report: impl Fn(Progress) + Send + Sync + 'static,
 ) -> Result<Outcome, ScanError> {
-  let started = Instant::now();
   info!("Starting shared file scan");
   let timestamp = now_ms();
   let options = settings.snapshot.to_string();
   db.write(move |conn| repository::insert_scan(conn, timestamp, &options))
     .await?;
+  let scanned = fill(db, settings, force, workers, cancel, report, timestamp).await;
+  let stopped = match &scanned {
+    Ok(Outcome::Completed { .. }) => return scanned,
+    Ok(Outcome::Canceled) => ScanState::Canceled,
+    Err(_) => ScanState::Failed,
+  };
+  let marked = db
+    .write(move |conn| repository::stop_scan(conn, timestamp, stopped))
+    .await;
+  match (scanned, marked) {
+    (scanned, Ok(())) => scanned,
+    // the scan's own error says more than the failure to record it
+    (Err(error), Err(e)) => {
+      warn!(error = %e, "the failed scan's row not marked failed; it stays running");
+      Err(error)
+    }
+    (Ok(_), Err(e)) => Err(e.into()),
+  }
+}
+
+/// The part of [`scan`] after its row is written: the walk, the reads and writes of every
+/// directory, and, unless canceled, the pruning and the end of the row stamped `timestamp`.
+async fn fill(
+  db: &Database,
+  settings: Arc<Settings>,
+  force: bool,
+  workers: u32,
+  cancel: CancellationToken,
+  report: impl Fn(Progress) + Send + Sync + 'static,
+  timestamp: i64,
+) -> Result<Outcome, ScanError> {
+  let started = Instant::now();
   if settings.shares.is_empty() {
     warn!("No shares configured; the scan leaves the share index empty");
   }
@@ -293,8 +324,6 @@ pub async fn scan(
     );
   }
   if cancel.is_cancelled() {
-    db.write(move |conn| repository::mark_suspect(conn, timestamp))
-      .await?;
     info!("Shared file scan canceled successfully");
     return Ok(Outcome::Canceled);
   }
@@ -419,7 +448,7 @@ pub(super) mod tests {
       ]
     );
     let latest = db.read(repository::latest_scan).await.unwrap().unwrap();
-    assert!(latest.ended_at.is_some() && !latest.suspect);
+    assert!(latest.state == ScanState::Finished && latest.ended_at.is_some() && !latest.suspect);
     assert_eq!(
       content(&latest.options).unwrap().unwrap()["filters"],
       json!(["/Thumbs$", r"\.ini$"])
@@ -501,7 +530,7 @@ pub(super) mod tests {
   }
 
   #[tokio::test]
-  async fn a_canceled_scan_prunes_nothing_and_is_suspect() {
+  async fn a_canceled_scan_prunes_nothing_and_is_not_trusted() {
     let dir = tree();
     let db = index().await;
     let settings = settings(dir.path(), &[], &[], false);
@@ -513,6 +542,7 @@ pub(super) mod tests {
     assert_eq!(outcome, Outcome::Canceled);
     assert_eq!(names(&db).await, before);
     let latest = db.read(repository::latest_scan).await.unwrap().unwrap();
-    assert!(latest.ended_at.is_none() && latest.suspect);
+    assert_eq!(latest.state, ScanState::Canceled);
+    assert!(latest.ended_at.is_none());
   }
 }

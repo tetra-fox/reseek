@@ -83,14 +83,15 @@ macro_rules! schema {
 const RECORD: &str = "CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, name TEXT \
                       NOT NULL, applied_at TEXT NOT NULL, checksum TEXT NOT NULL)";
 
-/// Brings the database on `conn` to the newest migration of `schema`. A database that has data
-/// is copied into `backups` first, when given; `path` names the file in messages and backups.
+/// Brings the database on `conn` to the newest migration of `schema` and returns how many
+/// migrations it applied. A database that has data is copied into `backups` first, when given;
+/// `path` names the file in messages and backups.
 pub(super) fn run(
   schema: &Schema,
   conn: &mut Connection,
   path: &Path,
   backups: Option<&Path>,
-) -> Result<(), DbError> {
+) -> Result<usize, DbError> {
   let objects: i64 = conn.query_row(
     "SELECT count(*) FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'",
     [],
@@ -146,12 +147,7 @@ pub(super) fn run(
     .filter(|m| m.version() > current)
     .collect();
   if pending.is_empty() {
-    info!(
-      database = schema.name,
-      version = current,
-      "Database is up to date"
-    );
-    return Ok(());
+    return Ok(0);
   }
   if let Some(backups) = backups.filter(|_| !fresh) {
     backup(conn, schema, current, backups)?;
@@ -191,7 +187,7 @@ pub(super) fn run(
       "migration applied"
     );
   }
-  Ok(())
+  Ok(total)
 }
 
 /// Copies the database as it stands into `<backups>/<name>.db.<version>.bak.db`, a consistent

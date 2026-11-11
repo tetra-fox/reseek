@@ -67,6 +67,27 @@ pub enum DbError {
     /// the unknown version
     version: u32,
   },
+  /// the copy at `path` could not be read or brought up to date, so the database it was to
+  /// replace keeps what it held
+  #[error("{} could not be restored: {}", path.display(), why_not_restored(source))]
+  Restore {
+    /// the copy
+    path: PathBuf,
+    /// why
+    source: Box<DbError>,
+  },
+}
+
+/// Why a copy could not be restored, without the copy's path, which the error names, or the
+/// advice for a database file in the data directory, which a copy does not need.
+fn why_not_restored(error: &DbError) -> String {
+  match error {
+    DbError::Checksum { version, name, .. } => {
+      format!("its migration {version} ({name}) differs from this reseek's")
+    }
+    DbError::NotOurs(_) => "it has tables but no migration record".to_string(),
+    error => error.to_string(),
+  }
 }
 
 /// Where and how the databases are opened.
@@ -323,6 +344,49 @@ impl Database {
     }
   }
 
+  /// Replaces what the database holds with the database file at `source`, brought to the
+  /// newest migration of `schema`, such as a backup an earlier version wrote. The copy is read
+  /// and migrated in a scratch database in memory and replaces this one's contents under one
+  /// hold of the writer, so a copy that cannot be brought up to date leaves this database as it
+  /// was, and no read sees it half done.
+  pub async fn restore(
+    &self,
+    schema: &'static Schema,
+    source: &std::path::Path,
+  ) -> Result<(), DbError> {
+    let source = source.to_path_buf();
+    let mut conn = self.inner.writer.clone().lock_owned().await;
+    tokio::task::spawn_blocking(move || {
+      let copied = (|| {
+        let from = Connection::open_with_flags(&source, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+        let mut scratch = Connection::open_in_memory()?;
+        rusqlite::backup::Backup::new(&from, &mut scratch)?.run_to_completion(
+          1024,
+          Duration::ZERO,
+          None,
+        )?;
+        let applied = migrate::run(schema, &mut scratch, &source, None)?;
+        debug!(
+          database = schema.name,
+          applied, "restored copy brought up to date"
+        );
+        Ok(scratch)
+      })();
+      let scratch = copied.map_err(|e: DbError| DbError::Restore {
+        path: source.clone(),
+        source: Box::new(e),
+      })?;
+      rusqlite::backup::Backup::new(&scratch, &mut conn)?.run_to_completion(
+        1024,
+        Duration::ZERO,
+        None,
+      )?;
+      Ok(())
+    })
+    .await
+    .map_err(|e| DbError::Task(e.to_string()))?
+  }
+
   /// Lets SQLite update its query statistics before the database is closed.
   pub async fn close(&self) {
     let name = self.inner.name;
@@ -394,7 +458,9 @@ fn open_blocking(
     check_pragmas(schema.name, &writer)?;
   }
   let backup = (!location.volatile).then_some(location.backups.as_path());
-  migrate::run(schema, &mut writer, &path, backup)?;
+  if migrate::run(schema, &mut writer, &path, backup)? == 0 {
+    info!(database = schema.name, "Database is up to date");
+  }
   writer.execute_batch("PRAGMA optimize;")?;
   let readers = if location.volatile {
     None

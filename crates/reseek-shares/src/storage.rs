@@ -3,7 +3,6 @@
 //! completed scan, to a file beside the old one that then replaces it.
 
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
 use rusqlite::{Connection, OpenFlags};
 use tracing::{info, warn};
@@ -105,9 +104,9 @@ fn replace_with_backup(primary: &Path, backup: Option<&Path>) {
   }
 }
 
-/// Whether the file at `path` is an index this program wrote: every migration it knows is
-/// recorded and no other. Says what is wrong when it is not.
-pub fn valid(path: &Path) -> Result<(), String> {
+/// The migrations recorded in the index at `path`, oldest first, and the ones this program
+/// knows.
+fn migrations(path: &Path) -> Result<(Vec<u32>, Vec<u32>), String> {
   let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)
     .map_err(|e| e.to_string())?;
   let mut statement = conn
@@ -117,10 +116,29 @@ pub fn valid(path: &Path) -> Result<(), String> {
     .query_map([], |row| row.get(0))
     .and_then(Iterator::collect)
     .map_err(|e| e.to_string())?;
-  let expected: Vec<u32> = SCHEMA.migrations.iter().map(|m| m.version()).collect();
-  if versions != expected {
+  let known = SCHEMA.migrations.iter().map(|m| m.version()).collect();
+  Ok((versions, known))
+}
+
+/// Whether the file at `path` is an index this program or an earlier version of it wrote: its
+/// migrations are the first of those this program knows, so the rest can be applied to it.
+/// Says what is wrong when it is not.
+pub fn valid(path: &Path) -> Result<(), String> {
+  let (versions, known) = migrations(path)?;
+  if versions.is_empty() || !known.starts_with(&versions) {
     return Err(format!(
-      "it has the migrations {versions:?}, this program writes {expected:?}"
+      "it has the migrations {versions:?}, this program knows {known:?}"
+    ));
+  }
+  Ok(())
+}
+
+/// Whether the file at `path` has every migration this program knows and no other.
+fn current(path: &Path) -> Result<(), String> {
+  let (versions, known) = migrations(path)?;
+  if versions != known {
+    return Err(format!(
+      "it has the migrations {versions:?}, this program writes {known:?}"
     ));
   }
   Ok(())
@@ -164,7 +182,7 @@ pub async fn check_foreign(path: &Path) -> Result<(), String> {
   let expected = expected_objects().await.map_err(|e| e.to_string())?;
   let path = path.to_path_buf();
   tokio::task::spawn_blocking(move || {
-    valid(&path)?;
+    current(&path)?;
     let conn = Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_ONLY)
       .map_err(|e| e.to_string())?;
     let found = objects(&conn).map_err(|e| e.to_string())?;
@@ -254,15 +272,10 @@ pub fn move_host_file(from: &Path, to: &Path) -> Result<(), String> {
   std::fs::rename(from, to).map_err(|e| format!("{}: {e}", to.display()))
 }
 
-/// Replaces what `db` holds with the backup at `backup`.
+/// Replaces what `db` holds with the backup at `backup`, with the migrations a backup written
+/// by an earlier version lacks applied; `db` is left as it was when that fails.
 pub async fn restore(db: &Database, backup: &Path) -> Result<(), DbError> {
-  let source = backup.to_path_buf();
-  db.write(move |conn| {
-    let from = Connection::open_with_flags(&source, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
-    let copy = rusqlite::backup::Backup::new(&from, conn)?;
-    copy.run_to_completion(1024, Duration::ZERO, None)
-  })
-  .await
+  db.restore(&SCHEMA, backup).await
 }
 
 #[cfg(test)]

@@ -6,7 +6,7 @@ use std::time::Duration;
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use tracing::{debug, warn};
 
-use super::{DirectoryRows, FileRow, upper};
+use super::{DirectoryRows, FileRow, ScanState, upper};
 
 pub fn insert_scan(conn: &Connection, started_at: i64, options: &str) -> rusqlite::Result<()> {
   conn
@@ -17,21 +17,22 @@ pub fn insert_scan(conn: &Connection, started_at: i64, options: &str) -> rusqlit
     .map(drop)
 }
 
+/// Marks the scan that started at `started_at` finished at `ended_at`.
 pub fn end_scan(conn: &Connection, started_at: i64, ended_at: i64) -> rusqlite::Result<()> {
   conn
     .execute(
-      "UPDATE scans SET \"end\" = ?1 WHERE timestamp = ?2",
+      "UPDATE scans SET \"end\" = ?1, state = 'finished' WHERE timestamp = ?2",
       params![ended_at, started_at],
     )
     .map(drop)
 }
 
-/// Marks one scan as suspect, so the next start scans again.
-pub fn mark_suspect(conn: &Connection, started_at: i64) -> rusqlite::Result<()> {
+/// Marks the scan that started at `started_at` stopped without completing, as `state` says.
+pub fn stop_scan(conn: &Connection, started_at: i64, state: ScanState) -> rusqlite::Result<()> {
   conn
     .execute(
-      "UPDATE scans SET suspect = 1 WHERE timestamp = ?1",
-      [started_at],
+      "UPDATE scans SET state = ?1 WHERE timestamp = ?2",
+      params![state.as_str(), started_at],
     )
     .map(drop)
 }

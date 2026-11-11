@@ -168,7 +168,7 @@ impl Shares {
   /// Clears the pending rescan after a scan that completed, unless the options changed since it
   /// started (`current` false) or a drift from the disk marked its row. The row is read and
   /// the flag cleared in one write, which a drift's mark and flag are ordered against.
-  async fn settle_pending(&self, current: bool) {
+  pub(super) async fn settle_pending(&self, current: bool) {
     let status = self.status.clone();
     let settled = self
       .db
