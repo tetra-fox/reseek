@@ -77,7 +77,7 @@ export const withShares = (map: VisibleTo, group: string, aliases: string[]): Vi
  * `map` with the group `from` called `to` in every share's list, or taken out of them for null. A
  * share left with no group stays listed, so nobody sees it rather than everyone
  */
-export const renamedIn = (map: VisibleTo, from: string, to: string | null): VisibleTo =>
+const renamedIn = (map: VisibleTo, from: string, to: string | null): VisibleTo =>
   Object.fromEntries(
     Object.entries(map).map(([alias, groups]) => [
       alias,
@@ -86,7 +86,7 @@ export const renamedIn = (map: VisibleTo, from: string, to: string | null): Visi
   );
 
 /** `order` with the group `from` called `to`, or left out for null */
-export const renamedInOrder = (order: string[], from: string, to: string | null): string[] =>
+const renamedInOrder = (order: string[], from: string, to: string | null): string[] =>
   order.flatMap((g) => (g !== from ? [g] : to ? [to] : []));
 
 /** `names` with the one at `from` moved to `to`, the others keeping their order */

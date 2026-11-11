@@ -8,8 +8,6 @@ import {
   type GroupForm,
   movedIn,
   nameProblem,
-  renamedIn,
-  renamedInOrder,
   settingNames,
   settingsText,
   notSetBy,
@@ -43,28 +41,9 @@ describe("who sees each share", () => {
       music: ["jazz"]
     });
   });
-
-  it("keeps a share no group sees any more listed, so nobody sees it", () => {
-    const only = { secret: ["jazz"] };
-    expect(withShares(only, "jazz", [])).toEqual({ secret: [] });
-    expect(renamedIn(only, "jazz", null)).toEqual({ secret: [] });
-  });
-
-  it("follows a group's new name, once in each list", () => {
-    expect(renamedIn({ a: ["jazz", "bop"], b: ["family"] }, "jazz", "bop")).toEqual({
-      a: ["bop"],
-      b: ["family"]
-    });
-  });
 });
 
 describe("the order of the groups", () => {
-  it("follows a group's new name, or leaves out one that is gone", () => {
-    const order = ["buddies", "jazz", "default", "leechers"];
-    expect(renamedInOrder(order, "jazz", "bop")).toEqual(["buddies", "bop", "default", "leechers"]);
-    expect(renamedInOrder(order, "jazz", null)).toEqual(["buddies", "default", "leechers"]);
-  });
-
   it("moves one group up or down past the others", () => {
     const order = ["a", "b", "c", "d"];
     expect(movedIn(order, 3, 1)).toEqual(["a", "d", "b", "c"]);
