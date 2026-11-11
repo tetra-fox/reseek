@@ -338,9 +338,24 @@ test("the frequency scale moves between linear and mel through the frames betwee
 test("the cursor follows playback and a click seeks it", async ({ page }) => {
   await fakeDownloads(page);
   await fakeAnalysis(page);
-  await page.route("**/api/v0/transfers/downloads/alice/*/content**", (route) =>
-    route.fulfill({ body: wav(6), contentType: "audio/wav" })
-  );
+  // the bytes of the range the browser asks for, as the daemon serves them: a whole file answered
+  // to a range leaves it unseekable, and a seek starts it over
+  const sound = wav(6);
+  await page.route("**/api/v0/transfers/downloads/alice/*/content**", (route) => {
+    const [first, last] = (route.request().headers()["range"] ?? "bytes=0-")
+      .replace("bytes=", "")
+      .split("-")
+      .map((n, i) => (n ? Number(n) : i ? sound.length - 1 : 0));
+    return route.fulfill({
+      status: 206,
+      body: sound.subarray(first, last + 1),
+      headers: {
+        "content-type": "audio/wav",
+        "accept-ranges": "bytes",
+        "content-range": `bytes ${first}-${last}/${sound.length}`
+      }
+    });
+  });
   await visit(page, "/downloads");
   const viewer = await openSlot(page);
   const plot = viewer.getByRole("slider", { name: "Cursor" });
@@ -352,15 +367,17 @@ test("the cursor follows playback and a click seeks it", async ({ page }) => {
   await expect.poll(now).toBeGreaterThan(1.5);
   const audio = page.locator("audio");
   const position = () => audio.evaluate((a: HTMLAudioElement) => a.currentTime);
-  // a click puts the cursor there and playback goes on from it
-  await clickAt(plot, 4 / 30.5);
-  await expect.poll(position).toBeGreaterThanOrEqual(4);
-  expect(await position()).toBeLessThan(5);
   await viewer.getByRole("button", { name: "Pause", exact: true }).click();
-  const paused = await now();
-  await page.waitForTimeout(300);
-  expect(await now()).toBe(paused);
+  await expect(audio).toHaveJSProperty("paused", true);
+  // a click puts the cursor there and the sound with it, to the pixel the click lands on
+  await clickAt(plot, 4 / 30.5);
+  await expect.poll(position).toBeGreaterThan(3.9);
+  expect(await position()).toBeLessThan(4.1);
+  // and playback goes on from there
   await viewer.getByRole("button", { name: "Play", exact: true }).click();
+  await expect(audio).toHaveJSProperty("paused", false);
+  expect(await position()).toBeGreaterThan(3.9);
+  await expect.poll(now).toBeGreaterThan(4.2);
   // the sound belongs to the slot and goes with it
   await viewer.getByRole("button", { name: "Clear slot A" }).click();
   await expect(viewer.getByText("Add a file to analyze")).toBeVisible();
