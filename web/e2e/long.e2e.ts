@@ -85,7 +85,7 @@ test("a room's 1000 messages draw a window and scroll back to the first", async 
       new Promise<void>((done) => {
         const step = () => {
           e.scrollTop -= 3 * e.clientHeight;
-          if (e.scrollTop <= 0) setTimeout(done, 300);
+          if (e.scrollTop <= 0) done();
           else requestAnimationFrame(step);
         };
         step();
