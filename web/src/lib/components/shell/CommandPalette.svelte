@@ -3,7 +3,6 @@
   import { Command, Dialog } from "bits-ui";
 
   import { activityPrefs } from "#lib/activity/activity.svelte.js";
-  import { screenHref } from "#lib/analysis/slots.svelte.js";
   import { api } from "#lib/api/client.js";
   import { app } from "#lib/app.svelte.js";
   import { chat } from "#lib/chat/chat.svelte.js";
@@ -24,6 +23,7 @@
   import { session } from "#lib/session.svelte.js";
   import { paletteScore, paletteValue } from "#lib/shell/palette.js";
   import { palette } from "#lib/shell/palette.svelte.js";
+  import { screenHref } from "#lib/shell/screens.svelte.js";
   import { shortcuts } from "#lib/shell/shortcuts.svelte.js";
   import { APP } from "#lib/ui/bindings.js";
   import { isPressed, keysText, TYPING_PAUSE } from "#lib/ui/keys.js";
@@ -58,7 +58,12 @@
         label: s.title,
         run: () => void goto(screenHref(s.path))
       })),
-      { id: systemItem.path, group: "Screens", label: "System", run: go(systemItem.path) },
+      {
+        id: systemItem.path,
+        group: "Screens",
+        label: "System",
+        run: () => void goto(screenHref(systemItem.path))
+      },
       {
         id: "activity",
         group: "Screens",

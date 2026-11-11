@@ -5,14 +5,16 @@
 
   import { app } from "#lib/app.svelte.js";
   import { href, route, systemTabs } from "#lib/nav.js";
+  import { leftAt } from "#lib/shell/screens.svelte.js";
 
   let { children } = $props();
 
   const path = $derived(route(page.url).path);
 
+  // System opens at the tab it was left at, at first Info
   $effect(() => {
     if (path === "/system" || path === "/system/")
-      void goto(href("/system/info"), { replace: true });
+      void goto(href(leftAt("/system") ?? "/system/info"), { replace: true });
   });
 
   /** A tab that needs attention: Info while a change waits on a restart or reconnect, Shares on a scan */

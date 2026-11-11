@@ -12,9 +12,10 @@
   import Input from "#lib/components/ui/Input.svelte";
   import Notice from "#lib/components/ui/Notice.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
-  import { href, route, safeReturn, title } from "#lib/nav.js";
+  import { href, route, safeReturn } from "#lib/nav.js";
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
+  import { title } from "#lib/shell/crumbs.svelte.js";
 
   const query = $derived(route(page.url).query);
   // where the session ran out, a route of this app only

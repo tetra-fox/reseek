@@ -1,7 +1,8 @@
 <script lang="ts">
+  import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import SearchIcon from "@lucide/svelte/icons/search";
-  import { onMount, tick } from "svelte";
+  import { onMount, tick, untrack } from "svelte";
   import { SvelteMap } from "svelte/reactivity";
   import { fly } from "svelte/transition";
 
@@ -26,6 +27,7 @@
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
   import { content } from "#lib/shell/content.svelte.js";
+  import { TYPING_PAUSE } from "#lib/ui/keys.js";
   import { motionFast } from "#lib/ui/motion.js";
 
   const view = new Loader(() => call(() => api.GET("/api/v0/options/view")));
@@ -48,17 +50,41 @@
   const query = $derived(route(page.url).query);
   // ?tab=raw shows the configuration file as text
   const raw = $derived(query.get("tab") === "raw");
-  // ?section=<id> scrolls to that section once the page has drawn it, as links from elsewhere ask
+  /** Changes the address in place: no history entry, and focus and scroll stay */
+  const rewrite = (change: (next: URLSearchParams) => void) => {
+    const next = new URLSearchParams(query);
+    change(next);
+    void goto(href(`/system/settings${next.size ? `?${next}` : ""}`), {
+      replace: true,
+      reset: false
+    });
+  };
+
+  // ?section=<id> scrolls to that section once the page has drawn it, as links from elsewhere
+  // ask, and leaves the address, so coming back to the page finds it where it was left
   const wanted = $derived(query.get("section"));
   $effect(() => {
     if (!wanted || !view.data || raw) return;
-    requestAnimationFrame(() => document.getElementById(wanted)?.scrollIntoView());
+    requestAnimationFrame(() => {
+      document.getElementById(wanted)?.scrollIntoView();
+      rewrite((next) => next.delete("section"));
+    });
   });
 
-  // the search over every option starts from ?q=, which links from elsewhere use
+  // the search over every option is ?q=, which links from elsewhere use and System comes back
+  // to; what is typed goes into the address once typing pauses
   // svelte-ignore state_referenced_locally
   let typed = $state(query.get("q") ?? "");
   const q = $derived(typed.trim());
+  $effect(() => {
+    const text = q;
+    if (text === untrack(() => query.get("q") ?? "")) return;
+    const timer = setTimeout(
+      () => rewrite((next) => (text ? next.set("q", text) : next.delete("q"))),
+      TYPING_PAUSE
+    );
+    return () => clearTimeout(timer);
+  });
   /** how many options each section shows for the search */
   const hits = $derived(
     new Map(

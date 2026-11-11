@@ -1,9 +1,5 @@
 <script lang="ts" module>
-  import type { PageSizes } from "#lib/lists/pages.js";
   import { gridView } from "#lib/lists/table.svelte.js";
-
-  /** the page sizes the directory offers, and the one it starts at */
-  export const DIRECTORY_PAGES: PageSizes = { sizes: [25, 50, 100, 200], size: 50 };
 
   /** the directory's sort and column widths, kept in this browser */
   const view = gridView(
@@ -59,6 +55,7 @@
   import { viewport } from "#lib/ui/viewport.svelte.js";
   import { canManage, configBlocked, reach, setBuddy, setGroups } from "#lib/users/actions.js";
   import { blocking, toggleBlock, unblockMany } from "#lib/users/block.svelte.js";
+  import { DIRECTORY_PAGES, type DirectoryAddress } from "#lib/users/directory.js";
   import { BUDDIES, chosenGroups, queueOf, withGroup, withoutGroup } from "#lib/users/groups.js";
   import { pictureOf } from "#lib/users/profile.svelte.js";
   import { type UserSummary, users as usersStore } from "#lib/users/users.svelte.js";
@@ -73,40 +70,38 @@
   import UserSearch from "./UserSearch.svelte";
 
   type Props = {
-    /** the group the list starts filtered by, from the link that opened it */
-    group?: string | null;
-    /** the list starts with the users we transferred with, from the link that opened it */
-    withTransfers?: boolean;
-    /** the page shown and its size, from the address */
-    place: Place;
-    /** writes another page or page size into the address */
-    onplace: (place: Place) => void;
+    /** the filters and the page shown, from the address */
+    address: DirectoryAddress;
+    /** writes another of them into the address */
+    onaddress: (next: DirectoryAddress) => void;
   };
 
-  let {
-    group: startGroup = null,
-    withTransfers = false,
-    place: address,
-    onplace
-  }: Props = $props();
+  let { address, onaddress }: Props = $props();
 
   /**
-   * a place asked for that the address has not taken yet: a filter's change and its return to
+   * an address asked for that the page has not taken yet: a filter's change and its return to
    * page 1 then read once, together, rather than the old page under the new filter first
    */
-  let asked = $state.raw<Place | null>(null);
+  let asked = $state.raw<DirectoryAddress | null>(null);
   // the address moved, by this list or by a link: it is the place again
   $effect.pre(() => {
     void address;
     untrack(() => (asked = null));
   });
-  // apart, so a new address with the same page and size reads nothing again
-  const page = $derived(asked?.page ?? address.page);
-  const size = $derived(asked?.size ?? address.size);
+  // apart, so a new address with the same values reads nothing again
+  const at = $derived(asked ?? address);
+  const page = $derived(at.page);
+  const size = $derived(at.size);
+  const q = $derived(at.q);
+  const blocked = $derived(at.blocked);
+  const buddies = $derived(at.buddies);
+  const presence = $derived(at.presence);
+  const group = $derived(at.group);
+  const hasTransfers = $derived(at.hasTransfers);
   const place = $derived({ page, size });
-  const moveTo = (next: Place) => {
-    asked = next;
-    onplace(next);
+  const moveTo = (next: Partial<DirectoryAddress>) => {
+    asked = { q, blocked, buddies, presence, group, hasTransfers, page, size, ...next };
+    onaddress(asked);
   };
 
   /** how many of a user's groups a row shows; the rest are on the profile */
@@ -118,14 +113,6 @@
   let total = $state(0);
   let loaded = $state(false);
   let error = $state("");
-  let q = $state("");
-  let blocked = $state(false);
-  let buddies = $state(false);
-  // svelte-ignore state_referenced_locally
-  let hasTransfers = $state(withTransfers);
-  let presence = $state<Schemas["UserPresence"] | "">("");
-  // svelte-ignore state_referenced_locally
-  let group = $state(startGroup ?? "");
   /** the daemon sorts the users, by the column the header sets */
   const sort = $derived(view.sort ?? { id: "lastSeen", dir: "desc" as const });
 
@@ -264,34 +251,41 @@
     });
   };
   /** what is typed in the search box, which sets `q` a moment after typing stops */
-  let typed = $state("");
+  // svelte-ignore state_referenced_locally
+  let typed = $state(q);
+  // a search the address brings, by a link or Back, is the box's text
+  $effect.pre(() => {
+    const text = address.q;
+    untrack(() => {
+      if (typed.trim() !== text) typed = text;
+    });
+  });
   let box = $state<HTMLElement | null>(null);
   const refocus = () => box?.focus();
   const USERS = ["user", "users"] as const;
   /** a filter that is on while `on` holds, which `off` turns off */
-  const when = (on: unknown, id: string, label: string, off: () => void): ActiveFilter[] =>
-    on ? [{ id, label, clear: () => refilter(off) }] : [];
+  const when = (
+    on: unknown,
+    id: string,
+    label: string,
+    off: Partial<DirectoryAddress>
+  ): ActiveFilter[] => (on ? [{ id, label, clear: () => refilter(off) }] : []);
   const filters = $derived<ActiveFilter[]>([
-    ...typedFilter(q, () =>
-      refilter(() => {
-        q = "";
-        typed = "";
-      })
-    ),
-    ...when(blocked, "blocked", "Blocked", () => (blocked = false)),
-    ...when(buddies, "buddies", BUDDY.plural, () => (buddies = false)),
-    ...when(hasTransfers, "hasTransfers", "Has transfers", () => (hasTransfers = false)),
-    ...when(presence, "presence", presence, () => (presence = "")),
-    ...when(group, "group", `Group ${group}`, () => (group = ""))
+    ...typedFilter(q, () => {
+      typed = "";
+      refilter({ q: "" });
+    }),
+    ...when(blocked, "blocked", "Blocked", { blocked: false }),
+    ...when(buddies, "buddies", BUDDY.plural, { buddies: false }),
+    ...when(hasTransfers, "hasTransfers", "Has transfers", { hasTransfers: false }),
+    ...when(presence, "presence", presence, { presence: "" }),
+    ...when(group, "group", `Group ${group}`, { group: "" })
   ]);
 
-  /** A filter changed: the list starts again from its first page */
-  const refilter = (change: () => void) => {
-    change();
-    if (place.page !== 1) moveTo({ page: 1, size: place.size });
-  };
+  /** A filter changed, in the address: the list starts again from its first page */
+  const refilter = (next: Partial<DirectoryAddress>) => moveTo({ ...next, page: 1 });
   const search = (text: string) => {
-    if (text !== q) refilter(() => (q = text));
+    if (text !== q) refilter({ q: text });
   };
 
   const toggleBuddy = async (u: UserSummary) => {
@@ -349,14 +343,14 @@
   <UserSearch onsearch={search} bind:typed />
   <Filter.Panel {filters}>
     <Filter.Group label="Show">
-      {#each [{ label: "Blocked", on: blocked, set: (v: boolean) => (blocked = v) }, { label: BUDDY.plural, on: buddies, set: (v: boolean) => (buddies = v) }, { label: "Has transfers", on: hasTransfers, set: (v: boolean) => (hasTransfers = v) }] as chip (chip.label)}
-        <Filter.Chip pressed={chip.on} onclick={() => refilter(() => chip.set(!chip.on))}
+      {#each [{ label: "Blocked", on: blocked, set: (v: boolean) => ({ blocked: v }) }, { label: BUDDY.plural, on: buddies, set: (v: boolean) => ({ buddies: v }) }, { label: "Has transfers", on: hasTransfers, set: (v: boolean) => ({ hasTransfers: v }) }] as chip (chip.label)}
+        <Filter.Chip pressed={chip.on} onclick={() => refilter(chip.set(!chip.on))}
           >{chip.label}</Filter.Chip>
       {/each}
       <Select
         class={["h-control-sm w-36", presence && Filter.FILTERING]}
         aria-label="Presence"
-        bind:value={() => presence, (v) => refilter(() => (presence = v))}
+        bind:value={() => presence, (v) => refilter({ presence: v })}
         options={[
           { value: "", label: "Any presence" },
           { value: "Online", label: "Online" },
@@ -367,7 +361,7 @@
       <Select
         class={["h-control-sm w-fit max-w-48 min-w-32", group && Filter.FILTERING]}
         aria-label="Group"
-        bind:value={() => group, (v) => refilter(() => (group = v))}
+        bind:value={() => group, (v) => refilter({ group: v })}
         options={[
           { value: "", label: "Any group" },
           ...groupNames.map((g) => ({ value: g, label: g }))
@@ -454,7 +448,7 @@
                 type="button"
                 class="max-w-full rounded-badge hover:bg-hover"
                 aria-label={`Show only group ${g.name}`}
-                onclick={() => refilter(() => (group = g.name))}><GroupBadge group={g} /></button>
+                onclick={() => refilter({ group: g.name })}><GroupBadge group={g} /></button>
             {/each}
             {#if listed.length > SHOWN_GROUPS}
               <Tooltip

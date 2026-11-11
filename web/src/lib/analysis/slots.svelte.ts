@@ -5,7 +5,7 @@ import { untrack } from "svelte";
 import { app } from "#lib/app.svelte.js";
 import { toast } from "#lib/feedback/toast.svelte.js";
 import { formatBytes } from "#lib/format.js";
-import { href, route } from "#lib/nav.js";
+import { route } from "#lib/nav.js";
 
 import { analysisHref, parseTarget, type SlotId } from "./address";
 import { type Target, targetKey } from "./analysis";
@@ -158,6 +158,3 @@ class Slots {
 }
 
 export const slots = new Slots();
-
-/** The link to a screen of the navigation: the Analysis page comes back as it was left */
-export const screenHref = (path: string) => (path === "/analysis" ? slots.href : href(path));

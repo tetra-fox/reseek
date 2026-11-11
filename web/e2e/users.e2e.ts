@@ -113,7 +113,8 @@ test("looking up a user asks the network as typed, and says when there is none",
   await searchBox(page).fill("nobody");
   await page.getByRole("option", { name: "Look up nobody" }).click();
   await expect(page.getByText("No user named nobody")).toBeVisible();
-  await expect(page).toHaveURL(/#\/users$/);
+  // the directory stays, its search in the address
+  await expect(page).toHaveURL(/#\/users\?q=nobody$/);
   await expect(page.getByRole("option", { name: "Look up nobody" })).toBeVisible();
 
   await searchBox(page).fill("NewUser");
@@ -145,7 +146,8 @@ test("a look-up the user walked away from opens nothing", async ({ page }) => {
   await expect(options(page)).toHaveCount(0);
   answer();
   await asked;
-  await expect(page).toHaveURL(/#\/users$/);
+  // the directory stays, its search in the address
+  await expect(page).toHaveURL(/#\/users\?q=slowpoke$/);
 });
 
 test("the dropdown fits a phone at the largest text size", async ({ page }) => {

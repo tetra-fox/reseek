@@ -9,6 +9,7 @@ import { userSummary } from "#lib/testing/fixtures.js";
 import { flushFaked } from "#lib/testing/flush.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 import { box } from "#lib/testing/state.svelte.js";
+import { type DirectoryAddress, directoryAt } from "#lib/users/directory.js";
 
 import Directory from "./Directory.svelte";
 
@@ -35,7 +36,10 @@ describe("the users directory", () => {
     live.start();
     component = mount(Directory, {
       target: document.body,
-      props: { place: { page: 1, size: 50 }, onplace: () => {} }
+      props: {
+        address: directoryAt(new URLSearchParams()),
+        onaddress: () => {}
+      }
     });
     await flushFaked();
     await flushFaked();
@@ -100,7 +104,7 @@ describe("the users directory", () => {
   describe("in pages", () => {
     const many = Array.from({ length: 120 }, (_, n) => userSummary(`user${n}`));
     /** the directory over `many`, a page at a time, answering a filter on Blocked with none */
-    const paged = async (place = { page: 1, size: 50 }) => {
+    const paged = async (place: Partial<DirectoryAddress> = {}) => {
       vi.useFakeTimers();
       const net = fakeNetwork((url) => {
         if (!url.pathname.endsWith("/api/v0/users")) return undefined;
@@ -110,18 +114,18 @@ describe("the users directory", () => {
         return { users: users.slice(offset, offset + limit), total: users.length };
       });
       const places: { page: number; size: number }[] = [];
-      // the address, which the place written into it comes back from as the route does
-      const address = box(place);
+      // the address, which what is written into it comes back from as the route does
+      const address = box<DirectoryAddress>({ ...directoryAt(new URLSearchParams()), ...place });
       live.start();
       component = mount(Directory, {
         target: document.body,
         props: {
-          get place() {
+          get address() {
             return address.value;
           },
-          onplace: (p: { page: number; size: number }) => {
-            places.push(p);
-            address.value = p;
+          onaddress: (next: DirectoryAddress) => {
+            places.push({ page: next.page, size: next.size });
+            address.value = next;
           }
         }
       });
@@ -159,7 +163,7 @@ describe("the users directory", () => {
       const { asked, address } = await paged({ page: 3, size: 50 });
       expect(lines()).toBe(20);
       // the sidebar's link to the directory, with no page in it
-      address.value = { page: 1, size: 50 };
+      address.value = directoryAt(new URLSearchParams());
       await flushFaked();
       expect(asked().at(-1)).toEqual(["0", "50"]);
       expect(lines()).toBe(50);
@@ -177,6 +181,18 @@ describe("the users directory", () => {
         ["0", "50"]
       ]);
       expect(places).toEqual([{ page: 1, size: 50 }]);
+    });
+
+    it("keeps every filter in the address, so a link shows just what it names", async () => {
+      const { address } = await paged({ page: 2, size: 50, hasTransfers: true });
+      pressed("Blocked").click();
+      await flushFaked();
+      expect(address.value).toMatchObject({ hasTransfers: true, blocked: true, page: 1 });
+      // the dashboard's count of users transferred with, followed later
+      address.value = directoryAt(new URLSearchParams("has=transfers"));
+      await flushFaked();
+      expect(pressed("Blocked").getAttribute("aria-pressed")).toBe("false");
+      expect(pressed("Has transfers").getAttribute("aria-pressed")).toBe("true");
     });
 
     it("lands on the last page when the one asked for is past the end", async () => {

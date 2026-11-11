@@ -16,8 +16,8 @@
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { CopyButton } from "#lib/feedback/clipboard.svelte.js";
   import { listText } from "#lib/format.js";
-  import { baseCrumbs, type Crumb, href, route } from "#lib/nav.js";
-  import { trail } from "#lib/shell/crumbs.svelte.js";
+  import { type Crumb, href, route } from "#lib/nav.js";
+  import { baseCrumbs, trail } from "#lib/shell/crumbs.svelte.js";
   import { palette } from "#lib/shell/palette.svelte.js";
   import { sidebar } from "#lib/shell/sidebar.svelte.js";
   import { APP } from "#lib/ui/bindings.js";
@@ -26,7 +26,7 @@
 
   import NewVersion from "./NewVersion.svelte";
 
-  const base = $derived(baseCrumbs(route(page.url).path));
+  const base = $derived(baseCrumbs(route(page.url).path, route(page.url).query));
   const crumbs = $derived([...base, ...trail.page]);
   /**
    * past this many steps the middle ones fold into a menu: the screen's own steps and the first

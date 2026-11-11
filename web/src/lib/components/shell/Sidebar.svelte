@@ -10,7 +10,6 @@
   import { tick } from "svelte";
   import { scale } from "svelte/transition";
 
-  import { screenHref } from "#lib/analysis/slots.svelte.js";
   import { app } from "#lib/app.svelte.js";
   import { chat } from "#lib/chat/chat.svelte.js";
   import Badge from "#lib/components/ui/Badge.svelte";
@@ -20,6 +19,7 @@
   import { DENSITY_LABELS } from "#lib/lists/density.js";
   import { href, navCurrent, navItems, type NavItem, route, systemItem } from "#lib/nav.js";
   import { settings } from "#lib/settings.svelte.js";
+  import { screenHref } from "#lib/shell/screens.svelte.js";
   import { sidebar } from "#lib/shell/sidebar.svelte.js";
   import { unseen } from "#lib/transfers/unseen.svelte.js";
   import { crossFade, easeOutSoft, motionFast } from "#lib/ui/motion.js";

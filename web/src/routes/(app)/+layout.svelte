@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { goto, onNavigate } from "$app/navigation";
+  import { afterNavigate, goto, onNavigate } from "$app/navigation";
   import { page } from "$app/state";
   import { onMount, untrack } from "svelte";
   import { prefersReducedMotion } from "svelte/motion";
@@ -22,18 +22,11 @@
   import BlockDialog from "#lib/components/users/BlockDialog.svelte";
   import { keepsScroll } from "#lib/lists/scroll.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
-  import {
-    baseCrumbs,
-    changesScreen,
-    fillsContent,
-    href,
-    redirectFor,
-    route,
-    titleOf
-  } from "#lib/nav.js";
+  import { changesScreen, fillsContent, href, redirectFor, route, titleOf } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
   import { content } from "#lib/shell/content.svelte.js";
-  import { trail } from "#lib/shell/crumbs.svelte.js";
+  import { baseCrumbs, trail } from "#lib/shell/crumbs.svelte.js";
+  import { visited } from "#lib/shell/screens.svelte.js";
   import { APP } from "#lib/ui/bindings.js";
   import { isPressed } from "#lib/ui/keys.js";
   // listens for transfer frames from the start, so its notifications follow every screen
@@ -70,6 +63,11 @@
         if (page) page.style.viewTransitionName = "";
       });
     });
+  });
+
+  // a screen whose place is in its address comes back to it from the navigation
+  afterNavigate(({ to }) => {
+    if (to?.url) visited(route(to.url).path, route(to.url).query);
   });
 
   // screens size their content from its height, and fixed layers keep clear of everything under

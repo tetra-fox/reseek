@@ -112,25 +112,9 @@ export const changesScreen = (from: string, to: string): boolean =>
  */
 export type Crumb = { label: string; href?: string; onclick?: () => void; copy?: string };
 
-/** The steps a route starts with: its screen, then the System tab it is on */
-export const baseCrumbs = (path: string): Crumb[] => {
-  const item = navCurrent(path);
-  if (path === "/login") return [{ label: "Log in" }];
-  if (!item) return [];
-  const crumbs: Crumb[] = [{ label: item.title, href: href(item.path) }];
-  if (item === systemItem) {
-    const tab = systemTabs.find((t) => path.startsWith(`/system/${t.tab}`));
-    if (tab) crumbs.push({ label: tab.title, href: href(`/system/${tab.tab}`) });
-  }
-  return crumbs;
-};
-
 /** The document title for a breadcrumb, innermost first: "Settings - System - reseek" */
 export const titleOf = (crumbs: Crumb[]): string =>
   [...crumbs.map((c) => c.label).toReversed(), "reseek"].join(" - ");
-
-/** The document title for a route without steps of its own */
-export const title = (path: string): string => titleOf(baseCrumbs(path));
 
 /** Where a route goes instead of rendering, or null when it renders: the root is the dashboard */
 export const redirectFor = (path: string): string | null => (path === "/" ? "/dashboard" : null);
