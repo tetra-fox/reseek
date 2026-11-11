@@ -239,8 +239,9 @@ async fn refusals_failures_and_sizes_end_each_in_their_outcome() {
   assert!(reasons.contains(&json!("File not shared.")), "{reasons:?}");
   assert!(
     reasons.contains(&json!("Download reported as failed by remote client")),
-    "once, after the last try: {reasons:?}"
+    "{reasons:?}"
   );
+  assert_eq!(reasons.len(), 2, "once, after the last try: {reasons:?}");
 
   // a partial file is resumed where it ends, and kept when the size differs
   let sending = Scripted::start(&server).await;
