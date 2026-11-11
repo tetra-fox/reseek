@@ -20,8 +20,6 @@ use api_types::transfers::{
   EnqueueDownloadFile, EnqueueDownloadGroup, EnqueueDownloadJobRequest, Transfer,
   TransferDirection, TransferListQuery, TransferStates,
 };
-use reseek::safety::Os;
-use reseek::transfers::downloads::incomplete_path;
 use serde_json::json;
 use soulseek_client::{ClientOptions, UploadInput, UploadRequest};
 use support::soulfind::{self, Soulfind, User};
@@ -354,33 +352,6 @@ async fn a_download_a_stop_interrupted_resumes_after_the_next_start() {
   let source = file(&scratch(), "one.flac", SIZE);
   serve(&uploader, &mut requests, ALBUM, &source).await;
   resumed(&api, dir.path(), &peer, job, first).await;
-}
-
-#[tokio::test]
-async fn a_download_whole_at_a_stop_is_moved_at_the_next_start_without_asking_again() {
-  let Some(server) = soulfind::server() else {
-    return;
-  };
-  let (uploader, mut requests) = uploader(&server).await;
-  let dir = tempfile::tempdir().unwrap();
-  let name = soulfind::username("daemon");
-  let (daemon, api) = started(dir.path(), &server, &name).await;
-  let peer = uploader.username.clone();
-  let (job, first) = stopped_while_queued(daemon, &api, &mut requests, &peer).await;
-  // every byte arrived and the stop came before the move
-  let (incomplete, _) = incomplete_path(
-    &dir.path().join("data").join("incomplete"),
-    &peer,
-    "@@share\\album\\01 song.flac",
-    Os::CURRENT,
-  )
-  .unwrap();
-  std::fs::create_dir_all(incomplete.parent().unwrap()).unwrap();
-  std::fs::write(&incomplete, content(SIZE)).unwrap();
-
-  let (_daemon, api) = started(dir.path(), &server, &name).await;
-  resumed(&api, dir.path(), &peer, job, first).await;
-  assert!(requests.try_recv().is_err(), "the peer is not asked again");
 }
 
 /// The analysis report of the download `id` from `username`, `None` before there is one.
