@@ -42,6 +42,15 @@ export const withGroup = (names: string[], name: string) =>
 /** `names` without `name` */
 export const withoutGroup = (names: string[], name: string) => names.filter((n) => n !== name);
 
+/**
+ * The groups something can be for, such as a share or the files users may send: the buddies and
+ * the user-defined groups of the options `values`, by name
+ */
+export const groupChoices = (values: unknown): string[] => [
+  BUDDIES,
+  ...Object.keys((at(values, USER_DEFINED) ?? {}) as Record<string, unknown>).toSorted()
+];
+
 /** Each share alias with the groups that see it; a share not listed is seen by everyone */
 export type VisibleTo = Record<string, string[]>;
 

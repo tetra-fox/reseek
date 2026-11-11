@@ -10,7 +10,6 @@
 </script>
 
 <script lang="ts">
-  import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
   import CopyIcon from "@lucide/svelte/icons/copy";
   import FolderIcon from "@lucide/svelte/icons/folder";
   import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
@@ -25,13 +24,13 @@
   import Dialog from "#lib/components/ui/Dialog.svelte";
   import EmptyRow from "#lib/components/ui/EmptyRow.svelte";
   import GridHeader from "#lib/components/ui/GridHeader.svelte";
-  import * as Menu from "#lib/components/ui/menu/menu.js";
   import MiddleTruncate from "#lib/components/ui/MiddleTruncate.svelte";
   import Notice from "#lib/components/ui/Notice.svelte";
   import Progress from "#lib/components/ui/Progress.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
+  import AudiencePicker from "#lib/components/users/groups/AudiencePicker.svelte";
   import { valueAt } from "#lib/config/sections.js";
   import { adminView } from "#lib/config/view.svelte.js";
   import { editabilityOf, writeFromPage } from "#lib/config/write.js";
@@ -50,13 +49,7 @@
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
   import { audienceText, contentsText } from "#lib/system/shares.js";
-  import {
-    BUDDIES,
-    USER_DEFINED,
-    VISIBLE_TO,
-    type VisibleTo,
-    withAudience
-  } from "#lib/users/groups.js";
+  import { groupChoices, VISIBLE_TO, type VisibleTo, withAudience } from "#lib/users/groups.js";
 
   import AddShare from "./AddShare.svelte";
 
@@ -184,11 +177,7 @@
   const settable = $derived(
     !!view.data && admin && editabilityOf(view.data, [VISIBLE_TO]).mode !== "locked"
   );
-  /** the groups a share can be shown to: the buddies and the user-defined groups */
-  const choices = $derived([
-    BUDDIES,
-    ...Object.keys(valueAt(view.data?.values, USER_DEFINED) ?? {}).toSorted()
-  ]);
+  const choices = $derived(groupChoices(view.data?.values));
   /** a share's audience is being written, and the options read again after it */
   let showing = $state(false);
   const showTo = async (r: Row, groups: string[] | null) => {
@@ -203,11 +192,6 @@
     for (const row of rows.rows)
       if (row.alias.toLowerCase() === r.alias.toLowerCase())
         rows.upsert({ ...row, visibleTo: groups });
-  };
-  /** `r` shown to `group` too, or no longer; with no group left no one sees it, never everyone */
-  const toggle = (r: Row, group: string, on: boolean) => {
-    const held = r.visibleTo ?? [];
-    void showTo(r, on ? [...held, group] : held.filter((g) => g !== group));
   };
 </script>
 
@@ -330,39 +314,13 @@
             </Tooltip>
             <span role="gridcell" class="px-2">
               {#if settable}
-                {@const held = r.visibleTo}
-                <Menu.Root>
-                  <Menu.Trigger disabled={showing}>
-                    {#snippet child({ props })}
-                      <Button
-                        {...props}
-                        variant="outline"
-                        size="sm"
-                        class="w-full justify-between"
-                        aria-label={`Who sees ${r.alias}: ${audienceText(held)}`}>
-                        <span class="truncate">{audienceText(held)}</span><ChevronDownIcon />
-                      </Button>
-                    {/snippet}
-                  </Menu.Trigger>
-                  <Menu.Content align="start">
-                    <Menu.CheckboxItem
-                      checked={held === null}
-                      onCheckedChange={(on) => {
-                        if (on) void showTo(r, null);
-                      }}>Everyone</Menu.CheckboxItem>
-                    <Menu.CheckboxItem
-                      checked={held?.length === 0}
-                      onCheckedChange={(on) => {
-                        if (on) void showTo(r, []);
-                      }}>No one</Menu.CheckboxItem>
-                    <Menu.Separator />
-                    {#each choices as group (group)}
-                      <Menu.CheckboxItem
-                        checked={!!held?.includes(group)}
-                        onCheckedChange={(on) => toggle(r, group, on)}>{group}</Menu.CheckboxItem>
-                    {/each}
-                  </Menu.Content>
-                </Menu.Root>
+                <AudiencePicker
+                  value={r.visibleTo}
+                  {choices}
+                  label={`Who sees ${r.alias}`}
+                  disabled={showing}
+                  class="w-full"
+                  onchange={(groups) => void showTo(r, groups)} />
               {:else}
                 <span class="truncate">{audienceText(r.visibleTo)}</span>
               {/if}
