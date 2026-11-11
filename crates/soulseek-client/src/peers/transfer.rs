@@ -109,6 +109,7 @@ impl Client {
     let awaited = AwaitedTransfer::register(self.peers_arc(), username, remote_token, filename);
     let username = username.to_owned();
     async move {
+      // on a tie the connection we dialed is kept: an uploader asks for it once its own dial failed
       let (conn, via) = race(direct, indirect, &stop).await.map_err(|errors| {
         both_failed(
           format!(
