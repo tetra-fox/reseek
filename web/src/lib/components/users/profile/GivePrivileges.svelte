@@ -62,7 +62,7 @@
 <Dialog
   bind:open
   busy={sending}
-  title={`Give ${username} privileges`}
+  title="Give privileges"
   description="Moves them ahead in other users' queues, using days of your own privileges. A refusal comes as a private message.">
   {#if daysLeft < 1}
     <Notice kind="info">You have no whole days of privileges to give</Notice>

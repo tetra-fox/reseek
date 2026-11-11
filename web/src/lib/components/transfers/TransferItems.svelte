@@ -115,7 +115,7 @@
 <Menu.Separator />
 <UserMenuItems name={t.username} folder={getFileName(folder.folder)} named />
 {#if write}
-  <Menu.Item onSelect={() => onblock(false)}><BanIcon />Block {t.username}</Menu.Item>
+  <Menu.Item onSelect={() => onblock(false)}><BanIcon />Block user</Menu.Item>
   {#if can.deny}
     <Menu.Item onSelect={() => onblock(true)}><BanIcon />Deny and block</Menu.Item>
   {/if}

@@ -174,7 +174,7 @@ export const groupActions = (
       text: true
     },
     {
-      label: `Block ${group.username}`,
+      label: "Block user",
       icon: BanIcon,
       shown: userUploads,
       run: () => onblock(false)

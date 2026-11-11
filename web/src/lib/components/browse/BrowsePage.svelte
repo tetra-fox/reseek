@@ -289,7 +289,7 @@
     </div>
   {:else if browser.phase === "error"}
     <div class="mt-12 flex flex-col items-center gap-1 text-center">
-      <p class="text-lg">Could not browse {browser.username}</p>
+      <p class="text-lg">Could not browse their shares</p>
       {#if browser.errorMessage}<p class="text-sm text-fg-muted">{browser.errorMessage}</p>{/if}
       <Button variant="outline" size="sm" class="mt-3" onclick={() => void browser.browse(user)}>
         <RefreshCwIcon />Try again
