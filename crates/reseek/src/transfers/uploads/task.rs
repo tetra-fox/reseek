@@ -10,7 +10,7 @@ use std::time::Duration;
 use api_types::events::{Event, UploadFileComplete};
 use api_types::live::LiveFrame;
 use api_types::relay::RelayUploadOutcome;
-use api_types::transfers::{TransferDirection, TransferStates};
+use api_types::transfers::{TransferDirection, TransferOutcome, TransferStates};
 use chrono::Utc;
 use reseek_shares::lock;
 use soulseek_client::{
@@ -27,6 +27,7 @@ use super::Uploads;
 use super::intake::Located;
 use crate::relay::Controller;
 use crate::shares::LOCAL_HOST;
+use crate::transfers::state::{self, State};
 use crate::transfers::{Record, removal, store};
 
 /// More states than one upload reports.
@@ -53,17 +54,17 @@ fn input_error(error: &ClientError) -> Option<&std::io::Error> {
   }
 }
 
-/// The outcome flag an upload that ended with `error` is written with.
-fn outcome(error: &ClientError) -> TransferStates {
+/// How an upload that ended with `error` ended.
+fn outcome(error: &ClientError) -> TransferOutcome {
   match error {
-    ClientError::Canceled => TransferStates::Cancelled,
-    ClientError::Timeout(_) => TransferStates::TimedOut,
-    ClientError::TransferRejected(_) => TransferStates::Rejected,
-    ClientError::NotFound(_) => TransferStates::Aborted,
+    ClientError::Canceled => TransferOutcome::Cancelled,
+    ClientError::Timeout(_) => TransferOutcome::TimedOut,
+    ClientError::TransferRejected(_) => TransferOutcome::Rejected,
+    ClientError::NotFound(_) => TransferOutcome::Aborted,
     other => match input_error(other).map(std::io::Error::kind) {
-      Some(std::io::ErrorKind::NotFound) => TransferStates::Aborted,
-      Some(std::io::ErrorKind::TimedOut) => TransferStates::TimedOut,
-      _ => TransferStates::Errored,
+      Some(std::io::ErrorKind::NotFound) => TransferOutcome::Aborted,
+      Some(std::io::ErrorKind::TimedOut) => TransferOutcome::TimedOut,
+      _ => TransferOutcome::Errored,
     },
   }
 }
@@ -137,9 +138,7 @@ impl Uploads {
     let id = record.id;
     let state_changed: StateChanged = Arc::new(move |_, snapshot: &Snapshot| {
       // marked before the client tells the peer, which may ask again at once
-      if snapshot
-        .state
-        .contains(soulseek_client::TransferState::COMPLETED)
+      if snapshot.state.is_terminal()
         && let Some(entry) = lock(&ending.in_flight).get_mut(&id)
       {
         entry.ended = true;
@@ -180,7 +179,7 @@ impl Uploads {
     let throttle = tokio::time::sleep(Duration::ZERO);
     tokio::pin!(throttle);
     let mut throttled = false;
-    let mut ended: Option<Snapshot> = None;
+    let mut ended: Option<(Snapshot, TransferOutcome)> = None;
     let result = loop {
       tokio::select! {
         biased;
@@ -270,25 +269,27 @@ impl Uploads {
   }
 
   /// Takes a state the client reported into `record` and writes it; a final state is kept in
-  /// `ended` for the task to write with the outcome.
+  /// `ended` with its outcome for the task to write.
   async fn state_changed(
     &self,
     record: &mut Record,
     snapshot: Snapshot,
-    ended: &mut Option<Snapshot>,
+    ended: &mut Option<(Snapshot, TransferOutcome)>,
   ) {
-    let state = TransferStates::from_bits_retain(snapshot.state.bits());
-    if state.contains(TransferStates::Completed) {
-      *ended = Some(snapshot);
+    let state = state::reported(snapshot.state);
+    if let TransferStates::Completed(outcome) = state {
+      *ended = Some((snapshot, outcome));
       return;
     }
     // records are left as they are once the daemon stops
     if self.shutdown.is_cancelled() {
       return;
     }
-    let previous = record.state;
+    let previous = record.state.kind();
+    if let Err(refused) = record.enter(State::of(state)) {
+      return warn!(%refused, "upload state not recorded");
+    }
     record.take_figures(&snapshot);
-    record.state = state;
     if state == TransferStates::Initializing && previous != state {
       // the server never pushes what a user shares, and their group depends on it
       self.users.refetch_statistics(&record.username);
@@ -306,7 +307,7 @@ impl Uploads {
 
   /// Writes and pushes the bytes sent and the speed of an upload in progress.
   async fn progressed(&self, record: &mut Record, bytes: u64, speed: f64) {
-    if record.state != TransferStates::InProgress || self.shutdown.is_cancelled() {
+    if record.state != State::InProgress || self.shutdown.is_cancelled() {
       return;
     }
     record.bytes_transferred = bytes;
@@ -336,9 +337,9 @@ impl Uploads {
   /// Writes an upload that succeeded, counts it and raises `UploadFileComplete`.
   async fn succeeded(&self, record: &mut Record, transfer: &Snapshot, located: &Located) {
     record.take_figures(transfer);
-    record.state = TransferStates::Completed | TransferStates::Succeeded;
-    record.ended_at.get_or_insert_with(Utc::now);
-    record.exception = None;
+    if let Err(refused) = record.enter(State::Completed(TransferOutcome::Succeeded)) {
+      return debug!(%refused, "upload ended already");
+    }
     self.save(record, true).await;
     self
       .telemetry
@@ -367,26 +368,26 @@ impl Uploads {
   /// Writes an upload that ended with `error` as completed with its outcome, unless its record
   /// ended already, and counts it as failed. The client's last snapshot, `ended`, gives the
   /// outcome and the times when there is one; without, the upload never started.
-  async fn fail(&self, record: &mut Record, error: &ClientError, ended: Option<&Snapshot>) {
-    if record.is_completed() {
-      return debug!(state = %record.state, "upload ended already");
-    }
+  async fn fail(
+    &self,
+    record: &mut Record,
+    error: &ClientError,
+    ended: Option<&(Snapshot, TransferOutcome)>,
+  ) {
     let canceled_for = lock(&self.in_flight)
       .get(&record.id)
       .and_then(|entry| entry.reason);
-    let state = match ended {
-      Some(snapshot) => {
-        record.take_figures(snapshot);
-        TransferStates::from_bits_retain(snapshot.state.bits())
-      }
-      None => TransferStates::Completed | outcome(error),
-    };
-    record.state = state;
-    record.ended_at.get_or_insert_with(Utc::now);
-    record.exception = Some(match canceled_for {
-      Some(why) if state.contains(TransferStates::Cancelled) => why.to_string(),
+    let outcome = ended.map_or_else(|| outcome(error), |(_, outcome)| *outcome);
+    let exception = match canceled_for {
+      Some(why) if outcome == TransferOutcome::Cancelled => why.to_string(),
       _ => reason(error),
-    });
+    };
+    if let Err(refused) = record.complete(outcome, Some(exception)) {
+      return debug!(%refused, "upload ended already");
+    }
+    if let Some((snapshot, _)) = ended {
+      record.take_figures(snapshot);
+    }
     self.save(record, true).await;
     self.telemetry.metrics().transfers().uploads.failed();
     info!(
@@ -428,11 +429,11 @@ mod tests {
   fn an_input_whose_file_is_gone_or_late_aborts_or_times_out_its_upload() {
     use std::io::{Error, ErrorKind};
     let gone = ClientError::io("read", Error::new(ErrorKind::NotFound, "no such file"));
-    assert_eq!(outcome(&gone), TransferStates::Aborted);
+    assert_eq!(outcome(&gone), TransferOutcome::Aborted);
     assert_eq!(reason(&gone), "no such file");
     let late = ClientError::io("read", Error::new(ErrorKind::TimedOut, "too slow"));
-    assert_eq!(outcome(&late), TransferStates::TimedOut);
+    assert_eq!(outcome(&late), TransferOutcome::TimedOut);
     let other = ClientError::io("read", Error::other("disk"));
-    assert_eq!(outcome(&other), TransferStates::Errored);
+    assert_eq!(outcome(&other), TransferOutcome::Errored);
   }
 }

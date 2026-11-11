@@ -6,7 +6,7 @@
 use std::net::IpAddr;
 use std::sync::Mutex;
 
-use api_types::transfers::TransferStates;
+use api_types::transfers::TransferOutcome;
 use chrono::Utc;
 use soulseek_client::ClientError;
 
@@ -39,7 +39,7 @@ async fn insert(app: &TestApp, record: &Record) {
 /// A download of `filename` from alice that ended canceled `ago`.
 fn canceled(filename: &str, ago: chrono::Duration) -> Record {
   let mut record = Record::download("alice", filename, 3);
-  record.state = TransferStates::Completed | TransferStates::Cancelled;
+  record.complete(TransferOutcome::Cancelled, None).unwrap();
   record.ended_at = Some(Utc::now() - ago);
   record
 }

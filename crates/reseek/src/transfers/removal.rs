@@ -145,14 +145,27 @@ pub fn push(live: &Live, direction: TransferDirection, removed: &[Removed]) {
 mod tests {
   use super::*;
   use crate::transfers::fixtures::{Row, insert, transfers};
+  use api_types::transfers::{TransferOutcome, TransferStates};
 
   #[tokio::test]
   async fn only_completed_transfers_of_the_direction_are_removed() {
     let db = transfers().await;
     let live = Live::new(tokio_util::sync::CancellationToken::new());
-    let done = Row::new("alice", TransferDirection::Download, 48);
-    let running = Row::new("alice", TransferDirection::Download, 8);
-    let upload = Row::new("bob", TransferDirection::Upload, 48);
+    let done = Row::new(
+      "alice",
+      TransferDirection::Download,
+      TransferStates::Completed(TransferOutcome::Succeeded),
+    );
+    let running = Row::new(
+      "alice",
+      TransferDirection::Download,
+      TransferStates::InProgress,
+    );
+    let upload = Row::new(
+      "bob",
+      TransferDirection::Upload,
+      TransferStates::Completed(TransferOutcome::Succeeded),
+    );
     insert(&db, vec![done.clone(), running.clone(), upload.clone()]).await;
     let download = TransferDirection::Download;
     assert!(!remove(&db, &live, download, running.id).await.unwrap());
@@ -164,7 +177,11 @@ mod tests {
     );
     insert(
       &db,
-      vec![Row::new("carol", TransferDirection::Download, 80)],
+      vec![Row::new(
+        "carol",
+        TransferDirection::Download,
+        TransferStates::Completed(TransferOutcome::Cancelled),
+      )],
     )
     .await;
     let removed = remove_completed(&db, &live, download).await.unwrap();

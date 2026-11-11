@@ -8,19 +8,31 @@ use std::num::NonZeroU32;
 
 use api_types::reports::{
   DirectoriesQuery, ExceptionsQuery, HistogramQuery, LeaderboardQuery, LeaderboardSort,
-  ParetoQuery, SummaryQuery, TransferOutcome, TransferSummary,
+  ParetoQuery, SummaryQuery, TransferSummary,
 };
 use api_types::transfers::TransferDirection::{self, Download, Upload};
-use api_types::transfers::{SortOrder, TransferStates};
+use api_types::transfers::{SortOrder, TransferOutcome};
 use chrono::{DateTime, Duration, Utc};
 
-use super::{Reports, Width, Window, outcome};
+use super::{Reports, Width, Window};
 use crate::transfers::fixtures::transfers;
+use crate::transfers::state::State;
 use crate::transfers::{Record, direction_text, store};
 
 const USERS: [&str; 5] = ["alice", "bob", "carol", "dave", "erin"];
-const STATES: [u32; 12] = [48, 48, 48, 48, 80, 144, 272, 528, 1040, 16, 2050, 8];
-const FAILED: [u32; 5] = [80, 144, 272, 528, 1040];
+const STATES: [State; 11] = [
+  State::Completed(TransferOutcome::Succeeded),
+  State::Completed(TransferOutcome::Succeeded),
+  State::Completed(TransferOutcome::Succeeded),
+  State::Completed(TransferOutcome::Succeeded),
+  State::Completed(TransferOutcome::Cancelled),
+  State::Completed(TransferOutcome::TimedOut),
+  State::Completed(TransferOutcome::Errored),
+  State::Completed(TransferOutcome::Rejected),
+  State::Completed(TransferOutcome::Aborted),
+  State::WAITING,
+  State::InProgress,
+];
 const EXCEPTIONS: [Option<&str>; 4] = [
   Some("File not shared."),
   Some("Remote file not found: C:\\x"),
@@ -82,21 +94,20 @@ fn history() -> Vec<Record> {
     } else {
       Record::upload(username, &filename, size)
     };
-    let state = dice.pick(&STATES);
-    record.state = TransferStates::from_bits_retain(state);
+    record.state = dice.pick(&STATES);
     record.requested_at = dice.after(base(), 10 * 86_400);
     record.enqueued_at = (dice.below(5) > 0).then(|| dice.after(record.requested_at, 600));
     record.started_at = match record.enqueued_at {
       Some(enqueued) if dice.below(4) > 0 => Some(dice.after(enqueued, 300)),
       _ => None,
     };
-    if state & 16 != 0 {
+    if record.is_completed() {
       let from = record.started_at.unwrap_or(record.requested_at);
       record.ended_at = Some(dice.after(from, 3600));
     }
     record.average_speed = dice.below(10_000_000) as f64 / 7.0;
     record.bytes_transferred = dice.below(size);
-    if FAILED.contains(&state) {
+    if failed(&record) {
       record.exception = dice.pick(&EXCEPTIONS).map(str::to_string);
     }
     record.removed = dice.below(5) == 0;
@@ -104,7 +115,7 @@ fn history() -> Vec<Record> {
   }
   for ended in [window().start, window().end] {
     let mut record = Record::upload("alice", "music/edge/x.mp3", 10);
-    record.state = TransferStates::Completed | TransferStates::Succeeded;
+    record.state = State::Completed(TransferOutcome::Succeeded);
     record.requested_at = ended - Duration::minutes(5);
     record.ended_at = Some(ended);
     records.push(record);
@@ -126,8 +137,20 @@ async fn written(records: &[Record]) -> Reports {
   Reports::new(db)
 }
 
-fn bits(record: &Record) -> u32 {
-  record.state.bits()
+/// How `record` ended, none while it is unfinished.
+fn outcome_of(record: &Record) -> Option<TransferOutcome> {
+  match record.state {
+    State::Completed(outcome) => Some(outcome),
+    _ => None,
+  }
+}
+
+fn succeeded(record: &Record) -> bool {
+  outcome_of(record) == Some(TransferOutcome::Succeeded)
+}
+
+fn failed(record: &Record) -> bool {
+  outcome_of(record).is_some_and(|outcome| outcome != TransferOutcome::Succeeded)
 }
 
 fn ended_in(record: &Record, window: Window) -> bool {
@@ -183,7 +206,8 @@ fn summarized(rows: &[&Record]) -> TransferSummary {
 fn by_outcome(rows: &[&Record]) -> BTreeMap<TransferOutcome, TransferSummary> {
   let mut grouped: BTreeMap<TransferOutcome, Vec<&Record>> = BTreeMap::new();
   for row in rows {
-    grouped.entry(outcome(bits(row))).or_default().push(row);
+    let ended = outcome_of(row).expect("a finished row has an outcome");
+    grouped.entry(ended).or_default().push(row);
   }
   grouped
     .into_iter()
@@ -257,7 +281,7 @@ async fn the_totals_count_every_finished_transfer_in_the_window_by_outcome() {
     let found = reports.summary(window, query).await.unwrap();
     let picked: Vec<&Record> = records
       .iter()
-      .filter(|r| ended_in(r, window) && bits(r) & 16 != 0)
+      .filter(|r| ended_in(r, window) && r.is_completed())
       .filter(|r| direction.is_none_or(|d| r.direction == d))
       .filter(|r| username.is_none_or(|u| r.username == u))
       .collect();
@@ -278,7 +302,7 @@ async fn the_totals_count_every_finished_transfer_in_the_window_by_outcome() {
     }
     let succeeded: BTreeSet<&str> = picked
       .iter()
-      .filter(|r| bits(r) == 48)
+      .filter(|r| succeeded(r))
       .map(|r| r.username.as_str())
       .collect();
     assert_eq!(found.distinct_users, succeeded.len() as u64);
@@ -317,7 +341,7 @@ async fn the_histogram_buckets_by_epoch_aligned_ends_without_its_window_s_end() 
       let Some(ended) = record.ended_at else {
         continue;
       };
-      if bits(record) & 16 == 0 || ended < window.start || ended >= window.end {
+      if !record.is_completed() || ended < window.start || ended >= window.end {
         continue;
       }
       let key = unix(ended).div_euclid(step) * step;
@@ -344,7 +368,7 @@ async fn the_histogram_buckets_by_epoch_aligned_ends_without_its_window_s_end() 
           let these: Vec<&Record> = rows
             .iter()
             .copied()
-            .filter(|r| super::outcome(bits(r)) == *outcome)
+            .filter(|r| outcome_of(r) == Some(*outcome))
             .collect();
           let seconds: f64 = waits_and_durations(&these).1.iter().sum();
           summary.average_speed = if seconds == 0.0 {
@@ -370,7 +394,7 @@ async fn the_rankings_order_users_and_directories_as_they_say() {
   let window = window();
   for direction in [Download, Upload] {
     let mut by_user: BTreeMap<&str, Vec<&Record>> = BTreeMap::new();
-    for record in going(&records, direction).filter(|r| bits(r) == 48 && ended_in(r, window)) {
+    for record in going(&records, direction).filter(|r| succeeded(r) && ended_in(r, window)) {
       by_user.entry(&record.username).or_default().push(record);
     }
     for sort_by in [
@@ -440,7 +464,7 @@ async fn the_rankings_order_users_and_directories_as_they_say() {
     .await
     .unwrap();
   let mut by_directory: BTreeMap<String, Vec<&Record>> = BTreeMap::new();
-  for record in going(&records, Upload).filter(|r| bits(r) == 48 && ended_in(r, window)) {
+  for record in going(&records, Upload).filter(|r| succeeded(r) && ended_in(r, window)) {
     by_directory
       .entry(directory(&record.filename))
       .or_default()
@@ -472,7 +496,7 @@ async fn the_failures_list_and_count_only_failed_transfers() {
   let window = window();
   for direction in [Download, Upload] {
     let failed: Vec<&Record> = going(&records, direction)
-      .filter(|r| FAILED.contains(&bits(r)) && ended_in(r, window))
+      .filter(|r| failed(r) && ended_in(r, window))
       .collect();
     for sort_order in [SortOrder::Asc, SortOrder::Desc] {
       let query = ExceptionsQuery {
@@ -535,19 +559,25 @@ async fn the_failures_list_and_count_only_failed_transfers() {
   }
   let user = reports.user("dave", window).await.unwrap();
   let theirs: Vec<&Record> = going(&records, Download)
-    .filter(|r| r.username == "dave" && bits(r) & 16 != 0 && ended_in(r, window))
+    .filter(|r| r.username == "dave" && r.is_completed() && ended_in(r, window))
     .collect();
   same_outcomes(&user.download.summary, &by_outcome(&theirs), "dave");
-  let count = |states: &[u32]| theirs.iter().filter(|r| states.contains(&bits(r))).count() as u64;
+  let count = |outcomes: &[TransferOutcome]| {
+    theirs
+      .iter()
+      .filter(|r| outcome_of(r).is_some_and(|o| outcomes.contains(&o)))
+      .count() as u64
+  };
+  use TransferOutcome::*;
   assert_eq!(user.download.statistics.total, theirs.len() as u64);
-  assert_eq!(user.download.statistics.successful, count(&[48]));
+  assert_eq!(user.download.statistics.successful, count(&[Succeeded]));
   assert_eq!(
     user.download.statistics.errored,
-    count(&[144, 272, 528, 1040])
+    count(&[TimedOut, Errored, Rejected, Aborted])
   );
-  assert_eq!(user.download.statistics.cancelled, count(&[80]));
+  assert_eq!(user.download.statistics.cancelled, count(&[Cancelled]));
   let mut by_message: BTreeMap<Option<String>, u64> = BTreeMap::new();
-  for record in theirs.iter().filter(|r| FAILED.contains(&bits(r))) {
+  for record in theirs.iter().filter(|r| failed(r)) {
     *by_message.entry(record.exception.clone()).or_default() += 1;
   }
   let mut expected: Vec<(Option<String>, u64)> = by_message.into_iter().collect();

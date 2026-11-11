@@ -4,13 +4,14 @@
 //! upload started. A megabyte is 1 000 000 bytes. A refused request is told why in the words
 //! other clients know.
 
-use api_types::transfers::{TransferDirection, TransferStates};
+use api_types::transfers::TransferDirection;
 use api_types::transfers::{UploadLimitUsage, UploadLimitWindow, UploadLimits};
 use chrono::{DateTime, Duration, Utc};
 use rusqlite::{Connection, params};
 
 use crate::config::{Limit, Limits, Options};
 use crate::db::timestamp;
+use crate::transfers::categories::{FAILED, SUCCESSFUL};
 use crate::transfers::direction_text;
 
 /// What a request over the queued files limit is told; clients ask again later.
@@ -50,25 +51,25 @@ pub fn statistics(
 ) -> rusqlite::Result<Statistics> {
   let week = timestamp(now - Duration::days(7));
   let day = timestamp(now - Duration::days(1));
-  let succeeded = (TransferStates::Completed | TransferStates::Succeeded).bits();
   conn.query_row(
-    "SELECT \
-       COUNT(*) FILTER (WHERE EndedAt IS NULL), \
-       COALESCE(SUM(Size) FILTER (WHERE EndedAt IS NULL), 0), \
-       COUNT(*) FILTER (WHERE StartedAt >= ?3 AND State IN (80, 144, 272, 528, 1040)), \
-       COUNT(*) FILTER (WHERE StartedAt >= ?3 AND State = ?5), \
-       COALESCE(SUM(Size) FILTER (WHERE StartedAt >= ?3 AND State = ?5), 0), \
-       COUNT(*) FILTER (WHERE StartedAt >= ?4 AND State IN (80, 144, 272, 528, 1040)), \
-       COUNT(*) FILTER (WHERE StartedAt >= ?4 AND State = ?5), \
-       COALESCE(SUM(Size) FILTER (WHERE StartedAt >= ?4 AND State = ?5), 0) \
-     FROM Transfers WHERE Username = ?1 AND Direction = ?2 \
-       AND (EndedAt IS NULL OR StartedAt >= ?3)",
+    &format!(
+      "SELECT \
+         COUNT(*) FILTER (WHERE EndedAt IS NULL), \
+         COALESCE(SUM(Size) FILTER (WHERE EndedAt IS NULL), 0), \
+         COUNT(*) FILTER (WHERE StartedAt >= ?3 AND {FAILED}), \
+         COUNT(*) FILTER (WHERE StartedAt >= ?3 AND {SUCCESSFUL}), \
+         COALESCE(SUM(Size) FILTER (WHERE StartedAt >= ?3 AND {SUCCESSFUL}), 0), \
+         COUNT(*) FILTER (WHERE StartedAt >= ?4 AND {FAILED}), \
+         COUNT(*) FILTER (WHERE StartedAt >= ?4 AND {SUCCESSFUL}), \
+         COALESCE(SUM(Size) FILTER (WHERE StartedAt >= ?4 AND {SUCCESSFUL}), 0) \
+       FROM Transfers WHERE Username = ?1 AND Direction = ?2 \
+         AND (EndedAt IS NULL OR StartedAt >= ?3)"
+    ),
     params![
       username,
       direction_text(TransferDirection::Upload),
       week,
-      day,
-      succeeded
+      day
     ],
     |row| {
       let n =
@@ -236,6 +237,8 @@ pub fn usage(options: &Options, own: &Limits, figures: &Statistics) -> UploadLim
 
 #[cfg(test)]
 mod tests {
+  use api_types::transfers::{TransferOutcome, TransferStates};
+
   use super::*;
   use crate::config::{DEFAULT_GROUP, LEECHERS_GROUP};
   use crate::transfers::fixtures::{Row, insert, transfers};
@@ -442,30 +445,54 @@ mod tests {
   async fn the_figures_count_by_when_an_upload_started_removed_ones_too() {
     let db = transfers().await;
     let now: DateTime<Utc> = "2026-05-10T12:00:00Z".parse().unwrap();
-    let row = |state: u32, started_hours_ago: Option<i64>, size: i64| {
+    let row = |state: TransferStates, started_hours_ago: Option<i64>, size: i64| {
       let mut row = Row::new("alice", TransferDirection::Upload, state);
       row.size = size;
       row.started_at = started_hours_ago.map(|h| now - Duration::hours(h));
-      row.ended_at = (state & 16 != 0).then_some(now);
+      row.ended_at = state.is_completed().then_some(now);
       row
     };
-    let mut removed = row(48, Some(30), 7);
+    let mut removed = row(
+      TransferStates::Completed(TransferOutcome::Succeeded),
+      Some(30),
+      7,
+    );
     removed.removed = true;
-    let mut download = Row::new("alice", TransferDirection::Download, 48);
+    let mut download = Row::new(
+      "alice",
+      TransferDirection::Download,
+      TransferStates::Completed(TransferOutcome::Succeeded),
+    );
     download.started_at = Some(now);
     download.ended_at = Some(now);
     insert(
       &db,
       vec![
-        row(2 | 2048, None, 100),
-        row(8, Some(1), 50),
-        row(48, Some(2), 10),
+        row(TransferStates::QueuedLocally, None, 100),
+        row(TransferStates::InProgress, Some(1), 50),
+        row(
+          TransferStates::Completed(TransferOutcome::Succeeded),
+          Some(2),
+          10,
+        ),
         removed,
-        row(80, Some(3), 1),
-        row(528, Some(100), 1),
-        row(48, Some(200), 1000),
+        row(
+          TransferStates::Completed(TransferOutcome::Cancelled),
+          Some(3),
+          1,
+        ),
+        row(
+          TransferStates::Completed(TransferOutcome::Rejected),
+          Some(100),
+          1,
+        ),
+        row(
+          TransferStates::Completed(TransferOutcome::Succeeded),
+          Some(200),
+          1000,
+        ),
         // failed before it started: counts nowhere
-        row(1040, None, 1),
+        row(TransferStates::Completed(TransferOutcome::Aborted), None, 1),
         download,
       ],
     )

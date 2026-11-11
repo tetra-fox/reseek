@@ -12,6 +12,7 @@ use rusqlite::types::Value;
 use uuid::Uuid;
 
 use super::categories::condition;
+use super::state::in_states;
 use super::{ASKED_ORDER, COLUMNS, Record, direction_text, store, transfer};
 use crate::db::{Database, DbError, timestamp};
 
@@ -146,7 +147,7 @@ pub async fn page(
         .iter()
         .map(|filter| match filter {
           TransferStateFilter::Category(category) => condition(*category).to_string(),
-          TransferStateFilter::State(state) => format!("(State = {})", state.bits()),
+          TransferStateFilter::State(state) => in_states([*state]),
         })
         .collect();
       conditions.push(format!("({})", states.join(" OR ")));
@@ -236,7 +237,7 @@ pub async fn record(
 
 #[cfg(test)]
 mod tests {
-  use api_types::transfers::{TransferStateCategory, TransferStates};
+  use api_types::transfers::{TransferOutcome, TransferStateCategory, TransferStates};
 
   use super::*;
   use crate::transfers::fixtures::{Row, insert, transfers};
@@ -257,7 +258,11 @@ mod tests {
   async fn transfers_group_by_user_then_directory_in_the_order_first_asked() {
     let db = transfers().await;
     let at = |minute: u32, user: &str, file: &str, removed: bool| {
-      let mut row = Row::new(user, TransferDirection::Download, 2 | 2048);
+      let mut row = Row::new(
+        user,
+        TransferDirection::Download,
+        TransferStates::QueuedLocally,
+      );
       row.filename = file.to_string();
       row.requested_at = format!("2026-01-01T00:{minute:02}:00Z").parse().unwrap();
       row.removed = removed;
@@ -275,7 +280,7 @@ mod tests {
       ],
     )
     .await;
-    let mut upload = Row::new("bob", TransferDirection::Upload, 8);
+    let mut upload = Row::new("bob", TransferDirection::Upload, TransferStates::InProgress);
     upload.filename = "b\\upload.mp3".to_string();
     insert(&db, vec![upload]).await;
     let listed = grouped(&db, TransferDirection::Download, false, None)
@@ -308,7 +313,11 @@ mod tests {
   async fn a_grouped_range_holds_what_was_asked_for_between_its_times_up_to_its_limit() {
     let db = transfers().await;
     let at = |minute: u32| {
-      let mut row = Row::new("alice", TransferDirection::Upload, 48);
+      let mut row = Row::new(
+        "alice",
+        TransferDirection::Upload,
+        TransferStates::Completed(TransferOutcome::Succeeded),
+      );
       row.filename = format!("d\\{minute}.flac");
       row.requested_at = format!("2026-01-01T00:{minute:02}:00Z").parse().unwrap();
       row
@@ -345,7 +354,7 @@ mod tests {
   #[tokio::test]
   async fn a_page_filters_sorts_and_counts_every_match() {
     let db = transfers().await;
-    let row = |user: &str, state: u32, size: i64| {
+    let row = |user: &str, state: TransferStates, size: i64| {
       let mut row = Row::new(user, TransferDirection::Download, state);
       row.size = size;
       row
@@ -353,10 +362,22 @@ mod tests {
     insert(
       &db,
       vec![
-        row("alice", 48, 3),
-        row("alice", 272, 1),
-        row("bob", 80, 2),
-        row("bob", 4098, 9),
+        row(
+          "alice",
+          TransferStates::Completed(TransferOutcome::Succeeded),
+          3,
+        ),
+        row(
+          "alice",
+          TransferStates::Completed(TransferOutcome::Errored),
+          1,
+        ),
+        row(
+          "bob",
+          TransferStates::Completed(TransferOutcome::Cancelled),
+          2,
+        ),
+        row("bob", TransferStates::QueuedRemotely, 9),
       ],
     )
     .await;
@@ -380,9 +401,7 @@ mod tests {
       .await
       .unwrap();
     assert_eq!(second.items[0].size, 1);
-    let exact = vec![TransferStateFilter::State(
-      TransferStates::Queued | TransferStates::Remotely,
-    )];
+    let exact = vec![TransferStateFilter::State(TransferStates::QueuedRemotely)];
     let queued = page(&db, TransferDirection::Download, query(exact, 0))
       .await
       .unwrap();

@@ -10,7 +10,7 @@ use api_types::transfers::TransferDirection;
 use chrono::{DateTime, SecondsFormat, Utc};
 use rusqlite::{OptionalExtension, params_from_iter};
 
-use super::{Filter, Reports, Window, genesis, outcome};
+use super::{Filter, Reports, Window, genesis, outcome_at};
 use crate::db::{self, DbError};
 use crate::transfers::categories::COMPLETED;
 use crate::transfers::direction_at;
@@ -92,7 +92,7 @@ impl Reports {
     }
     let filter = Filter::default()
       .ended_from(Window { start, end })
-      .states(COMPLETED)
+      .states(&COMPLETED)
       .direction(query.direction)
       .username(query.username.as_deref());
     let rows = self
@@ -116,7 +116,7 @@ impl Reports {
             Ok((
               row.get::<_, i64>(0)?,
               direction_at(row, 1)?,
-              row.get::<_, u32>(2)?,
+              outcome_at(row, 2)?,
               TransferSummary {
                 total_bytes: row.get::<_, i64>(3)?.max(0).unsigned_abs(),
                 count: row.get::<_, i64>(4)?.max(0).unsigned_abs(),
@@ -130,7 +130,7 @@ impl Reports {
           .collect::<rusqlite::Result<Vec<_>>>()
       })
       .await?;
-    for (bucket, direction, state, summary) in rows {
+    for (bucket, direction, outcome, summary) in rows {
       // with the end excluded every row ends in a listed bucket; one that does not is dropped
       let Some(summaries) = result.get_mut(&key(bucket)) else {
         continue;
@@ -139,7 +139,7 @@ impl Reports {
         TransferDirection::Download => &mut summaries.download,
         TransferDirection::Upload => &mut summaries.upload,
       };
-      into.insert(outcome(state), summary);
+      into.insert(outcome, summary);
     }
     Ok(result)
   }
@@ -151,6 +151,7 @@ mod tests {
   use crate::telemetry::reports::tests::{at, row};
   use crate::transfers::fixtures::{insert, transfers};
   use api_types::transfers::TransferDirection::Upload;
+  use api_types::transfers::{TransferOutcome, TransferStates};
 
   async fn cut(
     reports: &Reports,
@@ -202,7 +203,12 @@ mod tests {
   #[tokio::test]
   async fn a_window_before_the_first_release_starts_at_the_oldest_transfer() {
     let db = transfers().await;
-    let mut old = row("alice", Upload, 48, at(5, 0));
+    let mut old = row(
+      "alice",
+      Upload,
+      TransferStates::Completed(TransferOutcome::Succeeded),
+      at(5, 0),
+    );
     old.requested_at = at(4, 10);
     insert(&db, vec![old]).await;
     let reports = Reports::new(db);

@@ -179,7 +179,7 @@ mod tests {
     );
     assert_eq!(
       read("\"Queued, Remotely\""),
-      TransferStateFilter::State(TransferStates::Queued | TransferStates::Remotely)
+      TransferStateFilter::State(TransferStates::QueuedRemotely)
     );
     assert_eq!(
       read("\"Requested\""),

@@ -181,32 +181,41 @@ mod tests {
   use super::*;
   use crate::transfers::fixtures::{Row, insert, transfers};
   use api_types::transfers::{TransferDirection, TransferStateCategory};
+  use api_types::transfers::{TransferOutcome, TransferStates};
 
   #[tokio::test]
   async fn figures_count_each_category_with_removed_rows_only_in_the_history() {
     let db = transfers().await;
     let download = |state| Row::new("alice", TransferDirection::Download, state);
-    let mut succeeded = download(48);
+    let mut succeeded = download(TransferStates::Completed(TransferOutcome::Succeeded));
     succeeded.bytes = 700;
-    let mut removed = download(48);
+    let mut removed = download(TransferStates::Completed(TransferOutcome::Succeeded));
     removed.bytes = 300;
     removed.removed = true;
-    let mut gone_queue = download(4098);
+    let mut gone_queue = download(TransferStates::QueuedRemotely);
     gone_queue.removed = true;
-    let mut latest = Row::new("alice", TransferDirection::Upload, 272);
+    let mut latest = Row::new(
+      "alice",
+      TransferDirection::Upload,
+      TransferStates::Completed(TransferOutcome::Errored),
+    );
     latest.requested_at = "2026-03-01T00:00:00Z".parse().unwrap();
     insert(
       &db,
       vec![
         succeeded,
         removed,
-        download(80),
-        download(1040),
-        download(8),
-        download(2050),
+        download(TransferStates::Completed(TransferOutcome::Cancelled)),
+        download(TransferStates::Completed(TransferOutcome::Aborted)),
+        download(TransferStates::InProgress),
+        download(TransferStates::QueuedLocally),
         gone_queue,
         latest,
-        Row::new("bob", TransferDirection::Download, 48),
+        Row::new(
+          "bob",
+          TransferDirection::Download,
+          TransferStates::Completed(TransferOutcome::Succeeded),
+        ),
       ],
     )
     .await;

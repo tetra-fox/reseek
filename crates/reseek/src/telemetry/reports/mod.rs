@@ -12,13 +12,15 @@ mod summary;
 
 pub use histogram::{HistogramError, Width};
 
-use api_types::reports::{TransferOutcome, TransferSummary};
-use api_types::transfers::{TransferDirection, TransferStates};
+use api_types::reports::TransferSummary;
+use api_types::transfers::{TransferDirection, TransferOutcome, TransferStates};
 use chrono::{DateTime, Utc};
 use rusqlite::types::Value;
 
 use crate::db::{self, Database};
+use crate::transfers::categories::Condition;
 use crate::transfers::direction_text;
+use crate::transfers::state::state_at;
 
 /// The first release; no transfer can have ended before it.
 pub const GENESIS: &str = "2020-12-30T06:22:00Z";
@@ -55,24 +57,17 @@ impl Reports {
   }
 }
 
-/// Each outcome flag of a finished transfer and the outcome it reports.
-const OUTCOMES: [(TransferStates, TransferOutcome); 6] = [
-  (TransferStates::Succeeded, TransferOutcome::Succeeded),
-  (TransferStates::Cancelled, TransferOutcome::Cancelled),
-  (TransferStates::TimedOut, TransferOutcome::TimedOut),
-  (TransferStates::Errored, TransferOutcome::Errored),
-  (TransferStates::Rejected, TransferOutcome::Rejected),
-  (TransferStates::Aborted, TransferOutcome::Aborted),
-];
-
-/// How a finished transfer in the state `state` ended: the state without `Completed`, when
-/// that is one outcome flag, else none.
-fn outcome(state: u32) -> TransferOutcome {
-  let flags = TransferStates::from_bits_retain(state).difference(TransferStates::Completed);
-  OUTCOMES
-    .iter()
-    .find(|(flag, _)| *flag == flags)
-    .map_or(TransferOutcome::None, |(_, outcome)| *outcome)
+/// How the finished transfer in the `State` column `i` of `row` ended; a row in a state that
+/// is not finished is an error, since the reports only read finished ones.
+fn outcome_at(row: &rusqlite::Row, i: usize) -> rusqlite::Result<TransferOutcome> {
+  match state_at(row, i)? {
+    TransferStates::Completed(outcome) => Ok(outcome),
+    other => Err(rusqlite::Error::FromSqlConversionFailure(
+      i,
+      rusqlite::types::Type::Integer,
+      format!("{other} is not finished").into(),
+    )),
+  }
 }
 
 /// The [`TransferSummary`] of the [`SUMMARY`] columns starting at `at`.
@@ -116,7 +111,7 @@ impl Filter {
   }
 
   /// Transfers in the state category whose condition is `category`.
-  fn states(mut self, category: &str) -> Self {
+  fn states(mut self, category: &Condition) -> Self {
     self.conditions.push(category.to_string());
     self
   }
@@ -191,7 +186,7 @@ pub(super) mod tests {
   pub fn row(
     username: &str,
     direction: TransferDirection,
-    state: u32,
+    state: TransferStates,
     ended: DateTime<Utc>,
   ) -> Row {
     let mut row = Row::new(username, direction, state);

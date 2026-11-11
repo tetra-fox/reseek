@@ -13,7 +13,8 @@ use crate::support::scripted::{BOB, Scripted};
 use crate::support::transfers::{self, content, file, scratch, states};
 use crate::support::{Logs, PATIENCE, listening_options};
 use soulseek_client::{
-  ClientError, Event, Governor, InputFactory, Transfer, TransferState, UploadInput, UploadRequest,
+  ClientError, Event, Governor, InputFactory, Transfer, TransferOutcome, TransferState,
+  UploadInput, UploadRequest,
 };
 use soulseek_proto::peer::{QueueDownload, TransferResponse, UploadDenied, UploadFailed};
 use soulseek_proto::server::{GetPeerAddressRequest, GetPeerAddressResponse};
@@ -194,7 +195,7 @@ async fn a_downloader_that_refuses_or_never_answers_ends_the_upload_and_hears_it
   let (_, last) = states(&mut events, TransferDirection::Upload).await;
   assert_eq!(
     last.state,
-    TransferState::COMPLETED | TransferState::TIMED_OUT
+    TransferState::Completed(TransferOutcome::TimedOut)
   );
   assert!(told_failed(bob.read_peer().await, "@@share\\t.mp3"));
 }
@@ -365,7 +366,7 @@ async fn an_upload_canceled_at_any_stage_tells_the_downloader_to_drop_it() {
       .find(|upload| upload.filename.as_str() == "@@share\\second.mp3")
       .unwrap()
       .state,
-    TransferState::QUEUED_LOCALLY
+    TransferState::QueuedLocally
   );
   second.cancel.cancel();
   assert!(matches!(
@@ -506,7 +507,7 @@ async fn an_upload_is_queued_at_once_and_once_per_file() {
     .unwrap();
   assert_eq!(
     scripted.client().uploads()[0].state,
-    TransferState::QUEUED_LOCALLY
+    TransferState::QueuedLocally
   );
   assert!(matches!(
     scripted

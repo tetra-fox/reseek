@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 
 use api_client::Client;
 use api_types::options::OptionsPatch;
-use api_types::transfers::{Transfer, TransferDirection, TransferStates};
+use api_types::transfers::{Transfer, TransferDirection, TransferOutcome, TransferStates};
 use api_types::users::BuddyChange;
 use serde_json::json;
 use soulseek_client::{ClientError, ClientOptions, UploadInput, UploadRequest};
@@ -25,8 +25,7 @@ use support::scripted::{Scripted, send_from};
 use support::soulfind::{self, Soulfind, User};
 use support::transfers::{self, Asked, asked, content, file, scratch};
 use support::{
-  PATIENCE, completed, daemon_listening, download_when, enqueue, free_port, logged_in, signed_in,
-  until,
+  PATIENCE, daemon_listening, download_when, enqueue, free_port, logged_in, signed_in, until,
 };
 use tokio_util::sync::CancellationToken;
 
@@ -179,7 +178,10 @@ async fn a_file_sent_unasked_is_taken_only_from_a_buddy_on_their_own_address() {
     .await
     .expect("the daemon takes the buddy's file");
   let received = download_of(&api, &sender.username, GIFT, "landed", moved).await;
-  assert_eq!(received.state, completed(TransferStates::Succeeded));
+  assert_eq!(
+    received.state,
+    TransferStates::Completed(TransferOutcome::Succeeded)
+  );
   let path = dir
     .path()
     .join("data")
@@ -199,7 +201,7 @@ async fn a_file_sent_unasked_is_taken_only_from_a_buddy_on_their_own_address() {
     .await
     .unwrap();
   download_when(&api, &sender.username, id, "canceled", |t| {
-    t.state == completed(TransferStates::Cancelled)
+    t.state == TransferStates::Completed(TransferOutcome::Cancelled)
   })
   .await;
   assert!(
@@ -278,7 +280,10 @@ async fn a_file_sent_unasked_never_replaces_a_file_and_keeps_its_size() {
     t.ended_at.is_some()
   })
   .await;
-  assert_eq!(disputed.state, completed(TransferStates::Aborted));
+  assert_eq!(
+    disputed.state,
+    TransferStates::Completed(TransferOutcome::Aborted)
+  );
   assert_eq!(
     disputed.exception.as_deref(),
     Some("the remote size of 200 does not match expected size 100")

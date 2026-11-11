@@ -6,7 +6,7 @@ use std::time::Duration;
 use crate::support::scripted::{BOB, SIZE, Scripted, offer, queued, send_file};
 use crate::support::transfers::{content, reached, states};
 use crate::support::{listening_options, next_event};
-use soulseek_client::{ClientError, Event, RequestStyle, Transfer, TransferState};
+use soulseek_client::{ClientError, Event, RequestStyle, Transfer, TransferOutcome, TransferState};
 use soulseek_proto::TransferDirection;
 
 #[tokio::test]
@@ -18,7 +18,7 @@ async fn a_queued_download_outlives_the_message_connection() {
   tokio::time::sleep(Duration::from_millis(200)).await;
   assert_eq!(
     scripted.client().downloads()[0].state,
-    TransferState::QUEUED_REMOTELY
+    TransferState::QueuedRemotely
   );
   let mut bob = scripted.session.peer(BOB).await;
   offer(&mut bob, "@@share\\long.mp3", 12, Some(SIZE)).await;
@@ -78,7 +78,7 @@ async fn waits_that_take_too_long_time_the_download_out() {
   let (_, last) = states(&mut events, TransferDirection::Download).await;
   assert_eq!(
     last.state,
-    TransferState::COMPLETED | TransferState::TIMED_OUT
+    TransferState::Completed(TransferOutcome::TimedOut)
   );
 
   // the wait in the queue, when the caller bounds it
@@ -121,7 +121,7 @@ async fn a_download_canceled_at_any_stage_ends_canceled() {
   // the first download's states
   let _ = next_event(&mut events, |event| match event {
     Event::TransferStateChanged { transfer, .. }
-      if transfer.state == TransferState::QUEUED_REMOTELY =>
+      if transfer.state == TransferState::QueuedRemotely =>
     {
       Some(())
     }
@@ -134,7 +134,7 @@ async fn a_download_canceled_at_any_stage_ends_canceled() {
     _ => None,
   })
   .await;
-  assert_eq!(state, TransferState::QUEUED_LOCALLY);
+  assert_eq!(state, TransferState::QueuedLocally);
   second.cancel.cancel();
   assert!(canceled(second.task.await.unwrap()));
 

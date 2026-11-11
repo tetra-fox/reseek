@@ -51,7 +51,7 @@ impl Client {
     request: UploadRequest,
     cancel: &CancellationToken,
   ) -> Result<TransferTask, ClientError> {
-    let (observer, reached) = task::observer(TransferState::QUEUED_LOCALLY);
+    let (observer, reached) = task::observer(TransferState::QueuedLocally);
     let handle = self.start_upload(request, cancel, Some(observer)).await?;
     task::enqueued(handle, reached).await
   }
@@ -194,7 +194,7 @@ impl Upload {
   }
 
   async fn transfer(&mut self, held: &mut Held) -> Result<(), ClientError> {
-    self.tracker.emit_state(TransferState::QUEUED_LOCALLY, None);
+    self.tracker.emit_first_state();
     let turn = self.turn.clone();
     held.turn = Some(
       self
@@ -248,7 +248,7 @@ impl Upload {
       file_size: Some(self.size),
     });
     self.stop.run(write_peer(&conn, offer)).await?;
-    self.tracker.emit_state(TransferState::REQUESTED, None);
+    self.tracker.emit_state(TransferState::Requested, None)?;
     match self.stop.run(answer).await? {
       // a downloader may not queue us, so its "Queued" is a refusal too
       TransferResponse::Denied { message, .. } => {
@@ -256,7 +256,7 @@ impl Upload {
       }
       TransferResponse::Allowed { .. } => {}
     }
-    self.tracker.emit_state(TransferState::INITIALIZING, None);
+    self.tracker.emit_state(TransferState::Initializing, None)?;
     let conn = self
       .stop
       .run(
@@ -319,7 +319,7 @@ impl Upload {
     let start = self.check_offset(u64::from_le_bytes(offset))?;
     self.tracker.set_start_offset(start);
     let mut source = self.open_input(start).await?;
-    self.tracker.emit_state(TransferState::IN_PROGRESS, None);
+    self.tracker.emit_state(TransferState::InProgress, None)?;
     self.tracker.emit_progress(start);
     tracing::info!(size = self.size, start, "upload started");
     let transfers = self.client.transfers().clone();

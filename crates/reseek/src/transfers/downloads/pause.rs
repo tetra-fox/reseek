@@ -6,13 +6,15 @@
 use std::collections::BTreeMap;
 use std::collections::hash_map::Entry;
 
-use api_types::transfers::{BulkFailure, TransferStates};
+use api_types::transfers::BulkFailure;
 use reseek_shares::lock;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 use super::enqueue::gate_for;
 use super::{COMPLETED, Downloads, InFlight, Running};
+use crate::transfers::state::State;
+use crate::transfers::store::Saved;
 use crate::transfers::{Record, store};
 
 impl Downloads {
@@ -87,11 +89,21 @@ impl Downloads {
       if running == Running::Stopped {
         debug!(id = %record.id, "running download stopped to be paused");
       } else {
+        record
+          .enter(State::WAITING)
+          .expect("a download that has not completed may wait");
         record.paused = true;
-        record.state = TransferStates::Queued | TransferStates::Locally;
-        record.next_attempt_at = None;
-        record.place_in_queue = None;
-        self.save(&record, true).await;
+        let unsaved = match self.save(&record, true).await {
+          Some(Saved::Written) => None,
+          // a task that ended it since it was read keeps how it ended
+          Some(Saved::Refused(_)) => Some(COMPLETED),
+          Some(Saved::Gone) => Some("the download is gone"),
+          None => Some("the download was not written"),
+        };
+        if let Some(why) = unsaved {
+          outcomes.push(Err(failure(record.id, why)));
+          continue;
+        }
         info!(id = %record.id, username = record.username, "download paused");
       }
       outcomes.push(Ok(record.id));
@@ -143,7 +155,9 @@ impl Downloads {
           }
         }
         record.paused = false;
-        record.state = TransferStates::Queued | TransferStates::Locally;
+        record
+          .enter(State::WAITING)
+          .expect("a paused download that has not completed may wait");
         self.save(&record, true).await;
         info!(id = %record.id, username, "download resumed");
         let id = record.id;

@@ -18,7 +18,7 @@ use api_types::jobs::JobStarter;
 use super::{Downloads, FileRequest, Group, internal};
 use crate::api::error::ApiError;
 use crate::services::TransferService;
-use crate::transfers::categories::UNFINISHED;
+use crate::transfers::categories::FAILED;
 use crate::transfers::{ASKED_ORDER, COLUMNS, Record, listing, removal, store};
 
 /// What a refused enqueue call is told when every one allowed at once runs already.
@@ -105,7 +105,7 @@ impl Downloads {
       .read(move |conn| {
         let mut statement = conn.prepare(&format!(
           "SELECT {COLUMNS} FROM Transfers WHERE JobId = ?1 AND Removed = 0 \
-           AND NOT {UNFINISHED} AND State <> 48 ORDER BY {ASKED_ORDER}"
+           AND {FAILED} ORDER BY {ASKED_ORDER}"
         ))?;
         statement
           .query_map([job.to_string()], Record::read)?
@@ -371,15 +371,16 @@ impl TransferService for Downloads {
 
 #[cfg(test)]
 mod tests {
-  use api_types::transfers::TransferStates;
+  use api_types::transfers::TransferOutcome;
 
   use super::*;
+  use crate::transfers::state::State;
 
   #[test]
   fn a_retry_keeps_each_downloads_destination_and_search() {
     let search = Uuid::new_v4();
     let ended = |username: &str, filename: &str, destination: Option<&str>| Record {
-      state: TransferStates::Completed | TransferStates::Errored,
+      state: State::Completed(TransferOutcome::Errored),
       destination: destination.map(str::to_string),
       search_id: Some(search),
       ..Record::download(username, filename, 1)

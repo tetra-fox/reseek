@@ -10,6 +10,7 @@ use crate::testing::{app, request};
 use crate::transfers::fixtures::{Row, insert};
 use api_types::events::EventType;
 use api_types::transfers::{SortOrder, TransferDirection};
+use api_types::transfers::{TransferOutcome, TransferStates};
 use api_types::users::blocking::BlockSource;
 use api_types::users::{Buddy, BuddyChange, UserList, UserListQuery};
 use api_types::users::{UserPresence, UserSort};
@@ -58,7 +59,13 @@ async fn the_directory_filters_and_sorts_with_buddies_first() {
     .write(move |conn| touch::write(conn, &batch))
     .await
     .unwrap();
-  let upload = |name: &str| Row::new(name, TransferDirection::Upload, 48);
+  let upload = |name: &str| {
+    Row::new(
+      name,
+      TransferDirection::Upload,
+      TransferStates::Completed(TransferOutcome::Succeeded),
+    )
+  };
   insert(
     &app.state.transfers,
     vec![upload("carol"), upload("carol"), upload("Bob")],
@@ -149,7 +156,11 @@ async fn the_directory_filters_and_sorts_with_buddies_first() {
   );
   insert(
     &app.state.transfers,
-    vec![Row::new("carol", TransferDirection::Download, 48)],
+    vec![Row::new(
+      "carol",
+      TransferDirection::Download,
+      TransferStates::Completed(TransferOutcome::Succeeded),
+    )],
   )
   .await;
   let mut downloads = query();
@@ -525,7 +536,11 @@ async fn forgetting_a_user_drops_their_block_and_purges_their_transfers() {
   app
     .call("PUT", "/api/v0/users/alice/block", Some(json!({})))
     .await;
-  let download = Row::new("alice", TransferDirection::Download, 48);
+  let download = Row::new(
+    "alice",
+    TransferDirection::Download,
+    TransferStates::Completed(TransferOutcome::Succeeded),
+  );
   insert(&app.state.transfers, vec![download]).await;
   let (status, _) = app
     .call("DELETE", "/api/v0/users/alice?purge=true", None)

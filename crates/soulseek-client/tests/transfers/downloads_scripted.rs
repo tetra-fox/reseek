@@ -11,7 +11,7 @@ use crate::support::PATIENCE;
 use crate::support::scripted::{BOB, SIZE, Scripted, offer, queued, send_file};
 use crate::support::transfers::{self, content, reached, scratch, states};
 use soulseek_client::{
-  ClientError, DownloadOutput, DownloadRequest, Event, RequestStyle, TransferState,
+  ClientError, DownloadOutput, DownloadRequest, Event, RequestStyle, TransferOutcome, TransferState,
 };
 use soulseek_proto::peer::{TransferRequest, TransferResponse, UploadDenied, UploadFailed};
 use soulseek_proto::{PeerMessage, TransferDirection};
@@ -107,7 +107,7 @@ async fn a_transfer_request_answered_with_a_refusal_rejects_the_download_and_que
   let states = tokio::time::timeout(PATIENCE, async {
     loop {
       let downloads = scripted.client().downloads();
-      if downloads[0].state == TransferState::QUEUED_REMOTELY {
+      if downloads[0].state == TransferState::QueuedRemotely {
         return downloads;
       }
       tokio::time::sleep(Duration::from_millis(10)).await;
@@ -251,7 +251,7 @@ async fn the_size_the_uploader_names_is_checked_against_ours() {
   let (_, last) = states(&mut events, TransferDirection::Download).await;
   assert_eq!(
     last.state,
-    TransferState::COMPLETED | TransferState::ABORTED
+    TransferState::Completed(TransferOutcome::Aborted)
   );
 
   // a resolver can settle on the uploader's size

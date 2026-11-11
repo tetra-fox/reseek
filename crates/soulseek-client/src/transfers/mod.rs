@@ -21,7 +21,7 @@ pub use options::{
   StateChanged, TransferFuture, TransferOptions, UploadInput, UploadRequest, UploadSource,
 };
 pub use record::Transfer;
-pub use state::TransferState;
+pub use state::{TransferOutcome, TransferState};
 pub use task::TransferTask;
 
 use std::collections::HashMap;

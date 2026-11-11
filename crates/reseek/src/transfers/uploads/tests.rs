@@ -6,7 +6,7 @@
 use std::path::Path;
 use std::sync::atomic::Ordering;
 
-use api_types::transfers::{TransferDirection, TransferStates, UserResponse};
+use api_types::transfers::{TransferDirection, TransferOutcome, TransferStates, UserResponse};
 use reseek_shares::lock;
 use serde_json::{Value, json};
 use soulseek_client::ClientError;
@@ -19,6 +19,7 @@ use crate::network::resolvers::tests::{edges, exposed, from};
 use crate::network::resolvers::{enqueue_download, place_in_queue};
 use crate::testing::{TestApp, app};
 use crate::transfers::fixtures::{Row, insert};
+use crate::transfers::state::State;
 use crate::transfers::{Record, store};
 
 const SHARED: &str = "Music\\Album\\01.mp3";
@@ -89,9 +90,17 @@ async fn every_refusal_a_peer_can_be_told_and_what_triggers_it() {
   );
   assert!(app.state.state.current().shares.scan_pending);
 
-  let mut queued = Row::new("carol", TransferDirection::Upload, 2 | 2048);
+  let mut queued = Row::new(
+    "carol",
+    TransferDirection::Upload,
+    TransferStates::QueuedLocally,
+  );
   queued.filename = "Music\\Album\\02.mp3".to_string();
-  let mut failed = Row::new("dave", TransferDirection::Upload, 16 | 64);
+  let mut failed = Row::new(
+    "dave",
+    TransferDirection::Upload,
+    TransferStates::Completed(TransferOutcome::Cancelled),
+  );
   failed.started_at = Some(chrono::Utc::now());
   failed.ended_at = failed.started_at;
   insert(&app.state.transfers, vec![queued, failed]).await;
@@ -122,7 +131,11 @@ async fn every_refusal_a_peer_can_be_told_and_what_triggers_it() {
 #[tokio::test]
 async fn a_privileged_user_is_queued_past_the_limits() {
   let (_files, app) = shared_app("[transfers.upload.limits]\nqueued = { files = 1 }\n").await;
-  let mut queued = Row::new("vip", TransferDirection::Upload, 2 | 2048);
+  let mut queued = Row::new(
+    "vip",
+    TransferDirection::Upload,
+    TransferStates::QueuedLocally,
+  );
   queued.filename = "Music\\Album\\02.mp3".to_string();
   insert(&app.state.transfers, vec![queued]).await;
   assert_eq!(
@@ -146,7 +159,11 @@ async fn a_privileged_user_is_queued_past_the_limits() {
 #[tokio::test]
 async fn a_running_upload_stands_for_a_new_request_and_an_ended_one_is_superseded() {
   let (_files, app) = shared_app("").await;
-  let mut queued = Row::new("alice", TransferDirection::Upload, 2 | 2048);
+  let mut queued = Row::new(
+    "alice",
+    TransferDirection::Upload,
+    TransferStates::QueuedLocally,
+  );
   queued.filename = SHARED.to_string();
   let old = queued.id;
   insert(&app.state.transfers, vec![queued]).await;
@@ -215,7 +232,7 @@ async fn the_upload_calls_find_an_upload_by_its_user_and_id() {
   assert_eq!(body, json!({ "username": "nobody", "directories": [] }));
 
   let mut done = Record::upload("alice", SHARED, 3);
-  done.state = TransferStates::Completed | TransferStates::Succeeded;
+  done.state = State::Completed(TransferOutcome::Succeeded);
   done.ended_at = Some(chrono::Utc::now());
   let written = done.clone();
   app

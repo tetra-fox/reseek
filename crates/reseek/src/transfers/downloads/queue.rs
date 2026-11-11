@@ -16,7 +16,8 @@ use uuid::Uuid;
 use super::Downloads;
 use crate::api::error::ApiError;
 use crate::db::DbError;
-use crate::transfers::categories::{IN_PROGRESS, QUEUED, UNFINISHED};
+use crate::transfers::categories::{Condition, IN_PROGRESS, QUEUED, UNFINISHED};
+use crate::transfers::state::column;
 use crate::transfers::store;
 
 /// How long a place a peer gave is answered again without asking it.
@@ -33,14 +34,14 @@ impl Downloads {
         "No download {id} from {username}"
       )));
     }
-    let mut record = self.record_of(username, id).await?;
-    if record.state != TransferStates::Queued | TransferStates::Remotely {
+    let record = self.record_of(username, id).await?;
+    if record.state.kind() != TransferStates::QueuedRemotely {
       return Err(ApiError::conflict("Transfer is not queued remotely", None));
     }
     let recent = lock(&self.asked)
       .get(&id)
       .is_some_and(|at| at.elapsed() < ASK_EVERY);
-    if let (true, Some(place)) = (recent, record.place_in_queue) {
+    if let (true, Some(place)) = (recent, record.place_in_queue()) {
       debug!(%id, place, "place in queue answered from the last answer");
       return Ok(place);
     }
@@ -68,7 +69,6 @@ impl Downloads {
     if self.running(id) {
       lock(&self.asked).insert(id, Instant::now());
     }
-    record.place_in_queue = Some(place);
     self.place(record.id, place).await;
     info!(%id, username, place, "place in the peer's queue");
     Ok(place)
@@ -86,11 +86,7 @@ impl Downloads {
           .query_row(
             "SELECT Id FROM Transfers WHERE Username = ?1 AND Filename = ?2 AND Direction = \
              'Download' AND State = ?3 AND Removed = 0",
-            rusqlite::params![
-              name,
-              file,
-              (TransferStates::Queued | TransferStates::Remotely).bits()
-            ],
+            rusqlite::params![name, file, column(TransferStates::QueuedRemotely)],
             |row| row.get::<_, String>(0),
           )
           .map(Some)
@@ -115,7 +111,7 @@ impl Downloads {
 
   /// Writes `place` on the download `id` while it is queued by its peer, and pushes it.
   async fn place(&self, id: Uuid, place: u32) {
-    let remotely = (TransferStates::Queued | TransferStates::Remotely).bits();
+    let remotely = column(TransferStates::QueuedRemotely);
     let written = self
       .db
       .write(move |conn| {
@@ -142,7 +138,7 @@ impl Downloads {
     self
       .db
       .read(|conn| {
-        let tally = |condition: &str| -> rusqlite::Result<(u64, u64, u64)> {
+        let tally = |condition: &Condition| -> rusqlite::Result<(u64, u64, u64)> {
           conn.query_row(
             &format!(
               "SELECT COUNT(DISTINCT Username), COUNT(*), COALESCE(SUM(Size), 0) FROM Transfers \
@@ -157,7 +153,7 @@ impl Downloads {
             },
           )
         };
-        Ok((tally(QUEUED)?, tally(IN_PROGRESS)?))
+        Ok((tally(&QUEUED)?, tally(&IN_PROGRESS)?))
       })
       .await
   }

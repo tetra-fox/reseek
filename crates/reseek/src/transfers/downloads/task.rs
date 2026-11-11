@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use api_types::events::{DownloadFailureStage, DownloadFileFailed, Event};
-use api_types::transfers::TransferStates;
+use api_types::transfers::TransferOutcome;
 use chrono::Utc;
 use reseek_shares::{backoff, lock};
 use tokio::time::Instant;
@@ -24,6 +24,7 @@ use super::destination::incomplete_path;
 use super::starts::Turn;
 use crate::files::WriteGuard;
 use crate::safety::Os;
+use crate::transfers::state::State;
 use crate::transfers::{Record, removal, store};
 
 /// How long a download may hold its turn among the files of its request before its peer has
@@ -163,10 +164,10 @@ impl Downloads {
       }
       Err(e) => return Ended::failed(None, Failure::terminal(e.to_string()), None),
     };
-    let waiting = TransferStates::Queued | TransferStates::Locally;
-    if record.state != waiting {
+    if record.state != State::WAITING {
       let message = format!(
-        "Invalid starting state for download; expected {waiting}, encountered {}",
+        "Invalid starting state for download; expected {}, encountered {}",
+        State::WAITING,
         record.state
       );
       return Ended::failed(Some(record), Failure::terminal(message), None);
@@ -221,7 +222,9 @@ impl Downloads {
           () = tokio::time::sleep(delay) => {}
           () = cancel.cancelled() => return self.canceled(id, Some(incomplete)).await,
         }
-        record.next_attempt_at = None;
+        record
+          .enter(State::WAITING)
+          .expect("a download waiting to retry may wait again");
         self.save(&record, false).await;
       }
       // held for this try; a retry waits for one in its place in the queue, keeping its
@@ -245,26 +248,23 @@ impl Downloads {
           warn!(
             attempt,
             filename = record.filename,
-            state = %failure.state,
+            outcome = ?failure.outcome,
             reason = failure.message,
             "Failed attempt to download the file"
           );
           if !failure.retryable || attempt >= retry.attempts {
             return Ended::failed(Some(record), failure, Some(incomplete));
           }
-          // waiting to retry: queued here again, with the reason it failed shown meanwhile and
-          // no start until the next try starts
+          // waiting to retry: queued here again, with the reason it failed shown meanwhile
           attempt += 1;
-          record.state = TransferStates::Queued | TransferStates::Locally;
-          record.attempts = attempt;
-          record.started_at = None;
-          record.ended_at = None;
-          record.place_in_queue = None;
-          record.average_speed = 0.0;
-          record.exception = Some(failure.message);
           let wait = retry_wait(attempt, retry.delay, retry.max_delay);
-          record.next_attempt_at =
+          let next_attempt_at =
             Some(Utc::now() + chrono::Duration::from_std(wait).unwrap_or(chrono::Duration::MAX));
+          record
+            .enter(State::QueuedLocally { next_attempt_at })
+            .expect("a try that failed may wait to be retried");
+          record.attempts = attempt;
+          record.exception = Some(failure.message);
           delay = Some(wait);
           self.save(&record, true).await;
         }
@@ -305,33 +305,25 @@ impl Downloads {
     let Some(mut record) = record else {
       return warn!(reason = failure.message, "download without a record failed");
     };
-    if record.is_completed() {
-      return debug!(state = %record.state, "download ended already");
-    }
-    let canceled = failure.state == TransferStates::Cancelled;
+    let canceled = failure.outcome == TransferOutcome::Cancelled;
     if canceled && self.pausing(record.id) {
+      if let Err(refused) = record.enter(State::WAITING) {
+        return debug!(%refused, "download ended already");
+      }
       record.paused = true;
-      record.state = TransferStates::Queued | TransferStates::Locally;
-      record.started_at = None;
-      record.ended_at = None;
-      record.exception = None;
-      record.next_attempt_at = None;
-      record.place_in_queue = None;
-      record.average_speed = 0.0;
       self.save(&record, true).await;
       return info!("download paused");
     }
     let reason = lock(&self.in_flight)
       .get(&record.id)
       .and_then(|entry| entry.reason);
-    record.state = TransferStates::Completed | failure.state;
-    record.ended_at = Some(record.ended_at.unwrap_or_else(Utc::now));
-    record.exception = Some(match reason {
+    let exception = match reason {
       Some(reason) if canceled => reason.to_string(),
       _ => failure.message,
-    });
-    record.next_attempt_at = None;
-    record.place_in_queue = None;
+    };
+    if let Err(refused) = record.complete(failure.outcome, Some(exception)) {
+      return debug!(%refused, "download ended already");
+    }
     record.removed = self.removal_pending(record.id);
     self.save(&record, true).await;
     self.telemetry.metrics().transfers().downloads.failed();

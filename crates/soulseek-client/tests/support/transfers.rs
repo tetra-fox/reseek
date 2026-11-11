@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use soulseek_client::{ClientOptions, Event, Transfer, TransferState};
+use soulseek_client::{ClientOptions, Event, Transfer, TransferOutcome, TransferState};
 use soulseek_proto::{RemoteFilename, TransferDirection};
 use tokio::sync::{broadcast, mpsc};
 
@@ -102,22 +102,22 @@ pub async fn reached(events: &mut broadcast::Receiver<Event>, bytes: u64) {
 /// the states a download goes through when it succeeds
 pub fn download() -> Vec<TransferState> {
   vec![
-    TransferState::QUEUED_LOCALLY,
-    TransferState::REQUESTED,
-    TransferState::QUEUED_REMOTELY,
-    TransferState::INITIALIZING,
-    TransferState::IN_PROGRESS,
-    TransferState::COMPLETED | TransferState::SUCCEEDED,
+    TransferState::QueuedLocally,
+    TransferState::Requested,
+    TransferState::QueuedRemotely,
+    TransferState::Initializing,
+    TransferState::InProgress,
+    TransferState::Completed(TransferOutcome::Succeeded),
   ]
 }
 
 /// the states an upload goes through when it succeeds
 pub fn upload() -> Vec<TransferState> {
   vec![
-    TransferState::QUEUED_LOCALLY,
-    TransferState::REQUESTED,
-    TransferState::INITIALIZING,
-    TransferState::IN_PROGRESS,
-    TransferState::COMPLETED | TransferState::SUCCEEDED,
+    TransferState::QueuedLocally,
+    TransferState::Requested,
+    TransferState::Initializing,
+    TransferState::InProgress,
+    TransferState::Completed(TransferOutcome::Succeeded),
   ]
 }

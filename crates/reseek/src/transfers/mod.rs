@@ -14,6 +14,7 @@ pub mod record;
 pub mod removal;
 pub mod service;
 pub mod speed;
+pub mod state;
 pub mod store;
 pub mod uploads;
 
@@ -65,6 +66,7 @@ pub fn direction_at(row: &Row, i: usize) -> rusqlite::Result<TransferDirection> 
 mod tests {
   use super::*;
   use crate::transfers::fixtures::{Row, insert};
+  use api_types::transfers::TransferStates;
 
   /// `transfers.db` before the local queue's order was kept.
   static BEFORE_QUEUE_POSITIONS: Schema = db::schema!("transfers", ["0001_initial"]);
@@ -79,13 +81,25 @@ mod tests {
     let at = |minute: u32| format!("2026-11-01T10:0{minute}:00Z").parse().unwrap();
     let later = Row {
       requested_at: at(2),
-      ..Row::new("alice", TransferDirection::Download, 2 | 4096)
+      ..Row::new(
+        "alice",
+        TransferDirection::Download,
+        TransferStates::QueuedRemotely,
+      )
     };
     let earlier = Row {
       requested_at: at(1),
-      ..Row::new("alice", TransferDirection::Download, 2 | 4096)
+      ..Row::new(
+        "alice",
+        TransferDirection::Download,
+        TransferStates::QueuedRemotely,
+      )
     };
-    let upload = Row::new("bob", TransferDirection::Upload, 2);
+    let upload = Row::new(
+      "bob",
+      TransferDirection::Upload,
+      TransferStates::QueuedLocally,
+    );
     let ids = [later.id, earlier.id, upload.id];
     insert(&old, vec![later, earlier, upload]).await;
     drop(old);

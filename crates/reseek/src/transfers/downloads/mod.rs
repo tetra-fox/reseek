@@ -29,7 +29,7 @@ use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 
 use api_types::live::LiveFrame;
-use api_types::transfers::{TransferDirection, TransferStates};
+use api_types::transfers::{TransferDirection, TransferOutcome, TransferStates};
 use cascade::Watcher;
 use chrono::Utc;
 use reseek_shares::lock;
@@ -42,6 +42,7 @@ use tracing::{Instrument, debug, info, warn};
 use uuid::Uuid;
 
 use super::categories::UNFINISHED;
+use super::store::Saved;
 use super::{Record, cleanup, direction_text, removal, store};
 use crate::analysis::Analysis;
 use crate::api::error::ApiError;
@@ -307,20 +308,22 @@ impl Downloads {
 
   /// Writes `record` whole, adds its state to its history when it `entered` it, and pushes it:
   /// as updated, or, for a record removed, as removed once, with the state it ended in. A write
-  /// that ends the last download of its job tells of the job after. A failed write is logged;
-  /// the download goes on.
-  async fn save(&self, record: &Record, entered: bool) {
+  /// that ends the last download of its job tells of the job after. Returns how the write went,
+  /// none when it failed; a write that failed or was not made is logged, and the download goes
+  /// on.
+  async fn save(&self, record: &Record, entered: bool) -> Option<Saved> {
     let written = record.clone();
     let open = self.open_jobs.clone();
     let result = self
       .db
       .write(move |conn| {
         let tx = conn.transaction()?;
-        let ending = written.job_id.is_some() && written.state.contains(TransferStates::Completed);
+        let ending = written.job_id.is_some() && written.is_completed();
         let unfinished = ending && jobs::unfinished(&tx, written.id)?;
-        let found = store::save(&tx, &written)?;
+        let saved = store::save(&tx, &written)?;
+        let found = saved == Saved::Written;
         if found && entered {
-          store::entered(&tx, written.id, written.state, Utc::now())?;
+          store::entered(&tx, written.id, written.state.kind(), Utc::now())?;
         }
         let finished = if found {
           jobs::ended_by(&tx, &written, unfinished, &open)?
@@ -328,11 +331,11 @@ impl Downloads {
           None
         };
         tx.commit()?;
-        Ok((found, finished))
+        Ok((saved, finished))
       })
       .await;
     match result {
-      Ok((true, finished)) => {
+      Ok((Saved::Written, finished)) => {
         if !record.removed || entered {
           self.push(record);
         }
@@ -340,9 +343,21 @@ impl Downloads {
         if let (true, Some(job)) = (entered, record.job_id) {
           self.sync_job(job).await;
         }
+        Some(Saved::Written)
       }
-      Ok((false, _)) => warn!(id = %record.id, "download record gone; not written"),
-      Err(e) => warn!(id = %record.id, error = %e, "download record not written"),
+      Ok((Saved::Gone, _)) => {
+        warn!(id = %record.id, "download record gone; not written");
+        Some(Saved::Gone)
+      }
+      // a write that raced the download ending, which keeps how it ended
+      Ok((Saved::Refused(refused), _)) => {
+        debug!(id = %record.id, %refused, "download record not written");
+        Some(Saved::Refused(refused))
+      }
+      Err(e) => {
+        warn!(id = %record.id, error = %e, "download record not written");
+        None
+      }
     }
   }
 
@@ -371,30 +386,32 @@ impl Downloads {
 
   /// Cancels the download `id` of `username`: a running one stops wherever it is and ends
   /// canceled; one whose task is gone without ending it is ended canceled here. With
-  /// `remove` it leaves the listings once it has ended. False, doing nothing else, when the
-  /// download has completed or its file arrived and is being moved. 404 when there is no such
-  /// download.
+  /// `remove` it leaves the listings once it has ended. False, doing nothing else but the
+  /// removal, when the download has completed, its task included completing it meanwhile, or
+  /// its file arrived and is being moved. 404 when there is no such download.
   pub async fn cancel(&self, username: &str, id: Uuid, remove: bool) -> Result<bool, ApiError> {
-    let mut record = self.record_of(username, id).await?;
+    let record = self.record_of(username, id).await?;
     match self.cancel_running(id, remove, None) {
-      Running::Stopped => return Ok(true),
-      Running::Arrived => return Ok(remove),
-      Running::No => {}
+      Running::Stopped => Ok(true),
+      Running::Arrived => Ok(remove),
+      Running::No => self.cancel_unrun(record, remove).await,
     }
-    // a record no task runs any more, left behind by a failure, is ended canceled here; a task
-    // that ended it since it was read keeps how it ended. The removal is in the same write, so
-    // a removed download is left out of its job when that write ends the job
-    let canceled = TransferStates::Completed | TransferStates::Cancelled;
-    let at = Utc::now();
-    let unfinished = !record.is_completed();
+  }
+
+  /// Ends canceled the download of `record`, read before it was found to have no task, as
+  /// [`Downloads::cancel`] answers. A task that ended it since it was read keeps how it ended.
+  /// The removal is in the same write, so a removed download is left out of its job when that
+  /// write ends the job.
+  async fn cancel_unrun(&self, mut record: Record, remove: bool) -> Result<bool, ApiError> {
+    let id = record.id;
+    let canceled = TransferStates::Completed(TransferOutcome::Cancelled);
+    let unfinished = record
+      .complete(TransferOutcome::Cancelled, Some(CANCELED.to_string()))
+      .is_ok();
     if !unfinished && !remove {
       return Ok(false);
     }
-    record.state = canceled;
-    record.ended_at = Some(at);
-    record.exception = Some(CANCELED.to_string());
-    record.next_attempt_at = None;
-    record.place_in_queue = None;
+    let at = record.ended_at.unwrap_or_else(Utc::now);
     let written = record.clone();
     let open = self.open_jobs.clone();
     let (ended, removed, finished) = self
@@ -421,7 +438,7 @@ impl Downloads {
       .await
       .map_err(ApiError::internal)?;
     if ended {
-      info!(%id, username, "download without a running task ended as canceled");
+      info!(%id, username = record.username, "download without a running task ended as canceled");
       self.push(&record);
     }
     if let Some(peer) = removed {
@@ -431,7 +448,7 @@ impl Downloads {
     if let Some(job) = record.job_id {
       self.sync_job(job).await;
     }
-    Ok(true)
+    Ok(ended || remove)
   }
 
   /// Stops the running download `id`, marking it for removal with `remove` and noting

@@ -5,7 +5,7 @@
 
 use std::collections::BTreeMap;
 
-use api_types::transfers::{TransferDirection, TransferStates};
+use api_types::transfers::{TransferDirection, TransferOutcome, TransferStates};
 use chrono::Utc;
 use rusqlite::params;
 use tracing::{debug, info, warn};
@@ -13,6 +13,7 @@ use uuid::Uuid;
 
 use super::categories::UNFINISHED;
 use super::downloads::{FileRequest, Group};
+use super::state::column;
 use super::{ASKED_ORDER, COLUMNS, Record, direction_at, direction_text};
 use crate::db::{Database, DbError, timestamp};
 
@@ -27,7 +28,7 @@ pub type Resumable = BTreeMap<Uuid, Vec<Group>>;
 /// `Completed, Errored` with [`SHUT_DOWN`] at the time of this call, adding the state to each
 /// one's history and marking the downloads among them resumable. Returns how many it ended.
 pub async fn end_unfinished(db: &Database) -> Result<usize, DbError> {
-  let errored = TransferStates::Completed | TransferStates::Errored;
+  let errored = TransferStates::Completed(TransferOutcome::Errored);
   let now = timestamp(Utc::now());
   let ended = db
     .write(move |conn| {
@@ -47,7 +48,7 @@ pub async fn end_unfinished(db: &Database) -> Result<usize, DbError> {
           "INSERT INTO transfers_state_history (transfer_id, state, at) SELECT Id, ?1, ?2 \
            FROM Transfers WHERE {UNFINISHED} AND Paused = 0"
         ),
-        params![errored.bits(), now],
+        params![column(errored), now],
       )?;
       tx.execute(
         &format!(
@@ -56,8 +57,8 @@ pub async fn end_unfinished(db: &Database) -> Result<usize, DbError> {
            PlaceInQueue = NULL WHERE {UNFINISHED} AND Paused = 0"
         ),
         params![
-          errored.bits(),
-          errored.to_string(),
+          column(errored),
+          errored.as_str(),
           now,
           SHUT_DOWN,
           direction_text(TransferDirection::Download),
@@ -124,22 +125,37 @@ pub async fn take_resumable(db: &Database) -> Result<Resumable, DbError> {
 mod tests {
   use super::*;
   use crate::transfers::fixtures::{Row, insert, transfers};
+  use crate::transfers::state::state_at;
   use crate::transfers::{Record, store};
+
+  /// the state a transfer left unfinished ends in
+  const STOPPED: TransferStates = TransferStates::Completed(TransferOutcome::Errored);
 
   #[tokio::test]
   async fn unfinished_transfers_end_errored_and_finished_ones_stay() {
     let db = transfers().await;
-    let queued = Row::new("alice", TransferDirection::Download, 2 | 4096);
+    let queued = Row::new(
+      "alice",
+      TransferDirection::Download,
+      TransferStates::QueuedRemotely,
+    );
     let removed = Row {
       removed: true,
-      ..Row::new("alice", TransferDirection::Download, 8)
+      ..Row::new(
+        "alice",
+        TransferDirection::Download,
+        TransferStates::InProgress,
+      )
     };
-    let uploading = Row::new("bob", TransferDirection::Upload, 8);
+    let uploading = Row::new("bob", TransferDirection::Upload, TransferStates::InProgress);
     let done = Row {
       ended_at: Some(Utc::now()),
-      ..Row::new("carol", TransferDirection::Download, 48)
+      ..Row::new(
+        "carol",
+        TransferDirection::Download,
+        TransferStates::Completed(TransferOutcome::Succeeded),
+      )
     };
-    let unended = Row::new("dave", TransferDirection::Download, 48);
     insert(
       &db,
       vec![
@@ -147,16 +163,17 @@ mod tests {
         removed.clone(),
         uploading.clone(),
         done.clone(),
-        unended.clone(),
       ],
     )
     .await;
-    assert_eq!(end_unfinished(&db).await.unwrap(), 4);
-    let rows: Vec<(String, u32, Option<String>, bool)> = db
+    assert_eq!(end_unfinished(&db).await.unwrap(), 3);
+    let rows: Vec<(String, TransferStates, Option<String>, bool)> = db
       .read(|conn| {
         conn
           .prepare("SELECT Id, State, Exception, EndedAt IS NOT NULL FROM Transfers")?
-          .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?
+          .query_map([], |r| {
+            Ok((r.get(0)?, state_at(r, 1)?, r.get(2)?, r.get(3)?))
+          })?
           .collect()
       })
       .await
@@ -164,20 +181,20 @@ mod tests {
     for (id, state, exception, ended) in rows {
       assert!(ended, "{id}");
       if id == done.id.to_string() {
-        assert_eq!((state, exception), (48, None));
+        assert_eq!((state, exception), (done.state, None));
       } else {
         assert_eq!(
           (state, exception.as_deref()),
-          (272, Some(SHUT_DOWN)),
+          (STOPPED, Some(SHUT_DOWN)),
           "{id}"
         );
       }
     }
-    for row in [&queued, &removed, &uploading, &unended] {
+    for row in [&queued, &removed, &uploading] {
       let id = row.id;
       let history = db.read(move |conn| store::history(conn, id)).await.unwrap();
-      let states: Vec<u32> = history.iter().map(|change| change.state.bits()).collect();
-      assert_eq!(states, [272], "{id}");
+      let states: Vec<TransferStates> = history.iter().map(|change| change.state).collect();
+      assert_eq!(states, [STOPPED], "{id}");
     }
     let id = done.id;
     let history = db.read(move |conn| store::history(conn, id)).await.unwrap();
@@ -192,7 +209,7 @@ mod tests {
       })
       .await
       .unwrap();
-    let mut expected: Vec<String> = [queued.id, removed.id, unended.id]
+    let mut expected: Vec<String> = [queued.id, removed.id]
       .iter()
       .map(Uuid::to_string)
       .collect();
@@ -203,11 +220,19 @@ mod tests {
   #[tokio::test]
   async fn the_marked_downloads_are_taken_once_and_every_mark_is_cleared() {
     let db = transfers().await;
-    let mut kept = Row::new("alice", TransferDirection::Download, 2 | 2048);
+    let mut kept = Row::new(
+      "alice",
+      TransferDirection::Download,
+      TransferStates::QueuedLocally,
+    );
     kept.filename = "a\\one.flac".to_string();
     let removed = Row {
       removed: true,
-      ..Row::new("alice", TransferDirection::Download, 8)
+      ..Row::new(
+        "alice",
+        TransferDirection::Download,
+        TransferStates::InProgress,
+      )
     };
     insert(&db, vec![kept, removed]).await;
     let job = Uuid::new_v4().to_string();

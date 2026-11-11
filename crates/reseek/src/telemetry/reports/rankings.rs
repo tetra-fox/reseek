@@ -26,7 +26,7 @@ impl Reports {
     let filter = Filter::default()
       .ended_between(window)
       .direction(Some(query.direction))
-      .states(SUCCESSFUL);
+      .states(&SUCCESSFUL);
     let column = match query.sort_by {
       LeaderboardSort::Count => "COUNT(*)",
       LeaderboardSort::TotalBytes => "SUM(Size)",
@@ -72,7 +72,7 @@ impl Reports {
     let filter = Filter::default()
       .ended_between(window)
       .direction(Some(TransferDirection::Upload))
-      .states(SUCCESSFUL)
+      .states(&SUCCESSFUL)
       .username(query.username.as_deref());
     let sql = format!(
       "SELECT Filename, Username FROM Transfers{}",

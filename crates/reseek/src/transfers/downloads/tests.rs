@@ -3,11 +3,12 @@
 //! finished download's file served from where it was moved, the removals and updates
 //! pushed on the `transfers` topic, and a job told of once its last download ended.
 
-use api_types::transfers::{TransferStates, UserResponse};
+use api_types::transfers::{TransferOutcome, TransferStates, UserResponse};
 use serde_json::{Value, json};
 use uuid::Uuid;
 
 use crate::testing::{TRUSTED, TestApp, app, request};
+use crate::transfers::state::State;
 use crate::transfers::{Record, store};
 
 /// Writes `record` into the daemon's `transfers.db`, at the end of the local queue when it has
@@ -39,7 +40,7 @@ async fn read(app: &TestApp, id: Uuid) -> Record {
 
 fn done(username: &str, filename: &str) -> Record {
   let mut record = Record::download(username, filename, 3);
-  record.state = TransferStates::Completed | TransferStates::Succeeded;
+  record.state = State::Completed(TransferOutcome::Succeeded);
   record.ended_at = Some(chrono::Utc::now());
   record
 }
@@ -87,8 +88,9 @@ async fn a_download_is_found_by_its_peer_and_id_with_its_history() {
 async fn canceling_a_download_no_task_runs_ends_its_wait_and_can_remove_it() {
   let app = app(TRUSTED, &[]).await;
   let mut waiting = Record::download("alice", "a.flac", 10);
-  waiting.next_attempt_at = Some(chrono::Utc::now());
-  waiting.place_in_queue = Some(4);
+  waiting.state = State::QueuedLocally {
+    next_attempt_at: Some(chrono::Utc::now()),
+  };
   insert(&app, &waiting).await;
   let id = waiting.id;
   let uri = format!("/api/v0/transfers/downloads/alice/{id}?remove=true");
@@ -96,15 +98,18 @@ async fn canceling_a_download_no_task_runs_ends_its_wait_and_can_remove_it() {
   assert_eq!(status, 204);
   let ended = read(&app, id).await;
   assert_eq!(
-    ended.state,
-    TransferStates::Completed | TransferStates::Cancelled
+    ended.state.kind(),
+    TransferStates::Completed(TransferOutcome::Cancelled)
   );
   assert_eq!(
     ended.exception.as_deref(),
     Some("The operation was canceled.")
   );
   assert!(ended.ended_at.is_some() && ended.removed);
-  assert_eq!((ended.next_attempt_at, ended.place_in_queue), (None, None));
+  assert_eq!(
+    (ended.next_attempt_at(), ended.place_in_queue()),
+    (None, None)
+  );
   let (_, listed) = app.call("GET", "/api/v0/transfers/downloads", None).await;
   assert_eq!(listed, json!([]), "removed downloads are not listed");
   let (_, listed) = app
@@ -131,6 +136,32 @@ async fn a_bulk_cancel_ends_the_running_download_and_fails_the_ended_and_unknown
   assert_eq!(status, 200);
   assert_eq!(result["ok"], json!([waiting.id]));
   assert_eq!(result["failed"].as_array().unwrap().len(), 2);
+}
+
+/// A cancel reads a download no task runs, a task completes the download, and then the cancel
+/// writes: the download keeps how it ended and the cancel answers that it had completed.
+#[tokio::test]
+async fn a_cancel_that_loses_the_race_to_completion_says_the_download_completed() {
+  let app = app(TRUSTED, &[]).await;
+  let mut finished = done("alice", "a.flac");
+  finished.local_path = Some("/music/a.flac".into());
+  insert(&app, &finished).await;
+  let mut stale = Record::download("alice", "a.flac", 3);
+  stale.id = finished.id;
+  stale.state = State::InProgress;
+  let canceled = app
+    .state
+    .downloads
+    .cancel_unrun(stale, false)
+    .await
+    .unwrap();
+  assert!(!canceled);
+  let kept = read(&app, finished.id).await;
+  assert_eq!(
+    kept.state.kind(),
+    TransferStates::Completed(TransferOutcome::Succeeded)
+  );
+  assert_eq!(kept.local_path.as_deref(), Some("/music/a.flac"));
 }
 
 #[tokio::test]
@@ -291,10 +322,7 @@ async fn a_paused_download_holds_its_job_paused_and_stays_paused_across_a_stop()
   assert_eq!(answer["ok"][0], waiting.id.to_string());
   let paused = read(&app, waiting.id).await;
   assert!(paused.paused);
-  assert_eq!(
-    paused.state,
-    TransferStates::Queued | TransferStates::Locally
-  );
+  assert_eq!(paused.state.kind(), TransferStates::QueuedLocally);
   let listed = app.state.jobs.get(job).await.unwrap().unwrap();
   assert_eq!(listed.state, api_types::jobs::JobState::Paused);
   assert_eq!(listed.counts.paused, 1);
@@ -399,26 +427,14 @@ async fn the_gauges_count_the_downloads_waiting_here_but_not_the_paused_ones() {
   let app = app(TRUSTED, &[]).await;
   let with = |username: &str, state: TransferStates, paused: bool| {
     let mut record = Record::download(username, &format!("{username}.flac"), 100);
-    record.state = state;
+    record.state = State::of(state);
     record.paused = paused;
     record
   };
   for record in [
-    with(
-      "alice",
-      TransferStates::Queued | TransferStates::Locally,
-      false,
-    ),
-    with(
-      "bob",
-      TransferStates::Queued | TransferStates::Remotely,
-      false,
-    ),
-    with(
-      "carol",
-      TransferStates::Queued | TransferStates::Locally,
-      true,
-    ),
+    with("alice", TransferStates::QueuedLocally, false),
+    with("bob", TransferStates::QueuedRemotely, false),
+    with("carol", TransferStates::QueuedLocally, true),
     with("dave", TransferStates::InProgress, false),
     done("erin", "e.flac"),
   ] {
@@ -464,7 +480,7 @@ async fn a_download_paused_while_its_task_runs_waits_here_without_failing() {
   app
     .call("POST", "/api/v0/transfers/downloads/bulk", Some(resume))
     .await;
-  read_until(&app, id, |r| r.next_attempt_at.is_some()).await;
+  read_until(&app, id, |r| r.next_attempt_at().is_some()).await;
 
   let pause = json!({ "ids": [id], "action": "pause" });
   let (_, answer) = app
@@ -472,12 +488,13 @@ async fn a_download_paused_while_its_task_runs_waits_here_without_failing() {
     .await;
   assert_eq!(answer["ok"][0], id.to_string(), "{answer}");
   let paused = read_until(&app, id, |r| r.paused).await;
+  assert_eq!(paused.state.kind(), TransferStates::QueuedLocally);
   assert_eq!(
-    paused.state,
-    TransferStates::Queued | TransferStates::Locally
-  );
-  assert_eq!(
-    (paused.exception, paused.next_attempt_at, paused.ended_at),
+    (
+      paused.exception.as_deref(),
+      paused.next_attempt_at(),
+      paused.ended_at
+    ),
     (None, None, None)
   );
   assert_eq!(
@@ -512,7 +529,7 @@ async fn a_resume_sent_while_the_download_stops_to_be_paused_waits_and_resumes_i
       Some(bulk("resume")),
     )
     .await;
-  read_until(&app, id, |r| r.next_attempt_at.is_some()).await;
+  read_until(&app, id, |r| r.next_attempt_at().is_some()).await;
   // the pause answers once the task is told to stop, before the task has written it paused
   app
     .call(
@@ -585,8 +602,8 @@ async fn a_pause_or_cancel_during_the_move_says_the_download_has_completed() {
   drop(gate);
   let moved = read_until(&app, id, |r| r.local_path.is_some()).await;
   assert_eq!(
-    moved.state,
-    TransferStates::Completed | TransferStates::Succeeded
+    moved.state.kind(),
+    TransferStates::Completed(TransferOutcome::Succeeded)
   );
   assert!(!moved.paused);
 }
@@ -612,8 +629,8 @@ async fn a_stop_waits_past_its_limit_for_a_download_moving_its_file() {
   stopping.await.unwrap();
   let moved = read(&app, id).await;
   assert_eq!(
-    moved.state,
-    TransferStates::Completed | TransferStates::Succeeded
+    moved.state.kind(),
+    TransferStates::Completed(TransferOutcome::Succeeded)
   );
   assert!(
     moved.local_path.is_some(),
@@ -756,8 +773,8 @@ async fn an_interrupted_download_whole_here_is_moved_though_its_user_cannot_be_r
   assert_ne!(id, arrived.id, "enqueued again as a new download");
   let moved = read_until(&app, id, |r| r.local_path.is_some()).await;
   assert_eq!(
-    moved.state,
-    TransferStates::Completed | TransferStates::Succeeded
+    moved.state.kind(),
+    TransferStates::Completed(TransferOutcome::Succeeded)
   );
   assert_eq!(
     listed(&app, "@@a\\Album\\2.flac").await,

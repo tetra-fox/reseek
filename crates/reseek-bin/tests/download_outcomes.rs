@@ -12,7 +12,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use api_client::Client;
-use api_types::transfers::{Transfer, TransferStates};
+use api_types::transfers::{Transfer, TransferOutcome, TransferStates};
 use reseek::safety::Os;
 use reseek::transfers::downloads::incomplete_path;
 use serde_json::json;
@@ -26,8 +26,7 @@ use support::scripted::{Scripted, send_from};
 use support::soulfind::{self, Soulfind};
 use support::transfers::content;
 use support::{
-  completed, daemon_listening, download_when, enqueue, events, free_port, logged_in, signed_in,
-  until,
+  daemon_listening, download_when, enqueue, events, free_port, logged_in, signed_in, until,
 };
 
 /// Reads the daemon's request for `filename`.
@@ -96,7 +95,10 @@ async fn refusals_failures_and_sizes_end_each_in_their_outcome() {
   });
   side.send(&denied.encode()).await;
   let rejected = download_when(&api, refusing.name(), id, "rejected", ended).await;
-  assert_eq!(rejected.state, completed(TransferStates::Rejected));
+  assert_eq!(
+    rejected.state,
+    TransferStates::Completed(TransferOutcome::Rejected)
+  );
   assert_eq!(rejected.exception.as_deref(), Some("File not shared."));
   assert_eq!(rejected.attempts, 1, "a refusal is not tried again");
 
@@ -116,7 +118,7 @@ async fn refusals_failures_and_sizes_end_each_in_their_outcome() {
   };
   queued(&mut side, file).await;
   download_when(&api, failing.name(), id, "queued", |t| {
-    t.state == TransferStates::Queued | TransferStates::Remotely
+    t.state == TransferStates::QueuedRemotely
   })
   .await;
   side.send(&place(5)).await;
@@ -129,10 +131,7 @@ async fn refusals_failures_and_sizes_end_each_in_their_outcome() {
     t.attempts == 2
   })
   .await;
-  assert_eq!(
-    waiting.state,
-    TransferStates::Queued | TransferStates::Locally
-  );
+  assert_eq!(waiting.state, TransferStates::QueuedLocally);
   assert_eq!(
     waiting.exception.as_deref(),
     Some("Download reported as failed by remote client"),
@@ -151,7 +150,7 @@ async fn refusals_failures_and_sizes_end_each_in_their_outcome() {
   );
   queued(&mut side, file).await;
   download_when(&api, failing.name(), id, "queued", |t| {
-    t.state == TransferStates::Queued | TransferStates::Remotely
+    t.state == TransferStates::QueuedRemotely
   })
   .await;
   side.send(&place(4)).await;
@@ -161,7 +160,10 @@ async fn refusals_failures_and_sizes_end_each_in_their_outcome() {
   .await;
   side.send(&failed.encode()).await;
   let errored = download_when(&api, failing.name(), id, "errored", ended).await;
-  assert_eq!(errored.state, completed(TransferStates::Errored));
+  assert_eq!(
+    errored.state,
+    TransferStates::Completed(TransferOutcome::Errored)
+  );
   assert_eq!(
     errored.place_in_queue, None,
     "no place once out of the peer's queue"
@@ -215,7 +217,10 @@ async fn refusals_failures_and_sizes_end_each_in_their_outcome() {
   });
   side.send(&request.encode()).await;
   let aborted = download_when(&api, sending.name(), id, "aborted", ended).await;
-  assert_eq!(aborted.state, completed(TransferStates::Aborted));
+  assert_eq!(
+    aborted.state,
+    TransferStates::Completed(TransferOutcome::Aborted)
+  );
   assert_eq!(
     aborted.exception.as_deref(),
     Some("the remote size of 90 does not match expected size 100")
@@ -228,7 +233,7 @@ async fn refusals_failures_and_sizes_end_each_in_their_outcome() {
   let id = enqueue(&api, sending.name(), queue, 100).await;
   queued(&mut side, queue).await;
   download_when(&api, sending.name(), id, "queued", |t| {
-    t.state == TransferStates::Queued | TransferStates::Remotely
+    t.state == TransferStates::QueuedRemotely
   })
   .await;
   let peer = sending.name().to_string();
@@ -287,7 +292,10 @@ async fn a_peer_that_never_answers_times_out() {
   };
   assert_eq!(asked.direction, Wire::Download);
   let timed_out = download_when(&api, silent.name(), id, "timed out", ended).await;
-  assert_eq!(timed_out.state, completed(TransferStates::TimedOut));
+  assert_eq!(
+    timed_out.state,
+    TransferStates::Completed(TransferOutcome::TimedOut)
+  );
 
   let slow = Scripted::start(&server).await;
   let file = "@@share\\d\\slow.flac";
@@ -302,7 +310,7 @@ async fn a_peer_that_never_answers_times_out() {
   });
   side.send(&queued.encode()).await;
   download_when(&api, slow.name(), id, "queued", |t| {
-    t.state == TransferStates::Queued | TransferStates::Remotely
+    t.state == TransferStates::QueuedRemotely
   })
   .await;
   // the peer keeps the connection alive past the daemon's wait, and never answers

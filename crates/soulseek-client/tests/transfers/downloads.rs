@@ -10,7 +10,8 @@ use crate::support::PATIENCE;
 use crate::support::soulfind::{self, User};
 use crate::support::transfers::{self, Asked, asked, content, file, scratch, states};
 use soulseek_client::{
-  DownloadOutput, DownloadRequest, Event, RequestStyle, TransferState, UploadInput, UploadRequest,
+  DownloadOutput, DownloadRequest, Event, RequestStyle, TransferOutcome, TransferState,
+  UploadInput, UploadRequest,
 };
 use soulseek_proto::TransferDirection;
 use tokio_util::sync::CancellationToken;
@@ -68,7 +69,7 @@ async fn a_queued_download_goes_through_every_state_and_arrives_whole() {
   let finished = download.await.unwrap().unwrap();
   assert_eq!(
     finished.state,
-    TransferState::COMPLETED | TransferState::SUCCEEDED
+    TransferState::Completed(TransferOutcome::Succeeded)
   );
   assert_eq!(std::fs::read(destination).unwrap(), content(SIZE));
   assert!(downloader.client.downloads().is_empty());
@@ -209,7 +210,7 @@ async fn a_download_waits_in_the_queue_and_hears_its_place_until_the_upload_star
   tokio::time::sleep(Duration::from_millis(300)).await;
   let queued = downloader.client.downloads();
   assert_eq!(queued.len(), 1);
-  assert_eq!(queued[0].state, TransferState::QUEUED_REMOTELY);
+  assert_eq!(queued[0].state, TransferState::QueuedRemotely);
   let request = UploadRequest::new(&downloader.username, REMOTE, UploadInput::File(source));
   uploader
     .client
@@ -258,7 +259,7 @@ async fn a_download_canceled_in_the_queue_refuses_the_upload_offered_later() {
   let (uploaded, _) = states(&mut uploader.events, TransferDirection::Upload).await;
   assert_eq!(
     uploaded.last(),
-    Some(&(TransferState::COMPLETED | TransferState::REJECTED))
+    Some(&(TransferState::Completed(TransferOutcome::Rejected)))
   );
 }
 

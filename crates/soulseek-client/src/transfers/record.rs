@@ -11,7 +11,7 @@ use soulseek_proto::{RemoteFilename, TransferDirection};
 use tokio::time::Instant;
 
 use super::options::{ProgressUpdated, StateChanged};
-use super::state::TransferState;
+use super::state::{Refused, TransferState};
 use crate::client::Client;
 use crate::error::ClientError;
 use crate::events::Event;
@@ -95,7 +95,7 @@ impl Record {
       filename: filename.clone(),
       token,
       remote_token: None,
-      state: TransferState::empty(),
+      state: TransferState::QueuedLocally,
       size,
       start_offset,
       bytes_transferred: start_offset,
@@ -143,11 +143,12 @@ impl Record {
     }
   }
 
-  /// Moves to `state`, stamping the start on the first state with bytes moving and the end on
-  /// the first completed one; a transfer that ends without bytes moving starts when it ends
-  fn set_state(&mut self, state: TransferState, now: Instant) {
-    self.state = state;
-    if state.contains(TransferState::IN_PROGRESS) && self.started.is_none() {
+  /// Moves to `state` when the state machine allows it, stamping the start on the state with
+  /// bytes moving and the end on the completed one; a transfer that ends without bytes moving
+  /// starts when it ends
+  fn set_state(&mut self, state: TransferState, now: Instant) -> Result<(), Refused> {
+    self.state = self.state.to(state)?;
+    if state == TransferState::InProgress && self.started.is_none() {
       self.started = Some((now, SystemTime::now()));
       self.sample = (now, self.start_offset);
     }
@@ -158,6 +159,7 @@ impl Record {
       // the speed becomes the overall average
       self.set_progress(self.bytes_transferred, now);
     }
+    Ok(())
   }
 
   /// Records the position `bytes`. The speed is the overall average once every byte moved or
@@ -258,16 +260,35 @@ impl Tracker {
     });
   }
 
-  /// Moves the transfer to `state` and reports it; a terminal state carries `error`
-  pub(crate) fn emit_state(&self, state: TransferState, error: Option<ClientError>) {
+  /// Reports the state a new transfer starts in, with no state before it
+  pub(crate) fn emit_first_state(&self) {
+    self.report(None, self.snapshot());
+  }
+
+  /// Moves the transfer to `state` and reports it; a terminal state carries `error`. A move the
+  /// state machine does not allow leaves the transfer as it is and fails as an invalid
+  /// operation.
+  pub(crate) fn emit_state(
+    &self,
+    state: TransferState,
+    error: Option<ClientError>,
+  ) -> Result<(), ClientError> {
     let (previous, transfer) = {
       let mut record = lock(&self.record);
       let previous = record.state;
+      record
+        .set_state(state, Instant::now())
+        .map_err(|refused| ClientError::InvalidOperation(refused.to_string()))?;
       record.error = error;
-      record.set_state(state, Instant::now());
       (previous, record.snapshot())
     };
     tracing::debug!(%previous, %state, "transfer state changed");
+    self.report(Some(previous), transfer);
+    Ok(())
+  }
+
+  /// calls the callbacks with the state change, then raises its event
+  fn report(&self, previous: Option<TransferState>, transfer: Transfer) {
     for callback in &self.state_changed {
       callback(previous, &transfer);
     }
@@ -298,6 +319,7 @@ impl Tracker {
 
 #[cfg(test)]
 mod tests {
+  use super::super::state::TransferOutcome;
   use super::*;
 
   fn record(size: u64, start_offset: u64) -> Record {
@@ -311,10 +333,18 @@ mod tests {
     )
   }
 
+  /// moves `record` from Initializing to InProgress
+  fn start(record: &mut Record) {
+    record.state = TransferState::Initializing;
+    record
+      .set_state(TransferState::InProgress, Instant::now())
+      .unwrap();
+  }
+
   #[tokio::test(start_paused = true)]
   async fn speed_is_zero_for_the_first_second_then_a_moving_average() {
     let mut record = record(10_000, 0);
-    record.set_state(TransferState::IN_PROGRESS, Instant::now());
+    start(&mut record);
     tokio::time::advance(Duration::from_millis(500)).await;
     record.set_progress(500, Instant::now());
     assert_eq!(record.average_speed, 0.0);
@@ -335,13 +365,15 @@ mod tests {
   #[tokio::test(start_paused = true)]
   async fn completion_makes_the_speed_the_overall_average_of_the_bytes_moved() {
     let mut record = record(4000, 1000);
-    record.set_state(TransferState::IN_PROGRESS, Instant::now());
+    start(&mut record);
     tokio::time::advance(Duration::from_millis(1500)).await;
     record.set_progress(4000, Instant::now());
-    record.set_state(
-      TransferState::COMPLETED | TransferState::SUCCEEDED,
-      Instant::now(),
-    );
+    record
+      .set_state(
+        TransferState::Completed(TransferOutcome::Succeeded),
+        Instant::now(),
+      )
+      .unwrap();
     let transfer = record.snapshot();
     assert_eq!(transfer.average_speed, 2000.0);
     assert_eq!(transfer.bytes_transferred, 4000);
@@ -353,12 +385,13 @@ mod tests {
   #[tokio::test(start_paused = true)]
   async fn a_transfer_that_ends_before_moving_bytes_starts_when_it_ends() {
     let mut record = record(4000, 0);
-    record.set_state(TransferState::QUEUED_LOCALLY, Instant::now());
     tokio::time::advance(Duration::from_secs(3)).await;
-    record.set_state(
-      TransferState::COMPLETED | TransferState::CANCELLED,
-      Instant::now(),
-    );
+    record
+      .set_state(
+        TransferState::Completed(TransferOutcome::Cancelled),
+        Instant::now(),
+      )
+      .unwrap();
     let transfer = record.snapshot();
     assert_eq!(transfer.start_time, transfer.end_time);
     assert_eq!(transfer.elapsed_time, Some(Duration::ZERO));
@@ -368,7 +401,7 @@ mod tests {
   #[tokio::test(start_paused = true)]
   async fn a_remaining_time_too_long_to_hold_is_unknown() {
     let mut record = record(u64::MAX, 0);
-    record.set_state(TransferState::IN_PROGRESS, Instant::now());
+    start(&mut record);
     tokio::time::advance(Duration::from_secs(1000)).await;
     record.set_progress(1, Instant::now());
     assert!(record.average_speed > 0.0);

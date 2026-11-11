@@ -48,7 +48,7 @@ impl Client {
     request: DownloadRequest,
     cancel: &CancellationToken,
   ) -> Result<TransferTask, ClientError> {
-    let (observer, reached) = task::observer(TransferState::QUEUED_REMOTELY);
+    let (observer, reached) = task::observer(TransferState::QueuedRemotely);
     let handle = self.start_download(request, cancel, Some(observer)).await?;
     task::enqueued(handle, reached).await
   }
@@ -184,7 +184,7 @@ impl Download {
   }
 
   async fn transfer(&mut self) -> Result<(), ClientError> {
-    self.tracker.emit_state(TransferState::QUEUED_LOCALLY, None);
+    self.tracker.emit_first_state();
     if self.options.request_style == RequestStyle::Offered {
       let offer = self
         .client
@@ -226,14 +226,14 @@ impl Download {
           filename: self.filename.clone(),
         });
         self.stop.run(write_peer(&conn, request)).await?;
-        self.tracker.emit_state(TransferState::REQUESTED, None);
+        self.tracker.emit_state(TransferState::Requested, None)?;
         // the peer does not answer this request; refusing it later is all it can do
-        self.queued();
+        self.queued()?;
       }
       RequestStyle::TransferRequest => {
         if let Some(size) = self.ask(&conn).await? {
           // the peer sends at once, and expects us to connect with our own token
-          self.tracker.emit_state(TransferState::INITIALIZING, None);
+          self.tracker.emit_state(TransferState::Initializing, None)?;
           let conn = self
             .stop
             .run(
@@ -244,7 +244,7 @@ impl Download {
             .await?;
           return self.receive(conn, size).await;
         }
-        self.queued();
+        self.queued()?;
       }
       RequestStyle::Offered => unreachable!("an offered download takes its offer above"),
     }
@@ -256,18 +256,19 @@ impl Download {
   async fn take(&mut self, offer: TransferRequest) -> Result<(), ClientError> {
     let size = self.resolve_size(offer.file_size)?;
     self.tracker.set_remote_token(offer.token);
-    self.tracker.emit_state(TransferState::INITIALIZING, None);
+    self.tracker.emit_state(TransferState::Initializing, None)?;
     tracing::info!(remote_token = offer.token, "download offered by the peer");
     let conn = self.accept(offer.token).await?;
     self.receive(conn, size).await
   }
 
   /// the peer has the request in its queue
-  fn queued(&self) {
+  fn queued(&self) -> Result<(), ClientError> {
     self
       .tracker
-      .emit_state(TransferState::QUEUED_REMOTELY, None);
+      .emit_state(TransferState::QueuedRemotely, None)?;
     tracing::info!("download queued by the peer");
+    Ok(())
   }
 
   /// the cached message connection to the peer, or a new one
@@ -302,7 +303,7 @@ impl Download {
       file_size: None,
     });
     self.stop.run(write_peer(conn, request)).await?;
-    self.tracker.emit_state(TransferState::REQUESTED, None);
+    self.tracker.emit_state(TransferState::Requested, None)?;
     match self.stop.run(answer).await? {
       TransferResponse::Denied { message, .. } if is_queued(&message) => Ok(None),
       TransferResponse::Denied { message, .. } => Err(ClientError::TransferRejected(message)),
@@ -311,7 +312,7 @@ impl Download {
         // passed through so every download that starts was queued at the peer first
         self
           .tracker
-          .emit_state(TransferState::QUEUED_REMOTELY, None);
+          .emit_state(TransferState::QueuedRemotely, None)?;
         Ok(Some(size))
       }
     }
@@ -404,7 +405,7 @@ impl Download {
         .run(write.write_all(&start.to_le_bytes()))
         .await
         .map_err(|error| io::connection_failure(handle, error))?;
-      self.tracker.emit_state(TransferState::IN_PROGRESS, None);
+      self.tracker.emit_state(TransferState::InProgress, None)?;
       self.tracker.emit_progress(start);
       tracing::info!(size, start, "download started");
       let transfers = self.client.transfers().clone();

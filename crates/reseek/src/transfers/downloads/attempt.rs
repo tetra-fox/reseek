@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use api_types::live::LiveFrame;
-use api_types::transfers::TransferStates;
+use api_types::transfers::{TransferOutcome, TransferStates};
 use chrono::Utc;
 use soulseek_client::{
   ClientError, DownloadOutput, DownloadRequest, DownloadSink, LogLimiter, OutputFactory,
@@ -28,6 +28,7 @@ use crate::files::mode::to_unix_file_mode;
 use crate::files::{WriteGuard, create_file};
 use crate::network::options::request_style;
 use crate::safety::Os;
+use crate::transfers::state::{self, State};
 use crate::transfers::{Record, store};
 
 /// More states than one try reports.
@@ -60,8 +61,9 @@ pub(super) enum Attempted {
 /// help.
 #[derive(Clone, Debug, PartialEq)]
 pub(super) struct Failure {
-  /// the outcome flag: `Cancelled`, `TimedOut`, `Errored`, `Rejected` or `Aborted`
-  pub state: TransferStates,
+  /// how the download ends if it is not tried again: `Cancelled`, `TimedOut`, `Errored`,
+  /// `Rejected` or `Aborted`
+  pub outcome: TransferOutcome,
   /// the reason
   pub message: String,
   /// whether another try can succeed
@@ -72,7 +74,7 @@ impl Failure {
   /// An error trying again does not mend.
   pub fn terminal(message: String) -> Self {
     Self {
-      state: TransferStates::Errored,
+      outcome: TransferOutcome::Errored,
       message,
       retryable: false,
     }
@@ -81,7 +83,7 @@ impl Failure {
   /// A cancel.
   pub fn canceled() -> Self {
     Self {
-      state: TransferStates::Cancelled,
+      outcome: TransferOutcome::Cancelled,
       message: "Operation cancelled".to_string(),
       retryable: false,
     }
@@ -103,21 +105,21 @@ fn lasting(error: &io::Error) -> bool {
 /// dispute, a cancel and a duplicate end it; a timeout, a lost connection, the peer's failure
 /// or being offline are tried again, as is a local I/O error that is not lasting.
 pub(super) fn failure(error: &ClientError) -> Failure {
-  let retry = |state, message: String| Failure {
-    state,
+  let retry = |outcome, message: String| Failure {
+    outcome,
     message,
     retryable: true,
   };
   match error {
     ClientError::Canceled => Failure::canceled(),
-    ClientError::Timeout(message) => retry(TransferStates::TimedOut, message.clone()),
+    ClientError::Timeout(message) => retry(TransferOutcome::TimedOut, message.clone()),
     ClientError::TransferRejected(reason) => Failure {
-      state: TransferStates::Rejected,
+      outcome: TransferOutcome::Rejected,
       message: reason.clone(),
       retryable: false,
     },
     ClientError::SizeMismatch { local, remote, .. } => Failure {
-      state: TransferStates::Aborted,
+      outcome: TransferOutcome::Aborted,
       message: format!("the remote size of {remote} does not match expected size {local}"),
       retryable: false,
     },
@@ -125,14 +127,14 @@ pub(super) fn failure(error: &ClientError) -> Failure {
       "A duplicate download of the same file to the same user is already registered".to_string(),
     ),
     ClientError::Io { message, source } => Failure {
-      state: TransferStates::Errored,
+      outcome: TransferOutcome::Errored,
       message: message.clone(),
       retryable: !source
         .as_deref()
         .and_then(|source| source.downcast_ref::<io::Error>())
         .is_some_and(lasting),
     },
-    other => retry(TransferStates::Errored, other.to_string()),
+    other => retry(TransferOutcome::Errored, other.to_string()),
   }
 }
 
@@ -265,7 +267,7 @@ impl Downloads {
       // two downloads whose names give one incomplete file; this one waits for its next try
       Ok(Err(e)) => {
         return Attempted::Failed(Failure {
-          state: TransferStates::Errored,
+          outcome: TransferOutcome::Errored,
           message: format!("Failed to start the download: {e}"),
           retryable: true,
         });
@@ -282,16 +284,15 @@ impl Downloads {
         if !self.hand_over(record.id) {
           return Attempted::Failed(Failure::canceled());
         }
-        record.state = TransferStates::Completed | TransferStates::Succeeded;
+        record
+          .enter(State::Completed(TransferOutcome::Succeeded))
+          .expect("a download about to be tried has not completed");
         record.bytes_transferred = record.size;
-        record.ended_at = Some(Utc::now());
-        record.exception = None;
-        record.place_in_queue = None;
         return Attempted::Succeeded(writing);
       }
       Err(e) => {
         return Attempted::Failed(Failure {
-          state: TransferStates::Errored,
+          outcome: TransferOutcome::Errored,
           message: format!("Failed to read the partial file: {e}"),
           retryable: !lasting(&e),
         });
@@ -386,10 +387,10 @@ impl Downloads {
       Ok(_) if !self.hand_over(record.id) => Attempted::Failed(Failure::canceled()),
       Ok(transfer) => {
         record.take_figures(&transfer);
-        record.state = TransferStates::Completed | TransferStates::Succeeded;
+        record
+          .enter(State::Completed(TransferOutcome::Succeeded))
+          .expect("a download being tried has not completed");
         record.size = transfer.size;
-        record.exception = None;
-        record.place_in_queue = None;
         // written once the file is moved, so no reader sees it succeeded without its path
         self
           .telemetry
@@ -411,7 +412,7 @@ impl Downloads {
         debug!(%error, "download try ended");
         Attempted::Failed(if hard_limited {
           Failure {
-            state: TransferStates::TimedOut,
+            outcome: TransferOutcome::TimedOut,
             message: HARD_LIMITED.to_string(),
             retryable: true,
           }
@@ -432,14 +433,15 @@ impl Downloads {
     gate: &mut Option<Gate>,
     ended: &mut Option<Snapshot>,
   ) {
-    let state = TransferStates::from_bits_retain(snapshot.state.bits());
-    let remotely = TransferStates::Queued | TransferStates::Remotely;
-    let past_the_queue =
-      TransferStates::Initializing | TransferStates::InProgress | TransferStates::Completed;
-    if state == remotely || state.intersects(past_the_queue) {
+    let state = state::reported(snapshot.state);
+    let asking = matches!(
+      state,
+      TransferStates::QueuedLocally | TransferStates::Requested
+    );
+    if !asking {
       gate.take();
     }
-    if state.contains(TransferStates::Completed) {
+    if state.is_completed() {
       *ended = Some(snapshot);
       return;
     }
@@ -447,10 +449,11 @@ impl Downloads {
     if self.shutdown.is_cancelled() {
       return;
     }
-    let previous = record.state;
+    let previous = record.state.kind();
+    if let Err(refused) = record.enter(State::of(state)) {
+      return warn!(%refused, "download state not recorded");
+    }
     record.take_figures(&snapshot);
-    record.state = state;
-    record.exception = None;
     if state == TransferStates::Initializing && previous != state {
       // the server never pushes what a user shares
       self.users.refetch_statistics(&record.username);
@@ -463,10 +466,8 @@ impl Downloads {
       );
       record.size = snapshot.size;
     }
-    if state == remotely {
+    if state == TransferStates::QueuedRemotely {
       record.enqueued_at.get_or_insert_with(Utc::now);
-    } else if previous == remotely {
-      record.place_in_queue = None;
     }
     if state == TransferStates::InProgress && previous != state {
       info!(
@@ -492,7 +493,7 @@ impl Downloads {
 
   /// Writes and pushes the bytes moved and the speed of a download in progress.
   async fn progressed(&self, record: &mut Record, bytes: u64, speed: f64) {
-    if record.state != TransferStates::InProgress || self.shutdown.is_cancelled() {
+    if record.state != State::InProgress || self.shutdown.is_cancelled() {
       return;
     }
     record.bytes_transferred = bytes;
@@ -571,7 +572,7 @@ mod tests {
       filename: "a.flac".into(),
       token: 1,
       remote_token: None,
-      state: soulseek_client::TransferState::QUEUED_REMOTELY,
+      state: soulseek_client::TransferState::QueuedRemotely,
       size,
       start_offset,
       bytes_transferred: start_offset,

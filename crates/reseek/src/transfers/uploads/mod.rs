@@ -231,9 +231,12 @@ impl Uploads {
       .db
       .write(move |conn| {
         let tx = conn.transaction()?;
-        let found = store::save_state(&tx, &written)?;
-        if found && entered {
-          store::entered(&tx, written.id, written.state, chrono::Utc::now())?;
+        let write = store::save_state(&tx, &written)?;
+        if let store::Saved::Refused(refused) = write {
+          warn!(id = %written.id, %refused, "upload record not written");
+        }
+        if write == store::Saved::Written && entered {
+          store::entered(&tx, written.id, written.state.kind(), chrono::Utc::now())?;
         }
         let saved = store::get(&tx, written.id)?;
         tx.commit()?;

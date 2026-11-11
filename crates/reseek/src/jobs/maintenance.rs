@@ -477,8 +477,9 @@ impl MaintenanceRun {
 
 #[cfg(test)]
 mod tests {
+  use crate::transfers::state::State;
   use api_types::jobs::{JobPartState, JobStarterKind};
-  use api_types::transfers::TransferStates;
+  use api_types::transfers::TransferOutcome;
 
   use super::*;
   use crate::testing::{TRUSTED, app};
@@ -500,7 +501,7 @@ mod tests {
     assert_eq!(quiet.summary.as_deref(), Some("Nothing to remove"));
 
     let mut old = Record::download("alice", "@@a\\old.flac", 1);
-    old.state = TransferStates::Completed | TransferStates::Succeeded;
+    old.state = State::Completed(TransferOutcome::Succeeded);
     old.ended_at = Some(Utc::now() - chrono::Duration::hours(1));
     state
       .transfers

@@ -3,13 +3,14 @@
 //! message is read as stored, which is already without the transfer library's prefix.
 
 use api_types::reports::{ExceptionCount, ExceptionsQuery, ParetoQuery, TransferExceptionDetail};
-use api_types::transfers::{SortOrder, TransferStates};
+use api_types::transfers::SortOrder;
 use rusqlite::types::{Type, Value};
 use rusqlite::{Connection, params_from_iter};
 
 use super::{Filter, Reports, Window};
 use crate::db::{self, DbError};
 use crate::transfers::categories::FAILED;
+use crate::transfers::state::state_at;
 use crate::transfers::{direction_at, text_at};
 
 impl Reports {
@@ -21,7 +22,7 @@ impl Reports {
   ) -> Result<Vec<TransferExceptionDetail>, DbError> {
     let filter = Filter::default()
       .ended_between(window)
-      .states(FAILED)
+      .states(&FAILED)
       .direction(Some(query.direction))
       .username(query.username.as_deref())
       .exception(query.exception.as_deref());
@@ -119,7 +120,7 @@ fn detail(row: &rusqlite::Row) -> rusqlite::Result<TransferExceptionDetail> {
     direction,
     filename: text_at(row, 3)?,
     size: row.get::<_, i64>(4)?.max(0).unsigned_abs(),
-    state: TransferStates::from_bits_retain(row.get(5)?),
+    state: state_at(row, 5)?,
     requested_at: required(6, "RequestedAt")?,
     enqueued_at: time(7)?,
     started_at: time(8)?,
@@ -136,6 +137,7 @@ mod tests {
   use crate::telemetry::reports::tests::{all, at, row};
   use crate::transfers::fixtures::{insert, transfers};
   use api_types::transfers::TransferDirection::Download;
+  use api_types::transfers::{TransferOutcome, TransferStates};
 
   #[tokio::test]
   async fn failures_are_found_by_their_message() {
@@ -148,8 +150,16 @@ mod tests {
     insert(
       &db,
       vec![
-        failed(272, 1, "Remote file not found: C:\\x"),
-        failed(528, 2, "File not shared."),
+        failed(
+          TransferStates::Completed(TransferOutcome::Errored),
+          1,
+          "Remote file not found: C:\\x",
+        ),
+        failed(
+          TransferStates::Completed(TransferOutcome::Rejected),
+          2,
+          "File not shared.",
+        ),
       ],
     )
     .await;

@@ -1,12 +1,14 @@
 //! A transfer as its row in `Transfers` holds it, and the record the API shows with the figures
-//! derived from it. The engines keep a [`Record`] while they run a transfer and write it whole.
+//! derived from it. The engines keep a [`Record`] while they run a transfer, move it from state
+//! to state with [`Record::enter`] and write it whole.
 
-use api_types::transfers::{Transfer, TransferDirection, TransferStates};
+use api_types::transfers::{Transfer, TransferDirection, TransferOutcome};
 use chrono::{DateTime, Utc};
 use rusqlite::Row;
 use rusqlite::types::Type;
 use uuid::Uuid;
 
+use super::state::{self, Refused, State};
 use super::{direction_at, text_at};
 use crate::db::{self, read_timestamp};
 
@@ -42,8 +44,9 @@ pub struct Record {
   pub filename: String,
   /// the file's size in bytes
   pub size: u64,
-  /// where the transfer is
-  pub state: TransferStates,
+  /// where the transfer is, with the data that belongs to that state; changed with
+  /// [`Record::enter`]
+  pub state: State,
   /// when the transfer was asked for
   pub requested_at: DateTime<Utc>,
   /// when the peer or our queue took it
@@ -56,14 +59,10 @@ pub struct Record {
   pub bytes_transferred: u64,
   /// bytes per second
   pub average_speed: f64,
-  /// the place in the peer's queue it last reported
-  pub place_in_queue: Option<u32>,
   /// why it failed
   pub exception: Option<String>,
   /// attempts made, for a download
   pub attempts: u32,
-  /// when a download waiting to be retried tries again
-  pub next_attempt_at: Option<DateTime<Utc>>,
   /// taken out of the listings
   pub removed: bool,
   /// where a download's file was moved to
@@ -87,17 +86,15 @@ impl Record {
       direction: TransferDirection::Download,
       filename: filename.to_string(),
       size,
-      state: TransferStates::Queued | TransferStates::Locally,
+      state: State::WAITING,
       requested_at: Utc::now(),
       enqueued_at: None,
       started_at: None,
       ended_at: None,
       bytes_transferred: 0,
       average_speed: 0.0,
-      place_in_queue: None,
       exception: None,
       attempts: 0,
-      next_attempt_at: None,
       removed: false,
       local_path: None,
       paused: false,
@@ -129,6 +126,15 @@ impl Record {
     };
     let bytes =
       |i: usize| -> rusqlite::Result<u64> { Ok(row.get::<_, i64>(i)?.max(0).unsigned_abs()) };
+    let state = match State::of(state::state_at(row, 6)?) {
+      State::QueuedLocally { .. } => State::QueuedLocally {
+        next_attempt_at: time(16)?,
+      },
+      State::QueuedRemotely { .. } => State::QueuedRemotely {
+        place_in_queue: row.get(13)?,
+      },
+      other => other,
+    };
     Ok(Self {
       id: uuid(0, &row.get::<_, String>(0)?)?,
       job_id: text(1)?.map(|value| uuid(1, &value)).transpose()?,
@@ -138,7 +144,7 @@ impl Record {
       direction: direction_at(row, 3)?,
       filename: text_at(row, 4)?,
       size: bytes(5)?,
-      state: TransferStates::from_bits_retain(row.get::<_, u32>(6)?),
+      state,
       requested_at: time(7)?.ok_or(rusqlite::Error::InvalidColumnType(
         7,
         "RequestedAt".to_string(),
@@ -149,10 +155,8 @@ impl Record {
       ended_at: time(10)?,
       bytes_transferred: bytes(11)?,
       average_speed: row.get(12)?,
-      place_in_queue: row.get(13)?,
       exception: text(14)?,
       attempts: row.get(15)?,
-      next_attempt_at: time(16)?,
       removed: row.get(17)?,
       local_path: text(18)?,
       paused: row.get(21)?,
@@ -182,17 +186,17 @@ impl Record {
       direction: self.direction,
       filename: self.filename.clone(),
       size: self.size,
-      state: self.state,
+      state: self.state.kind(),
       requested_at: self.requested_at,
       enqueued_at: self.enqueued_at,
       started_at: self.started_at,
       ended_at: self.ended_at,
       bytes_transferred: self.bytes_transferred,
       average_speed: self.average_speed,
-      place_in_queue: self.place_in_queue,
+      place_in_queue: self.place_in_queue(),
       exception: self.exception.clone(),
       attempts: self.attempts,
-      next_attempt_at: self.next_attempt_at,
+      next_attempt_at: self.next_attempt_at(),
       removed: self.removed,
       bytes_remaining,
       elapsed_time,
@@ -216,7 +220,64 @@ impl Record {
 
   /// Whether the transfer has finished, whatever the outcome.
   pub fn is_completed(&self) -> bool {
-    self.state.contains(TransferStates::Completed)
+    self.state.is_completed()
+  }
+
+  /// The place in the peer's queue it last reported, while it is queued there.
+  pub fn place_in_queue(&self) -> Option<u32> {
+    match self.state {
+      State::QueuedRemotely { place_in_queue } => place_in_queue,
+      _ => None,
+    }
+  }
+
+  /// When a download waiting here to be retried tries again.
+  pub fn next_attempt_at(&self) -> Option<DateTime<Utc>> {
+    match self.state {
+      State::QueuedLocally { next_attempt_at } => next_attempt_at,
+      _ => None,
+    }
+  }
+
+  /// Moves the transfer to `to` when the state machine allows it, clearing what the old state
+  /// left that the new one does not have. Every move clears the reason it failed, which the
+  /// caller gives again for a failure or a retry. Waiting here again clears the times and the
+  /// speed of the try before; a completed transfer is stamped with when it ended. A move that
+  /// is refused leaves the record as it is.
+  pub fn enter(&mut self, to: State) -> Result<(), Refused> {
+    let refused = Refused {
+      from: self.state.kind(),
+      to: to.kind(),
+    };
+    if !state::allows(refused.from, refused.to) {
+      return Err(refused);
+    }
+    self.state = to;
+    self.exception = None;
+    match to {
+      State::QueuedLocally { .. } => {
+        self.started_at = None;
+        self.ended_at = None;
+        self.average_speed = 0.0;
+      }
+      State::Completed(_) => {
+        self.ended_at.get_or_insert_with(Utc::now);
+      }
+      _ => {}
+    }
+    Ok(())
+  }
+
+  /// Completes the transfer with `outcome` and `exception` as the reason, when it has not
+  /// completed already.
+  pub fn complete(
+    &mut self,
+    outcome: TransferOutcome,
+    exception: Option<String>,
+  ) -> Result<(), Refused> {
+    self.enter(State::Completed(outcome))?;
+    self.exception = exception;
+    Ok(())
   }
 }
 
@@ -234,12 +295,62 @@ pub(super) fn time_text(time: Option<DateTime<Utc>>) -> Option<String> {
 mod tests {
   use super::super::fixtures::{Row as Fixture, insert, transfers};
   use super::*;
+  use api_types::transfers::{TransferOutcome, TransferStates};
+
+  #[test]
+  fn waiting_again_clears_the_last_try_and_completing_stamps_the_end() {
+    let started: DateTime<Utc> = "2026-05-06T10:00:00Z".parse().unwrap();
+    let running = || {
+      let mut record = Record::download("alice", "a.flac", 10);
+      record.state = State::InProgress;
+      record.started_at = Some(started);
+      record.average_speed = 512.0;
+      record.exception = Some("slow".into());
+      record
+    };
+    let mut waiting = running();
+    waiting.ended_at = Some(started);
+    waiting.enter(State::WAITING).unwrap();
+    assert_eq!(
+      (
+        waiting.started_at,
+        waiting.ended_at,
+        waiting.average_speed,
+        waiting.exception
+      ),
+      (None, None, 0.0, None)
+    );
+    let mut ended = running();
+    let before = Utc::now();
+    ended
+      .complete(TransferOutcome::Errored, Some("gone".into()))
+      .unwrap();
+    assert!(ended.ended_at.is_some_and(|at| at >= before));
+    assert_eq!(
+      (ended.started_at, ended.exception.as_deref()),
+      (Some(started), Some("gone"))
+    );
+    let mut finished = running();
+    finished.ended_at = Some(started);
+    finished
+      .enter(State::Completed(TransferOutcome::Succeeded))
+      .unwrap();
+    assert_eq!(
+      finished.ended_at,
+      Some(started),
+      "an end the client gave is kept"
+    );
+  }
 
   #[tokio::test]
   async fn a_record_reads_back_with_its_derived_figures() {
     let db = transfers().await;
     let started: DateTime<Utc> = "2026-05-06T10:00:00Z".parse().unwrap();
-    let mut row = Fixture::new("alice", TransferDirection::Download, 16 | 32);
+    let mut row = Fixture::new(
+      "alice",
+      TransferDirection::Download,
+      TransferStates::Completed(TransferOutcome::Succeeded),
+    );
     row.size = 1000;
     row.bytes = 1200;
     row.speed = 0.0;
@@ -260,7 +371,7 @@ mod tests {
     assert_eq!(read.id, id);
     assert_eq!(
       read.state,
-      TransferStates::Completed | TransferStates::Succeeded
+      TransferStates::Completed(TransferOutcome::Succeeded)
     );
     assert_eq!(read.elapsed_time, Some(32_800));
     assert_eq!(read.bytes_remaining, 0, "never below zero");

@@ -18,15 +18,15 @@ use api_types::files::ContentQuery;
 use api_types::options::OptionsPatch;
 use api_types::transfers::{
   EnqueueDownloadFile, EnqueueDownloadGroup, EnqueueDownloadJobRequest, Transfer,
-  TransferDirection, TransferListQuery, TransferStates,
+  TransferDirection, TransferListQuery, TransferOutcome, TransferStates,
 };
 use serde_json::json;
 use soulseek_client::{ClientOptions, UploadInput, UploadRequest};
 use support::soulfind::{self, Soulfind, User};
 use support::transfers::{self, Asked, asked, content, file, scratch};
 use support::{
-  Daemon, PATIENCE, completed, daemon, download_when, enqueue, events, free_port, job, logged_in,
-  signed_in, until,
+  Daemon, PATIENCE, daemon, download_when, enqueue, events, free_port, job, logged_in, signed_in,
+  until,
 };
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
@@ -80,7 +80,7 @@ async fn a_download_lands_at_its_destination_and_a_failed_move_keeps_it() {
   let id = enqueue(&api, &peer, ALBUM, SIZE as u64).await;
   serve(&uploader, &mut requests, ALBUM, &one).await;
   // a download reads as succeeded only once its file is in place
-  let succeeded = |t: &Transfer| t.state == completed(TransferStates::Succeeded);
+  let succeeded = |t: &Transfer| t.state == TransferStates::Completed(TransferOutcome::Succeeded);
   let done = download_when(&api, &peer, id, "succeeded", succeeded).await;
   let landed = dir
     .path()
@@ -186,7 +186,7 @@ async fn a_cancel_removes_once_ended_and_a_block_cancels_with_its_reason() {
   let dir = tempfile::tempdir().unwrap();
   let (_daemon, api) = started(dir.path(), &server, &soulfind::username("daemon")).await;
   let peer = uploader.username.clone();
-  let queued = |t: &Transfer| t.state == TransferStates::Queued | TransferStates::Remotely;
+  let queued = |t: &Transfer| t.state == TransferStates::QueuedRemotely;
 
   let canceled = enqueue(&api, &peer, "@@share\\a\\1.flac", 10).await;
   let blocked = enqueue(&api, &peer, "@@share\\a\\2.flac", 10).await;
@@ -200,7 +200,10 @@ async fn a_cancel_removes_once_ended_and_a_block_cancels_with_its_reason() {
     .await
     .unwrap();
   let ended = download_when(&api, &peer, canceled, "removed", |t| t.removed).await;
-  assert_eq!(ended.state, completed(TransferStates::Cancelled));
+  assert_eq!(
+    ended.state,
+    TransferStates::Completed(TransferOutcome::Cancelled)
+  );
   assert_eq!(ended.exception.as_deref(), Some("Operation cancelled"));
   let missing = api
     .cancel_transfer(TransferDirection::Download, &peer, Uuid::new_v4(), false)
@@ -211,7 +214,10 @@ async fn a_cancel_removes_once_ended_and_a_block_cancels_with_its_reason() {
   let block = serde_json::from_value(json!({ "scopes": ["downloads"] })).unwrap();
   api.block(&peer, &block).await.unwrap();
   let ended = download_when(&api, &peer, blocked, "canceled", |t| t.ended_at.is_some()).await;
-  assert_eq!(ended.state, completed(TransferStates::Cancelled));
+  assert_eq!(
+    ended.state,
+    TransferStates::Completed(TransferOutcome::Cancelled)
+  );
   assert_eq!(ended.exception.as_deref(), Some("Blocked"));
   let refused = api
     .enqueue_download_job(&job(&peer, "@@share\\a\\3.flac", 1))
@@ -277,7 +283,7 @@ async fn stopped_while_queued(
   let first = answer.groups[0].enqueued[0].id;
   asked(requests).await;
   download_when(api, peer, first, "queued", |t| {
-    t.state == TransferStates::Queued | TransferStates::Remotely
+    t.state == TransferStates::QueuedRemotely
   })
   .await;
   api.shut_down().await.unwrap();
@@ -311,7 +317,10 @@ async fn resumed(api: &Client, dir: &Path, peer: &str, job: Uuid, first: Uuid) {
     assert!(started_at.elapsed() < PATIENCE * 2, "{listed:?}");
     tokio::time::sleep(Duration::from_millis(50)).await;
   };
-  assert_eq!(resumed.state, completed(TransferStates::Succeeded));
+  assert_eq!(
+    resumed.state,
+    TransferStates::Completed(TransferOutcome::Succeeded)
+  );
   assert_eq!(resumed.job_id, Some(job), "resumed in its job");
   let landed = dir
     .join("data")
@@ -328,7 +337,10 @@ async fn resumed(api: &Client, dir: &Path, peer: &str, job: Uuid, first: Uuid) {
     .transfer(TransferDirection::Download, peer, first, false)
     .await
     .unwrap();
-  assert_eq!(superseded.state, completed(TransferStates::Errored));
+  assert_eq!(
+    superseded.state,
+    TransferStates::Completed(TransferOutcome::Errored)
+  );
   assert_eq!(
     superseded.exception.as_deref(),
     Some("Application shut down")

@@ -11,7 +11,6 @@ use api_types::events::{Event as BusEvent, EventError, NoFields, SoulseekClientD
 use api_types::live::LiveFrame;
 use api_types::messaging::ServerMessage;
 use api_types::state::{DistributedNetworkState, ServerConnectionState};
-use api_types::transfers::TransferStates;
 use api_types::users::{UserPresence, UserStatus, UserStatusChanged};
 use chrono::Utc;
 use soulseek_client::{
@@ -24,6 +23,7 @@ use tracing::{Instrument, debug, error, info, trace, warn};
 
 use super::Intent;
 use crate::app::AppState;
+use crate::transfers::state::reported;
 
 static LAGGED: LogLimiter = LogLimiter::new();
 
@@ -689,7 +689,7 @@ async fn private_message(app: &AppState, message: PrivateMessage) {
 /// A transfer moved on: logged, its direction's queued and in-progress gauges counted again, and
 /// an upload that succeeded reports its speed to the server, which keeps our average speed from
 /// it.
-fn transfer_state(app: &AppState, previous: TransferState, transfer: &Transfer) {
+fn transfer_state(app: &AppState, previous: Option<TransferState>, transfer: &Transfer) {
   let name = transfer.filename.as_str();
   let basename = name.rsplit(['\\', '/']).next().unwrap_or(name);
   let direction = match transfer.direction {
@@ -700,7 +700,7 @@ fn transfer_state(app: &AppState, previous: TransferState, transfer: &Transfer) 
     direction,
     username = transfer.username,
     file = basename,
-    %previous,
+    previous = previous.map(tracing::field::display),
     state = %transfer.state,
     bytes = transfer.bytes_transferred,
     size = transfer.size,
@@ -718,9 +718,8 @@ fn transfer_state(app: &AppState, previous: TransferState, transfer: &Transfer) 
       soulseek_proto::TransferDirection::Upload => family.uploads.count(&client.uploads()),
     }
   }
-  let succeeded = TransferState::COMPLETED | TransferState::SUCCEEDED;
   if transfer.direction == soulseek_proto::TransferDirection::Upload
-    && transfer.state == succeeded
+    && transfer.state.succeeded()
     && transfer.average_speed > 0.0
   {
     // servers read the speed as a signed 32-bit number
@@ -739,18 +738,21 @@ fn transfer_state(app: &AppState, previous: TransferState, transfer: &Transfer) 
 
 /// An upload that started sending, or one that ended after it began, into the activity log. An
 /// upload that ends while still queued was never under way, so it is not noted.
-fn upload_activity(app: &AppState, previous: TransferState, transfer: &Transfer) {
-  let begun = TransferState::INITIALIZING | TransferState::IN_PROGRESS;
+fn upload_activity(app: &AppState, previous: Option<TransferState>, transfer: &Transfer) {
+  let begun = matches!(
+    previous,
+    Some(TransferState::Initializing | TransferState::InProgress)
+  );
   let kind =
-    if transfer.state == TransferState::IN_PROGRESS && previous != TransferState::IN_PROGRESS {
+    if transfer.state == TransferState::InProgress && previous != Some(TransferState::InProgress) {
       ActivityKind::UploadStarted {
         filename: transfer.filename.to_string(),
         size: transfer.size,
       }
-    } else if transfer.state.contains(TransferState::COMPLETED) && previous.intersects(begun) {
+    } else if transfer.state.is_terminal() && begun {
       ActivityKind::UploadEnded {
         filename: transfer.filename.to_string(),
-        state: TransferStates::from_bits_retain(transfer.state.bits()),
+        state: reported(transfer.state),
         bytes: transfer.bytes_transferred,
       }
     } else {

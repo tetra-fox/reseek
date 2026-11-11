@@ -1,73 +1,157 @@
 //! The state categories as SQL conditions on the `State` column of `Transfers`, so the
 //! listings, the users directory and the reports agree on what "queued" or "failed" means.
 
-use api_types::transfers::TransferStateCategory;
+use std::fmt;
+use std::sync::LazyLock;
 
-/// `Requested`, bare `Queued`, `Queued, Locally` and `Queued, Remotely`.
-pub const QUEUED: &str = "(State IN (1, 2, 2050, 4098))";
+use api_types::transfers::{TransferOutcome, TransferStateCategory, TransferStates};
+
+use super::state::in_states;
+
+/// An SQL condition on the `State` column, built once from the states it holds.
+pub struct Condition(LazyLock<String>);
+
+impl Condition {
+  const fn of(build: fn() -> String) -> Self {
+    Self(LazyLock::new(build))
+  }
+}
+
+impl std::ops::Deref for Condition {
+  type Target = str;
+
+  fn deref(&self) -> &str {
+    &self.0
+  }
+}
+
+impl fmt::Display for Condition {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    f.write_str(self)
+  }
+}
+
+/// the states `holds` holds
+fn states(holds: fn(TransferStates) -> bool) -> String {
+  in_states(
+    TransferStates::ALL
+      .into_iter()
+      .filter(|state| holds(*state)),
+  )
+}
+
+/// `Requested`, `Queued, Locally` and `Queued, Remotely`.
+pub static QUEUED: Condition = Condition::of(|| {
+  states(|state| {
+    matches!(
+      state,
+      TransferStates::Requested | TransferStates::QueuedLocally | TransferStates::QueuedRemotely
+    )
+  })
+});
 /// `Initializing` and `InProgress`.
-pub const IN_PROGRESS: &str = "(State IN (4, 8))";
-/// Every finished state: bare `Completed` and `Completed` with each outcome.
-pub const COMPLETED: &str = "(State IN (16, 48, 80, 144, 272, 528, 1040))";
+pub static IN_PROGRESS: Condition = Condition::of(|| {
+  states(|state| {
+    matches!(
+      state,
+      TransferStates::Initializing | TransferStates::InProgress
+    )
+  })
+});
+/// Every finished state.
+pub static COMPLETED: Condition = Condition::of(|| states(TransferStates::is_completed));
 /// `Completed, Succeeded`.
-pub const SUCCESSFUL: &str = "(State = 48)";
-/// `Completed` with `Cancelled`, `TimedOut`, `Errored`, `Rejected` or `Aborted`; a bare
-/// `Completed` is finished but neither succeeded nor failed.
-pub const FAILED: &str = "(State IN (80, 144, 272, 528, 1040))";
+pub static SUCCESSFUL: Condition =
+  Condition::of(|| states(|state| state == TransferStates::Completed(TransferOutcome::Succeeded)));
+/// Every finished state but `Completed, Succeeded`.
+pub static FAILED: Condition = Condition::of(|| {
+  states(|state| {
+    state.is_completed() && state != TransferStates::Completed(TransferOutcome::Succeeded)
+  })
+});
 /// `Completed` with `TimedOut`, `Errored`, `Rejected` or `Aborted`.
-pub const ERRORED: &str = "(State IN (144, 272, 528, 1040))";
+pub static ERRORED: Condition = Condition::of(|| {
+  states(|state| {
+    matches!(
+      state,
+      TransferStates::Completed(
+        TransferOutcome::TimedOut
+          | TransferOutcome::Errored
+          | TransferOutcome::Rejected
+          | TransferOutcome::Aborted
+      )
+    )
+  })
+});
 /// `Completed, Cancelled`.
-pub const CANCELLED: &str = "(State = 80)";
-/// Not finished: not ended, or in a state without `Completed`, so a row the daemon stopped
-/// writing halfway counts as unfinished too.
-pub const UNFINISHED: &str = "(EndedAt IS NULL OR (State & 16) = 0)";
+pub static CANCELLED: Condition =
+  Condition::of(|| states(|state| state == TransferStates::Completed(TransferOutcome::Cancelled)));
+/// Not finished.
+pub static UNFINISHED: Condition = Condition::of(|| states(|state| !state.is_completed()));
 
 /// The condition a category stands for.
-pub fn condition(category: TransferStateCategory) -> &'static str {
+pub fn condition(category: TransferStateCategory) -> &'static Condition {
   match category {
-    TransferStateCategory::Queued => QUEUED,
-    TransferStateCategory::InProgress => IN_PROGRESS,
-    TransferStateCategory::Completed => COMPLETED,
-    TransferStateCategory::Successful => SUCCESSFUL,
-    TransferStateCategory::Failed => FAILED,
-    TransferStateCategory::Errored => ERRORED,
-    TransferStateCategory::Cancelled => CANCELLED,
+    TransferStateCategory::Queued => &QUEUED,
+    TransferStateCategory::InProgress => &IN_PROGRESS,
+    TransferStateCategory::Completed => &COMPLETED,
+    TransferStateCategory::Successful => &SUCCESSFUL,
+    TransferStateCategory::Failed => &FAILED,
+    TransferStateCategory::Errored => &ERRORED,
+    TransferStateCategory::Cancelled => &CANCELLED,
   }
 }
 
 #[cfg(test)]
 mod tests {
   use super::*;
+  use crate::transfers::state::column;
   use rusqlite::Connection;
 
   #[test]
   fn each_state_falls_in_its_categories() {
     let conn = Connection::open_in_memory().unwrap();
-    let matches = |state: u32, category: TransferStateCategory| -> bool {
+    let matches = |state: TransferStates, category: TransferStateCategory| -> bool {
       conn
         .query_row(
           &format!("SELECT {} FROM (SELECT ?1 AS State)", condition(category)),
-          [state],
+          [column(state)],
           |row| row.get(0),
         )
         .unwrap()
     };
+    use TransferOutcome as O;
     use TransferStateCategory as C;
-    let cases: &[(u32, &[C])] = &[
-      (1, &[C::Queued]),
-      (2050, &[C::Queued]),
-      (4098, &[C::Queued]),
-      (4, &[C::InProgress]),
-      (8, &[C::InProgress]),
-      (48, &[C::Completed, C::Successful]),
-      (80, &[C::Completed, C::Failed, C::Cancelled]),
-      (144, &[C::Completed, C::Failed, C::Errored]),
-      (272, &[C::Completed, C::Failed, C::Errored]),
-      (528, &[C::Completed, C::Failed, C::Errored]),
-      (1040, &[C::Completed, C::Failed, C::Errored]),
-      (2, &[C::Queued]),
-      (16, &[C::Completed]),
+    use TransferStates as S;
+    let cases: &[(TransferStates, &[C])] = &[
+      (S::Requested, &[C::Queued]),
+      (S::QueuedLocally, &[C::Queued]),
+      (S::QueuedRemotely, &[C::Queued]),
+      (S::Initializing, &[C::InProgress]),
+      (S::InProgress, &[C::InProgress]),
+      (S::Completed(O::Succeeded), &[C::Completed, C::Successful]),
+      (
+        S::Completed(O::Cancelled),
+        &[C::Completed, C::Failed, C::Cancelled],
+      ),
+      (
+        S::Completed(O::TimedOut),
+        &[C::Completed, C::Failed, C::Errored],
+      ),
+      (
+        S::Completed(O::Errored),
+        &[C::Completed, C::Failed, C::Errored],
+      ),
+      (
+        S::Completed(O::Rejected),
+        &[C::Completed, C::Failed, C::Errored],
+      ),
+      (
+        S::Completed(O::Aborted),
+        &[C::Completed, C::Failed, C::Errored],
+      ),
     ];
+    assert_eq!(cases.len(), TransferStates::ALL.len());
     let all = [
       C::Queued,
       C::InProgress,
@@ -86,25 +170,5 @@ mod tests {
         );
       }
     }
-  }
-
-  #[test]
-  fn a_row_is_unfinished_until_it_has_both_ended_and_completed() {
-    let conn = Connection::open_in_memory().unwrap();
-    let unfinished = |ended: Option<&str>, state: u32| -> bool {
-      conn
-        .query_row(
-          &format!("SELECT {UNFINISHED} FROM (SELECT ?1 AS EndedAt, ?2 AS State)"),
-          rusqlite::params![ended, state],
-          |row| row.get(0),
-        )
-        .unwrap()
-    };
-    let at = Some("2026-01-01T00:00:00Z");
-    assert!(unfinished(None, 8));
-    assert!(unfinished(None, 48), "completed but never ended");
-    assert!(unfinished(at, 4098), "ended but not completed");
-    assert!(!unfinished(at, 48));
-    assert!(!unfinished(at, 272));
   }
 }

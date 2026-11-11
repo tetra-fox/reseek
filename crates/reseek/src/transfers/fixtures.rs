@@ -7,6 +7,7 @@ use rusqlite::params;
 use uuid::Uuid;
 
 use super::direction_text;
+use super::state::column;
 use crate::db::{Database, timestamp};
 
 /// One row of `Transfers`, everything but the user, direction and state defaulted.
@@ -22,8 +23,8 @@ pub struct Row {
   pub filename: String,
   /// bytes, 100
   pub size: i64,
-  /// the state bits
-  pub state: u32,
+  /// the state
+  pub state: TransferStates,
   /// 2026-01-01
   pub requested_at: DateTime<Utc>,
   /// none
@@ -43,8 +44,8 @@ pub struct Row {
 }
 
 impl Row {
-  /// A row of `username` going `direction` in the state with the bits `state`.
-  pub fn new(username: &str, direction: TransferDirection, state: u32) -> Self {
+  /// A row of `username` going `direction` in `state`.
+  pub fn new(username: &str, direction: TransferDirection, state: TransferStates) -> Self {
     Self {
       id: Uuid::new_v4(),
       username: username.to_string(),
@@ -86,12 +87,8 @@ pub async fn insert(db: &Database, rows: Vec<Row>) {
           direction_text(row.direction),
           row.filename,
           row.size,
-          row.state,
-          serde_json::to_value(TransferStates::from_bits_retain(row.state))
-            .unwrap()
-            .as_str()
-            .unwrap()
-            .to_string(),
+          column(row.state),
+          row.state.as_str(),
           timestamp(row.requested_at),
           time(row.enqueued_at),
           time(row.started_at),

@@ -159,7 +159,7 @@ mod tests {
       filename: "a.flac".into(),
       token: 1,
       remote_token: None,
-      state: soulseek_client::TransferState::IN_PROGRESS,
+      state: soulseek_client::TransferState::InProgress,
       size: 1_000_000,
       start_offset: 0,
       bytes_transferred: 0,

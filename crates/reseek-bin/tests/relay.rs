@@ -15,7 +15,7 @@ use std::time::{Duration, Instant};
 use api_client::{Client, Credential, RelayReceived};
 use api_types::relay::{LoginFailure, RELAY_PROTOCOL, RelayEnvelope, RelayMessage};
 use api_types::state::State;
-use api_types::transfers::{TransferDirection, TransferStates};
+use api_types::transfers::{TransferDirection, TransferOutcome, TransferStates};
 use reseek_relay_proto::credential::{Key, Purpose};
 use soulseek_client::{ClientOptions, DownloadOutput, DownloadRequest, UploadInput, UploadRequest};
 use support::soulfind::{self, Soulfind};
@@ -305,7 +305,7 @@ async fn a_finished_download_is_copied_to_an_agent_that_asks_for_them() {
       .transfer(TransferDirection::Download, &uploader.username, id, true)
       .await
       .unwrap();
-    if transfer.state == TransferStates::Completed | TransferStates::Succeeded {
+    if transfer.state == TransferStates::Completed(TransferOutcome::Succeeded) {
       break transfer;
     }
     assert!(

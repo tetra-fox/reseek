@@ -18385,15 +18385,14 @@
             },
             "propertyNames": {
               "type": "string",
-              "description": "How a finished transfer ended, as the key of a report's per-outcome map: its state without\nthe `Completed` flag.",
+              "description": "How a finished transfer ended.",
               "enum": [
                 "Succeeded",
                 "Cancelled",
                 "TimedOut",
                 "Errored",
                 "Rejected",
-                "Aborted",
-                "None"
+                "Aborted"
               ]
             }
           },
@@ -18405,15 +18404,14 @@
             },
             "propertyNames": {
               "type": "string",
-              "description": "How a finished transfer ended, as the key of a report's per-outcome map: its state without\nthe `Completed` flag.",
+              "description": "How a finished transfer ended.",
               "enum": [
                 "Succeeded",
                 "Cancelled",
                 "TimedOut",
                 "Errored",
                 "Rejected",
-                "Aborted",
-                "None"
+                "Aborted"
               ]
             }
           }
@@ -26717,9 +26715,19 @@
       },
       "TransferStates": {
         "type": "string",
-        "description": "the names of the set state flags joined by \", \"",
-        "examples": [
-          "Completed, Succeeded"
+        "description": "where a transfer is",
+        "enum": [
+          "Requested",
+          "Queued, Locally",
+          "Queued, Remotely",
+          "Initializing",
+          "InProgress",
+          "Completed, Succeeded",
+          "Completed, Cancelled",
+          "Completed, TimedOut",
+          "Completed, Errored",
+          "Completed, Rejected",
+          "Completed, Aborted"
         ]
       },
       "TransferSummary": {
@@ -27045,15 +27053,14 @@
             },
             "propertyNames": {
               "type": "string",
-              "description": "How a finished transfer ended, as the key of a report's per-outcome map: its state without\nthe `Completed` flag.",
+              "description": "How a finished transfer ended.",
               "enum": [
                 "Succeeded",
                 "Cancelled",
                 "TimedOut",
                 "Errored",
                 "Rejected",
-                "Aborted",
-                "None"
+                "Aborted"
               ]
             }
           }

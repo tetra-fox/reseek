@@ -65,8 +65,8 @@ pub use token::MAX_TOKEN;
 pub use transfers::{
   DownloadOutput, DownloadRequest, DownloadSink, Governor, InputFactory, OutputFactory,
   ProgressUpdated, Reporter, RequestStyle, SizeMismatchResolver, SlotAwaiter, SlotReleased,
-  StateChanged, Transfer, TransferFuture, TransferOptions, TransferState, TransferTask,
-  UploadInput, UploadRequest, UploadSource,
+  StateChanged, Transfer, TransferFuture, TransferOptions, TransferOutcome, TransferState,
+  TransferTask, UploadInput, UploadRequest, UploadSource,
 };
 pub use waiter::{Scope, WaitKey, Waiter};
 

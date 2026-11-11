@@ -15,8 +15,7 @@ use std::time::{Duration, Instant};
 use api_client::Client;
 use api_types::state::State;
 use api_types::transfers::{
-  EnqueueDownloadFile, EnqueueDownloadGroup, EnqueueDownloadJobRequest, Transfer,
-  TransferDirection, TransferStates,
+  EnqueueDownloadFile, EnqueueDownloadGroup, EnqueueDownloadJobRequest, Transfer, TransferDirection,
 };
 use soulfind::{PASSWORD, Soulfind};
 use uuid::Uuid;
@@ -449,9 +448,4 @@ pub async fn download_when(
     );
     tokio::time::sleep(Duration::from_millis(20)).await;
   }
-}
-
-/// The state of a transfer that ended with `outcome`.
-pub fn completed(outcome: TransferStates) -> TransferStates {
-  TransferStates::Completed | outcome
 }

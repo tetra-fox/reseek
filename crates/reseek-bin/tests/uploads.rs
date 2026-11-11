@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 
 use api_client::Client;
 use api_types::options::OptionsPatch;
-use api_types::transfers::{Transfer, TransferStates, UploadsQuery};
+use api_types::transfers::{Transfer, TransferOutcome, TransferStates, UploadsQuery};
 use serde_json::json;
 use soulseek_client::{
   ClientError, ClientOptions, DownloadOutput, DownloadRequest, Event, SearchOptions, SearchScope,
@@ -118,7 +118,7 @@ async fn metric(api: &Client, name: &str) -> f64 {
 }
 
 fn succeeded() -> TransferStates {
-  TransferStates::Completed | TransferStates::Succeeded
+  TransferStates::Completed(TransferOutcome::Succeeded)
 }
 
 #[tokio::test]
@@ -153,7 +153,7 @@ async fn a_second_request_waits_its_place_and_starts_once_the_first_ends() {
   .await;
   let (canceled, _) = download(&second, &name, small_name, small);
   let waiting = upload_when(&api, &second.username, small_name, "queued", |t| {
-    t.state == TransferStates::Queued | TransferStates::Locally
+    t.state == TransferStates::QueuedLocally
   })
   .await;
   let cancel = CancellationToken::new();
@@ -235,13 +235,13 @@ async fn a_second_request_waits_its_place_and_starts_once_the_first_ends() {
   let ended = upload_when(&api, &second.username, small_name, "removed", |t| t.removed).await;
   assert_eq!(
     ended.state,
-    TransferStates::Completed | TransferStates::Cancelled
+    TransferStates::Completed(TransferOutcome::Cancelled)
   );
 
   // asked again, it waits; a faster group lets the first finish and the second start
   let (again, into) = download(&second, &name, small_name, small);
   upload_when(&api, &second.username, small_name, "queued again", |t| {
-    !t.removed && t.state == TransferStates::Queued | TransferStates::Locally
+    !t.removed && t.state == TransferStates::QueuedLocally
   })
   .await;
   let faster = OptionsPatch {
@@ -363,5 +363,5 @@ async fn an_upload_that_failed_once_started_is_queued_anew_when_the_peer_asks_ag
     .find(|t| t.id == first.id)
     .unwrap();
   assert!(ended.removed, "the new request takes its place");
-  assert!(ended.state.contains(TransferStates::Completed));
+  assert!(ended.state.is_completed());
 }

@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex};
 
 use api_types::jobs::{JobCounts, JobKind, JobPart, JobPartState, JobStarter, JobState};
 use api_types::live::LiveFrame;
-use api_types::transfers::{DownloadJobFinished, TransferStates};
+use api_types::transfers::{DownloadJobFinished, TransferOutcome, TransferStates};
 use reseek_shares::lock;
 use rusqlite::{Connection, OptionalExtension};
 use tracing::{debug, info, warn};
@@ -23,8 +23,9 @@ use uuid::Uuid;
 
 use super::{Downloads, Group};
 use crate::jobs::{Ended, NewJob, NewPart};
-use crate::transfers::categories::UNFINISHED;
+use crate::transfers::categories::{CANCELLED, ERRORED, SUCCESSFUL, UNFINISHED};
 use crate::transfers::listing::remote_directory;
+use crate::transfers::state::state_at;
 use crate::transfers::{ASKED_ORDER, Record, text_at};
 
 /// The jobs whose files are still being enqueued: none of them is over, whatever its
@@ -53,9 +54,7 @@ pub(super) fn ended_by(
   open: &Open,
 ) -> rusqlite::Result<Option<DownloadJobFinished>> {
   match record.job_id {
-    Some(job) if unfinished && record.state.contains(TransferStates::Completed) => {
-      finished(conn, job, open)
-    }
+    Some(job) if unfinished && record.is_completed() => finished(conn, job, open),
     _ => Ok(None),
   }
 }
@@ -84,11 +83,7 @@ fn finished(
   ))?;
   let rows = statement
     .query_map([job.to_string()], |row| {
-      Ok((
-        text_at(row, 0)?,
-        text_at(row, 1)?,
-        TransferStates::from_bits_retain(row.get(2)?),
-      ))
+      Ok((text_at(row, 0)?, text_at(row, 1)?, state_at(row, 2)?))
     })?
     .collect::<rusqlite::Result<Vec<_>>>()?;
   Ok(summary(job, &rows))
@@ -103,12 +98,10 @@ fn summary(job: Uuid, rows: &[(String, String, TransferStates)]) -> Option<Downl
     if !usernames.contains(username) {
       usernames.push(username.clone());
     }
-    if *state == TransferStates::Completed | TransferStates::Succeeded {
-      succeeded += 1;
-    } else if state.contains(TransferStates::Cancelled) {
-      canceled += 1;
-    } else {
-      failed += 1;
+    match state {
+      TransferStates::Completed(TransferOutcome::Succeeded) => succeeded += 1,
+      TransferStates::Completed(TransferOutcome::Cancelled) => canceled += 1,
+      _ => failed += 1,
     }
   }
   let folder = if usernames.len() == 1 {
@@ -195,9 +188,9 @@ fn counts(conn: &Connection, job: Uuid) -> rusqlite::Result<JobCounts> {
   conn
     .prepare_cached(&format!(
       "SELECT COUNT(*), \
-       COALESCE(SUM(NOT {UNFINISHED} AND State = 48), 0), \
-       COALESCE(SUM(NOT {UNFINISHED} AND State NOT IN (48, 80)), 0), \
-       COALESCE(SUM(NOT {UNFINISHED} AND State = 80), 0), \
+       COALESCE(SUM({SUCCESSFUL}), 0), \
+       COALESCE(SUM({ERRORED}), 0), \
+       COALESCE(SUM({CANCELLED}), 0), \
        COALESCE(SUM({UNFINISHED} AND Paused = 1), 0) \
        FROM Transfers WHERE JobId = ?1 AND Removed = 0"
     ))?
@@ -227,22 +220,15 @@ pub(super) struct Part {
 
 impl Part {
   fn state(&self) -> JobPartState {
-    let finished = self.state.contains(TransferStates::Completed);
-    if finished && self.state.contains(TransferStates::Succeeded) {
-      JobPartState::Succeeded
-    } else if finished && self.state.contains(TransferStates::Cancelled) {
-      JobPartState::Canceled
-    } else if finished {
-      JobPartState::Failed
-    } else if self.paused {
-      JobPartState::Paused
-    } else if self
-      .state
-      .intersects(TransferStates::InProgress | TransferStates::Initializing)
-    {
-      JobPartState::Running
-    } else {
-      JobPartState::Waiting
+    match self.state {
+      TransferStates::Completed(TransferOutcome::Succeeded) => JobPartState::Succeeded,
+      TransferStates::Completed(TransferOutcome::Cancelled) => JobPartState::Canceled,
+      TransferStates::Completed(_) => JobPartState::Failed,
+      _ if self.paused => JobPartState::Paused,
+      TransferStates::Initializing | TransferStates::InProgress => JobPartState::Running,
+      TransferStates::Requested
+      | TransferStates::QueuedLocally
+      | TransferStates::QueuedRemotely => JobPartState::Waiting,
     }
   }
 
@@ -300,7 +286,7 @@ fn parts(conn: &Connection, job: Uuid) -> rusqlite::Result<Vec<Part>> {
         })?,
         username: text_at(row, 1)?,
         filename: text_at(row, 2)?,
-        state: TransferStates::from_bits_retain(row.get(3)?),
+        state: state_at(row, 3)?,
         paused: row.get(4)?,
         exception: row.get(5)?,
       })
@@ -520,7 +506,7 @@ impl Downloads {
     Ok(
       rows
         .into_iter()
-        .filter(|part| !part.state.contains(TransferStates::Completed))
+        .filter(|part| !part.state.is_completed())
         .collect(),
     )
   }
@@ -634,9 +620,9 @@ mod tests {
   use crate::transfers::fixtures::transfers;
   use crate::transfers::store;
 
-  const DONE: TransferStates = TransferStates::Completed.union(TransferStates::Succeeded);
-  const FAILED: TransferStates = TransferStates::Completed.union(TransferStates::Rejected);
-  const CANCELED: TransferStates = TransferStates::Completed.union(TransferStates::Cancelled);
+  const DONE: TransferOutcome = TransferOutcome::Succeeded;
+  const FAILED: TransferOutcome = TransferOutcome::Rejected;
+  const CANCELED: TransferOutcome = TransferOutcome::Cancelled;
 
   fn queued(job: Uuid, username: &str, filename: &str) -> Record {
     let mut record = Record::download(username, filename, 1);
@@ -644,16 +630,15 @@ mod tests {
     record
   }
 
-  /// Ends `record` in `state` as the engine's write does, and returns the job it ended.
+  /// Ends `record` with `outcome` as the engine's write does, and returns the job it ended.
   fn end(
     conn: &Connection,
     record: &mut Record,
-    state: TransferStates,
+    outcome: TransferOutcome,
     open: &Open,
   ) -> Option<DownloadJobFinished> {
     let was = unfinished(conn, record.id).unwrap();
-    record.state = state;
-    record.ended_at = Some(chrono::Utc::now());
+    record.complete(outcome, None).unwrap();
     store::save(conn, record).unwrap();
     ended_by(conn, record, was, open).unwrap()
   }
@@ -697,11 +682,10 @@ mod tests {
         ),
         (3, 1, 1, 1)
       );
-      assert_eq!(
-        end(conn, b, DONE, &open),
-        None,
-        "a write of a download that had ended tells nothing again"
-      );
+      // a download that had ended cannot end again, and a write of it tells nothing again
+      assert!(b.complete(DONE, None).is_err());
+      let was = unfinished(conn, b.id).unwrap();
+      assert_eq!(ended_by(conn, b, was, &open).unwrap(), None);
       Ok(())
     })
     .await

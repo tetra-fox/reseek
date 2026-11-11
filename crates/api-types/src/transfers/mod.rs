@@ -16,49 +16,124 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::flags::flag_names;
+/// Where a transfer is, written as one of `"Requested"`, `"Queued, Locally"`,
+/// `"Queued, Remotely"`, `"Initializing"`, `"InProgress"`, or `"Completed, <outcome>"` with one
+/// of the outcomes `Succeeded`, `Cancelled`, `TimedOut`, `Errored`, `Rejected` or `Aborted`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum TransferStates {
+  /// our request was written to the peer and is not acknowledged yet
+  Requested,
+  /// waiting in this process for a slot, a retry or the enqueue throttle
+  QueuedLocally,
+  /// the peer acknowledged and queued us
+  QueuedRemotely,
+  /// accepted, the transfer connection is being made
+  Initializing,
+  /// bytes are flowing
+  InProgress,
+  /// finished, with how it ended
+  Completed(TransferOutcome),
+}
 
-bitflags::bitflags! {
-  /// The state of a transfer, written as the names of the set flags in ascending bit order
-  /// joined by `", "`: `"Requested"`, `"Queued, Locally"`, `"Queued, Remotely"`,
-  /// `"Initializing"`, `"InProgress"`, and `"Completed, <outcome>"` with one of `Succeeded`,
-  /// `Cancelled`, `TimedOut`, `Errored`, `Rejected` or `Aborted`.
-  #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-  pub struct TransferStates: u32 {
-    /// our request was written to the peer and is not acknowledged yet
-    const Requested = 1;
-    /// waiting, with `Locally` or `Remotely` saying where
-    const Queued = 2;
-    /// accepted, the transfer connection is being made
-    const Initializing = 4;
-    /// bytes are flowing
-    const InProgress = 8;
-    /// finished, with one outcome flag
-    const Completed = 16;
-    /// outcome: the whole file arrived
-    const Succeeded = 32;
-    /// outcome: canceled here
-    const Cancelled = 64;
-    /// outcome: a connect or inactivity timeout
-    const TimedOut = 128;
-    /// outcome: any other failure
-    const Errored = 256;
-    /// outcome: the peer refused the transfer
-    const Rejected = 512;
-    /// outcome: our size and the peer's differ
-    const Aborted = 1024;
-    /// with `Queued`: waiting in this process for a slot, a retry or the enqueue throttle
-    const Locally = 2048;
-    /// with `Queued`: the peer acknowledged and queued us
-    const Remotely = 4096;
+/// How a finished transfer ended.
+#[derive(
+  Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, ToSchema,
+)]
+pub enum TransferOutcome {
+  /// the whole file arrived
+  Succeeded,
+  /// canceled here
+  Cancelled,
+  /// a connect or inactivity timeout
+  TimedOut,
+  /// any other failure
+  Errored,
+  /// the peer refused the transfer
+  Rejected,
+  /// our size and the peer's differ
+  Aborted,
+}
+
+impl TransferStates {
+  /// Every state, in the order a transfer goes through them.
+  pub const ALL: [Self; 11] = [
+    Self::Requested,
+    Self::QueuedLocally,
+    Self::QueuedRemotely,
+    Self::Initializing,
+    Self::InProgress,
+    Self::Completed(TransferOutcome::Succeeded),
+    Self::Completed(TransferOutcome::Cancelled),
+    Self::Completed(TransferOutcome::TimedOut),
+    Self::Completed(TransferOutcome::Errored),
+    Self::Completed(TransferOutcome::Rejected),
+    Self::Completed(TransferOutcome::Aborted),
+  ];
+
+  /// The state as it is written.
+  pub fn as_str(self) -> &'static str {
+    match self {
+      Self::Requested => "Requested",
+      Self::QueuedLocally => "Queued, Locally",
+      Self::QueuedRemotely => "Queued, Remotely",
+      Self::Initializing => "Initializing",
+      Self::InProgress => "InProgress",
+      Self::Completed(TransferOutcome::Succeeded) => "Completed, Succeeded",
+      Self::Completed(TransferOutcome::Cancelled) => "Completed, Cancelled",
+      Self::Completed(TransferOutcome::TimedOut) => "Completed, TimedOut",
+      Self::Completed(TransferOutcome::Errored) => "Completed, Errored",
+      Self::Completed(TransferOutcome::Rejected) => "Completed, Rejected",
+      Self::Completed(TransferOutcome::Aborted) => "Completed, Aborted",
+    }
+  }
+
+  /// Whether the transfer has finished, whatever the outcome.
+  pub fn is_completed(self) -> bool {
+    matches!(self, Self::Completed(_))
   }
 }
 
-flag_names!(
-  TransferStates,
-  "the names of the set state flags joined by \", \"",
-  "Completed, Succeeded"
-);
+impl std::fmt::Display for TransferStates {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.write_str(self.as_str())
+  }
+}
+
+impl std::str::FromStr for TransferStates {
+  type Err = String;
+
+  fn from_str(text: &str) -> Result<Self, Self::Err> {
+    Self::ALL
+      .into_iter()
+      .find(|state| state.as_str() == text)
+      .ok_or_else(|| format!("`{text}` is not a transfer state"))
+  }
+}
+
+impl Serialize for TransferStates {
+  fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+    serializer.serialize_str(self.as_str())
+  }
+}
+
+impl<'de> Deserialize<'de> for TransferStates {
+  fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+    let text = <std::borrow::Cow<'de, str>>::deserialize(deserializer)?;
+    text.parse().map_err(serde::de::Error::custom)
+  }
+}
+
+impl utoipa::PartialSchema for TransferStates {
+  fn schema() -> utoipa::openapi::RefOr<utoipa::openapi::schema::Schema> {
+    utoipa::openapi::ObjectBuilder::new()
+      .schema_type(utoipa::openapi::schema::Type::String)
+      .description(Some("where a transfer is"))
+      .enum_values(Some(Self::ALL.map(Self::as_str)))
+      .into()
+  }
+}
+
+impl utoipa::ToSchema for TransferStates {}
 
 /// Which way a transfer moves its file, seen from this daemon.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
@@ -252,11 +327,40 @@ mod tests {
   }
 
   #[test]
-  fn transfer_states_are_read_leniently_about_spacing_but_not_names() {
-    let read: TransferStates = serde_json::from_str("\"Completed,Succeeded\"").unwrap();
-    assert_eq!(read, TransferStates::Completed | TransferStates::Succeeded);
-    assert!(serde_json::from_str::<TransferStates>("\"completed, succeeded\"").is_err());
-    assert!(serde_json::from_str::<TransferStates>("\"Completed, \"").is_err());
-    assert!(serde_json::from_str::<TransferStates>("\"\"").is_err());
+  fn transfer_states_are_written_exactly_and_read_back() {
+    let names = [
+      "Requested",
+      "Queued, Locally",
+      "Queued, Remotely",
+      "Initializing",
+      "InProgress",
+      "Completed, Succeeded",
+      "Completed, Cancelled",
+      "Completed, TimedOut",
+      "Completed, Errored",
+      "Completed, Rejected",
+      "Completed, Aborted",
+    ];
+    for (state, name) in TransferStates::ALL.into_iter().zip(names) {
+      let json = format!("\"{name}\"");
+      assert_eq!(serde_json::to_string(&state).unwrap(), json);
+      assert_eq!(
+        serde_json::from_str::<TransferStates>(&json).unwrap(),
+        state
+      );
+    }
+    for text in [
+      "None",
+      "Queued",
+      "Completed",
+      "Completed,Succeeded",
+      "completed, succeeded",
+      "",
+    ] {
+      assert!(
+        serde_json::from_str::<TransferStates>(&format!("\"{text}\"")).is_err(),
+        "{text}"
+      );
+    }
   }
 }

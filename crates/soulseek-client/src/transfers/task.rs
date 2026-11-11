@@ -14,7 +14,7 @@ use tokio_util::sync::CancellationToken;
 use super::RemoteFailures;
 use super::options::StateChanged;
 use super::record::{Tracker, Transfer};
-use super::state::TransferState;
+use super::state::{TransferOutcome, TransferState};
 use crate::error::ClientError;
 use crate::lock;
 
@@ -163,16 +163,15 @@ async fn failed(remote_failure: &mut Option<RemoteFailures>) -> ClientError {
   }
 }
 
-/// the state a transfer ends in for the error that ended it
-pub(super) fn outcome(error: &ClientError) -> TransferState {
-  TransferState::COMPLETED
-    | match error {
-      ClientError::Canceled => TransferState::CANCELLED,
-      ClientError::Timeout(_) => TransferState::TIMED_OUT,
-      ClientError::TransferRejected(_) => TransferState::REJECTED,
-      ClientError::SizeMismatch { .. } => TransferState::ABORTED,
-      _ => TransferState::ERRORED,
-    }
+/// how a transfer ended by `error` ended
+pub(super) fn outcome(error: &ClientError) -> TransferOutcome {
+  match error {
+    ClientError::Canceled => TransferOutcome::Cancelled,
+    ClientError::Timeout(_) => TransferOutcome::TimedOut,
+    ClientError::TransferRejected(_) => TransferOutcome::Rejected,
+    ClientError::SizeMismatch { .. } => TransferOutcome::Aborted,
+    _ => TransferOutcome::Errored,
+  }
 }
 
 /// Reports how a transfer ended: the last progress, if bytes ever moved, then the final state.
@@ -185,13 +184,22 @@ pub(super) fn finish(
   if in_progress {
     tracker.emit_progress(tracker.bytes_transferred());
   }
+  // a transfer completes once, here, and any state but a completed one may complete
+  let ended = "a transfer completes once";
   match result {
     Ok(()) => {
-      tracker.emit_state(TransferState::COMPLETED | TransferState::SUCCEEDED, None);
+      tracker
+        .emit_state(TransferState::Completed(TransferOutcome::Succeeded), None)
+        .expect(ended);
       Ok(tracker.snapshot())
     }
     Err(error) => {
-      tracker.emit_state(outcome(&error), Some(error.clone()));
+      tracker
+        .emit_state(
+          TransferState::Completed(outcome(&error)),
+          Some(error.clone()),
+        )
+        .expect(ended);
       Err(error)
     }
   }
@@ -207,14 +215,14 @@ mod tests {
   #[test]
   fn each_error_ends_in_its_state() {
     let cases = [
-      (ClientError::Canceled, TransferState::CANCELLED),
+      (ClientError::Canceled, TransferOutcome::Cancelled),
       (
         ClientError::Timeout("late".into()),
-        TransferState::TIMED_OUT,
+        TransferOutcome::TimedOut,
       ),
       (
         ClientError::TransferRejected("Banned".into()),
-        TransferState::REJECTED,
+        TransferOutcome::Rejected,
       ),
       (
         ClientError::SizeMismatch {
@@ -222,23 +230,23 @@ mod tests {
           remote: 2,
           source: None,
         },
-        TransferState::ABORTED,
+        TransferOutcome::Aborted,
       ),
       (
         ClientError::TransferReportedFailed("failed".into()),
-        TransferState::ERRORED,
+        TransferOutcome::Errored,
       ),
       (
         ClientError::UserOffline("gone".into()),
-        TransferState::ERRORED,
+        TransferOutcome::Errored,
       ),
       (
         ClientError::connection(ConnectionErrorKind::Read, "closed"),
-        TransferState::ERRORED,
+        TransferOutcome::Errored,
       ),
     ];
     for (error, state) in cases {
-      assert_eq!(outcome(&error), TransferState::COMPLETED | state, "{error}");
+      assert_eq!(outcome(&error), state, "{error}");
     }
   }
 
@@ -254,7 +262,7 @@ mod tests {
   #[tokio::test]
   async fn enqueued_reports_a_task_that_failed_before_any_state() {
     let handle = tokio::spawn(async { Err(ClientError::DuplicateToken(7)) });
-    let (_observer, reached) = observer(TransferState::QUEUED_REMOTELY);
+    let (_observer, reached) = observer(TransferState::QueuedRemotely);
     assert!(matches!(
       enqueued(handle, reached).await,
       Err(ClientError::DuplicateToken(7))

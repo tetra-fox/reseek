@@ -18,7 +18,7 @@ use async_trait::async_trait;
 use axum::response::Response;
 use base64::Engine;
 use cascade::Watcher;
-use soulseek_client::{BrowseOptions, ClientError, TransferState};
+use soulseek_client::{BrowseOptions, ClientError};
 use tokio_util::sync::CancellationToken;
 use tracing::debug;
 
@@ -356,7 +356,7 @@ impl UserService for Users {
     let uploading = client
       .uploads()
       .iter()
-      .any(|t| t.username == username && !t.state.contains(TransferState::COMPLETED));
+      .any(|t| t.username == username && !t.state.is_terminal());
     if uploading {
       return Err(ApiError::conflict(
         format!("{username} has uploads that have not completed"),

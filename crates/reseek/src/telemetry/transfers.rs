@@ -89,12 +89,18 @@ impl TransferFamily {
 
 /// Whether a transfer in `state` waits: requested, or queued here or at the peer.
 fn queued(state: TransferState) -> bool {
-  state == TransferState::REQUESTED || state.contains(TransferState::QUEUED)
+  matches!(
+    state,
+    TransferState::Requested | TransferState::QueuedLocally | TransferState::QueuedRemotely
+  )
 }
 
 /// Whether a transfer in `state` is under way: making its connection or moving bytes.
 fn in_progress(state: TransferState) -> bool {
-  state == TransferState::INITIALIZING || state == TransferState::IN_PROGRESS
+  matches!(
+    state,
+    TransferState::Initializing | TransferState::InProgress
+  )
 }
 
 impl TransferMetrics {
@@ -232,7 +238,7 @@ impl TransferMetrics {
   pub fn pace(&self, transfers: &[Transfer]) {
     let speeds: Vec<f64> = transfers
       .iter()
-      .filter(|t| t.state == TransferState::IN_PROGRESS)
+      .filter(|t| t.state == TransferState::InProgress)
       .map(|t| t.average_speed)
       .collect();
     if speeds.is_empty() {

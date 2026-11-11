@@ -173,9 +173,10 @@ pub enum Event {
     filename: RemoteFilename,
     place: u32,
   },
-  /// a download or upload moved from one state to another
+  /// a download or upload moved from one state to another, or a new one reports the state it
+  /// starts in, with no previous state
   TransferStateChanged {
-    previous_state: TransferState,
+    previous_state: Option<TransferState>,
     transfer: Transfer,
   },
   /// bytes of a download or upload moved; raised for every chunk, so a consumer that shows it

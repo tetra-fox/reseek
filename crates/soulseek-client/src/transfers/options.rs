@@ -31,8 +31,9 @@ pub type Governor =
 /// the governor and the speed limit allowed, and the bytes that actually moved
 pub type Reporter = Arc<dyn Fn(&Transfer, u32, u32, u32) + Send + Sync>;
 
-/// `(previous_state, transfer)` on every state change, before the client raises the event
-pub type StateChanged = Arc<dyn Fn(TransferState, &Transfer) + Send + Sync>;
+/// `(previous_state, transfer)` on every state change, before the client raises the event; no
+/// previous state for the first report of a new transfer
+pub type StateChanged = Arc<dyn Fn(Option<TransferState>, &Transfer) + Send + Sync>;
 
 /// `(previous_bytes_transferred, transfer)` on every progress update, before the client raises
 /// the event

@@ -187,8 +187,8 @@ pub fn sample(kind: EventType, d: &str, now: DateTime<Utc>) -> Option<Event> {
   })
 }
 
-/// A transfer with every field at its zero: the zero id, no state, no bytes, requested at the
-/// start of year 1.
+/// A transfer with every field at its zero: the zero id, the state a new transfer starts in,
+/// no bytes, requested at the start of year 1.
 fn blank_transfer() -> Transfer {
   let year_one = NaiveDate::from_ymd_opt(1, 1, 1)
     .and_then(|day| day.and_hms_opt(0, 0, 0))
@@ -201,7 +201,7 @@ fn blank_transfer() -> Transfer {
     direction: TransferDirection::Download,
     filename: String::new(),
     size: 0,
-    state: TransferStates::empty(),
+    state: TransferStates::QueuedLocally,
     requested_at: year_one,
     enqueued_at: None,
     started_at: None,

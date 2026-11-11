@@ -12,29 +12,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
-use crate::transfers::{SortOrder, TransferDirection, TransferStates};
-
-/// How a finished transfer ended, as the key of a report's per-outcome map: its state without
-/// the `Completed` flag.
-#[derive(
-  Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, ToSchema,
-)]
-pub enum TransferOutcome {
-  /// the whole file arrived
-  Succeeded,
-  /// canceled here
-  Cancelled,
-  /// a connect or inactivity timeout
-  TimedOut,
-  /// any other failure
-  Errored,
-  /// the peer refused the transfer
-  Rejected,
-  /// our size and the peer's differ
-  Aborted,
-  /// completed without an outcome flag
-  None,
-}
+use crate::transfers::{SortOrder, TransferDirection, TransferOutcome, TransferStates};
 
 /// Aggregate figures over a set of finished transfers.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, ToSchema)]

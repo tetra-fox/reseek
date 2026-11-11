@@ -8,7 +8,7 @@ use api_types::transfers::TransferDirection;
 use chrono::Utc;
 use tracing::debug;
 
-use super::categories::{CANCELLED, ERRORED, FAILED, SUCCESSFUL};
+use super::categories::{CANCELLED, Condition, ERRORED, FAILED, SUCCESSFUL};
 use super::removal::{self, Removed};
 use crate::config::{TransferRetention, TransfersRetention};
 use crate::db::{Database, DbError, shifted, timestamp};
@@ -21,12 +21,14 @@ fn before_now(age: Duration) -> String {
 }
 
 /// The outcomes of one direction with how long each is kept, in the order they are swept.
-fn outcomes(retention: &TransferRetention) -> [(&'static str, Option<Duration>, &'static str); 4] {
+fn outcomes(
+  retention: &TransferRetention,
+) -> [(&'static str, Option<Duration>, &'static Condition); 4] {
   [
-    ("succeeded", retention.succeeded, SUCCESSFUL),
-    ("canceled", retention.canceled, CANCELLED),
-    ("errored", retention.errored, ERRORED),
-    ("failed", retention.failed, FAILED),
+    ("succeeded", retention.succeeded, &SUCCESSFUL),
+    ("canceled", retention.canceled, &CANCELLED),
+    ("errored", retention.errored, &ERRORED),
+    ("failed", retention.failed, &FAILED),
   ]
 }
 
@@ -89,7 +91,7 @@ pub async fn prune(
 async fn expire(
   db: &Database,
   direction: TransferDirection,
-  condition: &'static str,
+  condition: &'static Condition,
   age: Duration,
 ) -> Result<Vec<Removed>, DbError> {
   let cutoff = before_now(age);
@@ -130,6 +132,8 @@ async fn purge(db: &Database, after: Duration) -> Result<usize, DbError> {
 
 #[cfg(test)]
 mod tests {
+  use api_types::transfers::{TransferOutcome, TransferStates};
+
   use super::*;
   use crate::transfers::fixtures::{Row, insert, transfers};
   use crate::transfers::store;
@@ -137,7 +141,7 @@ mod tests {
 
   const HOUR: Duration = Duration::from_secs(3600);
 
-  fn ended(user: &str, state: u32, hours_ago: i64) -> Row {
+  fn ended(user: &str, state: TransferStates, hours_ago: i64) -> Row {
     let mut row = Row::new(user, TransferDirection::Download, state);
     row.ended_at = Some(Utc::now() - chrono::Duration::hours(hours_ago));
     row
@@ -164,11 +168,31 @@ mod tests {
     insert(
       &db,
       vec![
-        ended("old-success", 48, 3),
-        ended("new-success", 48, 1),
-        ended("old-rejected", 528, 3),
-        ended("old-canceled", 80, 3),
-        Row::new("running", TransferDirection::Download, 8),
+        ended(
+          "old-success",
+          TransferStates::Completed(TransferOutcome::Succeeded),
+          3,
+        ),
+        ended(
+          "new-success",
+          TransferStates::Completed(TransferOutcome::Succeeded),
+          1,
+        ),
+        ended(
+          "old-rejected",
+          TransferStates::Completed(TransferOutcome::Rejected),
+          3,
+        ),
+        ended(
+          "old-canceled",
+          TransferStates::Completed(TransferOutcome::Cancelled),
+          3,
+        ),
+        Row::new(
+          "running",
+          TransferDirection::Download,
+          TransferStates::InProgress,
+        ),
       ],
     )
     .await;
@@ -188,11 +212,23 @@ mod tests {
   async fn removed_transfers_are_deleted_once_removed_long_enough_with_their_history() {
     let db = transfers().await;
     let live = Live::new(CancellationToken::new());
-    let mut long_ago = ended("long-ago", 48, 3);
+    let mut long_ago = ended(
+      "long-ago",
+      TransferStates::Completed(TransferOutcome::Succeeded),
+      3,
+    );
     long_ago.removed = true;
-    let mut lately = ended("lately", 48, 3);
+    let mut lately = ended(
+      "lately",
+      TransferStates::Completed(TransferOutcome::Succeeded),
+      3,
+    );
     lately.removed = true;
-    let kept = ended("kept", 48, 3);
+    let kept = ended(
+      "kept",
+      TransferStates::Completed(TransferOutcome::Succeeded),
+      3,
+    );
     let (gone, stays) = (long_ago.id, lately.id);
     insert(&db, vec![long_ago, lately, kept]).await;
     db.write(move |conn| {
@@ -205,12 +241,7 @@ mod tests {
         "UPDATE Transfers SET RemovedAt = ?2 WHERE Id = ?1",
         rusqlite::params![stays.to_string(), timestamp(Utc::now())],
       )?;
-      store::entered(
-        conn,
-        gone,
-        api_types::transfers::TransferStates::InProgress,
-        Utc::now(),
-      )
+      store::entered(conn, gone, TransferStates::InProgress, Utc::now())
     })
     .await
     .unwrap();

@@ -3,14 +3,14 @@
 use std::collections::BTreeMap;
 
 use api_types::reports::{
-  DirectionSummaries, SummaryQuery, SummaryReport, TransferOutcome, TransferSummary,
-  UserDirectionReport, UserReport, UserTransferStatistics,
+  DirectionSummaries, SummaryQuery, SummaryReport, TransferSummary, UserDirectionReport,
+  UserReport, UserTransferStatistics,
 };
-use api_types::transfers::TransferDirection;
+use api_types::transfers::{TransferDirection, TransferOutcome};
 use rusqlite::{Connection, params_from_iter};
 
 use super::failures::pareto_rows;
-use super::{Filter, Reports, SUMMARY, Window, outcome, summary_at};
+use super::{Filter, Reports, SUMMARY, Window, outcome_at, summary_at};
 use crate::db::DbError;
 use crate::transfers::categories::{COMPLETED, SUCCESSFUL};
 use crate::transfers::direction_at;
@@ -35,8 +35,8 @@ impl Reports {
             .direction(query.direction)
             .username(query.username.as_deref())
         };
-        let directions = by_outcome(conn, filter().states(COMPLETED))?;
-        let succeeded = filter().states(SUCCESSFUL);
+        let directions = by_outcome(conn, filter().states(&COMPLETED))?;
+        let succeeded = filter().states(&SUCCESSFUL);
         let distinct_users: i64 = conn.query_row(
           &format!(
             "SELECT COUNT(DISTINCT Username) FROM Transfers{}",
@@ -67,7 +67,7 @@ impl Reports {
               .direction(Some(direction))
               .username(Some(&username))
           };
-          let summaries = by_outcome(conn, filter().states(COMPLETED))?;
+          let summaries = by_outcome(conn, filter().states(&COMPLETED))?;
           let summary = match direction {
             TransferDirection::Download => summaries.download,
             TransferDirection::Upload => summaries.upload,
@@ -98,18 +98,18 @@ fn by_outcome(conn: &Connection, filter: Filter) -> rusqlite::Result<DirectionSu
   let rows = statement.query_map(params_from_iter(&filter.values), |row| {
     Ok((
       direction_at(row, 0)?,
-      row.get::<_, u32>(1)?,
+      outcome_at(row, 1)?,
       summary_at(row, 2)?,
     ))
   })?;
   let mut summaries = DirectionSummaries::default();
   for row in rows {
-    let (direction, state, summary) = row?;
+    let (direction, outcome, summary) = row?;
     let into = match direction {
       TransferDirection::Download => &mut summaries.download,
       TransferDirection::Upload => &mut summaries.upload,
     };
-    into.insert(outcome(state), summary);
+    into.insert(outcome, summary);
   }
   Ok(summaries)
 }

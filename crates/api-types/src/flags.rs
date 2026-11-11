@@ -1,5 +1,7 @@
 //! Flag sets written as the names of their set flags joined by `", "`, in ascending bit order,
-//! with `"None"` for the empty set, such as `"Completed, Succeeded"` or `"Connected, LoggedIn"`.
+//! with `"None"` for the empty set: the server connection state such as `"Connected, LoggedIn"`,
+//! a search's state such as `"Completed, TimedOut"`, and file attributes such as
+//! `"ReadOnly, Directory"`.
 
 use bitflags::Flags;
 
@@ -78,7 +80,6 @@ mod tests {
   use crate::files::FilesystemAttributes as Fs;
   use crate::search::SearchStates as Search;
   use crate::state::ServerConnectionState as Server;
-  use crate::transfers::TransferStates as Transfer;
 
   fn round_trip<F: Serialize + DeserializeOwned + PartialEq + Debug>(rows: &[(F, &str)]) {
     for (value, text) in rows {
@@ -113,21 +114,6 @@ mod tests {
       ),
       (Search::Completed | Search::Errored, "Completed, Errored"),
       (Search::empty(), "None"),
-    ]);
-    round_trip(&[
-      (Transfer::Requested, "Requested"),
-      (Transfer::Queued | Transfer::Locally, "Queued, Locally"),
-      (Transfer::Remotely | Transfer::Queued, "Queued, Remotely"),
-      (Transfer::InProgress, "InProgress"),
-      (
-        Transfer::Succeeded | Transfer::Completed,
-        "Completed, Succeeded",
-      ),
-      (
-        Transfer::Completed | Transfer::Aborted,
-        "Completed, Aborted",
-      ),
-      (Transfer::empty(), "None"),
     ]);
   }
 }
