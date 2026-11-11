@@ -7,7 +7,7 @@ use api_types::options::{
 };
 use reqwest::StatusCode;
 
-use super::{Client, Result, Route, json, send};
+use super::{Client, Result, Route, checked, json, send};
 
 impl Client {
   /// `GET /options`: the options in effect.
@@ -31,7 +31,8 @@ impl Client {
   }
 
   /// `PATCH /options`: sets and removes runtime overrides; `None` when there was nothing to
-  /// change.
+  /// change. With `patch.revision`, from the view the change was made from, a change made since
+  /// is refused with 409; without, it is overwritten.
   pub async fn patch_options(&self, patch: &OptionsPatch) -> Result<Option<OptionsChanged>> {
     let response = send(self.patch(Route::new("options")).json(patch)).await?;
     if response.status() == StatusCode::NO_CONTENT {
@@ -40,9 +41,11 @@ impl Client {
     Ok(Some(serde_json::from_slice(&response.bytes().await?)?))
   }
 
-  /// `DELETE /options/overrides/{key}`: removes the runtime override of `key`.
-  pub async fn remove_override(&self, key: &str) -> Result<OptionsChanged> {
-    json(self.delete(Route::new("options/overrides").segment(key))).await
+  /// `DELETE /options/overrides/{key}`: removes the runtime override of `key`. With
+  /// `revision`, from the view it was read from, a change made since is refused with 409.
+  pub async fn remove_override(&self, key: &str, revision: Option<&str>) -> Result<OptionsChanged> {
+    let route = Route::new("options/overrides").segment(key);
+    json(self.delete(route.query(&checked(revision))?)).await
   }
 
   /// `GET /options/file`: a configuration file's text.

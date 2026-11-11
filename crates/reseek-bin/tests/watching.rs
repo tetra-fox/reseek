@@ -85,7 +85,8 @@ async fn our_interests_reach_the_server_when_changed_and_at_every_login() {
     liked: vec!["jazz".into()],
     hated: vec!["polka".into()],
   };
-  api.set_interests(&lists).await.unwrap();
+  let read = api.profile().await.unwrap().options_revision;
+  api.set_interests(&lists, Some(&read)).await.unwrap();
   let told = server
     .request_matching(|request| match request {
       ServerRequest::LikedInterestAdd(LikedInterestAdd { interest }) => Some(interest),

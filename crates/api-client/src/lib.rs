@@ -321,6 +321,14 @@ async fn done(request: RequestBuilder) -> Result<()> {
   send(request).await.map(drop)
 }
 
+/// The query that checks a change against the options' `revision`, or makes no check without
+/// one.
+fn checked(revision: Option<&str>) -> api_types::options::RevisionQuery {
+  api_types::options::RevisionQuery {
+    revision: revision.map(str::to_string),
+  }
+}
+
 /// The answer's body as it is.
 async fn bytes(request: RequestBuilder) -> Result<Bytes> {
   Ok(send(request).await?.bytes().await?)

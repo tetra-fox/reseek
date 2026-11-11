@@ -113,7 +113,11 @@ async fn another_user_searches_browses_and_asks_the_daemon() {
     (3, 0, true)
   );
 
-  api.set_profile_text("Jazz, mostly.").await.unwrap();
+  let read = api.profile().await.unwrap().options_revision;
+  api
+    .set_profile_text("Jazz, mostly.", Some(&read))
+    .await
+    .unwrap();
   let mut png = Vec::new();
   let square = image::RgbaImage::from_pixel(900, 900, image::Rgba([10, 200, 90, 255]));
   image::ImageEncoder::write_image(
