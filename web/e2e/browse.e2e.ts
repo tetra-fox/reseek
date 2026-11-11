@@ -50,20 +50,26 @@ const browseCarol = async (page: Page, opened?: string) => {
   return tree;
 };
 
+/** An animation that started, by its name and the key of the line it played on */
+type Started = { line: string | null; name: string };
+
 /**
- * Notes, from now on, the name of every animation that starts in `locator`, for a check that an
- * entrance played however soon it ended
+ * Notes, from now on, every animation that starts in `locator` and the line it plays on, for a
+ * check that an entrance played however soon it ended
  */
 const watchAnimations = (locator: Locator) =>
   locator.evaluate((box: HTMLElement) => {
-    const started: string[] = [];
+    const started: Started[] = [];
     Object.assign(window, { started });
-    box.addEventListener("animationstart", (e) => started.push(e.animationName));
+    box.addEventListener("animationstart", (e) => {
+      const line = e.target instanceof Element ? e.target.closest("[data-line]") : null;
+      started.push({ line: line?.getAttribute("data-line") ?? null, name: e.animationName });
+    });
   });
 
-/** The names `watchAnimations` noted */
+/** The animations `watchAnimations` noted */
 const started = (page: Page) =>
-  page.evaluate(() => (window as unknown as { started: string[] }).started);
+  page.evaluate(() => (window as unknown as { started: Started[] }).started);
 
 test("a folder opens in place with its files under it, and they come in", async ({ page }) => {
   const tree = await browseCarol(page);
@@ -73,7 +79,9 @@ test("a folder opens in place with its files under it, and they come in", async 
   await albums.click();
   const first = fileLine(tree, "\\Albums\\A01.flac");
   await expect(first).toBeVisible();
-  await expect.poll(() => started(page)).toContain("line-in");
+  await expect
+    .poll(() => started(page))
+    .toContainEqual({ line: `${MUSIC}\\Albums\\A01.flac`, name: "line-in" });
   // the folder's files come right after its line, before the next folder's
   const keys = await tree
     .locator("[role=rowgroup] [data-line]")

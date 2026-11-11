@@ -76,6 +76,11 @@ for (const [width, height] of [
     await expect(
       page.getByRole("group", { name: "Transfers over time series" }).getByRole("button")
     ).toHaveCount(0);
+    // the marks tween to a new size and the box does not, so each chart cuts them at its edge
+    for (const name of ["Transfers over time", "Transfer outcomes"]) {
+      const svg = page.getByRole("img", { name }).first().locator("svg").first();
+      await expect(svg, name).toHaveCSS("overflow", "hidden");
+    }
   });
 }
 

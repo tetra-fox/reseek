@@ -272,11 +272,18 @@ test("zooms around the pointer, pans, and loads the detail in view", async ({ pa
 test("the cursor follows playback and a click seeks it", async ({ page }) => {
   await fakeDownloads(page);
   await fakeAnalysis(page);
-  // the bytes of the range the browser asks for, as the daemon serves them: a whole file answered
-  // to a range leaves it unseekable, and a seek starts it over
+  // the file as the daemon serves it, whole or the range the browser asks for: a whole file
+  // answered to a range leaves it unseekable, and a seek starts it over
   const sound = wav(6);
   await page.route("**/api/v0/transfers/downloads/alice/*/content**", (route) => {
-    const [first, last] = (route.request().headers()["range"] ?? "bytes=0-")
+    const range = route.request().headers()["range"];
+    if (!range) {
+      return route.fulfill({
+        body: sound,
+        headers: { "content-type": "audio/wav", "accept-ranges": "bytes" }
+      });
+    }
+    const [first, last] = range
       .replace("bytes=", "")
       .split("-")
       .map((n, i) => (n ? Number(n) : i ? sound.length - 1 : 0));
