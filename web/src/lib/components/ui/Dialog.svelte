@@ -18,6 +18,8 @@
      * until it ends, so what the request does next happens in the dialog that asked for it
      */
     busy?: boolean;
+    /** where focus goes when it closes, in place of what had it before it opened */
+    returnTo?: () => HTMLElement | null;
     class?: string;
     children: Snippet;
   };
@@ -28,6 +30,7 @@
     description,
     footer,
     busy = false,
+    returnTo,
     class: className,
     children
   }: Props = $props();
@@ -40,6 +43,12 @@
     <Dialog.Content
       escapeKeydownBehavior={busy ? "ignore" : "close"}
       interactOutsideBehavior={busy ? "ignore" : "close"}
+      onCloseAutoFocus={(e) => {
+        const to = returnTo?.();
+        if (!to?.isConnected) return;
+        e.preventDefault();
+        to.focus({ preventScroll: true });
+      }}
       class={cn(
         "fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100svh-var(--safe-t)-var(--safe-b)-2rem)] w-[min(28rem,calc(100vw-2rem))] max-w-(--safe-w) -translate-x-1/2 -translate-y-1/2 flex-col rounded-card border bg-surface shadow-raised outline-none data-[state=closed]:animate-popover-out data-[state=open]:animate-popover-in",
         className

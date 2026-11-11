@@ -24,6 +24,7 @@
   import { session } from "#lib/session.svelte.js";
   import { paletteScore, paletteValue } from "#lib/shell/palette.js";
   import { palette } from "#lib/shell/palette.svelte.js";
+  import { shortcuts } from "#lib/shell/shortcuts.svelte.js";
   import { APP } from "#lib/ui/bindings.js";
   import { isPressed, keysText, TYPING_PAUSE } from "#lib/ui/keys.js";
   import { reach, USER_ACTIONS } from "#lib/users/actions.js";
@@ -65,6 +66,14 @@
         hint: keysText(APP.activity),
         keywords: "browsing searches queued uploads log network",
         run: () => (activityPrefs.open = !activityPrefs.open)
+      },
+      {
+        id: "shortcuts",
+        group: "Screens",
+        label: "Keyboard shortcuts",
+        hint: keysText(APP.shortcuts),
+        keywords: "keys keyboard hotkeys bindings help",
+        run: () => shortcuts.show(palette.from)
       },
       ...systemTabs.map((t) => ({
         id: `/system/${t.tab}`,

@@ -1,4 +1,7 @@
+import { flushSync, mount, unmount } from "svelte";
 import { afterEach, describe, expect, it } from "vitest";
+
+import Select from "#lib/components/ui/Select.svelte";
 
 import { APP, CHAT, DETAILS, LIST } from "./bindings";
 import { isPressed, keepsKey, keysAria, keysText, keyStep, layerOpen } from "./keys";
@@ -74,6 +77,25 @@ describe("an open layer", () => {
     expect(layerOpen()).toBe(false);
     document.body.innerHTML = `<div role="dialog"></div>`;
     expect(layerOpen()).toBe(true);
+    // a list of options that is part of the page, as the composer's suggestions, is not one
+    document.body.innerHTML = `<div role="listbox"></div>`;
+    expect(layerOpen()).toBe(false);
+  });
+
+  it("counts a select's list while it is open", () => {
+    document.body.innerHTML = "";
+    const select = mount(Select, {
+      target: document.body,
+      props: { "value": "", "options": [{ value: "", label: "Any group" }], "aria-label": "Group" }
+    });
+    flushSync();
+    expect(layerOpen()).toBe(false);
+    const trigger = document.querySelector<HTMLElement>('[aria-label="Group"]')!;
+    trigger.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    flushSync();
+    expect(document.querySelector('[role="listbox"]')).not.toBeNull();
+    expect(layerOpen()).toBe(true);
+    unmount(select);
   });
 });
 

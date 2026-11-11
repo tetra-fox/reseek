@@ -40,13 +40,17 @@ export const keepsKey = (e: KeyboardEvent): boolean => {
 export const inControl = (e: MouseEvent) => inside(e, `${KEEPS_ALL},${KEEPS_PRESS},label`);
 
 /**
- * Whether a menu, a dialog or a hover card is open, which Escape closes before anything under
- * it. One closing stays in the page for its exit animation, marked `data-state="closed"`, and
- * no longer counts
+ * Whether a menu, a dialog, a hover card or a select's list is open, which Escape closes before
+ * anything under it. One closing stays in the page for its exit animation, marked
+ * `data-state="closed"`, and no longer counts. A list of options that is part of the page, with
+ * no `data-state`, is not a layer
  */
 export const layerOpen = () =>
   !!document.querySelector(
-    ["menu", "dialog", "alertdialog"].map((r) => `[role=${r}]:not([data-state=closed])`).join(",")
+    [
+      ...["menu", "dialog", "alertdialog"].map((r) => `[role=${r}]:not([data-state=closed])`),
+      "[role=listbox][data-state=open]"
+    ].join(",")
   );
 
 /** Whether the keyboard is a Mac's, whose shortcuts take Cmd where others take Ctrl */
