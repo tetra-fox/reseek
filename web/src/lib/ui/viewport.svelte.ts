@@ -5,6 +5,7 @@ const narrow = new MediaQuery("max-width: 767px");
 const sm = new MediaQuery("min-width: 640px");
 const lg = new MediaQuery("min-width: 1024px");
 const xxl = new MediaQuery("min-width: 1536px");
+const finePointer = new MediaQuery("any-pointer: fine");
 
 /** What the window's width allows, decided here once for every screen */
 export const viewport = {
@@ -22,6 +23,10 @@ export const viewport = {
   /** at least Tailwind's `2xl` */
   get xxl() {
     return xxl.current;
+  },
+  /** a mouse or trackpad is at hand, as it is not on a touch-only phone or tablet */
+  get finePointer() {
+    return finePointer.current;
   }
 };
 

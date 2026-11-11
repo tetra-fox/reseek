@@ -3,6 +3,7 @@
   import CircleUserIcon from "@lucide/svelte/icons/circle-user";
   import ContactIcon from "@lucide/svelte/icons/contact";
   import EllipsisVerticalIcon from "@lucide/svelte/icons/ellipsis-vertical";
+  import KeyboardIcon from "@lucide/svelte/icons/keyboard";
   import LogOutIcon from "@lucide/svelte/icons/log-out";
 
   import { app } from "#lib/app.svelte.js";
@@ -13,12 +14,16 @@
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { href } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
+  import { shortcuts } from "#lib/shell/shortcuts.svelte.js";
   import { sidebar } from "#lib/shell/sidebar.svelte.js";
+  import { viewport } from "#lib/ui/viewport.svelte.js";
   import { ownProfile } from "#lib/users/profile.svelte.js";
 
   const name = $derived(session.principal?.name ?? "");
   const role = $derived(session.principal?.role ?? "");
   let confirming = $state(false);
+  /** the menu button, which focus goes back to after what the menu opened */
+  let button = $state<HTMLButtonElement | null>(null);
   ownProfile.need();
 
   const logout = async () => {
@@ -42,6 +47,7 @@
         {#snippet child({ props: trigger })}
           <button
             {...trigger}
+            bind:this={button}
             aria-label={sidebar.collapsed ? name : undefined}
             class={[
               "flex min-h-control w-full min-w-0 items-center gap-2 rounded-control text-left text-sm transition-colors duration-(--motion-fast) hover:bg-hover active:bg-press data-[state=open]:bg-hover",
@@ -82,6 +88,13 @@
       <CircleUserIcon />
       Account
     </Menu.Item>
+    <!-- a touch-only device has no keyboard to list keys for -->
+    {#if viewport.finePointer}
+      <Menu.Item onSelect={() => shortcuts.show(button)}>
+        <KeyboardIcon />
+        Keyboard shortcuts
+      </Menu.Item>
+    {/if}
     {#if session.canSignOut}
       <Menu.Separator />
       <Menu.Item onSelect={() => (confirming = true)}>
