@@ -151,7 +151,7 @@
         {plural(stats.fileCount, "file", "files")} ·
         {plural(stats.directoryCount, "folder", "folders")} ·
         {formatSpeed(stats.averageSpeed)}
-        {#if stats.fetchedAt}<span class="text-fg-subtle">· {ago(stats.fetchedAt, clock.now)}</span
+        {#if stats.fetchedAt}<span class="text-fg-muted">· {ago(stats.fetchedAt, clock.now)}</span
           >{/if}
       {:else}
         <span class="text-fg-muted">{SHARES_UNKNOWN}</span>

@@ -64,7 +64,7 @@
           ><MiddleTruncate text={node.label} path /></span>
       {/snippet}
     </Tooltip>
-    <span class="text-xs text-fg-subtle"><span>{folderCaption(node)}</span></span>
+    <span class="text-xs text-fg-muted"><span>{folderCaption(node)}</span></span>
   </span>
 </span>
 <div class="flex shrink-0 items-center gap-0.5 row-action">

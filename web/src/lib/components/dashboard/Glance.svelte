@@ -50,7 +50,7 @@
           ]}>{p.text}</a>
       {/each}
     </span>
-    {#if note}<span class="truncate text-xs text-fg-subtle">{note}</span>{/if}
+    {#if note}<span class="truncate text-xs text-fg-muted">{note}</span>{/if}
   </div>
 {/snippet}
 

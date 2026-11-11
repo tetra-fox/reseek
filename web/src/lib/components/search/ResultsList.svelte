@@ -237,7 +237,7 @@
         >{formatCount(row.queue)}</span>
     {/if}
     {#if shows.has("free")}
-      <span role="gridcell" class={["px-2", row.free ? "text-success" : "text-fg-muted"]}>
+      <span role="gridcell" class={["px-2", row.free ? "text-success-soft-fg" : "text-fg-muted"]}>
         {row.free ? "Yes" : "No"}
       </span>
     {/if}

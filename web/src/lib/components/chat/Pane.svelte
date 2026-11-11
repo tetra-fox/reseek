@@ -140,7 +140,7 @@
           class="relative z-1 flex h-control-sm flex-1 items-center justify-center rounded-control text-sm text-fg-muted transition-colors duration-(--motion-fast) hover:text-fg data-[state=active]:text-fg data-[state=inactive]:hover:bg-hover">
           {t.title}
           {#if t.id === "wall" && members.shownWall.length}
-            <span class="ml-1 text-xs text-fg-subtle tabular-nums"
+            <span class="ml-1 text-xs text-fg-muted tabular-nums"
               >{formatCount(members.shownWall.length)}</span>
           {/if}
         </Tabs.Trigger>

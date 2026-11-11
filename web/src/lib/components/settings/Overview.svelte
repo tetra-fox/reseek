@@ -119,11 +119,11 @@
           {@const revision = file.revision}
           <Tooltip text={revision}>
             {#snippet child({ props })}
-              <code {...props} class="text-xs text-fg-subtle">{revision.slice(0, 15)}</code>
+              <code {...props} class="text-xs text-fg-muted">{revision.slice(0, 15)}</code>
             {/snippet}
           </Tooltip>
         {:else}
-          <span class="text-xs text-fg-subtle">Not written yet</span>
+          <span class="text-xs text-fg-muted">Not written yet</span>
         {/if}
       </li>
     {/each}
@@ -139,7 +139,7 @@
         <li class="flex flex-wrap items-center gap-inline px-5 py-2 text-sm">
           <code class="min-w-0 font-medium wrap-anywhere">{key}</code>
           <code class="min-w-0 wrap-anywhere text-fg-muted">{JSON.stringify(override.value)}</code>
-          <span class="min-w-0 text-xs wrap-anywhere text-fg-subtle">
+          <span class="min-w-0 text-xs wrap-anywhere text-fg-muted">
             by {setBy(override.setBy)}, {lasting(override)}
           </span>
           <Tooltip text={`Remove override of ${key}`}>

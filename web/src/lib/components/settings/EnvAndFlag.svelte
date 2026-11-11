@@ -35,7 +35,7 @@
 <button
   bind:this={button}
   type="button"
-  class="flex w-fit items-center gap-1 rounded-badge text-xs text-fg-subtle hover:text-fg"
+  class="flex w-fit items-center gap-1 rounded-badge text-xs text-fg-muted hover:text-fg"
   aria-label={`Environment variable and flag for ${label}`}
   aria-haspopup="dialog"
   aria-expanded={open}

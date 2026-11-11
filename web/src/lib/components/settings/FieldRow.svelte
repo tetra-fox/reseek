@@ -111,8 +111,7 @@
             >{part.text}</code
           >{:else}{part.text}{/if}{/each}
       {#if !tabular && info.default !== null && info.default !== undefined && !(Array.isArray(info.default) && !info.default.length)}
-        <span class="text-fg-subtle"
-          >Default <code class="font-mono wrap-anywhere">{shown(info.default)}</code></span>
+        Default <code class="font-mono wrap-anywhere">{shown(info.default)}</code>
       {/if}
     </p>
   </div>
@@ -134,8 +133,8 @@
         {error} />
     {/key}
     {#if entry}
-      <p class="font-mono text-xs wrap-anywhere text-fg-subtle">{entry}</p>
-      <p class="text-xs text-fg-subtle">{field.derived?.note}</p>
+      <p class="font-mono text-xs wrap-anywhere text-fg-muted">{entry}</p>
+      <p class="text-xs text-fg-muted">{field.derived?.note}</p>
     {/if}
     {#if error && !tabular}<p class="text-xs text-danger" role="alert">
         <ErrorText text={error} />

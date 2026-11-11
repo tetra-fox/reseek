@@ -372,7 +372,7 @@
                     aria-label="Muted" />{/if}
                 {#if summary?.block}<Badge tone="danger" class="-my-px py-0">blocked</Badge>{/if}
               </span>
-              <span class="row-meta text-right text-xs text-fg-subtle"
+              <span class="row-meta text-right text-xs text-fg-muted"
                 ><span>{at ? ago(at, clock.now) : ""}</span></span>
             </span>
             <span class="flex items-center gap-2">

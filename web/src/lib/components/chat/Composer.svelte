@@ -328,7 +328,7 @@
           <dd class="text-xs text-fg-muted">{c.about}</dd>
         {/each}
       </dl>
-      <p class="mt-2 text-xs text-fg-subtle">Start with // to send a message that begins with /</p>
+      <p class="mt-2 text-xs text-fg-muted">Start with // to send a message that begins with /</p>
     </div>
   {/if}
   <div class="flex items-end gap-2">

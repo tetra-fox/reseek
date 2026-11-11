@@ -253,7 +253,7 @@
           class={["max-w-full wrap-anywhere whitespace-pre-wrap", !whole && "line-clamp-6"]}
           {@attach !whole && clamp(l.seq)}>
           <Tooltip text={l.record.context} dense
-            >{#snippet child({ props })}<span {...props} class="text-fg-subtle"
+            >{#snippet child({ props })}<span {...props} class="text-fg-muted"
                 >{l.record.context.split("::").pop()}{l.record.subContext
                   ? `[${l.record.subContext}]`
                   : ""}</span

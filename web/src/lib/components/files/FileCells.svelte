@@ -84,7 +84,7 @@
     {@render nameText()}
   {/if}
   {#if fill === "waiting"}
-    <span class="shrink-0 text-xs text-fg-subtle">Queued</span>
+    <span class="shrink-0 text-xs text-fg-muted">Queued</span>
   {:else if fill === "done"}
     <CheckIcon class="size-4 shrink-0 text-success" aria-label="Downloaded" />
   {:else if fill === "failed" && download && session.can("ReadWrite")}

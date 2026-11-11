@@ -8,7 +8,7 @@
   let { at }: { at: string } = $props();
 </script>
 
-<span role="gridcell" class="pt-0.5 text-xs whitespace-nowrap text-fg-subtle tabular-nums">
+<span role="gridcell" class="pt-0.5 text-xs whitespace-nowrap text-fg-muted tabular-nums">
   <Tooltip text={`${formatDate(at)}, ${ago(at, clock.now)}`} dense>
     {#snippet child({ props })}
       <time {...props} datetime={at}>{chatTime(at, clock.now)}</time>

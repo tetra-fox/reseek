@@ -160,7 +160,7 @@
                   <Rows3Icon class="size-4 shrink-0" />
                 {/if}
                 <span class={["truncate", sidebar.collapsed && "hidden"]}>Density</span>
-                <span class={["ml-auto text-xs text-fg-subtle", sidebar.collapsed && "hidden"]}
+                <span class={["ml-auto text-xs text-fg-muted", sidebar.collapsed && "hidden"]}
                   >{DENSITY_LABELS[settings.density]}</span>
               </button>
             {/snippet}

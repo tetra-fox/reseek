@@ -330,7 +330,7 @@
                   <div class="flex flex-col gap-1">
                     <span class="text-xs font-medium text-fg-muted">{column.label}</span>
                     {@render cell(row, i, column)}
-                    <span class="text-xs text-pretty text-fg-subtle">
+                    <span class="text-xs text-pretty text-fg-muted">
                       {#each helpParts(column.doc) as part, at (at)}{#if part.code}<code
                             class="font-mono wrap-anywhere">{part.text}</code
                           >{:else}{part.text}{/if}{/each}

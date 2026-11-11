@@ -99,7 +99,7 @@
       {/if}
       {#if providers.local.enabled}
         {#if providers.oidc.length}
-          <div class="flex items-center gap-3 text-xs text-fg-subtle">
+          <div class="flex items-center gap-3 text-xs text-fg-muted">
             <span class="h-px flex-1 bg-border"></span>or<span class="h-px flex-1 bg-border"></span>
           </div>
         {/if}

@@ -196,7 +196,7 @@
             </tr>
           {:else}
             <tr
-              ><td colspan="6" class="py-6 text-center text-fg-subtle"
+              ><td colspan="6" class="py-6 text-center text-fg-muted"
                 >No {table.title.toLowerCase()} in this range</td
               ></tr>
           {/each}

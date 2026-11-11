@@ -102,9 +102,7 @@
       {#if !filters.length}
         {plural(counts.files, "file", "files")} from {plural(counts.users, "user", "users")}
         {#if counts.users !== counts.allUsers}
-          <span class="text-fg-subtle">
-            (of {formatCount(counts.allFiles)} from {formatCount(counts.allUsers)})
-          </span>
+          (of {formatCount(counts.allFiles)} from {formatCount(counts.allUsers)})
         {/if}
       {/if}
     </p>

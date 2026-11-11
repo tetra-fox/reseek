@@ -168,7 +168,7 @@
               <p
                 aria-hidden="true"
                 class={[
-                  "px-2.5 pb-1 text-xs font-medium text-fg-subtle max-lg:hidden",
+                  "px-2.5 pb-1 text-xs font-medium text-fg-muted max-lg:hidden",
                   q && !members.some((s) => hits.get(s.id)) && "hidden"
                 ]}>
                 {group}
@@ -196,7 +196,7 @@
                       {/snippet}
                     </Tooltip>
                   {:else if q}
-                    <span class="ml-auto text-xs text-fg-subtle tabular-nums">{n}</span>
+                    <span class="ml-auto text-xs text-fg-muted tabular-nums">{n}</span>
                   {/if}
                 </a>
               {/each}

@@ -376,7 +376,7 @@
           data-key={line.key}
           {@attach shown.measure}>
           {#if line.kind === "start"}
-            <p class="py-2 text-center text-xs text-fg-subtle">The start of the stored history</p>
+            <p class="py-2 text-center text-xs text-fg-muted">The start of the stored history</p>
           {:else if line.kind === "day"}
             <div class="flex items-center gap-3 px-3 py-2 text-xs text-fg-muted" role="separator">
               <span class="h-px flex-1 bg-border"></span>

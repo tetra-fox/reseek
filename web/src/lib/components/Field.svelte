@@ -31,5 +31,5 @@
   </svelte:element>
   {@render children()}
   {#if id}<FieldError for={id} />{/if}
-  {#if hint}<p id={id && `${id}-hint`} class="text-xs text-pretty text-fg-subtle">{hint}</p>{/if}
+  {#if hint}<p id={id && `${id}-hint`} class="text-xs text-pretty text-fg-muted">{hint}</p>{/if}
 </div>

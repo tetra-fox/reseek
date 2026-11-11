@@ -79,7 +79,7 @@
         <div role="gridcell">
           <div class="flex items-baseline gap-2">
             <Username name={line.username} card class="text-xs" />
-            {#if line.at}<span class="ml-auto shrink-0 text-xs text-fg-subtle"
+            {#if line.at}<span class="ml-auto shrink-0 text-xs text-fg-muted"
                 >{ago(new Date(line.at).toISOString(), clock.now)}</span
               >{/if}
           </div>

@@ -12,7 +12,7 @@
   // an empty line inside a list or a table; a whole panel with nothing in it is an EmptyState
   let { text, colspan, class: className }: Props = $props();
 
-  const style = $derived(cn("px-4 py-6 text-center text-sm text-fg-subtle", className));
+  const style = $derived(cn("px-4 py-6 text-center text-sm text-fg-muted", className));
 </script>
 
 {#if colspan}

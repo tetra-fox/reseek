@@ -354,7 +354,7 @@
           <p class="text-sm text-fg-muted">No shares</p>
         {/each}
         {#if aliases.length}
-          <p class="text-xs text-fg-subtle">
+          <p class="text-xs text-fg-muted">
             Ticking a share hides it from everyone outside its groups
           </p>
         {/if}

@@ -49,6 +49,8 @@
   --color-field: oklch(0.976 0.004 var(--neutral-hue));
   --color-fg: oklch(0.19 0.012 var(--neutral-hue));
   --color-fg-muted: oklch(0.5 0.016 var(--neutral-hue));
+  /* marks that step back, such as chevrons, drag handles and idle icons; never text, which
+     reads at 4.5:1 only in fg-muted and fg */
   --color-fg-subtle: oklch(0.63 0.014 var(--neutral-hue));
   --color-accent: oklch(0.58 0.165 var(--accent-hue));
   --color-accent-hover: oklch(0.53 0.15 var(--accent-hue));

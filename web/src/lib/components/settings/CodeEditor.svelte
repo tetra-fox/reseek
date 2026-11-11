@@ -33,7 +33,7 @@
     ".cm-content": { fontFamily: "var(--font-mono)", caretColor: "var(--color-fg)" },
     ".cm-gutters": {
       backgroundColor: "var(--color-surface-muted)",
-      color: "var(--color-fg-subtle)",
+      color: "var(--color-fg-muted)",
       border: "none"
     },
     "&.cm-focused": { outline: "none" },

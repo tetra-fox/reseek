@@ -106,7 +106,7 @@
               {#snippet child({ props })}
                 <time
                   {...props}
-                  class="shrink-0 text-xs text-fg-subtle tabular-nums"
+                  class="shrink-0 text-xs text-fg-muted tabular-nums"
                   datetime={line.receivedAt}>{shortTime(line.receivedAt)}</time>
               {/snippet}
             </Tooltip>

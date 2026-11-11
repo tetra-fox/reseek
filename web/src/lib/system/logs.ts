@@ -8,8 +8,8 @@ export type Line = { seq: number; record: LogRecord };
 
 /** The levels, their short names and how their rows look */
 export const LEVELS: { level: Schemas["LogLevel"]; short: string; row: string }[] = [
-  { level: "Verbose", short: "VRB", row: "text-fg-subtle" },
-  { level: "Debug", short: "DBG", row: "text-fg-subtle" },
+  { level: "Verbose", short: "VRB", row: "text-fg-muted" },
+  { level: "Debug", short: "DBG", row: "text-fg-muted" },
   { level: "Information", short: "INF", row: "" },
   { level: "Warning", short: "WRN", row: "bg-warning-soft/50" },
   { level: "Error", short: "ERR", row: "bg-danger-soft/50" },

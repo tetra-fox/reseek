@@ -158,7 +158,7 @@
         {#if refreshing}
           <Spinner class="size-3.5" label="Refreshing" />
         {:else if stats}
-          <span class="text-xs whitespace-nowrap text-fg-subtle"
+          <span class="text-xs whitespace-nowrap text-fg-muted"
             >{ago(stats.fetchedAt, clock.now)}</span>
         {/if}
       </p>

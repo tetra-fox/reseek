@@ -87,7 +87,7 @@
       <span class="text-xs text-fg-muted">{tile.label}</span>
       <span class="text-3xl font-semibold tracking-tight tabular-nums"
         >{formatCount(tile.value)}</span>
-      <span class="text-xs text-fg-subtle">{tile.sub}</span>
+      <span class="text-xs text-fg-muted">{tile.sub}</span>
     </div>
   {/each}
 </div>

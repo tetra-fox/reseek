@@ -176,7 +176,7 @@
           <time
             {...props}
             class={[
-              "pt-px leading-5 whitespace-nowrap text-fg-subtle tabular-nums",
+              "pt-px leading-5 whitespace-nowrap text-fg-muted tabular-nums",
               notice
                 ? "text-xs"
                 : "invisible text-[0.625rem] group-focus-within/message:visible group-hover/message:visible"
@@ -190,19 +190,19 @@
     {#if head}
       <div class="flex items-baseline gap-2 leading-5">
         <Username name={m.author} card class="text-sm font-semibold" />
-        {#if m.self}<span class="shrink-0 text-xs text-fg-subtle">you</span>{/if}
+        {#if m.self}<span class="shrink-0 text-xs text-fg-muted">you</span>{/if}
         <Tooltip text={formatDate(m.timestamp)} dense dormant={!awake}>
           {#snippet child({ props })}
             <time
               {...props}
-              class="shrink-0 text-xs whitespace-nowrap text-fg-subtle"
+              class="shrink-0 text-xs whitespace-nowrap text-fg-muted"
               datetime={m.timestamp}>{chatTime(m.timestamp, clock.now)}</time>
           {/snippet}
         </Tooltip>
         {#if m.replayed}
           <Tooltip text="Held by the server until you connected" dense dormant={!awake}>
             {#snippet child({ props })}
-              <span {...props} class="min-w-0 truncate text-xs text-fg-subtle italic"
+              <span {...props} class="min-w-0 truncate text-xs text-fg-muted italic"
                 >sent while offline</span>
             {/snippet}
           </Tooltip>
@@ -210,7 +210,7 @@
         {#if m.automatic}
           <Tooltip text="Your away reply" dense dormant={!awake}>
             {#snippet child({ props })}
-              <span {...props} class="min-w-0 truncate text-xs text-fg-subtle italic"
+              <span {...props} class="min-w-0 truncate text-xs text-fg-muted italic"
                 >sent automatically</span>
             {/snippet}
           </Tooltip>
@@ -235,7 +235,7 @@
       </p>
     {/if}
     {#if m.sending === "sending"}
-      <span class="flex items-center gap-1 text-xs text-fg-subtle"
+      <span class="flex items-center gap-1 text-xs text-fg-muted"
         ><ClockIcon class="size-3" />Sending</span>
     {:else if m.sending === "failed"}
       <span class="flex items-center gap-1 text-xs text-danger">

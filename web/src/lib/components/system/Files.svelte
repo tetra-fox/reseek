@@ -575,7 +575,7 @@
             {/snippet}
           </Tooltip>
           {#if listings.has(node.path)}
-            <span class="shrink-0 text-xs text-fg-subtle tabular-nums">{folderCaption(node)}</span>
+            <span class="shrink-0 text-xs text-fg-muted tabular-nums">{folderCaption(node)}</span>
           {/if}
           {#if layout === "wide"}
             <span class="ml-auto w-40 shrink-0 text-xs text-fg-muted">

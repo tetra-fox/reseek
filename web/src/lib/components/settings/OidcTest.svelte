@@ -45,7 +45,7 @@
       </p>{/if}
     {#if result?.endpoints}
       {@const e = result.endpoints}
-      <ul class="font-mono wrap-anywhere text-fg-subtle">
+      <ul class="font-mono wrap-anywhere text-fg-muted">
         <li>authorization {e.authorization}</li>
         <li>token {e.token}</li>
         <li>jwks {e.jwks}</li>

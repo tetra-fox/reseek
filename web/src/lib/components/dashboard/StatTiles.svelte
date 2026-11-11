@@ -67,7 +67,7 @@
           ]}
           >{stat.value}{#if stat.unit}<span class="text-sm text-fg-muted">{stat.unit}</span
             >{/if}</span>
-        {#if stat.note}<span class="truncate text-xs text-fg-subtle">{stat.note}</span>{/if}
+        {#if stat.note}<span class="truncate text-xs text-fg-muted">{stat.note}</span>{/if}
       </a>
     {/snippet}
   </Tooltip>

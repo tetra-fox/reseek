@@ -229,7 +229,7 @@
                       class="flex h-9 items-center gap-2 rounded-control px-2.5 text-sm data-selected:bg-hover">
                       <span class="truncate">{entry.label}</span>
                       {#if entry.hint}
-                        <span class="ml-auto shrink-0 text-xs text-fg-subtle">{entry.hint}</span>
+                        <span class="ml-auto shrink-0 text-xs text-fg-muted">{entry.hint}</span>
                       {/if}
                     </Command.Item>
                   {/each}
