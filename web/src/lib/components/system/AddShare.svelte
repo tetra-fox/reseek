@@ -10,6 +10,7 @@
   import Button from "#lib/components/ui/Button.svelte";
   import Dialog from "#lib/components/ui/Dialog.svelte";
   import Input from "#lib/components/ui/Input.svelte";
+  import * as Menu from "#lib/components/ui/menu/menu.js";
   import Notice from "#lib/components/ui/Notice.svelte";
   import Segmented from "#lib/components/ui/Segmented.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
@@ -17,7 +18,9 @@
   import { valueAt } from "#lib/config/sections.js";
   import { changedUnder, patchFile, refusedUnder } from "#lib/config/write.js";
   import { Busy } from "#lib/feedback/busy.svelte.js";
+  import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
+  import { FILE_ACTIONS as A } from "#lib/files/actions.js";
   import { live } from "#lib/live/live.svelte.js";
   import { Loader } from "#lib/loader.svelte.js";
   import { call } from "#lib/request.js";
@@ -202,6 +205,12 @@
           {/if}
         {/snippet}
         {#snippet item()}{/snippet}
+        {#snippet menu(line)}
+          {#if line.kind === "folder"}
+            <Menu.Item onSelect={() => void copyText(line.node.path)}
+              ><A.copyPath.icon />{A.copyPath.label}</Menu.Item>
+          {/if}
+        {/snippet}
       </FileTree>
       {#each cut as listed (listed.path)}
         <p class="text-xs text-fg-muted">

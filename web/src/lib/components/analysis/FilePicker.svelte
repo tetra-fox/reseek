@@ -9,11 +9,14 @@
   import FolderLine from "#lib/components/files/FolderLine.svelte";
   import EmptyRow from "#lib/components/ui/EmptyRow.svelte";
   import Input from "#lib/components/ui/Input.svelte";
+  import * as Menu from "#lib/components/ui/menu/menu.js";
   import MiddleTruncate from "#lib/components/ui/MiddleTruncate.svelte";
   import Notice from "#lib/components/ui/Notice.svelte";
   import Segmented from "#lib/components/ui/Segmented.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
+  import { copyText } from "#lib/feedback/clipboard.svelte.js";
+  import { FILE_ACTIONS as A } from "#lib/files/actions.js";
   import { formatBytes, getFileName } from "#lib/format.js";
   import { call } from "#lib/request.js";
   import type { Root } from "#lib/system/localfiles.js";
@@ -137,6 +140,11 @@
       nameOf={(line) => (line.kind === "folder" ? line.node.label : getFileName(line.item.path))}>
       {#snippet folder(node, depth)}
         <FolderLine {node} open={expansion.isOpen(node.key)} {depth} />
+      {/snippet}
+      {#snippet menu(line)}
+        <Menu.Item
+          onSelect={() => void copyText(line.kind === "folder" ? line.node.path : line.item.path)}
+          ><A.copyPath.icon />{A.copyPath.label}</Menu.Item>
       {/snippet}
       {#snippet item(f)}
         <Tooltip text={f.path} dense>
