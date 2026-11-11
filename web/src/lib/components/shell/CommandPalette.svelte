@@ -24,7 +24,8 @@
   import { session } from "#lib/session.svelte.js";
   import { paletteScore, paletteValue } from "#lib/shell/palette.js";
   import { palette } from "#lib/shell/palette.svelte.js";
-  import { opensPalette, shortcutText, TYPING_PAUSE } from "#lib/ui/keys.js";
+  import { APP } from "#lib/ui/bindings.js";
+  import { isPressed, keysText, TYPING_PAUSE } from "#lib/ui/keys.js";
   import { reach, USER_ACTIONS } from "#lib/users/actions.js";
 
   /** One thing the palette can do: go to a screen, a user, a room, a setting, a search */
@@ -61,7 +62,7 @@
         id: "activity",
         group: "Screens",
         label: activityPrefs.open ? "Close activity log" : "Activity log",
-        hint: shortcutText("J"),
+        hint: keysText(APP.activity),
         keywords: "browsing searches queued uploads log network",
         run: () => (activityPrefs.open = !activityPrefs.open)
       },
@@ -192,7 +193,7 @@
 
 <svelte:window
   onkeydown={(e) => {
-    if (!opensPalette(e)) return;
+    if (!isPressed(APP.palette, e)) return;
     e.preventDefault();
     palette.toggle();
   }} />

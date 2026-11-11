@@ -16,7 +16,8 @@
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
   import { REPOSITORY } from "#lib/shell/project.js";
-  import { shortcutAria, shortcutText } from "#lib/ui/keys.js";
+  import { APP } from "#lib/ui/bindings.js";
+  import { keysAria, keysText } from "#lib/ui/keys.js";
 
   import Logo from "./Logo.svelte";
   import SpeedLimits from "./SpeedLimits.svelte";
@@ -120,14 +121,14 @@
     </Tooltip>
   {/if}
   <Tooltip
-    text={`Activity log: browses, searches and downloads by other users (${shortcutText("J")})`}>
+    text={`Activity log: browses, searches and downloads by other users (${keysText(APP.activity)})`}>
     {#snippet child({ props })}
       <button
         {...props}
         type="button"
         aria-pressed={activityPrefs.open}
         class="flex h-control-sm shrink-0 items-center gap-1.5 rounded-badge px-2 text-fg-muted hover:bg-hover hover:text-fg aria-pressed:bg-surface-muted aria-pressed:text-fg max-md:ml-auto"
-        aria-keyshortcuts={shortcutAria("J")}
+        aria-keyshortcuts={keysAria(APP.activity)}
         onclick={() => (activityPrefs.open = !activityPrefs.open)}>
         <ActivityIcon class="size-3.5" /><span class="max-md:sr-only">Activity</span>
       </button>

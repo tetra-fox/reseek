@@ -32,7 +32,8 @@
   import { session } from "#lib/session.svelte.js";
   import { content } from "#lib/shell/content.svelte.js";
   import { trail } from "#lib/shell/crumbs.svelte.js";
-  import { togglesActivity } from "#lib/ui/keys.js";
+  import { APP } from "#lib/ui/bindings.js";
+  import { isPressed } from "#lib/ui/keys.js";
   // listens for transfer frames from the start, so its notifications follow every screen
   import "#lib/transfers/notices.svelte.js";
   import "#lib/users/presence.svelte.js";
@@ -95,7 +96,7 @@
   });
 
   const keydown = (e: KeyboardEvent) => {
-    if (!togglesActivity(e) || app.phase !== "app") return;
+    if (!isPressed(APP.activity, e) || app.phase !== "app") return;
     e.preventDefault();
     activityPrefs.open = !activityPrefs.open;
   };

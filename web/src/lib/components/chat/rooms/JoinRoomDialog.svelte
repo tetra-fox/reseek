@@ -36,6 +36,8 @@
   import { href, roomHref } from "#lib/nav.js";
   import { call } from "#lib/request.js";
   import { fields } from "#lib/stored.svelte.js";
+  import { CHAT } from "#lib/ui/bindings.js";
+  import { isPressed } from "#lib/ui/keys.js";
   import { rem } from "#lib/ui/viewport.svelte.js";
 
   // two parts: the server's public rooms, each joined from its row, and a room created by name
@@ -169,7 +171,7 @@
       aria-label="Filter rooms"
       bind:value={filter}
       onkeydown={(e) => {
-        if (e.key !== "Enter") return;
+        if (!isPressed(CHAT.join, e)) return;
         e.preventDefault();
         joinFocused();
       }} />

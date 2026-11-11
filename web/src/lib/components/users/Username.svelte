@@ -9,7 +9,9 @@
   import { interaction } from "#lib/lists/interaction.svelte.js";
   import { userHref } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
+  import { USERNAMES } from "#lib/ui/bindings.js";
   import { cn } from "#lib/ui/cn.js";
+  import { isPressed } from "#lib/ui/keys.js";
   import { safeArea } from "#lib/ui/safearea.svelte.js";
   import { canManage, links } from "#lib/users/actions.js";
   import { toggleBlock } from "#lib/users/block.svelte.js";
@@ -122,10 +124,10 @@
   };
 
   const keydown = (e: KeyboardEvent) => {
-    if (e.key === " " || (e.key === "ArrowDown" && e.altKey)) {
+    if (isPressed(USERNAMES.card, e)) {
       e.preventDefault();
       show("card", true);
-    } else if (e.key === "ContextMenu" || (e.key === "F10" && e.shiftKey)) {
+    } else if (isPressed(USERNAMES.menu, e)) {
       e.preventDefault();
       show("menu", true);
     }

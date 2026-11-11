@@ -3,7 +3,8 @@ import { on } from "svelte/events";
 import { SvelteSet } from "svelte/reactivity";
 
 import { inspector } from "#lib/inspector/inspector.svelte.js";
-import { inControl, keepsKey, layerOpen, withModifier } from "#lib/ui/keys.js";
+import { DETAILS, LIST } from "#lib/ui/bindings.js";
+import { inControl, isPressed, keepsKey, keyStep, layerOpen, withModifier } from "#lib/ui/keys.js";
 
 import { TYPE_AHEAD_MS, typeAhead } from "./typeahead";
 
@@ -403,42 +404,51 @@ export class ListControl<L> {
     this.#take(e.target);
     const line = this.focused;
     const id = line === null ? null : this.#spec.id(line);
-    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "a") {
+    if (isPressed(LIST.selectAll, e)) {
       this.setAll((line && this.#spec.group?.(line)) ?? this.everything, true);
     } else if (withModifier(e)) {
       if (line === null || !this.#spec.onchord?.(e, line)) return;
       this.#ringed = true;
-    } else if (e.key === "ArrowDown") {
+    } else if (keyStep(LIST.move, e) === 1) {
       const to = this.#next(this.focusIndex, 1);
       if (to !== -1) this.#moveTo(to);
-    } else if (e.key === "ArrowUp") {
+    } else if (keyStep(LIST.move, e) === -1) {
       const to = this.focusIndex === -1 ? this.#next(-1, 1) : this.#next(this.focusIndex, -1);
       if (to !== -1) this.#moveTo(to);
-    } else if (e.key === "Home" || e.key === "End") {
-      const to = e.key === "Home" ? this.#next(-1, 1) : this.#next(this.lines.length, -1);
+    } else if (isPressed(LIST.ends, e)) {
+      const to =
+        keyStep(LIST.ends, e) === -1 ? this.#next(-1, 1) : this.#next(this.lines.length, -1);
       if (to !== -1) this.#moveTo(to);
-    } else if (e.key === "PageDown" || e.key === "PageUp") {
-      const step = e.key === "PageDown" ? 1 : -1;
+    } else if (isPressed(LIST.page, e)) {
+      const way = keyStep(LIST.page, e) === 1 ? 1 : -1;
       const by = Math.max(1, this.#spec.page?.() ?? 10);
-      const want = Math.min(Math.max(this.focusIndex + step * by, 0), this.lines.length - 1);
+      const want = Math.min(Math.max(this.focusIndex + way * by, 0), this.lines.length - 1);
       // the line a page away, or the nearest one focus stops on past it, else before it
-      const past = this.#next(want - step, step);
-      const to = past !== -1 ? past : this.#next(want, step === 1 ? -1 : 1);
+      const past = this.#next(want - way, way);
+      const to = past !== -1 ? past : this.#next(want, way === 1 ? -1 : 1);
       if (to !== -1) this.#moveTo(to);
-    } else if (e.key === "Escape") {
+    } else if (isPressed(LIST.clear, e)) {
       if (layerOpen()) return;
       this.clear();
     } else if (this.#togglesInspector(e, line)) {
       inspector.toggle();
+    } else if (
+      id !== null &&
+      line !== null &&
+      this.#spec.inspects?.(line) &&
+      isPressed(DETAILS.select, e)
+    ) {
+      // Space shows the line in the inspector, so Shift+Space ticks it
+      this.toggle(id);
     } else if (this.#findTyped(e)) {
       // a letter went to the line named by what was typed
     } else if (line === null) return;
-    else if (id === null && e.key === " ") {
+    else if (id === null && isPressed(LIST.select, e)) {
       const ids = this.#spec.group?.(line) ?? [];
       this.setAll(ids, !ids.every((one) => this.selected.has(one)));
     } else if (id === null && !this.#spec.headersFocus) return;
-    else if (e.key === " " && id !== null) this.toggle(id);
-    else if (e.key === "Enter") {
+    else if (id !== null && isPressed(LIST.select, e)) this.toggle(id);
+    else if (isPressed(LIST.open, e)) {
       if (!this.#spec.onopen) return;
       this.#spec.onopen(line);
     } else if (!this.#spec.onkey?.(e, line)) return;
@@ -449,8 +459,9 @@ export class ListControl<L> {
   #togglesInspector(e: KeyboardEvent, line: L | null) {
     const inspects = this.#spec.inspects;
     if (!inspects || (line !== null && !inspects(line))) return false;
-    if (e.key === " ") return !e.shiftKey;
-    return e.key === "i" && Date.now() - this.#typedAt > TYPE_AHEAD_MS;
+    if (!isPressed(DETAILS.details, e)) return false;
+    // an `i` in the middle of a name being typed is part of the name
+    return !isPressed(LIST.find, e) || Date.now() - this.#typedAt > TYPE_AHEAD_MS;
   }
 
   /**
@@ -459,7 +470,7 @@ export class ListControl<L> {
    */
   #findTyped(e: KeyboardEvent) {
     const name = this.#spec.typeahead;
-    if (!name || e.key.length !== 1 || e.key === " ") return false;
+    if (!name || !isPressed(LIST.find, e)) return false;
     const now = Date.now();
     this.#typed = now - this.#typedAt > TYPE_AHEAD_MS ? e.key : this.#typed + e.key;
     this.#typedAt = now;

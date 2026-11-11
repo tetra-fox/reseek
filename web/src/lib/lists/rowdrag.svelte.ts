@@ -1,3 +1,6 @@
+import { LIST } from "#lib/ui/bindings.js";
+import { isPressed } from "#lib/ui/keys.js";
+
 /** How far a press moves, in px, before it is a drag and not a click */
 const SLOP = 4;
 /** How near the list's top or bottom edge, in px, the pointer scrolls the list */
@@ -101,7 +104,7 @@ export class RowDrag {
   };
 
   #escaped = (e: KeyboardEvent) => {
-    if (e.key !== "Escape" || this.key === null) return;
+    if (!isPressed(LIST.cancelDrag, e) || this.key === null) return;
     e.stopPropagation();
     e.preventDefault();
     this.#end();

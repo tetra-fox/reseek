@@ -1,6 +1,7 @@
 import { on } from "svelte/events";
 
-import { inControl } from "#lib/ui/keys.js";
+import { LIST } from "#lib/ui/bindings.js";
+import { inControl, isPressed } from "#lib/ui/keys.js";
 import { LONG_PRESS_MS } from "#lib/users/hover.svelte.js";
 
 import { interaction } from "./interaction.svelte";
@@ -76,7 +77,7 @@ export class LineMenu<L> {
 
   /** The menu key and Shift+F10 on a line open its menu; true when one of them was pressed */
   key(e: KeyboardEvent, line: L): boolean {
-    if (!this.#spec.enabled() || !(e.key === "ContextMenu" || (e.key === "F10" && e.shiftKey))) {
+    if (!this.#spec.enabled() || !isPressed(LIST.menu, e)) {
       return false;
     }
     this.open(line);

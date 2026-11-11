@@ -20,7 +20,8 @@
   import { trail } from "#lib/shell/crumbs.svelte.js";
   import { palette } from "#lib/shell/palette.svelte.js";
   import { sidebar } from "#lib/shell/sidebar.svelte.js";
-  import { shortcutAria, shortcutText } from "#lib/ui/keys.js";
+  import { APP } from "#lib/ui/bindings.js";
+  import { keysAria, keysText } from "#lib/ui/keys.js";
   import { easeOutSoft, motionFast } from "#lib/ui/motion.js";
 
   import NewVersion from "./NewVersion.svelte";
@@ -212,12 +213,12 @@
       type="button"
       class="flex h-control-sm items-center gap-2 rounded-control border bg-surface px-2 text-sm text-fg-muted shadow-xs hover:bg-hover hover:text-fg"
       aria-label="Go to a screen, user, room or setting"
-      aria-keyshortcuts={shortcutAria("K")}
+      aria-keyshortcuts={keysAria(APP.palette)}
       onclick={() => palette.show()}>
       <SearchIcon class="size-4" />
       <span class="hidden md:inline">Go to</span>
       <kbd class="hidden rounded-badge border px-1 font-sans text-xs md:inline"
-        >{shortcutText("K")}</kbd>
+        >{keysText(APP.palette)}</kbd>
     </button>
   </div>
 </header>

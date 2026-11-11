@@ -37,9 +37,9 @@ describe("the composer", () => {
       box.dispatchEvent(new Event("input", { bubbles: true }));
       flushSync();
     };
-    const press = (key: string, shiftKey = false) => {
+    const press = (key: string, shiftKey = false, held: KeyboardEventInit = {}) => {
       const passed = box.dispatchEvent(
-        new KeyboardEvent("keydown", { key, shiftKey, bubbles: true, cancelable: true })
+        new KeyboardEvent("keydown", { key, shiftKey, bubbles: true, cancelable: true, ...held })
       );
       flushSync();
       return passed;
@@ -59,6 +59,24 @@ describe("the composer", () => {
     expect(errors).toEqual([]);
     expect(box.value).toBe("hi 😄  there");
     expect(box.selectionStart).toBe("hi 😄 ".length);
+  });
+
+  it("sends on Enter, with Ctrl, Cmd or Alt too, and breaks a line on Shift+Enter", async () => {
+    const { type, press } = open();
+    const sent = () => fetchCalls().filter((r) => r.method === "POST").length;
+    for (const [n, held] of [
+      {},
+      { ctrlKey: true },
+      { metaKey: true },
+      { altKey: true }
+    ].entries()) {
+      type("hello");
+      press("Enter", false, held);
+      await vi.waitFor(() => expect(sent()).toBe(n + 1));
+    }
+    type("hello");
+    expect(press("Enter", true)).toBe(true);
+    expect(sent()).toBe(4);
   });
 
   it("completes an emoji or a name typed in full on Enter, sending nothing", () => {

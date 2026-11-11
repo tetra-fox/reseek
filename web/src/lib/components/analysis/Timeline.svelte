@@ -14,6 +14,8 @@
   import type { ScaleMotion } from "#lib/analysis/spectrogram/scalemotion.svelte.js";
   import type { Scope } from "#lib/analysis/spectrogram/scope.svelte.js";
   import { acrossOf, showsAll, timeAt } from "#lib/analysis/spectrogram/timeview.js";
+  import { ANALYSIS } from "#lib/ui/bindings.js";
+  import { isPressed, keyStep } from "#lib/ui/keys.js";
 
   // the spectrogram over the waveform on one time axis, drawn on one canvas at device pixels,
   // with the cursor across both. Pressing on the cursor and dragging moves it; pressing
@@ -242,22 +244,15 @@
   });
 
   const key = (e: KeyboardEvent) => {
-    const steps = e.shiftKey ? 10 : 1;
-    const run: Record<string, () => void> = {
-      "ArrowLeft": () => scope.step(-steps),
-      "ArrowRight": () => scope.step(steps),
-      "Home": () => scope.toEnd(false),
-      "End": () => scope.toEnd(true),
-      "+": () => scope.zoomAtCursor(2),
-      "=": () => scope.zoomAtCursor(2),
-      "-": () => scope.zoomAtCursor(0.5),
-      " ": () => ontoggle?.()
-    };
-    const action = run[e.key];
-    if (!action || e.ctrlKey || e.metaKey || e.altKey) return;
+    const steps = keyStep(ANALYSIS.cursor, e) || 10 * keyStep(ANALYSIS.leap, e);
+    if (steps) scope.step(steps);
+    else if (isPressed(ANALYSIS.ends, e)) scope.toEnd(keyStep(ANALYSIS.ends, e) === 1);
+    else if (isPressed(ANALYSIS.zoomIn, e)) scope.zoomAtCursor(2);
+    else if (isPressed(ANALYSIS.zoomOut, e)) scope.zoomAtCursor(0.5);
+    else if (isPressed(ANALYSIS.play, e)) ontoggle?.();
+    else return;
     e.preventDefault();
-    action();
-    if (e.key.startsWith("Arrow") || e.key === "Home" || e.key === "End") onseek(scope.cursor);
+    if (steps || isPressed(ANALYSIS.ends, e)) onseek(scope.cursor);
   };
 </script>
 

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { keepsKey, layerOpen, opensPalette } from "./keys";
+import { APP, CHAT, DETAILS, LIST } from "./bindings";
+import { isPressed, keepsKey, keysAria, keysText, keyStep, layerOpen } from "./keys";
 
 describe("which keys a focused element keeps", () => {
   afterEach(() => (document.body.innerHTML = ""));
@@ -76,14 +77,44 @@ describe("an open layer", () => {
   });
 });
 
-describe("the command palette's key", () => {
-  it("is Ctrl+K or Cmd+K and nothing near it", () => {
-    const press = (init: KeyboardEventInit) => opensPalette(new KeyboardEvent("keydown", init));
-    expect(press({ key: "k", ctrlKey: true })).toBe(true);
-    expect(press({ key: "K", metaKey: true })).toBe(true);
-    expect(press({ key: "k" })).toBe(false);
-    expect(press({ key: "k", ctrlKey: true, shiftKey: true })).toBe(false);
-    expect(press({ key: "k", ctrlKey: true, altKey: true })).toBe(false);
-    expect(press({ key: "j", ctrlKey: true })).toBe(false);
+describe("a key binding", () => {
+  const key = (init: KeyboardEventInit) => new KeyboardEvent("keydown", init);
+
+  it("takes Ctrl or Cmd for the palette and nothing near it", () => {
+    expect(isPressed(APP.palette, key({ key: "k", ctrlKey: true }))).toBe(true);
+    expect(isPressed(APP.palette, key({ key: "K", metaKey: true }))).toBe(true);
+    expect(isPressed(APP.palette, key({ key: "k" }))).toBe(false);
+    expect(isPressed(APP.palette, key({ key: "k", ctrlKey: true, shiftKey: true }))).toBe(false);
+    expect(isPressed(APP.palette, key({ key: "k", ctrlKey: true, altKey: true }))).toBe(false);
+    expect(isPressed(APP.palette, key({ key: "j", ctrlKey: true }))).toBe(false);
+  });
+
+  it("takes a key typed with Shift, unless it says how Shift is held", () => {
+    // `?` is Shift+/ on most keyboards and a key of its own on some
+    expect(isPressed(APP.shortcuts, key({ key: "?", shiftKey: true }))).toBe(true);
+    expect(isPressed(APP.shortcuts, key({ key: "?" }))).toBe(true);
+    expect(isPressed(APP.shortcuts, key({ key: "?", ctrlKey: true }))).toBe(false);
+    // Space shows details and Shift+Space ticks the row
+    expect(isPressed(DETAILS.details, key({ key: " " }))).toBe(true);
+    expect(isPressed(DETAILS.details, key({ key: " ", shiftKey: true }))).toBe(false);
+    expect(isPressed(DETAILS.select, key({ key: " " }))).toBe(false);
+    expect(isPressed(LIST.select, key({ key: " ", shiftKey: true }))).toBe(true);
+  });
+
+  it("tells the two ways of a pair apart", () => {
+    expect(keyStep(LIST.move, key({ key: "ArrowUp" }))).toBe(-1);
+    expect(keyStep(LIST.move, key({ key: "ArrowDown", shiftKey: true }))).toBe(1);
+    expect(keyStep(LIST.move, key({ key: "ArrowDown", altKey: true }))).toBe(0);
+    expect(keyStep(CHAT.movePin, key({ key: "ArrowDown", altKey: true, shiftKey: true }))).toBe(1);
+    expect(keyStep(CHAT.next, key({ key: "ArrowDown", altKey: true, shiftKey: true }))).toBe(0);
+  });
+
+  it("names its keys as a Mac's keyboard does, and as others do", () => {
+    expect(keysText(APP.palette, true)).toBe("⌘K");
+    expect(keysText(APP.palette, false)).toBe("Ctrl+K");
+    expect(keysText(CHAT.movePin, true)).toBe("⌥⇧↑ or ⌥⇧↓");
+    expect(keysText(CHAT.movePin, false)).toBe("Alt+Shift+↑ or Alt+Shift+↓");
+    expect(keysAria(APP.palette, true)).toBe("Meta+K");
+    expect(keysAria(LIST.menu, false)).toBe("ContextMenu Shift+F10");
   });
 });

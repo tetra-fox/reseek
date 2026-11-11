@@ -37,8 +37,9 @@
   import { RowDrag } from "#lib/lists/rowdrag.svelte.js";
   import { chatHref, publicFeedHref, roomHref } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
+  import { CHAT } from "#lib/ui/bindings.js";
   import { clock } from "#lib/ui/clock.svelte.js";
-  import { inControl, moveKeys, moveStep } from "#lib/ui/keys.js";
+  import { inControl, keyStep, keysText } from "#lib/ui/keys.js";
   import { disclose } from "#lib/ui/motion.js";
   import { nameColor } from "#lib/users/colors.js";
   import { pictureOf } from "#lib/users/profile.svelte.js";
@@ -135,9 +136,9 @@
       if (l.kind === "row") open(l.target);
     },
     onchord: (e, l) => {
-      const step = moveStep(e);
-      if (!step || !write || l.kind !== "row" || !l.pinned) return false;
-      nudge(l.target, step);
+      const way = keyStep(CHAT.movePin, e);
+      if (!way || !write || l.kind !== "row" || !l.pinned) return false;
+      nudge(l.target, way);
       return true;
     },
     openOnClick: true
@@ -266,7 +267,8 @@
                 class="size-3.5" />{/if}
             {line.title}
           </button>
-          {#if write && line.key === PINNED}<span class="sr-only">Move a pin with {moveKeys}.</span
+          {#if write && line.key === PINNED}<span class="sr-only"
+              >Move a pin with {keysText(CHAT.movePin)}.</span
             >{/if}
         </div>
       {:else}
@@ -328,7 +330,7 @@
           {#if movable}
             <!-- the press is taken in the capture phase, so the tooltip's own pointerdown still
                  closes it -->
-            <Tooltip text={`Drag to reorder, or press ${moveKeys}`}>
+            <Tooltip text={`Drag to reorder, or press ${keysText(CHAT.movePin)}`}>
               {#snippet child({ props })}
                 <button
                   {...props}

@@ -13,6 +13,8 @@
   import UserEntry from "#lib/components/users/UserEntry.svelte";
   import { chatHref } from "#lib/nav.js";
   import { call } from "#lib/request.js";
+  import { COMPOSER } from "#lib/ui/bindings.js";
+  import { isPressed } from "#lib/ui/keys.js";
   import { USER_ACTIONS } from "#lib/users/actions.js";
   import { UserFinder, userOf, userValue } from "#lib/users/finder.svelte.js";
 
@@ -100,7 +102,8 @@
       </Suggest.Box>
     </Field>
     <Field label="Message" for="new-message-text">
-      <!-- a private message is one line: Enter sends it, as in a conversation -->
+      <!-- a private message is one line: Enter sends it and Shift+Enter breaks none, as in a
+           conversation -->
       <Textarea
         id="new-message-text"
         bind:ref={messageBox}
@@ -109,9 +112,11 @@
         required
         bind:value={message}
         onkeydown={(e) => {
-          if (e.key !== "Enter" || e.isComposing) return;
-          e.preventDefault();
-          e.currentTarget.form?.requestSubmit();
+          if (e.isComposing) return;
+          if (isPressed(COMPOSER.send, e)) {
+            e.preventDefault();
+            e.currentTarget.form?.requestSubmit();
+          } else if (isPressed(COMPOSER.newLine, e)) e.preventDefault();
         }} />
       {#if nearMax(length, max)}<p class="flex text-xs"><LengthCount {length} {max} /></p>{/if}
     </Field>

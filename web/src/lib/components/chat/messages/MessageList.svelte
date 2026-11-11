@@ -22,6 +22,8 @@
   import { formatDay, plural } from "#lib/format.js";
   import { freezesWhileUsed, interaction } from "#lib/lists/interaction.svelte.js";
   import { ListWindow } from "#lib/lists/virtual.svelte.js";
+  import { MESSAGES } from "#lib/ui/bindings.js";
+  import { isPressed, keysAria, keyStep } from "#lib/ui/keys.js";
   import { motionFast } from "#lib/ui/motion.js";
   import { rem } from "#lib/ui/viewport.svelte.js";
 
@@ -171,7 +173,8 @@
    */
   const keydown = (e: KeyboardEvent) => {
     if (e.target !== box && e.target !== activeRow()) return;
-    if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+    const way = keyStep(MESSAGES.move, e);
+    if (way) {
       e.preventDefault();
       const indexes = lines.flatMap((line, i) =>
         line.kind === "message" && actionable(line.message) ? [i] : []
@@ -179,17 +182,16 @@
       const idOf = (i: number) => (lines[i] as Line & { kind: "message" }).message.localId;
       const at = indexes.findIndex((i) => idOf(i) === active);
       const from = at === -1 ? indexes.findLastIndex((i) => shown.isDrawn(i)) : at;
-      const step = at === -1 ? 0 : e.key === "ArrowUp" ? -1 : 1;
-      const to = indexes[Math.min(Math.max(from + step, 0), indexes.length - 1)];
+      const to = indexes[Math.min(Math.max(from + (at === -1 ? 0 : way), 0), indexes.length - 1)];
       if (to === undefined) return;
       active = idOf(to);
       shown.scrollTo(to);
       void focusActive();
-    } else if (e.key === "Escape") {
+    } else if (isPressed(MESSAGES.leave, e)) {
       active = null;
       box?.focus({ preventScroll: true });
     } else if (active !== null) {
-      if (e.key !== "Enter" && e.key !== "ContextMenu" && !(e.key === "F10" && e.shiftKey)) return;
+      if (!isPressed(MESSAGES.menu, e)) return;
       e.preventDefault();
       // the menu hangs from the message, which may have been scrolled away from
       shown.scrollTo(activeAt);
@@ -358,7 +360,7 @@
     role="log"
     aria-live="polite"
     aria-label="Messages"
-    aria-keyshortcuts="ArrowUp ArrowDown Enter"
+    aria-keyshortcuts={`${keysAria(MESSAGES.move)} ${keysAria(MESSAGES.menu)}`}
     tabindex="0"
     onscroll={scrolled}
     onpointerdown={grip}

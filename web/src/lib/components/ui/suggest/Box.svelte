@@ -3,6 +3,8 @@
   import type { ComponentProps, Snippet } from "svelte";
 
   import Input from "#lib/components/ui/Input.svelte";
+  import { SUGGESTIONS } from "#lib/ui/bindings.js";
+  import { isPressed } from "#lib/ui/keys.js";
   import { safeArea } from "#lib/ui/safearea.svelte.js";
 
   import { type Highlight, shareHighlight } from "./highlight";
@@ -77,7 +79,7 @@
 
   // an empty box leaves Enter to the form the box is in
   const keydown = (e: KeyboardEvent) => {
-    if (e.key !== "Enter" || e.isComposing || !text) return;
+    if (!isPressed(SUGGESTIONS.take, e) || e.isComposing || !text) return;
     e.preventDefault();
     void enter();
   };

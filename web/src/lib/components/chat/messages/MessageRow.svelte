@@ -14,8 +14,9 @@
   import Username from "#lib/components/users/Username.svelte";
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import { chatTime, formatDate, shortTime } from "#lib/format.js";
+  import { MESSAGES } from "#lib/ui/bindings.js";
   import { clock } from "#lib/ui/clock.svelte.js";
-  import { inControl } from "#lib/ui/keys.js";
+  import { inControl, isPressed, keyStep } from "#lib/ui/keys.js";
   import { reach } from "#lib/users/actions.js";
   import { LONG_PRESS_MS } from "#lib/users/hover.svelte.js";
   import { pictureOf } from "#lib/users/profile.svelte.js";
@@ -105,9 +106,9 @@
     if (!active || !row || !toolbar) return;
     const first = toolbar.querySelector<HTMLElement>("a, button");
     const back =
-      (e.key === "Tab" && e.shiftKey && e.target === first) ||
-      (e.key === "Escape" && toolbar.contains(e.target as Node));
-    if (e.key === "Tab" && !e.shiftKey && e.target === row && first) {
+      (keyStep(MESSAGES.actions, e) === -1 && e.target === first) ||
+      (isPressed(MESSAGES.back, e) && toolbar.contains(e.target as Node));
+    if (keyStep(MESSAGES.actions, e) === 1 && e.target === row && first) {
       e.preventDefault();
       first.focus();
     } else if (back) {

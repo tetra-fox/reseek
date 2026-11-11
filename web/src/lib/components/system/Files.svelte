@@ -54,6 +54,8 @@
   import { Expansion } from "#lib/tree/expansion.svelte.js";
   import { type FolderNode, folderNode, type TreeLine, treeLines } from "#lib/tree/folders.js";
   import { TICK_REM } from "#lib/tree/indent.js";
+  import { FILES } from "#lib/ui/bindings.js";
+  import { isPressed } from "#lib/ui/keys.js";
   import { rem, viewport } from "#lib/ui/viewport.svelte.js";
 
   // the downloads or incomplete directory as a file explorer: browse, open, delete
@@ -298,7 +300,7 @@
 
   /** Delete removes the selection, or the row it is pressed on when nothing is selected */
   const onkey = (e: KeyboardEvent, line: TreeLine<Entry>) => {
-    if (e.key !== "Delete" || !canDelete) return false;
+    if (!isPressed(FILES.remove, e) || !canDelete) return false;
     const entry = line.kind === "item" ? line.item : dirEntry(line.node);
     if (!entry || (entry.kind === "up" && !chosen.length)) return false;
     askRemove(chosen.length ? chosen : [entry]);

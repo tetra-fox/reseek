@@ -30,6 +30,8 @@
   import { chatHref, roomHref, userHref } from "#lib/nav.js";
   import { call } from "#lib/request.js";
   import { openSearch } from "#lib/search/searches.svelte.js";
+  import { COMPOSER } from "#lib/ui/bindings.js";
+  import { isPressed, keyStep } from "#lib/ui/keys.js";
   import { links } from "#lib/users/actions.js";
   import { blocking } from "#lib/users/block.svelte.js";
 
@@ -226,10 +228,10 @@
 
   const keydown = (e: KeyboardEvent) => {
     if (suggestions.length) {
-      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      const way = keyStep(COMPOSER.choose, e);
+      if (way) {
         e.preventDefault();
-        const step = e.key === "ArrowDown" ? 1 : -1;
-        choice = (choice + step + suggestions.length) % suggestions.length;
+        choice = (choice + way + suggestions.length) % suggestions.length;
         return;
       }
       const picked = suggestions[Math.min(choice, suggestions.length - 1)];
@@ -237,29 +239,30 @@
       // typed in full is still completed, and Tab always completes
       const whole =
         word?.kind === "command" && picked.key.toLowerCase() === word.typed.toLowerCase();
-      if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey && !whole)) {
+      if (isPressed(COMPOSER.complete, e) || (isPressed(COMPOSER.send, e) && !whole)) {
         e.preventDefault();
         complete(picked);
         return;
       }
     }
-    if (e.key === "Escape" && said) {
+    if (isPressed(COMPOSER.hide, e) && said) {
       e.preventDefault();
       said = null;
       return;
     }
     // Up in an empty box brings back the last message sent here, to correct and send again
-    if (e.key === "ArrowUp" && !text && !e.altKey && recall.get(key)) {
+    if (isPressed(COMPOSER.recall, e) && !text && recall.get(key)) {
       e.preventDefault();
       text = recall.get(key)!;
       caret = text.length;
       return;
     }
     // a private message goes on one line, so Shift+Enter breaks none
-    if (e.key === "Enter" && !e.isComposing && (!e.shiftKey || target.kind === "user")) {
+    if (e.isComposing) return;
+    if (isPressed(COMPOSER.send, e)) {
       e.preventDefault();
-      if (!e.shiftKey) void send();
-    }
+      void send();
+    } else if (isPressed(COMPOSER.newLine, e) && target.kind === "user") e.preventDefault();
   };
 
   const paste = (e: ClipboardEvent) => {

@@ -76,10 +76,16 @@ describe("the file explorer", () => {
       "Album/CD1": {
         name: "CD1",
         fullName: "",
-        directories: [],
+        directories: [{ name: "Scans", fullName: "Scans", modifiedAt: "2026-10-26T10:00:00Z" }],
         files: [
           { name: "1.flac", fullName: "1.flac", length: 3, modifiedAt: "2026-10-26T10:00:00Z" }
         ]
+      },
+      "Album/CD1/Scans": {
+        name: "Scans",
+        fullName: "",
+        directories: [],
+        files: [{ name: "a.jpg", fullName: "a.jpg", length: 3, modifiedAt: "2026-10-26T10:00:00Z" }]
       }
     };
     const net = fakeNetwork(
@@ -106,7 +112,8 @@ describe("the file explorer", () => {
     press(grid, "ArrowDown");
     press(grid, "ArrowRight");
     await flush();
-    expect(rows()).toEqual(["..", "folder:Album/CD1", "f:Album/CD1/1.flac"]);
+    const cd1 = ["folder:Album/CD1", "f:Album/CD1/1.flac", "folder:Album/CD1/Scans"];
+    expect(rows()).toEqual(["..", ...cd1]);
     // every row has its cells, and a folder its level and whether it is open
     for (const row of grid.querySelectorAll("[role=row][data-line]")) {
       expect(row.querySelector("[role=gridcell]")).not.toBeNull();
@@ -123,6 +130,16 @@ describe("the file explorer", () => {
     expect(net.requests.filter((r) => r.url.pathname.includes("/directories/"))).toHaveLength(2);
     press(grid, "ArrowLeft");
     expect(rows()).toEqual(["..", "folder:Album/CD1"]);
+    // with Ctrl, every folder inside opens too; the list hands it the chord
+    press(grid, "ArrowRight", { ctrlKey: true });
+    await flush();
+    expect(rows()).toEqual([
+      "..",
+      "folder:Album/CD1",
+      "f:Album/CD1/1.flac",
+      "folder:Album/CD1/Scans",
+      "f:Album/CD1/Scans/a.jpg"
+    ]);
   });
 
   it("shows the root it was moved to when the last one answers late", async () => {

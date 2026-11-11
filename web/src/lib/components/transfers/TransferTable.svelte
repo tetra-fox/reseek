@@ -20,6 +20,8 @@
   import type { Transfers } from "#lib/transfers/transfers.svelte.js";
   import type { Expansion } from "#lib/tree/expansion.svelte.js";
   import type { TreeLine } from "#lib/tree/folders.js";
+  import { TRANSFERS } from "#lib/ui/bindings.js";
+  import { isPressed } from "#lib/ui/keys.js";
   import { viewport } from "#lib/ui/viewport.svelte.js";
 
   import GroupHeader from "./GroupHeader.svelte";
@@ -147,18 +149,18 @@
   const actOnKey = (e: KeyboardEvent, line: TreeLine<Transfer>) => {
     if (line.kind !== "item") return false;
     const t = line.item;
-    const key = e.key.toLowerCase();
-    if (!session.can("ReadWrite") && ["delete", "r", "c"].includes(key)) return false;
-    if (key === "delete") {
+    const writes = [TRANSFERS.remove, TRANSFERS.retry, TRANSFERS.cancel];
+    if (!session.can("ReadWrite") && writes.some((b) => isPressed(b, e))) return false;
+    if (isPressed(TRANSFERS.remove, e)) {
       // the selection when the focused row is in it, else the focused row alone
       ondelete(
         selected.size > 1 && selected.has(t.id)
           ? store.list.rows.filter((r) => selected.has(r.id))
           : [t]
       );
-    } else if (key === "r") onkey("retry", t);
-    else if (key === "c") onkey("cancel", t);
-    else if (key === "o") onkey("open", t);
+    } else if (isPressed(TRANSFERS.retry, e)) onkey("retry", t);
+    else if (isPressed(TRANSFERS.cancel, e)) onkey("cancel", t);
+    else if (isPressed(TRANSFERS.open, e)) onkey("open", t);
     else return false;
     return true;
   };

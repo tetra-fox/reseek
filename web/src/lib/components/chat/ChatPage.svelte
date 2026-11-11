@@ -26,7 +26,8 @@
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { chatHref, roomHref } from "#lib/nav.js";
   import { useCrumbs } from "#lib/shell/crumbs.svelte.js";
-  import { layerOpen } from "#lib/ui/keys.js";
+  import { CHAT } from "#lib/ui/bindings.js";
+  import { isPressed, keyStep, layerOpen } from "#lib/ui/keys.js";
   import { viewport } from "#lib/ui/viewport.svelte.js";
   import { DESKTOP_NEEDS_HTTPS, TURN_ON_NOTIFICATIONS } from "#lib/wording.js";
 
@@ -110,22 +111,16 @@
   // Alt+Up and Alt+Down move to the chat above or below; Escape goes back to the search results
   // a chat was opened from, once nothing open takes it
   const keydown = (e: KeyboardEvent) => {
-    if (e.key === "Escape" && fromResults && !e.defaultPrevented && !layerOpen()) {
+    if (isPressed(CHAT.backToResults, e) && fromResults && !e.defaultPrevented && !layerOpen()) {
       backToResults();
       return;
     }
-    if (
-      e.altKey &&
-      !e.shiftKey &&
-      !e.ctrlKey &&
-      !e.metaKey &&
-      (e.key === "ArrowUp" || e.key === "ArrowDown")
-    ) {
+    const way = keyStep(CHAT.next, e);
+    if (way) {
       // from the chats themselves, so it works with the list closed in its sheet
       const order = chatOrder();
       const at = order.findIndex((t) => paneKey(t.kind, t.name) === current);
-      const next =
-        order[at + (e.key === "ArrowDown" ? 1 : -1)] ?? (at === -1 ? order[0] : undefined);
+      const next = order[at + way] ?? (at === -1 ? order[0] : undefined);
       if (!next) return;
       e.preventDefault();
       go(next);

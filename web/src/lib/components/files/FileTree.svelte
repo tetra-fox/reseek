@@ -12,7 +12,7 @@
   import { type AllTick, ListControl } from "#lib/lists/list.svelte.js";
   import { ListWindow } from "#lib/lists/virtual.svelte.js";
   import { settings } from "#lib/settings.svelte.js";
-  import { type Expansion, withInside, withSiblings } from "#lib/tree/expansion.svelte.js";
+  import { type Expansion, withSiblings } from "#lib/tree/expansion.svelte.js";
   import {
     type FolderNode,
     foldersUnder,
@@ -22,7 +22,8 @@
   } from "#lib/tree/folders.js";
   import { GAP_REM, insetCss, itemStart, stepRem } from "#lib/tree/indent.js";
   import { nesting, pins } from "#lib/tree/pins.js";
-  import { inControl } from "#lib/ui/keys.js";
+  import { LIST } from "#lib/ui/bindings.js";
+  import { inControl, isPressed, keyStep } from "#lib/ui/keys.js";
   import { untabbable } from "#lib/ui/untabbable.js";
   import { rem, viewport } from "#lib/ui/viewport.svelte.js";
 
@@ -193,11 +194,13 @@
     ontoggle?.(open, keys);
   };
 
-  // Right opens a folder and Left closes it, as in a file manager's tree; with Ctrl, or Cmd on a
-  // Mac, every folder inside it too
+  // Right opens a folder and Left closes it, as in a file manager's tree; with Ctrl or Cmd,
+  // every folder inside it too
   const folderArrow = (e: KeyboardEvent, line: TreeLine<T>) => {
-    if (line.kind !== "folder" || (e.key !== "ArrowRight" && e.key !== "ArrowLeft")) return false;
-    show(line.node, e.key === "ArrowRight", withInside(e));
+    if (line.kind !== "folder") return false;
+    const deep = isPressed(LIST.folderAll, e);
+    if (!deep && !isPressed(LIST.folder, e)) return false;
+    show(line.node, keyStep(deep ? LIST.folderAll : LIST.folder, e) === 1, deep);
     return true;
   };
 
@@ -223,7 +226,7 @@
       else show(line.node, !expansion.isOpen(line.node.key));
     },
     onkey: (e, line) => folderArrow(e, line) || lineMenu.key(e, line) || !!onkey?.(e, line),
-    onchord: (e, line) => withInside(e) && !e.altKey && folderArrow(e, line),
+    onchord: (e, line) => folderArrow(e, line),
     headersFocus: true,
     inspects: (line) => !!inspect && line.kind === "item",
     onfocus: (line) => {

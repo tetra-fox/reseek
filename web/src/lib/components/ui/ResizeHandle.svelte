@@ -2,8 +2,9 @@
   import type { Snippet } from "svelte";
 
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
+  import { PANELS } from "#lib/ui/bindings.js";
   import { cn } from "#lib/ui/cn.js";
-  import { withModifier } from "#lib/ui/keys.js";
+  import { keyStep } from "#lib/ui/keys.js";
 
   type Props = {
     /** the height or width it sets, in pixels */
@@ -39,7 +40,7 @@
   let dragging = $state.raw<{ at: number; value: number } | null>(null);
   const sideways = $derived(edge === "left" || edge === "right");
   /** the keys that move the handle back and forward along its axis */
-  const keys = $derived(sideways ? ["ArrowLeft", "ArrowRight"] : ["ArrowUp", "ArrowDown"]);
+  const keys = $derived(sideways ? PANELS.side : PANELS.below);
   const clamp = (v: number) => Math.round(Math.min(max, Math.max(min, v)));
   /**
    * the size in effect: a window made smaller lowers `max` under a size kept from before, which
@@ -97,10 +98,10 @@
       }}
       ondblclick={() => set(initial)}
       onkeydown={(e) => {
-        if (withModifier(e)) return;
-        if (e.key === "Home") set(min);
-        else if (e.key === "End" && Number.isFinite(max)) set(max);
-        else if (keys.includes(e.key)) set(size + grows(e.key === keys[1] ? STEP : -STEP));
+        const way = keyStep(keys, e);
+        if (keyStep(PANELS.ends, e) === -1) set(min);
+        else if (keyStep(PANELS.ends, e) === 1 && Number.isFinite(max)) set(max);
+        else if (way) set(size + grows(way * STEP));
         else return;
         e.preventDefault();
       }}>
