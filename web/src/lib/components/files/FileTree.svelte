@@ -193,6 +193,14 @@
     ontoggle?.(open, keys);
   };
 
+  // Right opens a folder and Left closes it, as in a file manager's tree; with Ctrl, or Cmd on a
+  // Mac, every folder inside it too
+  const folderArrow = (e: KeyboardEvent, line: TreeLine<T>) => {
+    if (line.kind !== "folder" || (e.key !== "ArrowRight" && e.key !== "ArrowLeft")) return false;
+    show(line.node, e.key === "ArrowRight", withInside(e));
+    return true;
+  };
+
   const list = new ListControl<TreeLine<T>>({
     lines: () => lines,
     all: () => (selected ? selectAllIds(lines, idOf, tickable, folderId) : []),
@@ -214,15 +222,8 @@
       else if (onopenfolder) onopenfolder(line.node);
       else show(line.node, !expansion.isOpen(line.node.key));
     },
-    // Right opens a folder and Left closes it, as in a file manager's tree; with Ctrl, or Cmd on a
-    // Mac, every folder inside it too
-    onkey: (e, line) => {
-      if (line.kind === "folder" && (e.key === "ArrowRight" || e.key === "ArrowLeft")) {
-        show(line.node, e.key === "ArrowRight", withInside(e));
-        return true;
-      }
-      return lineMenu.key(e, line) || !!onkey?.(e, line);
-    },
+    onkey: (e, line) => folderArrow(e, line) || lineMenu.key(e, line) || !!onkey?.(e, line),
+    onchord: (e, line) => withInside(e) && !e.altKey && folderArrow(e, line),
     headersFocus: true,
     inspects: (line) => !!inspect && line.kind === "item",
     onfocus: (line) => {
@@ -331,10 +332,7 @@
   const shownId = $derived(focusedPin ? pinnedId(focusedPin.index) : list.activeId);
   /** the rows before the lines: the column header's */
   const above = $derived(header ? 1 : 0);
-  /**
-   * A folder line's tint, opaque so the lines scrolling under its pinned copy don't show through;
-   * the line's state tints it over this as any line's
-   */
+  // a folder line's tint, opaque so the lines scrolling under its pinned copy don't show through
   const folderTint =
     "bg-[color-mix(in_srgb,var(--color-surface-muted)_50%,var(--color-surface))] line-tint-opaque";
 </script>
