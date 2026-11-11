@@ -262,20 +262,8 @@ impl Schema {
     })
   }
 
-  /// The leaf keys whose values differ between `old` and `new`, compared as serialized. A list
-  /// or user-keyed map is one value.
-  ///
-  /// # Panics
-  ///
-  /// When either value does not serialize, which for a type whose default does takes a
-  /// `Serialize` of its own that fails.
-  pub fn diff<T: Serialize>(&self, old: &T, new: &T) -> Vec<Key> {
-    match (serde_json::to_value(old), serde_json::to_value(new)) {
-      (Ok(old), Ok(new)) => self.diff_trees(&old, &new),
-      (Err(e), _) | (_, Err(e)) => panic!("the configuration does not serialize: {e}"),
-    }
-  }
-
+  /// The leaf keys whose values differ between two configuration trees. A list or user-keyed
+  /// map is one value.
   pub(crate) fn diff_trees(&self, old: &Value, new: &Value) -> Vec<Key> {
     self
       .changed_fields(old, new)
@@ -576,16 +564,17 @@ mod tests {
   #[test]
   fn diff_names_changed_leaves_and_whole_lists() {
     let schema = example_schema();
+    let tree = |example: &Example| serde_json::to_value(example).unwrap();
     let old = Example::default();
     let mut new = Example::default();
-    assert!(schema.diff(&old, &new).is_empty());
+    assert!(schema.diff_trees(&tree(&old), &tree(&new)).is_empty());
     new.server.port = 1;
     new.shares.directories.push("/music".into());
     new
       .api_keys
       .insert("mine".into(), crate::testing::ApiKey::default());
     assert_eq!(
-      schema.diff(&old, &new),
+      schema.diff_trees(&tree(&old), &tree(&new)),
       ["server.port", "shares.directories", "api_keys"]
     );
   }
