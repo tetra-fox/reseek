@@ -9,10 +9,9 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+use reseek_shares::lock;
 use tokio::sync::oneshot;
 use uuid::Uuid;
-
-use crate::sync::lock;
 
 /// What a waiting download waits for.
 struct Waiting {

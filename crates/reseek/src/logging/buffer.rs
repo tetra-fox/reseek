@@ -5,12 +5,11 @@ use std::sync::{Arc, Mutex};
 
 use api_types::logs::{LogLevel, LogRecord};
 use chrono::Utc;
+use reseek_shares::lock;
 use tokio::sync::broadcast;
 use tracing::field::{Field, Visit};
 use tracing::{Event, Level, Subscriber};
 use tracing_subscriber::layer::{Context, Layer};
-
-use crate::sync::lock;
 
 /// How many records the buffer keeps.
 pub const CAPACITY: usize = 100;

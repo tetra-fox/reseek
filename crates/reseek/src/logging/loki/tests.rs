@@ -2,10 +2,10 @@ use std::collections::VecDeque;
 use std::sync::Mutex;
 
 use axum::http::StatusCode;
+use reseek_shares::lock;
 use tracing_subscriber::layer::SubscriberExt;
 
 use super::*;
-use crate::sync::lock;
 
 /// A stand-in Loki answering each push with the next of `answers`, then 204, and handing over
 /// every body it was sent.

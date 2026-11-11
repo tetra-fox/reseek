@@ -12,6 +12,7 @@ use api_types::live::LiveFrame;
 use api_types::relay::RelayUploadOutcome;
 use api_types::transfers::{TransferDirection, TransferStates};
 use chrono::Utc;
+use reseek_shares::lock;
 use soulseek_client::{
   ClientError, InputFactory, LogLimiter, ProgressUpdated, SlotAwaiter, SlotReleased, StateChanged,
   Transfer as Snapshot, TransferOptions, UploadInput, UploadRequest, UploadSource,
@@ -26,7 +27,6 @@ use super::Uploads;
 use super::intake::Located;
 use crate::relay::Controller;
 use crate::shares::LOCAL_HOST;
-use crate::sync::lock;
 use crate::transfers::{Record, removal, store};
 
 /// More states than one upload reports.

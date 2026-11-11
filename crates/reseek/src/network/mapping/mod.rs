@@ -14,6 +14,7 @@ use std::time::Duration;
 
 use api_types::state::{PortMappingMethod, PortMappingState, PortMappingStatus};
 use async_trait::async_trait;
+use reseek_shares::lock;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -24,7 +25,6 @@ pub use upnp::Upnp;
 
 use super::reachability::Reachability;
 use crate::state::StateOwner;
-use crate::sync::lock;
 
 /// How long one request to a router may take before it counts as unanswered.
 const ASKING: Duration = Duration::from_secs(15);

@@ -4,7 +4,7 @@
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
-pub use reseek_shares::lock;
+use reseek_shares::lock;
 
 /// The principals each holding the one slot they may, such as for an archive being sent.
 #[derive(Clone, Debug, Default)]

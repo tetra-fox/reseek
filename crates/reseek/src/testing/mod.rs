@@ -268,8 +268,6 @@ impl Stream {
   }
 }
 
-pub use reseek_shares::testing::logged;
-
 /// `request` with the header `name` set to `value`.
 pub fn with(mut request: Request<Body>, name: &'static str, value: &str) -> Request<Body> {
   request.headers_mut().append(name, value.parse().unwrap());

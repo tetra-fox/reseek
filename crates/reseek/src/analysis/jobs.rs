@@ -14,6 +14,7 @@ use api_types::files::FileRoot;
 use api_types::jobs::{JobKind, JobPartState, JobStarter, JobStarterKind, JobState};
 use api_types::live::LiveFrame;
 use chrono::{DateTime, Utc};
+use reseek_shares::lock;
 use serde::{Deserialize, Serialize};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
@@ -25,7 +26,6 @@ use crate::config::Analysis as AnalysisOptions;
 use crate::files::LocalFile;
 use crate::jobs::{Ended, NewJob, NewPart, StoredPart, store as job_store};
 use crate::services::FileTarget;
-use crate::sync::lock;
 
 /// The most files one batch may name.
 pub(super) const BATCH_LIMIT: usize = 100_000;

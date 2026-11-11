@@ -24,6 +24,7 @@ use openidconnect::{
   IdToken, IdTokenFields, IssuerUrl, JsonWebKeySet, ProviderMetadataWithLogout, RedirectUrl,
   StandardErrorResponse, StandardTokenResponse,
 };
+use reseek_shares::lock;
 use serde::{Deserialize, Serialize};
 use tokio::time::Instant;
 use tracing::{Instrument, debug, error, info, info_span, warn};
@@ -31,7 +32,6 @@ use tracing::{Instrument, debug, error, info, info_span, warn};
 use crate::app::AppState;
 use crate::auth::Client;
 use crate::config::{Oidc, Options};
-use crate::sync::lock;
 
 /// A provider's discovery document with its signing keys.
 pub type Metadata = ProviderMetadataWithLogout;

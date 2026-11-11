@@ -9,12 +9,13 @@ use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 
 use regex::{Captures, Regex};
+use reseek_shares::traverses;
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::safety::{
   Os, combine_safely, creatable, creatable_path, directory_name_safely, file_name_safely,
-  is_absolute, sanitize_filename, sanitize_path_segment, too_long, traverses, with_suffix,
+  is_absolute, sanitize_filename, sanitize_path_segment, too_long, with_suffix,
 };
 
 /// How many bytes of the hash of a download's peer and remote filename its incomplete file's

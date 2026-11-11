@@ -10,11 +10,11 @@ use std::net::IpAddr;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
+use reseek_shares::lock;
 use soulseek_client::ClientError;
 use tracing::{debug, warn};
 
 use super::Directory;
-use crate::sync::lock;
 
 /// How often a request in one member's name from one other address is warned of.
 const WARN_EVERY: Duration = Duration::from_secs(60);

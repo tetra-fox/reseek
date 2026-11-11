@@ -25,6 +25,7 @@ use api_types::search::{
 use async_trait::async_trait;
 use cascade::Watcher;
 use chrono::Utc;
+use reseek_shares::lock;
 use soulseek_client::{ClientError, SearchOptions, SearchStateChanged};
 use soulseek_proto::SearchQuery;
 use tokio::sync::oneshot;
@@ -39,7 +40,6 @@ use crate::live::Live;
 use crate::network::Network;
 use crate::services::{Canceled, SearchService};
 use crate::state::StateOwner;
-use crate::sync::lock;
 use crate::users::Directory;
 use running::Running;
 

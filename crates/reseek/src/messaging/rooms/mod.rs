@@ -22,6 +22,7 @@ use api_types::messaging::rooms::{
 };
 use api_types::users::blocking::BlockScope;
 use chrono::Utc;
+use reseek_shares::lock;
 use soulseek_client::{ClientError, RoomErrorKind};
 use soulseek_proto::RoomType;
 use soulseek_proto::server::RoomList;
@@ -32,7 +33,6 @@ use super::conversations::unsent;
 use crate::api::error::ApiError;
 use crate::db::DbError;
 use crate::services::Joined;
-use crate::sync::lock;
 use tracker::{Tracker, country_of};
 
 /// How long the server's room list is served again before it is asked for anew.

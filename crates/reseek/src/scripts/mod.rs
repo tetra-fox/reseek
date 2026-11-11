@@ -26,11 +26,11 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use tracing::{Instrument, info, info_span, warn};
 
+use reseek_shares::lock;
 pub use run::Shell;
 
 use crate::config::{Options, ScriptRun};
 use crate::events::EventBus;
-use crate::sync::lock;
 use run::{Context, Job};
 
 /// The names in `on` that match every event a script can run for.

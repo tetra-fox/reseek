@@ -9,6 +9,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use api_types::state::OwnStatus;
+use reseek_shares::lock;
 use rusqlite::OptionalExtension;
 use soulseek_proto::UserPresence;
 use tokio::sync::Notify;
@@ -17,7 +18,6 @@ use tracing::{debug, info, warn};
 
 use super::Messaging;
 use crate::api::error::ApiError;
-use crate::sync::lock;
 
 /// What the reply is sent with, so the one who gets it can tell it was not typed.
 const AUTOMATIC: &str = "[Automatic Message] ";

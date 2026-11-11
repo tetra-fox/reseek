@@ -4,9 +4,8 @@
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
+use reseek_shares::lock;
 use tokio::io::{AsyncRead, AsyncReadExt};
-
-use crate::sync::lock;
 
 /// How many lines of output are kept.
 pub const LINES: usize = 20;

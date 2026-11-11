@@ -26,7 +26,7 @@ use stream::Queue;
 pub use stream::{Revalidate, body};
 pub use topics::Topic;
 
-use crate::sync::lock;
+use reseek_shares::lock;
 
 /// How many published frames are kept for streams that reconnect.
 const RING_FRAMES: usize = 4096;

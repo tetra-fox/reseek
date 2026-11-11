@@ -28,6 +28,7 @@ use std::time::Duration;
 use api_types::messaging::NotifyLevel;
 use cascade::Watcher;
 use chrono::Utc;
+use reseek_shares::lock;
 use soulseek_client::{Client, ClientState, Event};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
@@ -43,7 +44,6 @@ use crate::events::EventBus;
 use crate::live::Live;
 use crate::network::Network;
 use crate::state::StateOwner;
-use crate::sync::lock;
 use crate::users::Directory;
 use rooms::Rooms;
 

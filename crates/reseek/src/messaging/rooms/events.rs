@@ -341,8 +341,8 @@ mod tests {
   use soulseek_proto::server::RoomData;
 
   use super::history;
-  use crate::sync::lock;
   use crate::testing::app;
+  use reseek_shares::lock;
 
   #[tokio::test]
   async fn a_login_handled_after_its_session_ended_names_us() {

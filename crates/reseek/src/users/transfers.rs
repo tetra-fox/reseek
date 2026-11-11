@@ -7,11 +7,11 @@ use std::time::{Duration, Instant};
 
 use api_types::transfers::TransferDirection;
 use api_types::users::{TransferFigures, UserFigures, UserTransfers, UserTransfersQuery};
+use reseek_shares::lock;
 use rusqlite::params_from_iter;
 use rusqlite::types::Value;
 
 use crate::db::{Database, DbError, read_timestamp};
-use crate::sync::lock;
 use crate::transfers::categories::{FAILED, IN_PROGRESS, QUEUED, SUCCESSFUL, condition};
 use crate::transfers::{COLUMNS, NEWEST_FIRST, direction_text, transfer};
 

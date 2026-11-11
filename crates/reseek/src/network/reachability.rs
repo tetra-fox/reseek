@@ -11,13 +11,13 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use api_types::state::Reachable;
+use reseek_shares::lock;
 use tokio::sync::{Notify, watch};
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
 use crate::state::StateOwner;
-use crate::sync::lock;
 
 /// How long we stay logged in before nobody connecting to us says they cannot.
 pub const WAITED: Duration = Duration::from_secs(600);

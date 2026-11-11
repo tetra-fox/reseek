@@ -13,6 +13,7 @@ use axum::extract::{DefaultBodyLimit, Multipart, Request, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::Response;
 use base64::Engine;
+use reseek_shares::traverses;
 use tracing::info;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
@@ -23,7 +24,6 @@ use super::extract::{Json, Path};
 use crate::app::AppState;
 use crate::auth::{Administrator, AnyRole, Authorized, Client, ReadWrite};
 use crate::config::Options;
-use crate::safety::traverses;
 use crate::services::AgentCredential;
 
 /// The relay routes.

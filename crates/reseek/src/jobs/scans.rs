@@ -7,13 +7,13 @@ use std::sync::{Arc, Mutex};
 
 use api_types::jobs::{Job, JobCounts, JobEnding, JobKind, JobStarter, JobStarterKind, JobState};
 use chrono::{DateTime, Utc};
+use reseek_shares::lock;
 use reseek_shares::{ScanEnded, ScanHook, ScanNotice, ScanOrigin, SharedCounts};
 use tracing::warn;
 use uuid::Uuid;
 
 use super::schedules::Schedule;
 use super::{Ended, Jobs, NewJob};
-use crate::sync::lock;
 
 /// The scan going on.
 struct Running {

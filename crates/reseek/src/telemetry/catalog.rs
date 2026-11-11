@@ -5,10 +5,11 @@
 
 use std::sync::{Mutex, MutexGuard};
 
+use reseek_shares::lock;
+
 use super::derived::{Ema, TimedCounter};
 use super::registry::{Counter, Gauge, Histogram, LabeledCounter, Registry, exponential};
 use super::transfers::{TransferFamily, TransferMetrics};
-use crate::sync::lock;
 
 /// The prefix of every metric of the daemon's own.
 pub(super) const PREFIX: &str = "reseek";

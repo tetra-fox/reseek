@@ -11,6 +11,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 use api_types::auth::Role;
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
+use reseek_shares::lock;
 use sha2::{Digest, Sha256};
 use subtle::ConstantTimeEq;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
@@ -18,7 +19,6 @@ use tracing::warn;
 
 use crate::config::{Authentication, LocalUser};
 use crate::crypto;
-use crate::sync::lock;
 
 /// A local account that a password matched.
 #[derive(Clone, Debug, PartialEq, Eq)]

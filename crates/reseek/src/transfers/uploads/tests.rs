@@ -7,6 +7,7 @@ use std::path::Path;
 use std::sync::atomic::Ordering;
 
 use api_types::transfers::{TransferDirection, TransferStates, UserResponse};
+use reseek_shares::lock;
 use serde_json::{Value, json};
 use soulseek_client::ClientError;
 use soulseek_proto::RemoteFilename;
@@ -16,7 +17,6 @@ use uuid::Uuid;
 use super::{InFlight, OVERWHELMED};
 use crate::network::resolvers::tests::{edges, exposed, from};
 use crate::network::resolvers::{enqueue_download, place_in_queue};
-use crate::sync::lock;
 use crate::testing::{TestApp, app};
 use crate::transfers::fixtures::{Row, insert};
 use crate::transfers::{Record, store};

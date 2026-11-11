@@ -10,11 +10,11 @@ use std::time::Duration;
 use api_types::activity::{ActivityEntry, ActivityKind};
 use api_types::live::LiveFrame;
 use chrono::Utc;
+use reseek_shares::lock;
 use tokio::time::Instant;
 use tracing::trace;
 
 use crate::live::Live;
-use crate::sync::lock;
 
 /// How many entries are kept; the oldest go first.
 pub const KEPT: usize = 500;

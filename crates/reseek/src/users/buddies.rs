@@ -11,6 +11,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use api_types::events::{BuddyPresenceChanged, Event};
 use api_types::live::LiveFrame;
 use api_types::users::{Buddy, BuddyChange, UserPresence};
+use reseek_shares::lock;
 use rusqlite::Connection;
 use soulseek_client::{Client, ClientState};
 use soulseek_proto::SERVER_USERNAME;
@@ -19,7 +20,6 @@ use tracing::{Instrument, debug, info};
 use super::store::{self, Change};
 use super::{Directory, groups};
 use crate::api::error::ApiError;
-use crate::sync::lock;
 
 /// Every buddy by name, as `users.db` has them.
 pub struct Buddies {

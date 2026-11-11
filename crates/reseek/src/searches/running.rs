@@ -10,6 +10,7 @@ use std::time::Duration;
 use api_types::live::LiveFrame;
 use api_types::search::{Search, SearchResponse, SearchResponseReceived, SearchStates};
 use chrono::Utc;
+use reseek_shares::lock;
 use soulseek_client::{ClientError, SearchState};
 use soulseek_proto::peer;
 use tokio::sync::{Notify, oneshot, watch};
@@ -19,7 +20,6 @@ use tracing::{debug, error, trace, warn};
 
 use super::{Searches, store, suspect};
 use crate::live::{Live, Topic};
-use crate::sync::lock;
 use crate::users::Directory;
 
 /// How often the counts of a running search are written and pushed at most.

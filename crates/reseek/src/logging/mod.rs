@@ -10,6 +10,7 @@ mod loki;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
+use reseek_shares::lock;
 use tracing_appender::non_blocking::{NonBlockingBuilder, WorkerGuard};
 use tracing_subscriber::fmt::format::{DefaultFields, Writer};
 use tracing_subscriber::fmt::{FormatFields, Layer as FmtLayer};
@@ -22,7 +23,6 @@ pub use file::DailyFile;
 
 use crate::config::Options;
 use crate::config::enums::{DiagnosticLevel, LogLevel};
-use crate::sync::lock;
 use format::{Clock, Line};
 
 /// The name of the span every event of the process is in, which carries the instance name,

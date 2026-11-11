@@ -9,11 +9,10 @@ use std::net::{IpAddr, Ipv6Addr};
 use std::sync::Mutex;
 use std::time::Duration;
 
+use reseek_shares::lock;
 use soulseek_client::LogLimiter;
 use tokio::time::Instant;
 use tracing::warn;
-
-use crate::sync::lock;
 
 /// How long a failure counts.
 pub const WINDOW: Duration = Duration::from_secs(60);

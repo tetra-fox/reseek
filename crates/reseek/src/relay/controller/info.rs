@@ -3,13 +3,13 @@
 //! configured time gets no answer, and the request is refused as not shared.
 
 use api_types::relay::RelayMessage;
+use reseek_shares::lock;
 use tokio::sync::oneshot;
 use tokio::time::timeout;
 use tracing::{debug, warn};
 use uuid::Uuid;
 
 use super::Controller;
-use crate::sync::lock;
 use reseek_relay_proto::frames;
 
 /// A file info request waiting for its answer.

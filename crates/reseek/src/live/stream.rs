@@ -11,13 +11,13 @@ use std::time::Duration;
 
 use api_types::live::{Bye, ByeReason, LiveFrame};
 use axum::body::{Body, Bytes};
+use reseek_shares::lock;
 use tokio::sync::{Notify, mpsc};
 use tokio::time::{Instant, sleep_until};
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, error, trace, warn};
 
 use super::{Published, Registered, Topic};
-use crate::sync::lock;
 
 /// How many frames a stream may fall behind by before it is closed as lagging.
 const QUEUE: usize = 1024;

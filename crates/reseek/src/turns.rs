@@ -5,9 +5,8 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+use reseek_shares::lock;
 use tokio::sync::OwnedMutexGuard;
-
-use crate::sync::lock;
 
 type Map = HashMap<String, Arc<tokio::sync::Mutex<()>>>;
 

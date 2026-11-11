@@ -101,7 +101,7 @@ pub fn relative_path(text: &str, deleting: bool) -> Result<String, ApiError> {
       "Only relative paths may be specified",
     ));
   }
-  if safety::traverses(&path) {
+  if reseek_shares::traverses(&path) {
     return Err(ApiError::bad_request(
       "Paths containing traversal segments are not allowed",
     ));

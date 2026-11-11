@@ -13,6 +13,7 @@ use api_types::analysis::AnalysisUpload;
 use api_types::files::FileRoot;
 use axum::body::{Body, HttpBody};
 use futures_util::StreamExt;
+use reseek_shares::lock;
 use tokio::io::AsyncWriteExt;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
@@ -20,7 +21,6 @@ use uuid::Uuid;
 use super::{Analysis, store};
 use crate::api::error::ApiError;
 use crate::safety::{Os, creatable, file_name_safely};
-use crate::sync::lock;
 
 /// The folder under the analysis directory that holds the uploads.
 const FOLDER: &str = "uploads";

@@ -4,8 +4,9 @@
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use reseek_shares::lock;
+
 use super::registry::Gauge;
-use crate::sync::lock;
 
 /// Counts over a window; when the window ends the count is published to its gauge and starts
 /// again from zero, so the gauge shows the count of the last whole window. The window is a

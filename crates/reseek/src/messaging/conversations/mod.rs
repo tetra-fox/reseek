@@ -15,13 +15,13 @@ use api_types::messaging::{ExportFormat, NotifyLevel, ServerMessage};
 use api_types::users::blocking::BlockScope;
 use axum::response::Response;
 use chrono::{DateTime, Utc};
+use reseek_shares::lock;
 use soulseek_client::ClientError;
 use tracing::{debug, info, trace, warn};
 
 use super::{Messaging, export};
 use crate::api::error::ApiError;
 use crate::db::DbError;
-use crate::sync::lock;
 use crate::users::Touch;
 use store::{Inbound, SERVER};
 

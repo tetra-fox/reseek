@@ -15,14 +15,13 @@ use std::sync::{Arc, Mutex, PoisonError};
 use api_types::events::{Event, EventRecord, EventType};
 use chrono::{DateTime, Utc};
 use futures_util::FutureExt;
+use reseek_shares::lock;
 use soulseek_client::LogLimiter;
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, error, info_span, warn};
-
-use crate::sync::lock;
 
 /// How many events a slow subscriber may fall behind by before it misses some.
 const BACKLOG: usize = 1024;

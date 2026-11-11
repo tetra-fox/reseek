@@ -5,8 +5,9 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
+use reseek_shares::lock;
+
 use super::roots::inside;
-use crate::sync::lock;
 
 /// The paths being written, each by every spelling it was marked with, shared by every handle.
 #[derive(Clone, Default)]

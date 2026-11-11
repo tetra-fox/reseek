@@ -19,6 +19,7 @@ use std::cmp::Reverse;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::{Mutex, MutexGuard};
 
+use reseek_shares::lock;
 use tokio::sync::oneshot;
 use tracing::{debug, warn};
 use uuid::Uuid;
@@ -27,7 +28,6 @@ pub use position::Forecast;
 
 use crate::config::enums::QueueStrategy;
 use crate::config::{DEFAULT_GROUP, GroupUpload, Groups, Options, PRIVILEGED_GROUP};
-use crate::sync::lock;
 
 /// Looks up the group a user is in, without waiting.
 pub type GroupOf = Box<dyn Fn(&str) -> String + Send + Sync>;

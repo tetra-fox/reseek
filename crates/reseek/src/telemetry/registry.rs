@@ -10,8 +10,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use api_types::telemetry::{MetricSample, MetricType, PrometheusMetric};
-
-use crate::sync::lock;
+use reseek_shares::lock;
 
 /// A value that only goes up. Cloning gives another handle to the same value.
 #[derive(Clone, Debug, Default)]

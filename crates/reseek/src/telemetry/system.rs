@@ -3,13 +3,13 @@
 
 use std::sync::Mutex;
 
+use reseek_shares::lock;
 use sysinfo::{
   Disks, MemoryRefreshKind, Networks, Pid, ProcessRefreshKind, ProcessesToUpdate, System,
 };
 use tokio::runtime::Handle;
 
 use super::registry::{Family, Labels, Values};
-use crate::sync::lock;
 
 /// Filesystems that live in memory or are layered over others, which are left out.
 const NOT_FIXED: &[&str] = &["tmpfs", "overlay", "devtmpfs", "ramfs", "squashfs"];

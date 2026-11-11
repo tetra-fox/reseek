@@ -5,9 +5,8 @@
 use std::collections::HashMap;
 use std::sync::{Mutex, MutexGuard};
 
+use reseek_shares::lock;
 use rusqlite::Connection;
-
-use crate::sync::lock;
 
 /// Every user with a row, and the country code stored for them.
 #[derive(Default)]

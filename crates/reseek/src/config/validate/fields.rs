@@ -35,7 +35,7 @@ pub(crate) fn ip_addresses(name: &str, value: &str) -> Result<(), String> {
 /// Whether `pattern` is a usable regular expression: not blank, and it compiles as the engines
 /// compile it, matching ignoring case unless `case_sensitive`.
 pub(crate) fn is_regex(pattern: &str, case_sensitive: bool) -> bool {
-  crate::config::patterns::compile(pattern, case_sensitive).is_ok()
+  reseek_shares::patterns::compile(pattern, case_sensitive).is_ok()
 }
 
 /// One address range.

@@ -12,10 +12,10 @@ use async_trait::async_trait;
 use crab_nat::{
   InternetProtocol, PortMapping, PortMappingOptions, PortMappingType, TimeoutConfig, natpmp,
 };
+use reseek_shares::lock;
 use tracing::debug;
 
 use super::{Gateway, Mapped, local_toward};
-use crate::sync::lock;
 
 /// How long each request waits for the router, doubling on each of the retries: about four
 /// seconds for each protocol in all.

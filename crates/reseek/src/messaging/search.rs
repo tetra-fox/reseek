@@ -7,13 +7,13 @@ use api_types::messaging::{
 };
 use std::sync::{Arc, Mutex};
 
+use reseek_shares::lock;
 use rusqlite::types::Value;
 use rusqlite::{Connection, params_from_iter};
 
 use super::Messaging;
 use crate::api::error::ApiError;
 use crate::db::{enum_at, enum_text, read_timestamp};
-use crate::sync::lock;
 
 /// Where a snippet's match starts and ends before it is escaped; no message holds them.
 const OPEN: &str = "\u{1}";

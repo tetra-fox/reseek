@@ -8,6 +8,7 @@ use api_types::relay::RelayMessage;
 use axum::body::Body;
 use axum::http::{HeaderValue, StatusCode, header};
 use axum::response::Response;
+use reseek_shares::lock;
 use tokio::time::Instant;
 use tokio_util::io::ReaderStream;
 use tracing::{debug, info, warn};
@@ -17,7 +18,6 @@ use super::{Controller, Token};
 use crate::api::error::ApiError;
 use crate::safety::{Os, is_absolute};
 use crate::services::AgentCredential;
-use crate::sync::lock;
 use reseek_relay_proto::credential::Purpose;
 use reseek_relay_proto::frames::{self, DOWNLOAD_TOKEN_LIFETIME, millis};
 

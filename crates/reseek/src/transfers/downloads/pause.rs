@@ -7,12 +7,12 @@ use std::collections::BTreeMap;
 use std::collections::hash_map::Entry;
 
 use api_types::transfers::{BulkFailure, TransferStates};
+use reseek_shares::lock;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 use super::enqueue::gate_for;
 use super::{COMPLETED, Downloads, InFlight, Running};
-use crate::sync::lock;
 use crate::transfers::{Record, store};
 
 impl Downloads {

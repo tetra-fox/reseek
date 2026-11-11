@@ -8,13 +8,13 @@ use std::collections::HashSet;
 
 use api_types::live::LiveFrame;
 use api_types::transfers::TransferDirection;
+use reseek_shares::lock;
 use rusqlite::{Connection, params};
 use soulseek_client::ClientError;
 use tracing::info;
 
 use super::intake::Located;
 use super::{InFlight, Uploads};
-use crate::sync::lock;
 use crate::transfers::categories::UNFINISHED;
 use crate::transfers::removal::{self, Removed};
 use crate::transfers::{Record, direction_text, store};

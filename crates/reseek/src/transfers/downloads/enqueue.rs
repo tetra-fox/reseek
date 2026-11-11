@@ -11,6 +11,8 @@ use api_types::live::LiveFrame;
 use api_types::transfers::{EnqueueFailure, Transfer, TransferDirection};
 use api_types::users::blocking::BlockScope;
 use regex::Regex;
+use reseek_shares::lock;
+use reseek_shares::traverses;
 use rusqlite::params;
 use soulseek_client::ClientError;
 use tracing::{Instrument, debug, info, warn};
@@ -18,8 +20,6 @@ use uuid::Uuid;
 
 use super::{Downloads, InFlight};
 use crate::api::error::ApiError;
-use crate::safety::traverses;
-use crate::sync::lock;
 use crate::transfers::categories::UNFINISHED;
 use crate::transfers::removal::{self, Removed};
 use crate::transfers::{Record, direction_text, store};

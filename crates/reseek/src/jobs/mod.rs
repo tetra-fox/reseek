@@ -26,6 +26,7 @@ use api_types::jobs::{
 };
 use api_types::live::LiveFrame;
 use chrono::{DateTime, Utc};
+use reseek_shares::lock;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
@@ -34,7 +35,6 @@ use crate::db::{Database, DbError, Location};
 use crate::events::EventBus;
 use crate::live::Live;
 use crate::state::StateOwner;
-use crate::sync::lock;
 pub use store::{NewPart, SCHEMA, StoredPart};
 
 /// Why a scan or maintenance run a restart cut off failed.

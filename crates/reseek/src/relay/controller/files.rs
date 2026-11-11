@@ -11,6 +11,8 @@ use std::task::{Context, Poll};
 use api_types::relay::{FileFailure, RelayFileUploadResult, RelayMessage, RelayUploadOutcome};
 use axum::extract::Multipart;
 use bytes::Bytes;
+use reseek_shares::lock;
+use reseek_shares::traverses;
 use tokio::io::{AsyncRead, AsyncSeek, ReadBuf};
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::{Instant, timeout};
@@ -19,9 +21,7 @@ use uuid::Uuid;
 
 use super::Controller;
 use crate::api::error::ApiError;
-use crate::safety::traverses;
 use crate::services::AgentCredential;
-use crate::sync::lock;
 use reseek_relay_proto::credential::Purpose;
 use reseek_relay_proto::frames;
 

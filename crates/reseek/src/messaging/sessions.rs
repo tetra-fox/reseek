@@ -5,13 +5,13 @@
 use api_types::live::LiveFrame;
 use api_types::messaging::rooms::{HistoryGap, RoomHistoryGap};
 use chrono::{DateTime, Utc};
+use reseek_shares::lock;
 use rusqlite::{Connection, Row, params};
 use tracing::{debug, warn};
 
 use super::Messaging;
 use super::rooms::history;
 use crate::db::{read_timestamp, timestamp};
-use crate::sync::lock;
 
 /// The shortest gap reported.
 const SHORTEST: chrono::Duration = chrono::Duration::seconds(1);

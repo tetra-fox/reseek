@@ -10,10 +10,10 @@ use async_trait::async_trait;
 use igd_next::aio::Gateway as Router;
 use igd_next::aio::tokio::{Tokio, search_gateway};
 use igd_next::{AddPortError, PortMappingProtocol, SearchOptions};
+use reseek_shares::lock;
 use tracing::debug;
 
 use super::{DESCRIPTION, Gateway, Mapped, local_toward};
-use crate::sync::lock;
 
 /// Where SSDP searches go: every UPnP device on the local network listens there.
 const DISCOVERY: &str = "239.255.255.250:1900";

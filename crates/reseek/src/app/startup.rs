@@ -187,7 +187,7 @@ pub(super) fn config_error(error: &cascade::Error) -> String {
 mod tests {
   use super::*;
   use crate::config::Metrics;
-  use crate::testing::logged;
+  use reseek_shares::testing::logged;
 
   #[test]
   fn a_default_login_is_refused_only_where_other_machines_reach_it() {

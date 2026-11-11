@@ -18,13 +18,13 @@ use std::time::Duration;
 use api_types::state::UserStatistics;
 use api_types::users::{CachedUser, StatisticsSnapshot, UserPresence, UserStatus};
 use chrono::Utc;
+use reseek_shares::lock;
 use soulseek_client::{Client, ClientError, LogLimiter};
 use soulseek_proto::server::UserStats;
 use tracing::{Instrument, debug, info, trace, warn};
 
 use super::groups::{self, Facts, Placement};
 use super::{Directory, Touch};
-use crate::sync::lock;
 use crate::turns::Turns;
 
 /// How old a user's statistics may be when their group is worked out before they are asked

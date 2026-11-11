@@ -13,6 +13,7 @@ use api_types::jobs::{JobEnding, JobSchedule, JobStarter};
 use api_types::live::LiveFrame;
 use chrono::{DateTime, Local, Utc};
 use reseek_shares::ScanOrigin;
+use reseek_shares::lock;
 use reseek_shares::schedule::Schedule as Timing;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::time::MissedTickBehavior;
@@ -24,7 +25,6 @@ use super::store::LastRun;
 use crate::api::error::ApiError;
 use crate::app::AppState;
 use crate::config::Options;
-use crate::sync::lock;
 
 /// How long the scheduler waits at most before it looks at the schedules again.
 const LOOK_AGAIN: Duration = Duration::from_secs(60);

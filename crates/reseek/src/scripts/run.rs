@@ -9,6 +9,7 @@ use std::time::{Duration, Instant};
 
 use api_types::events::{Event, EventRecord, ScriptRunCompleted};
 use cascade::Schema;
+use reseek_shares::lock;
 use tokio::process::{Child, Command};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
@@ -17,7 +18,6 @@ use uuid::Uuid;
 use super::group::{self, Group};
 use super::output::{self, Tail};
 use crate::config::{Script, ScriptRun};
-use crate::sync::lock;
 
 /// Past this size the event goes to a file instead of the environment, where Linux takes no
 /// single string over 128 KiB.

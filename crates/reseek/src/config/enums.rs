@@ -90,8 +90,6 @@ impl cascade::Cascade for RelayMode {
   }
 }
 
-pub use reseek_shares::options::StorageMode;
-
 option_enum! {
   /// What a retried download does with the part already on disk.
   pub enum RetryPartial {

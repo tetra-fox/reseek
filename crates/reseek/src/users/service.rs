@@ -13,6 +13,7 @@ use async_trait::async_trait;
 use axum::http::{HeaderValue, header};
 use axum::response::{IntoResponse, Response};
 use chrono::Utc;
+use reseek_shares::lock;
 use sha2::{Digest, Sha256};
 use tracing::debug;
 
@@ -21,7 +22,6 @@ use super::{Directory, SUMMARY_FOR, blocking, profile, transfers};
 use crate::api::error::ApiError;
 use crate::db::shifted;
 use crate::services::{BlockImport, BlockingService};
-use crate::sync::lock;
 
 fn internal(error: impl std::fmt::Display) -> ApiError {
   ApiError::internal(error)

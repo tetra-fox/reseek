@@ -8,7 +8,6 @@ pub(crate) use cascade::duration;
 pub mod enums;
 pub mod load;
 mod options;
-pub use reseek_shares::patterns;
 pub mod redact;
 pub mod template;
 pub mod validate;

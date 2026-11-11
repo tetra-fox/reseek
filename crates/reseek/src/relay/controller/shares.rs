@@ -13,6 +13,7 @@ use api_types::relay::{RelayErrorCode, RelayMessage};
 use api_types::shares::Share;
 use axum::extract::Multipart;
 use chrono::Utc;
+use reseek_shares::lock;
 use tokio::io::AsyncWriteExt;
 use tokio::time::Instant;
 use tracing::{debug, info, warn};
@@ -23,7 +24,6 @@ use crate::api::error::ApiError;
 use crate::db::remove_database;
 use crate::services::AgentCredential;
 use crate::shares::{HostError, Shares};
-use crate::sync::lock;
 use reseek_relay_proto::credential::Purpose;
 use reseek_relay_proto::frames::{self, SHARE_TOKEN_LIFETIME, millis};
 

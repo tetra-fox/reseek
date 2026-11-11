@@ -16,13 +16,13 @@ use std::sync::{Arc, Mutex};
 use api_types::jobs::{JobCounts, JobKind, JobPart, JobPartState, JobStarter, JobState};
 use api_types::live::LiveFrame;
 use api_types::transfers::{DownloadJobFinished, TransferStates};
+use reseek_shares::lock;
 use rusqlite::{Connection, OptionalExtension};
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 use super::{Downloads, Group};
 use crate::jobs::{Ended, NewJob, NewPart};
-use crate::sync::lock;
 use crate::transfers::categories::UNFINISHED;
 use crate::transfers::listing::remote_directory;
 use crate::transfers::{ASKED_ORDER, Record, text_at};

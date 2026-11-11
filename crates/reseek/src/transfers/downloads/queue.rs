@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use api_types::transfers::TransferStates;
 use api_types::users::blocking::BlockScope;
+use reseek_shares::lock;
 use soulseek_client::ClientError;
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
@@ -15,7 +16,6 @@ use uuid::Uuid;
 use super::Downloads;
 use crate::api::error::ApiError;
 use crate::db::DbError;
-use crate::sync::lock;
 use crate::transfers::categories::{IN_PROGRESS, QUEUED, UNFINISHED};
 use crate::transfers::store;
 

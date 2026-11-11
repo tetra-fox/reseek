@@ -12,6 +12,7 @@ use std::time::{Duration, Instant};
 
 use api_types::users::blocking::BlockScope;
 use regex::Regex;
+use reseek_shares::patterns;
 use soulseek_client::{ClientError, LogLimiter, SearchReply};
 use soulseek_proto::SearchQuery;
 use soulseek_proto::peer::{File, SearchResponse};
@@ -20,7 +21,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, trace, warn};
 
 use super::{Edges, blocked, forecast, log_refused};
-use crate::config::{Options, patterns};
+use crate::config::Options;
 use crate::shares::View;
 use crate::telemetry::catalog::SearchMetrics;
 use crate::telemetry::millis;

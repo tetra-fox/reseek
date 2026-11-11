@@ -13,6 +13,7 @@ use std::time::{Duration, Instant};
 use api_types::users::blocking::{BlacklistRules, Block, BlockScope, BlockSource, BlocklistFile};
 use chrono::{DateTime, Utc};
 use regex::Regex;
+use reseek_shares::lock;
 use rusqlite::{Connection, OptionalExtension, Row, params};
 use tracing::warn;
 
@@ -21,7 +22,6 @@ use super::store::ensure;
 use crate::config::Options;
 use crate::config::cidr::IpRange;
 use crate::db::{read_timestamp, timestamp};
-use crate::sync::lock;
 
 /// How long an answer is remembered.
 const DECISION_FOR: Duration = Duration::from_secs(600);
@@ -226,7 +226,7 @@ impl Rules {
       .patterns
       .iter()
       .filter_map(|text| {
-        crate::config::patterns::compile(text, case_sensitive)
+        reseek_shares::patterns::compile(text, case_sensitive)
           .inspect_err(|e| warn!(pattern = text, error = %e, "blacklist pattern not used"))
           .ok()
       })

@@ -9,10 +9,10 @@ use std::time::Duration;
 
 use api_types::live::LiveFrame;
 use api_types::users::BrowseProgress;
+use reseek_shares::lock;
 use tokio::time::Instant;
 
 use crate::live::Live;
-use crate::sync::lock;
 
 /// How long a browse's progress is kept after it ended.
 const KEPT: Duration = Duration::from_secs(5);

@@ -12,13 +12,13 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use chrono::Utc;
+use reseek_shares::lock;
 use soulseek_client::{ClientError, LogLimiter};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore, SemaphorePermit};
 use tracing::{debug, info, trace, warn};
 
 use super::{Uploads, limits};
 use crate::shares::{LOCAL_HOST, Resolved};
-use crate::sync::lock;
 use crate::telemetry::millis;
 
 /// What a peer is told when too many requests wait to be decided.

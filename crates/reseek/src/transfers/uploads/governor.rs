@@ -13,11 +13,11 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError, RwLock};
 
+use reseek_shares::lock;
 use soulseek_client::{Governor as ChunkGovernor, Reporter, TokenBucket};
 use tracing::debug;
 
 use crate::config::{DEFAULT_GROUP, Groups, Options, PRIVILEGED_GROUP};
-use crate::sync::lock;
 
 /// Looks up the group an upload's user is in now.
 pub type CurrentGroup = Arc<dyn Fn() -> String + Send + Sync>;

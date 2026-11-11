@@ -14,6 +14,7 @@ use api_types::files::FileRoot;
 use api_types::jobs::{JobKind, JobPartState, JobState};
 use api_types::live::LiveFrame;
 use chrono::{DateTime, Utc};
+use reseek_shares::lock;
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{Instrument, debug, error, info, info_span, warn};
 use uuid::Uuid;
@@ -25,7 +26,6 @@ use super::report::{assemble, kept_name, layout, modified_text};
 use super::{Analysis, kept, store, uploads};
 use crate::config::Options;
 use crate::jobs::{StoredPart, store as job_store};
-use crate::sync::lock;
 
 /// How a file's analysis ended.
 pub(super) enum Done {
