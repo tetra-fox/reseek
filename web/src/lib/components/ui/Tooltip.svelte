@@ -60,21 +60,14 @@
     };
   };
   const measuring = { [createAttachmentKey()]: measure };
-
-  // bits-ui reads payload and disabled again in the trigger's teardown, when what `text` comes
-  // from may be gone, such as a removed row, so it gets these copies of the last values
-  // TODO: pass the props straight through once bits-ui stops reading them on detach
-  let payload = $state.raw<{ text: string; side: Side }>({ text: "", side: "top" });
-  let disabled = $state(true);
-  $effect.pre(() => {
-    payload = { text: text ?? "", side };
-    disabled = text === undefined || (clipped && !cut);
-  });
 </script>
 
 <!-- a trigger once awake, disabled without text, so the element isn't remounted when a tooltip
      comes and goes. The spoken text follows it without a line break, which would render as a space -->
-{#if dormant}{@render render({ props: {} })}{:else}<Tooltip.Trigger {tether} {payload} {disabled}>
+{#if dormant}{@render render({ props: {} })}{:else}<Tooltip.Trigger
+    {tether}
+    payload={{ text: text ?? "", side }}
+    disabled={text === undefined || (clipped && !cut)}>
     {#snippet child({ props })}
       <!-- type is for bits-ui's own button, and disabled only means there's nothing to show -->
       {@const {
