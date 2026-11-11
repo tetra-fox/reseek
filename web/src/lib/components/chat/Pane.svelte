@@ -118,14 +118,26 @@
     if (!outcome.ok) toast(outcome.error, "error");
     else void members?.load();
   };
-  // the people `@` can name: never ourselves, and each once
+  // buddies come first in `@` completion
+  void users.loadBuddies();
+  // the people `@` can name, never ourselves and each once: the buddies among those here, the
+  // others here, then the buddies who aren't
   const names = () => {
     const us = app.state?.user.username;
-    const all =
+    const here = new Set(
       target.kind === "room"
         ? members!.users.rows.map((u) => u.username)
-        : [target.name, ...chat.conversations.rows.map((c) => c.username)];
-    return [...new Set(all)].filter((name) => name !== us);
+        : [target.name, ...chat.conversations.rows.map((c) => c.username)]
+    );
+    if (us) here.delete(us);
+    const buddies = [...users.buddies]
+      .filter((name) => name !== us)
+      .toSorted((a, b) => a.localeCompare(b));
+    return [
+      ...buddies.filter((name) => here.has(name)),
+      ...[...here].filter((name) => !users.buddies.has(name)),
+      ...buddies.filter((name) => !here.has(name))
+    ];
   };
 </script>
 

@@ -1,4 +1,4 @@
-import { SvelteMap } from "svelte/reactivity";
+import { SvelteMap, SvelteSet } from "svelte/reactivity";
 
 import { api, byUser, type Schemas } from "#lib/api/client.js";
 import type { paths } from "#lib/api/schema.js";
@@ -27,10 +27,17 @@ type Entry = { summary: UserSummary; at: number };
 class Users {
   #entries = new SvelteMap<string, Entry>();
   #loading = new Map<string, Promise<void>>();
+  /** our buddies' names, read by `loadBuddies` and kept by every summary that comes in */
+  readonly buddies = new SvelteSet<string>();
+  #buddiesAt = -Infinity;
+  #buddiesLoading: Promise<void> | null = null;
 
   constructor() {
     live.on("users.updated", (summary) => this.#put(summary));
-    live.on("users.removed", ({ username }) => this.#entries.delete(username));
+    live.on("users.removed", ({ username }) => {
+      this.#entries.delete(username);
+      this.buddies.delete(username);
+    });
   }
 
   /** The summary held for `username`, whatever its age */
@@ -73,6 +80,22 @@ class Users {
     }
   };
 
+  /** Reads the buddy list into `buddies` unless it was read less than a minute ago */
+  loadBuddies(now = Date.now()): Promise<void> {
+    if (now - this.#buddiesAt < SUMMARY_TTL_MS) return Promise.resolve();
+    // read by name, so a buddy changed between pages is not missed
+    this.#buddiesLoading ??= this.every({ buddy: true, sort: "username", order: "asc" })
+      .then((outcome) => {
+        // a list that can't be read leaves the names as they were, to be read on the next call
+        if (!outcome.ok) return;
+        const found = new Set(outcome.data.map((u) => u.username));
+        for (const name of this.buddies) if (!found.has(name)) this.buddies.delete(name);
+        this.#buddiesAt = now;
+      })
+      .finally(() => (this.#buddiesLoading = null));
+    return this.#buddiesLoading;
+  }
+
   /** The usernames blocked now; null when the directory couldn't be read */
   blocked = async (): Promise<Set<string> | null> => {
     const outcome = await this.every({ blocked: true });
@@ -81,9 +104,13 @@ class Users {
 
   clear() {
     this.#entries.clear();
+    this.buddies.clear();
+    this.#buddiesAt = -Infinity;
   }
 
   #put(summary: UserSummary) {
+    if (summary.buddy) this.buddies.add(summary.username);
+    else this.buddies.delete(summary.username);
     const entry = this.#entries.get(summary.username);
     if (entry) {
       patch(entry.summary, summary);
