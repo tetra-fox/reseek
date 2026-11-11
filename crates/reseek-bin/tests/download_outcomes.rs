@@ -16,65 +16,19 @@ use api_types::transfers::{Transfer, TransferStates};
 use reseek::safety::Os;
 use reseek::transfers::downloads::incomplete_path;
 use serde_json::json;
-use soulseek_client::ClientOptions;
-use soulseek_proto::init::{FileTransferInit, PeerInit};
 use soulseek_proto::peer::{
   PlaceInQueueRequest, PlaceInQueueResponse, QueueDownload, TransferRequest, TransferResponse,
   UploadDenied, UploadFailed,
 };
-use soulseek_proto::{InitMessage, PeerConnectionType, PeerMessage, TransferDirection as Wire};
+use soulseek_proto::{PeerMessage, TransferDirection as Wire};
 use support::peer::PeerSide;
-use support::soulfind::{self, Soulfind, User};
+use support::scripted::{Scripted, send_from};
+use support::soulfind::{self, Soulfind};
 use support::transfers::content;
 use support::{
-  PATIENCE, completed, daemon_listening, download_when, enqueue, events, free_port, logged_in,
-  signed_in, until,
+  completed, daemon_listening, download_when, enqueue, events, free_port, logged_in, signed_in,
+  until,
 };
-use tokio::net::TcpListener;
-
-/// A user on soulfind whose peer side the test scripts: soulfind gives out the port of a
-/// listener of the test's as the user's own.
-struct Scripted {
-  user: User,
-  listener: TcpListener,
-}
-
-impl Scripted {
-  async fn start(server: &Arc<Soulfind>) -> Self {
-    // soulfind gives out a loopback user's address as the host's LAN address
-    let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, 0)).await.unwrap();
-    let options = ClientOptions {
-      enable_listener: false,
-      listen_port: listener.local_addr().unwrap().port(),
-      ..ClientOptions::default()
-    };
-    Self {
-      user: server.login("peer", options).await,
-      listener,
-    }
-  }
-
-  fn name(&self) -> &str {
-    &self.user.username
-  }
-
-  /// The daemon's next message connection to the peer, past its introduction.
-  async fn connected(&self) -> PeerSide {
-    let (stream, _) = tokio::time::timeout(PATIENCE, self.listener.accept())
-      .await
-      .expect("the daemon connects")
-      .unwrap();
-    let mut side = PeerSide::new(stream);
-    let InitMessage::PeerInit(PeerInit {
-      connection_type, ..
-    }) = side.read_init().await
-    else {
-      panic!("the daemon introduces itself");
-    };
-    assert_eq!(connection_type, PeerConnectionType::Peer);
-    side
-  }
-}
 
 /// Reads the daemon's request for `filename`.
 async fn queued(side: &mut PeerSide, filename: &str) {
@@ -102,24 +56,6 @@ async fn offer(side: &mut PeerSide, filename: &str, token: u32, size: u64) {
       file_size: None,
     })
   );
-}
-
-/// Connects to the daemon as `username` for the transfer `token`, reads where it asks to
-/// start, checks it is `start`, and sends the file of `size` bytes from there.
-async fn send_from(daemon: SocketAddr, username: &str, token: u32, start: u64, size: usize) {
-  let mut transfer = PeerSide::connect(daemon).await;
-  let mut init = InitMessage::PeerInit(PeerInit {
-    username: username.into(),
-    connection_type: PeerConnectionType::Transfer,
-    token: 0,
-  })
-  .encode();
-  init.extend(FileTransferInit { token }.encode());
-  transfer.send(&init).await;
-  let offset = u64::from_le_bytes(transfer.raw(8).await.try_into().unwrap());
-  assert_eq!(offset, start);
-  transfer.send(&content(size)[start as usize..]).await;
-  transfer.closed().await;
 }
 
 fn ended(transfer: &Transfer) -> bool {

@@ -18,6 +18,7 @@
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import Time from "#lib/components/ui/Time.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
+  import Username from "#lib/components/users/Username.svelte";
   import { Busy } from "#lib/feedback/busy.svelte.js";
   import { confirmation } from "#lib/feedback/confirm.svelte.js";
   import {
@@ -115,7 +116,13 @@
           {/snippet}
         </Tooltip>
       </span>
-      <span class="truncate text-xs text-fg-muted">{starterText(job, jobs.schedules)}</span>
+      <span class="truncate text-xs text-fg-muted">
+        {#if job.starter.kind === "user" && job.starter.name}
+          Sent by <Username name={job.starter.name} />
+        {:else}
+          {starterText(job, jobs.schedules)}
+        {/if}
+      </span>
     </div>
     <div class="flex min-w-0 flex-col gap-1 max-md:col-start-2">
       <span class="flex flex-wrap items-center gap-1.5">

@@ -48,6 +48,9 @@ pub struct ClientOptions {
   /// how long an upload, or a download asked for with a transfer request, waits for the peer
   /// to answer the transfer request
   pub transfer_response_timeout: Duration,
+  /// how long the offer of a file a user sends unasked is held for the download the application
+  /// starts for it; one not taken by then is refused, as its sender no longer waits for an answer
+  pub unasked_offer_timeout: Duration,
   /// acknowledge private messages as soon as they arrive, so the server stops replaying them
   pub auto_acknowledge_private_messages: bool,
   /// acknowledge privilege notifications as soon as they arrive
@@ -103,6 +106,7 @@ impl Default for ClientOptions {
       deduplicate_search_requests: true,
       message_timeout: Duration::from_secs(5),
       transfer_response_timeout: Duration::from_secs(15),
+      unasked_offer_timeout: Duration::from_secs(30),
       auto_acknowledge_private_messages: true,
       auto_acknowledge_privilege_notifications: true,
       accept_private_room_invitations: false,
@@ -178,6 +182,12 @@ impl ClientOptions {
     if self.transfer_response_timeout.is_zero() {
       return Err(invalid(
         "transfer_response_timeout",
+        "Must be greater than zero",
+      ));
+    }
+    if self.unasked_offer_timeout.is_zero() {
+      return Err(invalid(
+        "unasked_offer_timeout",
         "Must be greater than zero",
       ));
     }

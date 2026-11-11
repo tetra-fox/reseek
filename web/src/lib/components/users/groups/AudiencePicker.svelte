@@ -17,10 +17,12 @@
     /** what the menu picks for, as its button reads to a screen reader */
     label: string;
     disabled?: boolean;
+    /** the button's id, for a label or a field to point at */
+    id?: string;
     class?: string;
   };
 
-  let { value, choices, onchange, label, disabled = false, class: className }: Props = $props();
+  let { value, choices, onchange, label, disabled = false, id, class: className }: Props = $props();
 
   const toggle = (group: string, on: boolean) => {
     const held = value ?? [];
@@ -29,7 +31,7 @@
 </script>
 
 <Menu.Root>
-  <Menu.Trigger {disabled}>
+  <Menu.Trigger {id} {disabled}>
     {#snippet child({ props })}
       <Button
         {...props}

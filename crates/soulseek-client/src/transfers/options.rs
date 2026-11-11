@@ -83,6 +83,10 @@ pub enum RequestStyle {
   Queue,
   /// a download `TransferRequest`, which the peer answers with "queued", "send now" or a refusal
   TransferRequest,
+  /// none: the peer offered the file without being asked and the client holds the offer, which
+  /// the download takes at once. The sender waits for our answer, so the download does not wait
+  /// for a download slot.
+  Offered,
 }
 
 /// The options and callbacks of one transfer. Every callback is optional.

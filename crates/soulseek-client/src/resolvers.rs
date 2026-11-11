@@ -1,6 +1,6 @@
 //! The callbacks the application supplies so the client can answer peers: share listings,
-//! folder contents, user info, search results and upload queueing. They are part of the client
-//! options; the peer dispatcher and the search responder call them.
+//! folder contents, user info, search results, upload queueing and files users offer unasked.
+//! They are part of the client options; the peer dispatcher and the search responder call them.
 
 use std::fmt;
 use std::future::Future;
@@ -43,6 +43,14 @@ pub type UserInfoResolver =
 /// logged and the peer gets a generic refusal.
 pub type EnqueueDownload =
   Arc<dyn Fn(String, SocketAddr, RemoteFilename) -> ResolverFuture<()> + Send + Sync>;
+
+/// `(username, endpoint, filename, size)`: a user offers to send us a file we did not ask for, and
+/// the client holds the offer while this runs. Succeeding means the application started a
+/// download of the file with [`RequestStyle::Offered`](crate::RequestStyle::Offered), which takes
+/// the offer; failing refuses it, with [`ClientError::TransferRejected`] when the application
+/// does not want the file.
+pub type ReceiveOffer =
+  Arc<dyn Fn(String, SocketAddr, RemoteFilename, u64) -> ResolverFuture<()> + Send + Sync>;
 
 /// `(username, endpoint, filename)` to the 1-based place of that file in our upload queue, or
 /// `None` to send no reply
@@ -132,6 +140,8 @@ pub struct Resolvers {
   pub enqueue_download: Option<EnqueueDownload>,
   /// unset: place requests get no reply
   pub place_in_queue_resolver: Option<PlaceInQueueResolver>,
+  /// unset: every file a user offers unasked is refused
+  pub receive_offer: Option<ReceiveOffer>,
 }
 
 impl Resolvers {
@@ -144,6 +154,7 @@ impl Resolvers {
       user_info_resolver,
       enqueue_download,
       place_in_queue_resolver,
+      receive_offer,
     } = patch;
     if search_response_resolver.is_some() {
       self.search_response_resolver = search_response_resolver;
@@ -162,6 +173,9 @@ impl Resolvers {
     }
     if place_in_queue_resolver.is_some() {
       self.place_in_queue_resolver = place_in_queue_resolver;
+    }
+    if receive_offer.is_some() {
+      self.receive_offer = receive_offer;
     }
   }
 }
@@ -188,6 +202,7 @@ impl fmt::Debug for Resolvers {
         "place_in_queue_resolver",
         &self.place_in_queue_resolver.is_some(),
       )
+      .field("receive_offer", &self.receive_offer.is_some())
       .finish()
   }
 }

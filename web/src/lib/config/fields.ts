@@ -40,7 +40,7 @@ export const controlOf = (field: Field, view: FieldView | undefined): Control =>
 };
 
 const isList = (control: Control) =>
-  control === "list" || control === "regex-list" || control === "cidr-list";
+  control === "list" || control === "regex-list" || control === "cidr-list" || control === "groups";
 
 /** The running value as the control edits it */
 export const toDraft = (control: Control, value: unknown): Draft => {

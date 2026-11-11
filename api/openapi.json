@@ -20978,7 +20978,7 @@
               "string",
               "null"
             ],
-            "description": "the schedule that started it; null for the other kinds",
+            "description": "the schedule or the Soulseek user that started it; null for the other kinds",
             "example": "cleanup"
           }
         }
@@ -20990,7 +20990,8 @@
           "you",
           "schedule",
           "download",
-          "resumed"
+          "resumed",
+          "user"
         ]
       },
       "JobState": {

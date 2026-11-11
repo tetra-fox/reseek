@@ -1,7 +1,9 @@
 //! One download's task: it waits its turn in the local queue, checks its record, then tries
 //! the download, waiting longer before each new try and for a slot before each, until the file
-//! arrives, the download fails for good or it is canceled, and writes how it ended. A stop of
-//! the daemon leaves the record as it is, for the stop to end.
+//! arrives, the download fails for good or it is canceled, and writes how it ended. A file its
+//! user offered unasked is tried at once, taking the offer, since the sender waits for our
+//! answer; a later try asks for it like any other. A stop of the daemon leaves the record as it
+//! is, for the stop to end.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -73,13 +75,14 @@ fn retry_wait(attempt: u32, delay: Duration, max: Duration) -> Duration {
 impl Downloads {
   /// Starts the task of the download `record`, which waits at `position` in the local queue,
   /// takes a turn of `request`, whose files hold that many at once, and stops when `cancel` is
-  /// canceled.
+  /// canceled. With `offered`, its first try takes the offer its user made unasked.
   pub(super) fn spawn(
     &self,
     record: Record,
     position: f64,
     request: (u64, usize),
     cancel: CancellationToken,
+    offered: bool,
   ) {
     let this = self.this();
     let span = info_span!(
@@ -88,9 +91,14 @@ impl Downloads {
       direction = "download",
       username = record.username
     );
-    self
-      .tasks
-      .spawn(async move { this.run(record.id, position, request, cancel).await }.instrument(span));
+    self.tasks.spawn(
+      async move {
+        this
+          .run(record.id, position, request, cancel, offered)
+          .await
+      }
+      .instrument(span),
+    );
   }
 
   async fn run(
@@ -99,8 +107,9 @@ impl Downloads {
     position: f64,
     request: (u64, usize),
     cancel: CancellationToken,
+    offered: bool,
   ) {
-    match self.download(id, position, request, &cancel).await {
+    match self.download(id, position, request, &cancel, offered).await {
       Ended::Succeeded(record, incomplete, writing) => {
         let this = self.clone();
         let moving = async move {
@@ -120,23 +129,29 @@ impl Downloads {
     self.forget(id).await;
   }
 
-  /// The download's tries, from its turn in the local queue to how it ended.
+  /// The download's tries, from its turn in the local queue to how it ended; with `offered`,
+  /// the first try takes the offer its user made unasked, without a turn.
   async fn download(
     &self,
     id: Uuid,
     position: f64,
     request: (u64, usize),
     cancel: &CancellationToken,
+    mut offered: bool,
   ) -> Ended {
-    let first = tokio::select! {
-      grant = self.starts.wait(id, position, Some(request)) => grant,
-      () = cancel.cancelled() => return self.canceled(id, None).await,
+    let (mut first_slot, mut gate) = if offered {
+      (None, None)
+    } else {
+      let first = tokio::select! {
+        grant = self.starts.wait(id, position, Some(request)) => grant,
+        () = cancel.cancelled() => return self.canceled(id, None).await,
+      };
+      let gate = first.turn.map(|turn| Gate {
+        _turn: turn,
+        deadline: Instant::now() + HARD_LIMIT,
+      });
+      (Some(first.slot), gate)
     };
-    let mut first_slot = Some(first.slot);
-    let mut gate = first.turn.map(|turn| Gate {
-      _turn: turn,
-      deadline: Instant::now() + HARD_LIMIT,
-    });
     let mut record = match self.db.read(move |conn| store::get(conn, id)).await {
       Ok(Some(record)) => record,
       Ok(None) => {
@@ -188,6 +203,8 @@ impl Downloads {
       }
       Err(e) => return Ended::failed(Some(record), Failure::terminal(e), None),
     };
+    // a file sent unasked is downloaded at the size its offer was checked for, on every try
+    let pushed = self.pushed(&record).await;
     record.attempts = 1;
     self.save(&record, false).await;
     let mut attempt = 1;
@@ -208,16 +225,18 @@ impl Downloads {
         self.save(&record, false).await;
       }
       // held for this try; a retry waits for one in its place in the queue, keeping its
-      // request's turn
+      // request's turn. Taking an offer holds none
       let _slot = match first_slot.take() {
-        Some(slot) => slot,
+        Some(slot) => Some(slot),
+        None if offered => None,
         None => tokio::select! {
-          grant = self.starts.wait(id, position, None) => grant.slot,
+          grant = self.starts.wait(id, position, None) => Some(grant.slot),
           () = cancel.cancelled() => return self.canceled(id, Some(incomplete)).await,
         },
       };
+      let taking = std::mem::take(&mut offered);
       match self
-        .attempt(&mut record, &incomplete, cancel, &mut gate)
+        .attempt(&mut record, &incomplete, cancel, &mut gate, taking, pushed)
         .await
       {
         Attempted::Succeeded(writing) => return Ended::Succeeded(record, incomplete, writing),

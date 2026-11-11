@@ -135,6 +135,8 @@ pub struct Download {
   /// skipped in folder and selection downloads, never when downloaded on their own.
   #[cascade(env = "RESEEK_DOWNLOAD_FILTERS")]
   pub filters: Vec<String>,
+  /// Files other users send you without being asked.
+  pub received: Received,
 }
 
 impl Default for Download {
@@ -150,6 +152,33 @@ impl Default for Download {
         r"\.(exe|msi|scr|com|bat|lnk)$".to_string(),
         r"(^|[\\/])(thumbs\.db|desktop\.ini|\.ds_store)$".to_string(),
       ],
+      received: Received::default(),
+    }
+  }
+}
+
+/// Files other users send you without being asked. They are downloaded like any other file, as
+/// a job started by their sender. Files matching the download filters are refused.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
+#[serde(default)]
+pub struct Received {
+  /// Groups whose members may send you files, such as `buddies`; `default` is everyone, and then
+  /// a sender's name is not checked against their address. No one may when empty.
+  pub from: Vec<String>,
+  /// Largest file accepted. No limit when not set.
+  #[cascade(kind = "size")]
+  pub max_size: Option<bytesize::ByteSize>,
+  /// Most files one user may be sending you at once. When everyone may send, each address is
+  /// held to it instead. `0` for no limit.
+  pub max_files: u32,
+}
+
+impl Default for Received {
+  fn default() -> Self {
+    Self {
+      from: Vec::new(),
+      max_size: None,
+      max_files: 100,
     }
   }
 }

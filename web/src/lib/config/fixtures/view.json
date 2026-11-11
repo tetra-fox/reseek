@@ -316,6 +316,11 @@
           "\\.(exe|msi|scr|com|bat|lnk)$",
           "(^|[\\\\/])(thumbs\\.db|desktop\\.ini|\\.ds_store)$"
         ],
+        "received": {
+          "from": [],
+          "max_files": 100,
+          "max_size": null
+        },
         "request_style": "queue",
         "retry": {
           "attempts": 3,
@@ -3355,6 +3360,56 @@
         "\\.(exe|msi|scr|com|bat|lnk)$",
         "(^|[\\\\/])(thumbs\\.db|desktop\\.ini|\\.ds_store)$"
       ],
+      "apply": "live",
+      "secret": false,
+      "notApplied": null,
+      "entries": []
+    },
+    "transfers.download.received.from": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": {
+        "list": "string"
+      },
+      "doc": "Groups whose members may send you files, such as `buddies`; `default` is everyone, and then a sender's name is not checked against their address. No one may when empty.",
+      "choices": null,
+      "default": [],
+      "apply": "live",
+      "secret": false,
+      "notApplied": null,
+      "entries": []
+    },
+    "transfers.download.received.max_files": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "Most files one user may be sending you at once. When everyone may send, each address is held to it instead. `0` for no limit.",
+      "choices": null,
+      "default": 100,
+      "apply": "live",
+      "secret": false,
+      "notApplied": null,
+      "entries": []
+    },
+    "transfers.download.received.max_size": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "size",
+      "doc": "Largest file accepted. No limit when not set.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null,

@@ -10,6 +10,7 @@
   import type { Draft } from "#lib/config/fields.js";
   import { helpParts } from "#lib/config/help.js";
   import type { Control, Field } from "#lib/config/sections.js";
+  import { groupChoices } from "#lib/users/groups.js";
 
   import EnvAndFlag from "./EnvAndFlag.svelte";
   import ErrorText from "./ErrorText.svelte";
@@ -68,7 +69,7 @@
   /** a table takes the row's whole width, and says what is wrong by its rows */
   const tabular = $derived(control === "map" || control === "table-list");
   /** whether the control is one element a label can name */
-  const labelable = $derived(!tabular && control !== "notify-mode");
+  const labelable = $derived(!tabular && control !== "notify-mode" && control !== "groups");
   const restorable = $derived(!!custom && edit.mode !== "locked");
   const environment = $derived(!!(info.envVar || info.cliFlag));
   /** the row has buttons that go with the option rather than its value */
@@ -125,7 +126,7 @@
       <FieldControl
         {field}
         {control}
-        choices={info.choices ?? []}
+        choices={control === "groups" ? groupChoices(values) : (info.choices ?? [])}
         entries={info.entries}
         bind:draft
         disabled={edit.mode === "locked" || unused}

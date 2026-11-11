@@ -6,8 +6,8 @@ import { plural } from "#lib/format.js";
 
 /**
  * The control an option is edited with. Most follow from the kind the daemon reports for the key;
- * a description names one only where the kind alone can't say (a secret, a list of patterns or
- * networks); an option that is one of a fixed set of names is a select of the names the daemon
+ * a description names one only where the kind alone can't say (a secret, a list of patterns,
+ * networks or groups); an option that is one of a fixed set of names is a select of the names the daemon
  * gives, and a notification mode is a row of its four choices
  */
 export type Control =
@@ -23,6 +23,7 @@ export type Control =
   | "secret"
   | "regex-list"
   | "cidr-list"
+  | "groups"
   | "map"
   | "table-list";
 
@@ -356,6 +357,23 @@ export const sections: Section[] = [
           placeholder: "system default"
         },
         { key: "transfers.ui.queue_refresh", label: "Queue position refresh interval" }
+      ]),
+      ...under("Files sent to you", [
+        {
+          key: "transfers.download.received.from",
+          label: "Who may send you files",
+          control: "groups"
+        },
+        {
+          key: "transfers.download.received.max_size",
+          label: "Largest file",
+          placeholder: NO_LIMIT
+        },
+        {
+          key: "transfers.download.received.max_files",
+          label: "Files from one user at once",
+          min: 0
+        }
       ]),
       ...under("Uploads", [
         { key: "transfers.upload.slots", label: "Upload slots", ...AT_LEAST_1 },

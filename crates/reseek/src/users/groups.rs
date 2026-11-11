@@ -294,6 +294,29 @@ pub fn unknown_share_groups(options: &Options) -> BTreeSet<(String, String)> {
     .collect()
 }
 
+/// Each group of `transfers.download.received.from` no user can be in, such as a misspelled
+/// name: one that is neither everyone, buddies, a smart group nor a user-defined group.
+pub fn unknown_sender_groups(options: &Options) -> BTreeSet<String> {
+  let known = [
+    DEFAULT_GROUP,
+    BUDDIES_GROUP,
+    LEECHERS_GROUP,
+    PRIVILEGED_GROUP,
+  ];
+  options
+    .transfers
+    .download
+    .received
+    .from
+    .iter()
+    .filter(|group| {
+      !known.contains(&group.as_str())
+        && !options.transfers.groups.user_defined.contains_key(*group)
+    })
+    .cloned()
+    .collect()
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -443,6 +466,26 @@ mod tests {
     assert_eq!(
       unknown_share_groups(&options),
       [pair("Rare", "Jazz"), pair("Rare", "leechers")].into()
+    );
+  }
+
+  #[test]
+  fn a_group_no_one_can_be_in_is_found_among_those_who_may_send_files() {
+    let mut options = options();
+    options.transfers.download.received.from = [
+      "default",
+      "buddies",
+      "leechers",
+      "privileged",
+      "jazz",
+      "budies",
+      "blacklisted",
+    ]
+    .map(String::from)
+    .to_vec();
+    assert_eq!(
+      unknown_sender_groups(&options),
+      ["budies", "blacklisted"].map(String::from).into()
     );
   }
 

@@ -371,20 +371,26 @@ impl Downloads {
         })
         .filter(|reason| !reason.is_empty())
         .collect();
-      let ended = Ended {
-        ending: Some(api_types::jobs::JobEnding::Failed),
-        error: Some(if reasons.is_empty() {
-          "Nothing was queued".to_string()
-        } else {
-          reasons.join("; ")
-        }),
-        ..Ended::default()
-      };
-      if let Err(e) = self.jobs.end(job, ended).await {
-        warn!(%job, error = %e, "download job that queued nothing not ended");
-      }
+      self.end_unqueued(job, &reasons).await;
     }
     (job, results)
+  }
+
+  /// Ends the job `job`, of which no download was made, failed with why its files were not
+  /// queued.
+  pub(super) async fn end_unqueued(&self, job: Uuid, reasons: &[String]) {
+    let ended = Ended {
+      ending: Some(api_types::jobs::JobEnding::Failed),
+      error: Some(if reasons.is_empty() {
+        "Nothing was queued".to_string()
+      } else {
+        reasons.join("; ")
+      }),
+      ..Ended::default()
+    };
+    if let Err(e) = self.jobs.end(job, ended).await {
+      warn!(%job, error = %e, "download job that queued nothing not ended");
+    }
   }
 
   /// Makes the job `job` in the jobs list as started by a restart when it is not there, for

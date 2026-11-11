@@ -18,8 +18,10 @@ use soulseek_client::ClientError;
 use tracing::{Instrument, debug, info, warn};
 use uuid::Uuid;
 
+use super::received::Sending;
 use super::{Downloads, InFlight};
 use crate::api::error::ApiError;
+use crate::config::Options;
 use crate::transfers::categories::UNFINISHED;
 use crate::transfers::removal::{self, Removed};
 use crate::transfers::{Record, direction_text, store};
@@ -117,7 +119,7 @@ struct Written {
 
 /// Refuses an enqueue without a user or files, with a file without a name or with a `.` or
 /// `..` segment, or with a file named twice.
-fn check(username: &str, files: &[FileRequest]) -> Result<(), ApiError> {
+pub(super) fn check(username: &str, files: &[FileRequest]) -> Result<(), ApiError> {
   if username.trim().is_empty() {
     return Err(ApiError::bad_request("Username is required"));
   }
@@ -141,6 +143,19 @@ fn check(username: &str, files: &[FileRequest]) -> Result<(), ApiError> {
     ));
   }
   Ok(())
+}
+
+/// The download filters of `options`: the files they match are skipped in folder and selection
+/// downloads, and refused when sent unasked.
+pub(super) fn download_filters(options: &Options) -> Vec<Regex> {
+  options
+    .transfers
+    .download
+    .filters
+    .iter()
+    // validation refuses a filter that does not compile
+    .filter_map(|pattern| reseek_shares::patterns::compile(pattern, false).ok())
+    .collect()
 }
 
 /// The answer to a failure reaching `username`.
@@ -168,18 +183,8 @@ impl Downloads {
     groups: Vec<Group>,
     filtered: bool,
   ) -> Vec<Result<Enqueued, ApiError>> {
-    let filters: Vec<Regex> = if filtered {
-      self
-        .config
-        .current()
-        .values
-        .transfers
-        .download
-        .filters
-        .iter()
-        // validation refuses a filter that does not compile
-        .filter_map(|pattern| reseek_shares::patterns::compile(pattern, false).ok())
-        .collect()
+    let filters = if filtered {
+      download_filters(&self.config.current().values)
     } else {
       Vec::new()
     };
@@ -192,7 +197,7 @@ impl Downloads {
         this.open_job(job);
         let mut results = Vec::with_capacity(groups.len());
         for group in groups {
-          results.push(this.enqueue_group(job, group, &filters).await);
+          results.push(this.enqueue_group(job, group, &filters, None).await);
         }
         this.close_job(job).await;
         results
@@ -211,12 +216,14 @@ impl Downloads {
     }
   }
 
-  /// Enqueues one group of the job `job`, skipping the files that match `filters`.
-  async fn enqueue_group(
+  /// Enqueues one group of the job `job`, skipping the files that match `filters`; with
+  /// `sending`, the one file its user is sending unasked, whom the offer was checked for.
+  pub(super) async fn enqueue_group(
     &self,
     job: Uuid,
     mut group: Group,
     filters: &[Regex],
+    sending: Option<Sending>,
   ) -> Result<Enqueued, ApiError> {
     check(&group.username, &group.files)?;
     let (skipped, kept): (Vec<FileRequest>, Vec<FileRequest>) = group
@@ -244,22 +251,34 @@ impl Downloads {
       });
     }
     group.files = kept;
-    let mut whole = true;
-    for file in &group.files {
-      if !self.whole_here(&group.username, file).await {
-        whole = false;
-        break;
+    // the sender of a file offered unasked was checked when they offered, on the connection
+    // they offered on
+    if sending.is_none() {
+      let mut whole = true;
+      for file in &group.files {
+        if !self.whole_here(&group.username, file).await {
+          whole = false;
+          break;
+        }
       }
+      self.admit(&group.username, whole).await?;
     }
-    self.admit(&group.username, whole).await?;
-    let mut enqueued = self.make(job, group).await?;
+    let mut enqueued = self.make(job, group, sending).await?;
     enqueued.failed.extend(skipped);
     Ok(enqueued)
   }
 
   /// In the turn of the user of `group`, writes a record in the job `job` for every file of
-  /// `group` not downloading already, and starts a task for each.
-  async fn make(&self, job: Uuid, group: Group) -> Result<Enqueued, ApiError> {
+  /// `group` not downloading already, and starts a task for each; with `sending`, the one file
+  /// its user is sending unasked, whose first try takes the offer and which counts against the
+  /// files they may send at once while its download runs.
+  async fn make(
+    &self,
+    job: Uuid,
+    group: Group,
+    mut sending: Option<Sending>,
+  ) -> Result<Enqueued, ApiError> {
+    let offered = sending.is_some();
     let Group {
       username,
       files,
@@ -291,7 +310,11 @@ impl Downloads {
     {
       let mut in_flight = lock(&self.in_flight);
       for id in &ids {
-        in_flight.insert(*id, InFlight::new(self.shutdown.child_token()));
+        let entry = InFlight {
+          _sending: sending.take(),
+          ..InFlight::new(self.shutdown.child_token())
+        };
+        in_flight.insert(*id, entry);
       }
     }
     let name = username.to_string();
@@ -336,7 +359,7 @@ impl Downloads {
       let position = record
         .queue_position
         .expect("the write places every download it inserts");
-      self.spawn(record, position, request, cancel);
+      self.spawn(record, position, request, cancel, offered);
       enqueued.push(transfer);
     }
     Ok(Enqueued {

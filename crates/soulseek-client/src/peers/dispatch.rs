@@ -401,7 +401,11 @@ impl Client {
         response,
       ),
       M::TransferRequest(request) => match request.direction {
-        TransferDirection::Upload => self.upload_offered(conn, username, request).await?,
+        TransferDirection::Upload => {
+          self
+            .upload_offered(conn, username, endpoint, request)
+            .await?;
+        }
         TransferDirection::Download => {
           self
             .download_requested(conn, username, endpoint, request)

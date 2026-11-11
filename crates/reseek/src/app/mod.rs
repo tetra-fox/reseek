@@ -324,7 +324,7 @@ impl AppState {
       relay.controller.clone(),
       shutdown.clone(),
     );
-    network.attach_uploads(uploads.clone());
+    network.attach_transfers(uploads.clone(), downloads.clone());
     uploads.switch_speed_limits(alternative);
     let mut services = Services::unavailable();
     services.transfers = Arc::new(Transfers {

@@ -104,6 +104,8 @@ pub struct Directory {
   /// the share aliases and groups of `shares.visible_to` warned of as letting no one see the
   /// share through that group
   unknown_share_groups: Mutex<BTreeSet<(String, String)>>,
+  /// the groups of `transfers.download.received.from` warned of as having no one in them
+  unknown_sender_groups: Mutex<BTreeSet<String>>,
   figures: FigureCache,
   summaries: Mutex<HashMap<String, CachedSummary>>,
   /// who has a row, with their country
@@ -203,6 +205,7 @@ impl Directory {
       blocks,
       groups: GroupCache::new(memberships),
       unknown_share_groups: Mutex::new(BTreeSet::new()),
+      unknown_sender_groups: Mutex::new(BTreeSet::new()),
       figures: FigureCache::default(),
       summaries: Mutex::new(HashMap::new()),
       known,
@@ -212,6 +215,7 @@ impl Directory {
     });
     // nothing is kept for a browse yet
     directory.check_share_groups(&options);
+    directory.check_sender_groups(&options);
     tokio::spawn(
       directory
         .clone()
@@ -569,6 +573,27 @@ impl Directory {
     changed
   }
 
+  /// Warns of each group in `transfers.download.received.from` that no user can be in, when it
+  /// comes to be listed, and says so when it no longer is: no one sends files through it.
+  fn check_sender_groups(&self, options: &Options) {
+    let now = groups::unknown_sender_groups(options);
+    let mut before = lock(&self.unknown_sender_groups);
+    for group in now.difference(&before) {
+      warn!(
+        group,
+        "transfers.download.received.from names a group no one can be in; no one may send \
+         files through it"
+      );
+    }
+    for group in before.difference(&now) {
+      info!(
+        group,
+        "transfers.download.received.from no longer names that group"
+      );
+    }
+    *before = now;
+  }
+
   /// Takes every configuration change: the blacklist is compiled again, the blocklist file
   /// read again when its settings changed, the shares' groups checked, the server told what
   /// changed in our interests, and the cached summaries dropped, since groups may have moved.
@@ -586,6 +611,7 @@ impl Directory {
           if self.check_share_groups(options) {
             self.shares.forget_browse_views();
           }
+          self.check_sender_groups(options);
           if change
             .changed
             .iter()
@@ -611,6 +637,7 @@ impl Directory {
           if self.check_share_groups(&options) {
             self.shares.forget_browse_views();
           }
+          self.check_sender_groups(&options);
           self.reload_blocklist(&options).await;
           self.interests_changed().await;
         }

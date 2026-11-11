@@ -42,7 +42,8 @@ export const STARTER_LABELS: Record<StarterKind, string> = {
   you: "You",
   schedule: "A schedule",
   download: "A download",
-  resumed: "A restart"
+  resumed: "A restart",
+  user: "A user"
 };
 
 /** Who started a job, as its row says it */
@@ -54,6 +55,7 @@ export const starterText = (job: Job, schedules: Schedule[] = []): string => {
   }
   if (kind === "download") return "Started by its download";
   if (kind === "resumed") return "Started when reseek started";
+  if (kind === "user") return `Sent by ${name ?? "a user"}`;
   return "Started by you";
 };
 

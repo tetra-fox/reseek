@@ -2,7 +2,8 @@
 //! queues it; when the file reaches the front of the peer's queue the peer offers to send it, we
 //! accept, and the peer connects to us (or we to it, when it cannot) with a transfer connection.
 //! We say where to start, read the rest of the file and close the connection, which tells the
-//! peer we have it all. The peer can refuse or fail the download at any point before that.
+//! peer we have it all. The peer can refuse or fail the download at any point before that. A
+//! file the peer offered unasked starts at its offer, which the client holds.
 
 use std::io::SeekFrom;
 use std::net::SocketAddr;
@@ -184,6 +185,19 @@ impl Download {
 
   async fn transfer(&mut self) -> Result<(), ClientError> {
     self.tracker.emit_state(TransferState::QUEUED_LOCALLY, None);
+    if self.options.request_style == RequestStyle::Offered {
+      let offer = self
+        .client
+        .transfers()
+        .take_offer(&self.username, &self.filename)
+        .ok_or_else(|| {
+          ClientError::InvalidOperation(format!(
+            "No offer of {} from {} is held",
+            self.filename, self.username
+          ))
+        })?;
+      return self.take(offer).await;
+    }
     let limit = self.client.options().maximum_concurrent_downloads;
     let transfers = self.client.transfers().clone();
     let cancel = self.stop.cancel().clone();
@@ -232,8 +246,14 @@ impl Download {
         }
         self.queued();
       }
+      RequestStyle::Offered => unreachable!("an offered download takes its offer above"),
     }
     let offer = self.stop.run(offered).await?;
+    self.take(offer).await
+  }
+
+  /// Takes the peer's offer to send the file: accepts it and reads the file
+  async fn take(&mut self, offer: TransferRequest) -> Result<(), ClientError> {
     let size = self.resolve_size(offer.file_size)?;
     self.tracker.set_remote_token(offer.token);
     self.tracker.emit_state(TransferState::INITIALIZING, None);

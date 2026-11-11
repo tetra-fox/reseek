@@ -191,9 +191,14 @@ impl Network {
   }
 
   /// Has the upload engine answer peers' upload requests and their questions about the
-  /// upload queue; done once, while the daemon is built.
-  pub fn attach_uploads(&self, uploads: Arc<crate::transfers::uploads::Uploads>) {
-    self.edges.attach(uploads);
+  /// upload queue, and the download engine take the files peers send unasked; done once, while
+  /// the daemon is built.
+  pub fn attach_transfers(
+    &self,
+    uploads: Arc<crate::transfers::uploads::Uploads>,
+    downloads: Arc<crate::transfers::downloads::Downloads>,
+  ) {
+    self.edges.attach(uploads, downloads);
   }
 
   /// The Soulseek client, for the operations the engines start.

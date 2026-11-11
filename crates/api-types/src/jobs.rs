@@ -61,6 +61,8 @@ pub enum JobStarterKind {
   Download,
   /// reseek starting up again, such as the scan that checks the shares after a restart
   Resumed,
+  /// a Soulseek user, named by `name`, who sent us files without being asked
+  User,
 }
 
 /// Who or what started a job.
@@ -69,7 +71,7 @@ pub enum JobStarterKind {
 pub struct JobStarter {
   /// the kind of starter
   pub kind: JobStarterKind,
-  /// the schedule that started it; null for the other kinds
+  /// the schedule or the Soulseek user that started it; null for the other kinds
   #[schema(example = "cleanup")]
   pub name: Option<String>,
 }
@@ -93,6 +95,14 @@ impl JobStarter {
     Self {
       kind: JobStarterKind::Schedule,
       name: Some(name.to_string()),
+    }
+  }
+
+  /// A job the Soulseek user `username` started by sending us files unasked.
+  pub fn user(username: &str) -> Self {
+    Self {
+      kind: JobStarterKind::User,
+      name: Some(username.to_string()),
     }
   }
 }

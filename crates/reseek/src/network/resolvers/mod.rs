@@ -1,9 +1,10 @@
 //! How we answer what other users ask of us: an upload queued, our share listing, a folder's
-//! contents, a search, our user info and a file's place in our upload queue. Each answer passes
-//! the checks at the network's edge first: a name with a `.` or `..` part is refused, and a user
-//! blocked from what they ask for gets what a blocked user gets. Listings, folders and searches
-//! are answered from what we share; uploads, places in the upload queue and the queue figures
-//! from the upload engine.
+//! contents, a search, our user info, a file's place in our upload queue and a file they send
+//! unasked. Each answer passes the checks at the network's edge first: a name with a `.` or `..`
+//! part is refused, and a user blocked from what they ask for gets what a blocked user gets.
+//! Listings, folders and searches are answered from what we share; uploads, places in the upload
+//! queue and the queue figures from the upload engine; files sent unasked by the download
+//! engine.
 
 mod browse;
 mod search;
@@ -28,6 +29,7 @@ use crate::activity::Activity;
 use crate::config::Options;
 use crate::shares::Shares;
 use crate::telemetry::Telemetry;
+use crate::transfers::downloads::Downloads;
 use crate::transfers::uploads::Uploads;
 pub use crate::transfers::uploads::{Forecast, NOT_SHARED, OVERWHELMED};
 use crate::users::Directory as Users;
@@ -58,6 +60,8 @@ pub struct Edges {
   rebuilding: tokio::sync::Mutex<()>,
   /// the upload engine, attached once while the daemon is built
   uploads: OnceLock<Arc<Uploads>>,
+  /// the download engine, attached with the upload engine
+  downloads: OnceLock<Arc<Downloads>>,
 }
 
 impl Edges {
@@ -82,15 +86,16 @@ impl Edges {
       searches,
       rebuilding: tokio::sync::Mutex::new(()),
       uploads: OnceLock::new(),
+      downloads: OnceLock::new(),
     }
   }
 
-  /// Answers upload requests, places in the queue and the queue figures with `uploads` from
-  /// now on; done once, while the daemon is built.
-  pub(super) fn attach(&self, uploads: Arc<Uploads>) {
+  /// Answers upload requests, places in the queue and the queue figures with `uploads`, and
+  /// files sent unasked with `downloads`, from now on; done once, while the daemon is built.
+  pub(super) fn attach(&self, uploads: Arc<Uploads>, downloads: Arc<Downloads>) {
     assert!(
-      self.uploads.set(uploads).is_ok(),
-      "the upload engine is attached once"
+      self.uploads.set(uploads).is_ok() && self.downloads.set(downloads).is_ok(),
+      "the transfer engines are attached once"
     );
   }
 
@@ -104,6 +109,7 @@ impl Edges {
 
 /// The resolvers the client answers peers with.
 pub fn resolvers(edges: Arc<Edges>) -> Resolvers {
+  let receiving = edges.clone();
   let enqueue = edges.clone();
   let browsing = edges.clone();
   let folder = edges.clone();
@@ -134,6 +140,10 @@ pub fn resolvers(edges: Arc<Edges>) -> Resolvers {
     place_in_queue_resolver: Some(Arc::new(move |username, endpoint, filename| {
       let edges = place.clone();
       Box::pin(async move { Ok(place_in_queue(&edges, &username, endpoint, &filename)) })
+    })),
+    receive_offer: Some(Arc::new(move |username, endpoint, filename, size| {
+      let edges = receiving.clone();
+      Box::pin(async move { receive_offer(&edges, &username, endpoint, &filename, size).await })
     })),
   }
 }
@@ -204,6 +214,37 @@ pub async fn enqueue_download(
   Ok(())
 }
 
+/// A peer offers to send us `filename` unasked: a name with a `.` or `..` part and a user blocked
+/// from downloads are refused, and the download engine decides the rest. The client logs the
+/// refusal.
+pub async fn receive_offer(
+  edges: &Edges,
+  username: &str,
+  endpoint: SocketAddr,
+  filename: &RemoteFilename,
+  size: u64,
+) -> Result<(), ClientError> {
+  if traverses(filename.as_str()) {
+    return Err(ClientError::TransferRejected(
+      "the file name has a . or .. part".into(),
+    ));
+  }
+  if edges
+    .users
+    .is_blocked(username, Some(endpoint.ip()), BlockScope::Downloads)
+  {
+    return Err(ClientError::TransferRejected(
+      "the sender is blocked".into(),
+    ));
+  }
+  edges
+    .downloads
+    .get()
+    .expect("the download engine is attached while the daemon is built, before peers reach it")
+    .receive(username, endpoint.ip(), filename.as_str(), size)
+    .await
+}
+
 /// The forecast for a new upload request from `username`, by the group known for them now.
 pub fn forecast(edges: &Edges, username: &str) -> Forecast {
   edges.uploads().forecast(username)
@@ -266,7 +307,7 @@ pub fn place_in_queue(
 #[cfg(test)]
 pub(crate) mod tests {
   use super::*;
-  use crate::testing::{TestApp, app, request};
+  use crate::testing::{TestApp, app, request, sent_jobs};
   use serde_json::json;
 
   const CONFIG: &str = "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n\
@@ -347,6 +388,38 @@ pub(crate) mod tests {
         .queue_length,
       i32::MAX as u32
     );
+  }
+
+  #[tokio::test]
+  async fn a_file_sent_unasked_is_refused_for_a_name_of_no_file_or_a_blocked_sender() {
+    let config = format!("{CONFIG}[transfers.download.received]\nfrom = [\"default\"]\n");
+    let app = app(&config, &[]).await;
+    let block = json!({ "scopes": ["downloads"] });
+    let answer = app
+      .send(request("PUT", "/api/v0/users/mallory/block", Some(block)))
+      .await;
+    assert_eq!(answer.status, 200);
+    let edges = edges(&app);
+    let peer = from("198.51.100.7");
+    let rejected = |result| matches!(result, Err(ClientError::TransferRejected(_)));
+    for no_file in ["", "\\", "@@s\\folder\\", " ", "\t"] {
+      let offered = receive_offer(&edges, "alice", peer, &name(no_file), 3).await;
+      assert!(rejected(offered), "{no_file:?}");
+    }
+    let file = name("@@s\\a.flac");
+    assert!(rejected(
+      receive_offer(&edges, "mallory", peer, &file, 3).await
+    ));
+    assert!(
+      rejected(receive_offer(&edges, " ", peer, &file, 3).await),
+      "a sender named with whitespace alone"
+    );
+    assert_eq!(sent_jobs(&app).await, 0, "a refused offer makes no job");
+    assert!(
+      receive_offer(&edges, "alice", peer, &file, 3).await.is_ok(),
+      "the same file from someone else is taken"
+    );
+    assert_eq!(sent_jobs(&app).await, 1);
   }
 
   #[tokio::test]

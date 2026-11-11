@@ -147,7 +147,8 @@ impl Downloads {
         self.save(&record, true).await;
         info!(id = %record.id, username, "download resumed");
         let id = record.id;
-        self.spawn(record, position, request, cancel);
+        // the offer of a file sent unasked is long gone; a resumed one asks for it
+        self.spawn(record, position, request, cancel, false);
         outcomes.push(Ok(id));
       }
     }

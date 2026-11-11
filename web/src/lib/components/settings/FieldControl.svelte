@@ -7,16 +7,18 @@
   import Select from "#lib/components/ui/Select.svelte";
   import Switch from "#lib/components/ui/Switch.svelte";
   import Textarea from "#lib/components/ui/Textarea.svelte";
+  import AudiencePicker from "#lib/components/users/groups/AudiencePicker.svelte";
   import type { Draft } from "#lib/config/fields.js";
   import type { Control, Field } from "#lib/config/sections.js";
   import { REDACTED } from "#lib/config/tables.js";
+  import { DEFAULT } from "#lib/users/groups.js";
 
   import TableEditor from "./TableEditor.svelte";
 
   type Props = {
     field: Field;
     control: Control;
-    /** the names a select offers */
+    /** the names a select offers, or the groups a group list picks from */
     choices: string[];
     /** the fields of a table's rows */
     entries: Schemas["EntryView"][];
@@ -45,6 +47,14 @@
   let changing = $state(false);
   let kept = $state<Draft>(REDACTED);
   const cleared = $derived(kept === REDACTED && draft === "");
+  /** a group list's groups, one a line, with `default` standing for everyone */
+  const groups = $derived.by(() => {
+    const lines = String(draft)
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+    return lines.includes(DEFAULT) ? null : lines;
+  });
   /** what `auto` stands for, shown while the input holds it */
   const autoHint = $derived(
     String(draft).trim().toLowerCase() === "auto" ? field.auto?.hint() : undefined
@@ -109,6 +119,15 @@
         }}>Change</Button>
     </div>
   {/if}
+{:else if control === "groups"}
+  <AudiencePicker
+    id={field.key}
+    value={groups}
+    {choices}
+    label={field.label}
+    {disabled}
+    class="w-fit min-w-40"
+    onchange={(picked) => (draft = picked === null ? DEFAULT : picked.join("\n"))} />
 {:else if control === "map" || control === "table-list"}
   <TableEditor {field} {control} {entries} bind:draft {disabled} {described} {error} />
 {:else if control === "list" || control === "regex-list" || control === "cidr-list"}

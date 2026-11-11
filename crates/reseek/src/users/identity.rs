@@ -1,8 +1,8 @@
 //! Whether a request in a group member's name comes from the member. A peer can give any name
-//! when it connects, so the shares a member's groups see go only to a request from the address
-//! the server last reported for the name, which the client keeps for up to a minute. A member
-//! behind another address, such as one on our own network, sees what everyone sees, and users
-//! behind one public address cannot be told apart.
+//! when it connects, so the shares a member's groups see, and the files only some groups may
+//! send us, are for a request from the address the server last reported for the name, which the
+//! client keeps for up to a minute. A member behind another address, such as one on our own
+//! network, is treated as everyone, and users behind one public address cannot be told apart.
 
 use std::collections::hash_map::Entry;
 use std::collections::{BTreeSet, HashMap};
@@ -90,6 +90,22 @@ impl Directory {
     if standing.is_empty() {
       return None;
     }
+    let at = self.confirming_address(username, from).await?;
+    Some((standing, at))
+  }
+
+  /// Whether a request in `username`'s name from `from` comes from the address the server
+  /// reports for them, so it is taken to come from them.
+  pub async fn confirms(&self, username: &str, from: IpAddr) -> bool {
+    self
+      .confirming_address(username, Some(from))
+      .await
+      .is_some()
+  }
+
+  /// The address that confirms a request in `username`'s name from `from`, the one the server
+  /// reports for them; `None` when it reports none or the request came from another.
+  async fn confirming_address(&self, username: &str, from: Option<IpAddr>) -> Option<IpAddr> {
     // the client is attached before the network answers anyone
     let client = self.client.get()?;
     let reported = match client.get_user_endpoint(username).await {
@@ -97,17 +113,17 @@ impl Directory {
       Err(ClientError::UserOffline(_)) => {
         debug!(
           username,
-          "a group member the server says is offline; answered as everyone"
+          "a group member the server says is offline; not confirmed"
         );
         return None;
       }
       Err(e) => {
-        debug!(username, error = %e, "a group member's address not found; answered as everyone");
+        debug!(username, error = %e, "a group member's address not found; not confirmed");
         return None;
       }
     };
     match confirmation(reported, from) {
-      Ok(at) => Some((standing, at)),
+      Ok(at) => Some(at),
       Err(from) => {
         if self.impersonations.allow(username, from) {
           warn!(
@@ -115,7 +131,7 @@ impl Directory {
             %reported,
             %from,
             "a request in a group member's name came from another address than the server \
-             reports; answered as everyone"
+             reports; not taken as theirs"
           );
         }
         None

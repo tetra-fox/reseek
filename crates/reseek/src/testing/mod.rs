@@ -288,6 +288,18 @@ pub fn set_cookie(headers: &HeaderMap, name: &str) -> Option<String> {
 /// [`TestApp::send`] come from an administrator.
 pub const TRUSTED: &str = "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n";
 
+/// How many jobs in the jobs list of `app` users started by sending files unasked.
+pub async fn sent_jobs(app: &TestApp) -> usize {
+  let (status, body) = app.call("GET", "/api/v0/jobs", None).await;
+  assert_eq!(status, 200);
+  let list: api_types::jobs::JobList = serde_json::from_value(body).unwrap();
+  list
+    .jobs
+    .iter()
+    .filter(|job| job.starter.kind == api_types::jobs::JobStarterKind::User)
+    .count()
+}
+
 /// An address outside every trusted network, for [`TestApp::send_from`].
 pub const OUTSIDE: &str = "192.0.2.1:1";
 

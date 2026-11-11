@@ -53,8 +53,8 @@ pub use patch::ClientOptionsPatch;
 pub use peers::IncomingBrowse;
 pub use resolvers::{
   BrowseReply, BrowseResponseResolver, DirectoryContentsResolver, EnqueueDownload,
-  PlaceInQueueResolver, ResolverFuture, Resolvers, SearchReply, SearchResponseResolver,
-  UserInfoResolver,
+  PlaceInQueueResolver, ReceiveOffer, ResolverFuture, Resolvers, SearchReply,
+  SearchResponseResolver, UserInfoResolver,
 };
 pub use search::{
   FileFilter, ResponseFilter, Search, SearchOptions, SearchResponseReceived, SearchScope,

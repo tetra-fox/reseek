@@ -48,7 +48,7 @@ pub use soulseek::{
 pub use transfers::{
   BUDDIES_GROUP, BUILTIN_GROUPS, Blacklisted, Buddies, DEFAULT_GROUP, Destination, Download, Group,
   GroupUpload, Groups, LEECHERS_GROUP, LeecherThresholds, Leechers, Limit, Limits,
-  PRIVILEGED_GROUP, Permissions, Retry, Transfers, TransfersUi, Upload, UserDefinedGroup,
+  PRIVILEGED_GROUP, Permissions, Received, Retry, Transfers, TransfersUi, Upload, UserDefinedGroup,
   is_group_name,
 };
 pub use web::{Certificate, Cors, Https, Live, Web, WebFiles};

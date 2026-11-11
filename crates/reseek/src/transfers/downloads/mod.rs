@@ -15,6 +15,7 @@ mod enqueue;
 mod jobs;
 mod pause;
 mod queue;
+mod received;
 mod service;
 mod starts;
 mod task;
@@ -88,6 +89,9 @@ struct InFlight {
   pause: bool,
   /// its file arrived and is handed to its move, which a pause or cancel no longer stops
   arrived: bool,
+  /// for a file its user sends unasked, what counts it against the files they may send at once
+  /// until the entry goes
+  _sending: Option<received::Sending>,
   /// dropped with the entry once the task has let go of the download, which ends every wait on
   /// a receiver of it
   ended: watch::Sender<()>,
@@ -102,6 +106,7 @@ impl InFlight {
       reason: None,
       pause: false,
       arrived: false,
+      _sending: None,
       ended: watch::Sender::new(()),
     }
   }
@@ -148,6 +153,8 @@ pub struct Downloads {
   /// for the next start to take up, since the stop no longer waits for its move
   moves_closed: Mutex<bool>,
   in_flight: Mutex<HashMap<Uuid, InFlight>>,
+  /// the files users are sending unasked, and the job each sender's go to
+  senders: Arc<Mutex<received::Senders>>,
   /// one enqueue per user at a time
   turns: Turns,
   /// the local queue: the order waiting downloads start in
@@ -212,6 +219,7 @@ impl Downloads {
       moving: TaskTracker::new(),
       moves_closed: Mutex::new(false),
       in_flight: Mutex::new(HashMap::new()),
+      senders: Arc::default(),
       turns: Turns::default(),
       starts: starts::Starts::default(),
       open_jobs: jobs::Open::default(),

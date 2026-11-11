@@ -12,7 +12,8 @@ use api_types::transfers::TransferStates;
 use chrono::Utc;
 use soulseek_client::{
   ClientError, DownloadOutput, DownloadRequest, DownloadSink, LogLimiter, OutputFactory,
-  ProgressUpdated, SizeMismatchResolver, StateChanged, Transfer as Snapshot, TransferOptions,
+  ProgressUpdated, RequestStyle, SizeMismatchResolver, StateChanged, Transfer as Snapshot,
+  TransferOptions,
 };
 use tokio::sync::{mpsc, watch};
 use tokio::time::Instant;
@@ -241,13 +242,18 @@ impl Downloads {
   }
 
   /// One try of the download `record` into `incomplete`, stopped by `cancel`, or by the
-  /// request's hard limit while it holds `gate`.
+  /// request's hard limit while it holds `gate`; with `offered`, a try that takes the offer its
+  /// user made unasked rather than asking for the file. A try of a file `pushed` unasked fails
+  /// when the peer names another size than the record's, which is the one its offer was checked
+  /// for; any other takes the peer's size.
   pub(super) async fn attempt(
     &self,
     record: &mut Record,
     incomplete: &Path,
     cancel: &CancellationToken,
     gate: &mut Option<Gate>,
+    offered: bool,
+    pushed: bool,
   ) -> Attempted {
     let options = self.config.current().values.clone();
     let download = &options.transfers.download;
@@ -318,8 +324,12 @@ impl Downloads {
       options: TransferOptions {
         state_changed: Some(state_changed),
         progress_updated: Some(progress_updated),
-        size_mismatch_resolver: Some(peers_size()),
-        request_style: request_style(&options),
+        size_mismatch_resolver: (!pushed).then(peers_size),
+        request_style: if offered {
+          RequestStyle::Offered
+        } else {
+          request_style(&options)
+        },
         ..TransferOptions::default()
       },
     };

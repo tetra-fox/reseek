@@ -5686,7 +5686,7 @@ export interface components {
             /** @description the kind of starter */
             kind: components["schemas"]["JobStarterKind"];
             /**
-             * @description the schedule that started it; null for the other kinds
+             * @description the schedule or the Soulseek user that started it; null for the other kinds
              * @example cleanup
              */
             name?: string | null;
@@ -5695,7 +5695,7 @@ export interface components {
          * @description Who or what started a job.
          * @enum {string}
          */
-        JobStarterKind: "you" | "schedule" | "download" | "resumed";
+        JobStarterKind: "you" | "schedule" | "download" | "resumed" | "user";
         /**
          * @description Where a job is.
          * @enum {string}

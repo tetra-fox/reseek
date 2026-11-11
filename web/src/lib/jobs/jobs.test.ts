@@ -92,6 +92,7 @@ describe("the jobs list", () => {
     expect(starterText(job({ starter: { kind: "resumed", name: null } }))).toBe(
       "Started when reseek started"
     );
+    expect(starterText(job({ starter: { kind: "user", name: "alice" } }))).toBe("Sent by alice");
   });
 });
 

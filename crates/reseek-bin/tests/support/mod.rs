@@ -25,6 +25,7 @@ use uuid::Uuid;
 /// server and scripted peers for what a real one never does, and files to send.
 #[path = "../../../soulseek-client/tests/support/mod.rs"]
 pub mod client;
+pub mod scripted;
 
 #[allow(unused_imports, reason = "each test binary uses a part of it")]
 pub use client::{free_port, options as quiet, peer, soulfind, transfers};

@@ -1,7 +1,10 @@
 //! What peers say about the files we download from them: the offer to start sending one, a
 //! refusal or a failure, our place in their queue. A refusal or failure ends the download
-//! wherever it is. Also asking a peer for our place in its queue, and failing the waits of a
-//! download whose peer sent one of these messages in a form we cannot read.
+//! wherever it is. The offer of a file a user sends unasked is held while the application
+//! decides whether to take it. Also asking a peer for our place in its queue, and failing the
+//! waits of a download whose peer sent one of these messages in a form we cannot read.
+
+use std::net::SocketAddr;
 
 use soulseek_proto::peer::{
   PlaceInQueueRequest, PlaceInQueueResponse, TransferRequest, TransferResponse, UploadDenied,
@@ -9,6 +12,7 @@ use soulseek_proto::peer::{
 };
 use soulseek_proto::{DecodeError, PeerCode, PeerMessage, RemoteFilename, TransferDirection};
 use tokio_util::sync::CancellationToken;
+use tracing::Instrument;
 
 use crate::client::{Client, failed, non_blank};
 use crate::conn::MessageConn;
@@ -19,12 +23,14 @@ use crate::waiter::WaitKey;
 
 impl Client {
   /// An uploader is about to send us a file. A download of that file from that user takes the
-  /// offer when it waits for one; a file we do not download is refused, which is also how a
+  /// offer when it waits for one. Any other file is one the user sends unasked: the application
+  /// decides whether to take it, and a file it does not take is refused, which is also how a
   /// canceled download tells the uploader to drop it.
   pub(crate) async fn upload_offered(
     &self,
     conn: &MessageConn,
     username: &str,
+    endpoint: SocketAddr,
     request: TransferRequest,
   ) -> Result<(), ClientError> {
     let token = request.token;
@@ -35,15 +41,81 @@ impl Client {
       }
       return Ok(());
     }
-    tracing::debug!(filename = %request.filename, token, "Rejecting unknown upload");
-    write_peer(
-      conn,
-      PeerMessage::TransferResponse(TransferResponse::Denied {
-        token,
-        message: "Cancelled".into(),
-      }),
-    )
-    .await
+    let filename = request.filename.clone();
+    if self.receive_offer(username, endpoint, request).await {
+      self.expire_offer(conn.clone(), username, filename, token);
+      return Ok(());
+    }
+    refuse_offer(conn, token).await
+  }
+
+  /// Asks the application whether to take a file `username` offers unasked, holding the offer
+  /// meanwhile; true when it started a download of the file, which takes the offer
+  async fn receive_offer(
+    &self,
+    username: &str,
+    endpoint: SocketAddr,
+    offer: TransferRequest,
+  ) -> bool {
+    let filename = offer.filename.clone();
+    let token = offer.token;
+    let Some(receive) = self.options().resolvers.receive_offer.clone() else {
+      tracing::debug!(username, %filename, token, "file offered unasked refused; nothing receives such files");
+      return false;
+    };
+    let Some(size) = offer.file_size else {
+      tracing::debug!(username, %filename, token, "file offered unasked without a size refused");
+      return false;
+    };
+    if !self.transfers().hold_offer(username, offer) {
+      tracing::debug!(username, %filename, token, "file offered unasked again while its offer is held, refused");
+      return false;
+    }
+    match receive(username.to_owned(), endpoint, filename.clone(), size).await {
+      Ok(()) => {
+        tracing::debug!(username, %filename, token, size, "file offered unasked accepted");
+        return true;
+      }
+      Err(ClientError::TransferRejected(reason)) => {
+        tracing::debug!(username, %filename, token, reason, "file offered unasked refused");
+      }
+      Err(error) => {
+        tracing::warn!(username, %filename, token, %error, "file offered unasked not received");
+      }
+    }
+    self.transfers().release_offer(username, &filename, token);
+    false
+  }
+
+  /// Refuses the offer of `filename` with `token` from `username` once the unasked offer timeout has
+  /// passed, unless a download took it by then
+  fn expire_offer(&self, conn: MessageConn, username: &str, filename: RemoteFilename, token: u32) {
+    let held = self.options().unasked_offer_timeout;
+    let client = self.downgrade();
+    let lifetime = self.cancellation().clone();
+    let username = username.to_owned();
+    tokio::spawn(
+      async move {
+        tokio::select! {
+          () = lifetime.cancelled() => return,
+          () = tokio::time::sleep(held) => {}
+        }
+        let Some(client) = client.upgrade() else {
+          return;
+        };
+        if !client
+          .transfers()
+          .release_offer(&username, &filename, token)
+        {
+          return;
+        }
+        tracing::debug!(username, %filename, token, "file offered unasked not taken in time, refused");
+        if let Err(error) = refuse_offer(&conn, token).await {
+          tracing::debug!(%error, "refusal of an offer not taken in time not sent");
+        }
+      }
+      .in_current_span(),
+    );
   }
 
   /// The uploader refused a file we asked for: the download ends rejected with its reason
@@ -156,6 +228,18 @@ impl Client {
       tracing::debug!(?key, "wait failed by an unparseable message");
     }
   }
+}
+
+/// tells the sender of a file we do not take to drop it
+async fn refuse_offer(conn: &MessageConn, token: u32) -> Result<(), ClientError> {
+  write_peer(
+    conn,
+    PeerMessage::TransferResponse(TransferResponse::Denied {
+      token,
+      message: "Cancelled".into(),
+    }),
+  )
+  .await
 }
 
 /// the wait a download holds for its uploader's offer

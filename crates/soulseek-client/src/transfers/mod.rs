@@ -2,7 +2,8 @@
 //! keeps a record of every transfer from the moment it is accepted until its task has cleaned up,
 //! one transfer per file, user and direction, with tokens unique across both directions. The
 //! limits every transfer of a direction shares live here too: how many run at once, the speed
-//! limit, and the one upload at a time each user gets.
+//! limit, and the one upload at a time each user gets. So do the offers of files users send us
+//! unasked, held until a download takes them.
 
 mod download;
 mod io;
@@ -24,9 +25,11 @@ pub use state::TransferState;
 pub use task::TransferTask;
 
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
+use soulseek_proto::peer::TransferRequest;
 use soulseek_proto::{RemoteFilename, TransferDirection};
 use tokio::sync::{Semaphore, watch};
 use tokio::time::{Instant, MissedTickBehavior, interval_at};
@@ -87,6 +90,8 @@ pub(crate) struct Transfers {
   upload_turns: Mutex<HashMap<String, Arc<Semaphore>>>,
   /// peers that sent the broken resume offset, logged once each
   offset_logged: Mutex<BoundedCache<String, ()>>,
+  /// the offers of files users send us unasked, by user and file, until a download takes them
+  offered: Mutex<HashMap<(String, RemoteFilename), TransferRequest>>,
 }
 
 /// Who and what a new transfer is
@@ -130,6 +135,7 @@ impl Transfers {
       upload_speed: TokenBucket::new(bucket::capacity(options.maximum_upload_speed)),
       upload_turns: Mutex::new(HashMap::new()),
       offset_logged: Mutex::new(BoundedCache::new(OFFSET_LOGGED_PEERS, OFFSET_LOGGED_FOR)),
+      offered: Mutex::new(HashMap::new()),
     }
   }
 
@@ -210,6 +216,46 @@ impl Transfers {
   pub(crate) fn has_download(&self, username: &str, filename: &RemoteFilename) -> bool {
     let key = file_key(TransferDirection::Download, username, filename);
     self.table().by_file.contains_key(&key)
+  }
+
+  /// Holds the offer `username` made to send us a file unasked; false, holding nothing, when an
+  /// offer of the same file is held already. That one is being decided or was accepted, and the
+  /// download that takes it must get the offer whose size was checked
+  pub(crate) fn hold_offer(&self, username: &str, offer: TransferRequest) -> bool {
+    let key = (username.to_owned(), offer.filename.clone());
+    match lock(&self.offered).entry(key) {
+      Entry::Occupied(_) => false,
+      Entry::Vacant(vacant) => {
+        vacant.insert(offer);
+        true
+      }
+    }
+  }
+
+  /// takes the offer `username` holds for `filename`, for the download that accepts it
+  pub(crate) fn take_offer(
+    &self,
+    username: &str,
+    filename: &RemoteFilename,
+  ) -> Option<TransferRequest> {
+    lock(&self.offered).remove(&(username.to_owned(), filename.clone()))
+  }
+
+  /// Lets go of the offer of `filename` from `username` with `token`, unless a download took it
+  /// or another offer is held in its place; returns whether it was still held
+  pub(crate) fn release_offer(
+    &self,
+    username: &str,
+    filename: &RemoteFilename,
+    token: u32,
+  ) -> bool {
+    let mut offered = lock(&self.offered);
+    let key = (username.to_owned(), filename.clone());
+    if offered.get(&key).is_some_and(|offer| offer.token == token) {
+      offered.remove(&key);
+      return true;
+    }
+    false
   }
 
   /// Fails the download of `filename` from `username`, at whatever stage it is, with `error`;

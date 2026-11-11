@@ -43,7 +43,9 @@ impl Downloads {
       .mode
       .as_deref()
       .and_then(|text| to_unix_file_mode(text).ok());
-    let overwrite = destination.exists == DestinationExists::Overwrite;
+    // a sender who sends files unasked names them, so theirs never replace a file
+    let overwrite =
+      destination.exists == DestinationExists::Overwrite && !self.pushed(&record).await;
     let (directory, name) = match self
       .destination(&record, destination.subdirectory.as_deref())
       .await
