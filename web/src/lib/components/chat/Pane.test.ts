@@ -79,6 +79,7 @@ describe("a chat pane", () => {
     session.principal = null;
     app.state = null;
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
     document.body.innerHTML = "";
   });
 
@@ -185,10 +186,11 @@ describe("a chat pane", () => {
     expect(chat.total).toBe(0);
   });
 
-  // two pages of a hundred messages, as a short page would say nothing newer is left: over a
-  // second alone and several in the full run, past vitest's default of 5 s
+  // two pages of a hundred messages, as a short page would say nothing newer is left
   it("acknowledges a conversation opened at an old message only once the newest are shown", async () => {
     vi.useFakeTimers();
+    // jsdom measures every line as 0 high, which would draw them all
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(24);
     const stored = 200;
     const messages = (from: number, to: number) =>
       Array.from({ length: Math.max(0, to - from + 1) }, (_, n) =>
@@ -220,7 +222,7 @@ describe("a chat pane", () => {
       .click();
     await step();
     expect(acknowledged().map((r) => r.url.pathname)).toEqual(["/api/v0/conversations/alice"]);
-  }, 15_000);
+  });
 
   it("pages a room's history up, with its gaps as rows, and takes new messages in place", async () => {
     const older = { messages: [roomMessage(1)], hasMore: false, gaps: [] };
