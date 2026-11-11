@@ -2,6 +2,7 @@
   import { DropdownMenu } from "bits-ui";
 
   import { cn } from "#lib/ui/cn.js";
+  import { safeArea } from "#lib/ui/safearea.svelte.js";
 
   import { anchorOf } from "./anchor";
 
@@ -15,6 +16,7 @@
 <DropdownMenu.Portal>
   <DropdownMenu.Content
     {sideOffset}
+    collisionPadding={safeArea.padding(0)}
     class={cn(
       "z-50 max-h-(--bits-dropdown-menu-content-available-height) max-w-(--bits-dropdown-menu-content-available-width) min-w-32 origin-(--bits-dropdown-menu-content-transform-origin) overflow-y-auto rounded-control border bg-overlay p-1 text-fg shadow-raised outline-none data-[state=closed]:animate-popover-out data-[state=open]:animate-popover-in",
       className

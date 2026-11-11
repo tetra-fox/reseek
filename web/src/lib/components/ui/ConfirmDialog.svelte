@@ -36,7 +36,7 @@
       class="fixed inset-0 z-50 bg-scrim data-[state=closed]:animate-fade-out data-[state=open]:animate-fade-in" />
     <AlertDialog.Content
       onCloseAutoFocus={onclosefocus}
-      class="fixed top-1/2 left-1/2 z-50 flex w-[min(26rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col gap-4 rounded-card border bg-surface p-5 shadow-raised outline-none data-[state=closed]:animate-popover-out data-[state=open]:animate-popover-in">
+      class="fixed top-1/2 left-1/2 z-50 flex w-[min(26rem,calc(100vw-2rem))] max-w-(--safe-w) -translate-x-1/2 -translate-y-1/2 flex-col gap-4 rounded-card border bg-surface p-5 shadow-raised outline-none data-[state=closed]:animate-popover-out data-[state=open]:animate-popover-in">
       <div class="flex flex-col gap-1">
         <AlertDialog.Title class="text-base font-medium">{title}</AlertDialog.Title>
         {#if body}

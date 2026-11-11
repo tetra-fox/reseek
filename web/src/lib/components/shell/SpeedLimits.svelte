@@ -14,6 +14,7 @@
     switchSpeedLimits,
     type LimitPair
   } from "#lib/transfers/speed.js";
+  import { safeArea } from "#lib/ui/safearea.svelte.js";
 
   // the footer's speeds open the two pairs of speed limits and the switch between them
   type Props = { children: Snippet };
@@ -81,7 +82,7 @@
       side="top"
       align="start"
       sideOffset={6}
-      collisionPadding={8}
+      collisionPadding={safeArea.padding(8)}
       class="z-50 flex w-72 max-w-[calc(100vw-2rem)] flex-col gap-3 rounded-card border bg-overlay p-3 text-sm shadow-raised outline-none data-[state=closed]:animate-popover-out data-[state=open]:animate-popover-in">
       {#if write}
         <label class="flex items-center justify-between gap-inline">

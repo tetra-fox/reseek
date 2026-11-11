@@ -158,10 +158,12 @@
 
 {#if app.phase === "app"}
   <!-- the window never scrolls: the content area does, and the activity log under it and the
-       footer take their room from it rather than covering it -->
+       footer take their room from it rather than covering it. The page may reach under a
+       phone's notch and its browser's bottom bar, so the shell keeps clear of what the
+       safe-area insets say is covered -->
   <div
     bind:this={shell}
-    class="grid h-svh grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto]">
+    class="grid h-svh grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto] safe-t safe-r safe-b safe-l">
     <div class="flex min-h-0">
       <Sidebar />
       <!-- the screen's panel, inset from the chrome around it, edge to edge on a phone. The footer

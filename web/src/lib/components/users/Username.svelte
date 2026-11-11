@@ -10,6 +10,7 @@
   import { userHref } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
   import { cn } from "#lib/ui/cn.js";
+  import { safeArea } from "#lib/ui/safearea.svelte.js";
   import { canManage, links } from "#lib/users/actions.js";
   import { toggleBlock } from "#lib/users/block.svelte.js";
   import { nameColor } from "#lib/users/colors.js";
@@ -189,7 +190,7 @@
           side="bottom"
           align="start"
           sideOffset={4}
-          collisionPadding={8}
+          collisionPadding={safeArea.padding(8)}
           trapFocus={keyboard}
           onOpenAutoFocus={(e) => !keyboard && e.preventDefault()}
           onCloseAutoFocus={(e) => e.preventDefault()}

@@ -19,7 +19,7 @@
 <!-- bottom center, newest on top, above the footer, the docked activity log and a selection's
      toolbar where they would lie on it -->
 <div
-  class="pointer-events-none fixed inset-x-4 z-50 mx-auto flex max-w-md flex-col items-center gap-2 transition-[bottom] duration-(--motion-fast) ease-(--ease-out-soft)"
+  class="pointer-events-none fixed inset-x-0 z-50 mx-auto box-content flex max-w-md flex-col items-center gap-2 safe-r safe-l transition-[bottom] duration-(--motion-fast) ease-(--ease-out-soft) [--safe-pad:--spacing(4)]"
   style:bottom={`calc(var(--bottom-h) + ${footBars.rest(rem.px, height)}px)`}
   bind:offsetHeight={height}
   aria-live="polite">

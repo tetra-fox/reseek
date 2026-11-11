@@ -54,7 +54,7 @@
           {#if open}
             <div
               {...props}
-              class="fixed inset-0 z-50 flex flex-col bg-surface outline-none"
+              class="fixed inset-0 z-50 flex flex-col bg-surface safe-t safe-r safe-b safe-l outline-none"
               data-inspector
               transition:sheetOpening>
               {@render body()}

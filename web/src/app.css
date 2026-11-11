@@ -238,6 +238,34 @@
   --bottom-h: 2.5rem;
 }
 
+/* the safe area: what a phone's notch, rounded corners and browser bar leave of the screen, which
+   the page reaches past (viewport-fit=cover). 0 where nothing is covered */
+:root {
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  /* the widest a layer centered on the screen gets: the safe area's width less a margin each
+     side, as a max-w-(--safe-w) a caller's own max-w-* replaces */
+  --safe-w: calc(100vw - 2 * max(var(--safe-l), var(--safe-r)) - 2rem);
+}
+
+/* padding that keeps what a layer holds inside the safe area, on each screen edge the layer lies
+   against: the shell, sheets, docked panels and the toasts. --safe-pad is the layer's own
+   padding there, which the inset replaces where it is larger */
+@utility safe-t {
+  padding-top: max(var(--safe-pad, 0px), var(--safe-t));
+}
+@utility safe-r {
+  padding-right: max(var(--safe-pad, 0px), var(--safe-r));
+}
+@utility safe-b {
+  padding-bottom: max(var(--safe-pad, 0px), var(--safe-b));
+}
+@utility safe-l {
+  padding-left: max(var(--safe-pad, 0px), var(--safe-l));
+}
+
 .dark {
   color-scheme: dark;
   --color-page: oklch(0.128 0.008 var(--neutral-hue));

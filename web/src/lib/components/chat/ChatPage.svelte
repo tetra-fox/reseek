@@ -224,7 +224,7 @@
     <Dialog.Portal>
       <Scrim />
       <Dialog.Content
-        class="fixed inset-y-0 left-0 z-50 flex w-80 max-w-[90vw] flex-col bg-surface shadow-raised data-[state=closed]:animate-sheet-out data-[state=open]:animate-sheet-in">
+        class="fixed inset-y-0 left-0 z-50 box-content flex w-80 max-w-[90vw] flex-col bg-surface safe-t safe-b safe-l shadow-raised data-[state=closed]:animate-sheet-out data-[state=open]:animate-sheet-in">
         <Dialog.Title class="sr-only">Chats</Dialog.Title>
         {@render list()}
       </Dialog.Content>

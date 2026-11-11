@@ -3,6 +3,7 @@
   import type { ComponentProps, Snippet } from "svelte";
 
   import Input from "#lib/components/ui/Input.svelte";
+  import { safeArea } from "#lib/ui/safearea.svelte.js";
 
   import { type Highlight, shareHighlight } from "./highlight";
 
@@ -95,6 +96,7 @@
   <Combobox.Portal>
     <Combobox.Content
       sideOffset={4}
+      collisionPadding={safeArea.padding(0)}
       onEscapeKeydown={ondismiss}
       onInteractOutside={ondismiss}
       class="z-50 flex max-h-(--bits-combobox-content-available-height) w-[max(var(--bits-combobox-anchor-width),20rem)] max-w-[calc(100vw-1rem)] origin-(--bits-combobox-content-transform-origin) flex-col rounded-control border bg-overlay p-1 text-fg shadow-raised data-[state=closed]:animate-popover-out data-[state=open]:animate-popover-in">

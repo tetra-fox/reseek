@@ -82,7 +82,7 @@
   <Dialog
     bind:open={picking}
     title="Add from Downloads"
-    class="top-auto bottom-0 left-0 w-full max-w-none translate-x-0 translate-y-0 rounded-b-none">
+    class="top-auto bottom-0 left-0 w-full max-w-none translate-x-0 translate-y-0 rounded-b-none safe-r safe-b safe-l">
     <div class="px-3 pb-3"><FilePicker onpick={pick} height="60svh" /></div>
   </Dialog>
 {/if}

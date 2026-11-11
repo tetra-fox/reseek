@@ -41,7 +41,7 @@
       escapeKeydownBehavior={busy ? "ignore" : "close"}
       interactOutsideBehavior={busy ? "ignore" : "close"}
       class={cn(
-        "fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100svh-2rem)] w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col rounded-card border bg-surface shadow-raised outline-none data-[state=closed]:animate-popover-out data-[state=open]:animate-popover-in",
+        "fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100svh-var(--safe-t)-var(--safe-b)-2rem)] w-[min(28rem,calc(100vw-2rem))] max-w-(--safe-w) -translate-x-1/2 -translate-y-1/2 flex-col rounded-card border bg-surface shadow-raised outline-none data-[state=closed]:animate-popover-out data-[state=open]:animate-popover-in",
         className
       )}>
       <div class="flex flex-col gap-1 py-4 pr-14 pl-5">

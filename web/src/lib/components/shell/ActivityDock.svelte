@@ -102,7 +102,7 @@
   class={[
     "flex flex-col border-t",
     viewport.phone
-      ? "fixed inset-x-0 bottom-(--bottom-h) z-20 h-72 max-h-[45svh] bg-surface/95 shadow-raised backdrop-blur-md"
+      ? "fixed inset-x-0 bottom-(--bottom-h) z-20 h-72 max-h-[45svh] bg-surface/95 safe-r safe-l shadow-raised backdrop-blur-md"
       : "relative bg-surface"
   ]}
   style:height={viewport.phone ? undefined : `${docked}px`}

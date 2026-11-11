@@ -14,6 +14,7 @@
   import Switch from "#lib/components/ui/Switch.svelte";
   import { FILE_ACTIONS as A } from "#lib/files/actions.js";
   import { formatCount } from "#lib/format.js";
+  import { safeArea } from "#lib/ui/safearea.svelte.js";
 
   import AnalysisGuide from "./AnalysisGuide.svelte";
   import AnalysisJobs from "./AnalysisJobs.svelte";
@@ -45,7 +46,7 @@
     <Popover.Portal>
       <Popover.Content
         sideOffset={6}
-        collisionPadding={8}
+        collisionPadding={safeArea.padding(8)}
         class="z-50 flex max-h-(--bits-popover-content-available-height) w-[min(30rem,calc(100vw-2rem))] flex-col overflow-y-auto rounded-card border bg-overlay p-3 shadow-raised outline-none data-[state=closed]:animate-popover-out data-[state=open]:animate-popover-in">
         {@render content()}
       </Popover.Content>

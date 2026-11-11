@@ -306,7 +306,7 @@
     <Dialog.Portal>
       <Scrim />
       <Dialog.Content
-        class="fixed inset-y-0 right-0 z-50 flex w-80 max-w-[90vw] flex-col bg-surface shadow-raised [--sheet-from:100%] data-[state=closed]:animate-sheet-out data-[state=open]:animate-sheet-in">
+        class="fixed inset-y-0 right-0 z-50 box-content flex w-80 max-w-[90vw] flex-col bg-surface safe-t safe-r safe-b shadow-raised [--sheet-from:100%] data-[state=closed]:animate-sheet-out data-[state=open]:animate-sheet-in">
         <Dialog.Title class="sr-only">{`#${target.name}`}</Dialog.Title>
         {@render side(members)}
       </Dialog.Content>

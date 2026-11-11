@@ -4,6 +4,7 @@
 
   import Button from "#lib/components/ui/Button.svelte";
   import { FILTER_TOKENS } from "#lib/files/filters.js";
+  import { safeArea } from "#lib/ui/safearea.svelte.js";
 </script>
 
 <!-- every token the filter box takes, one click away from it -->
@@ -19,6 +20,7 @@
     <Popover.Content
       align="end"
       sideOffset={6}
+      collisionPadding={safeArea.padding(0)}
       class="z-50 w-[min(30rem,calc(100vw-2rem))] rounded-card border bg-overlay p-4 text-sm shadow-raised outline-none data-[state=closed]:animate-popover-out data-[state=open]:animate-popover-in">
       <p class="mb-2 text-fg-muted">
         Every word must appear in the path. A file with no bitrate or other attribute passes that

@@ -6,6 +6,7 @@
   import Button from "#lib/components/ui/Button.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
+  import { safeArea } from "#lib/ui/safearea.svelte.js";
 
   // an option's environment variable and command-line flag, with a copy button for each, opened
   // by a click or a tap. The popover is made on the first open, so a page of options doesn't
@@ -55,6 +56,7 @@
         side="bottom"
         align="start"
         sideOffset={4}
+        collisionPadding={safeArea.padding(0)}
         onCloseAutoFocus={(e) => {
           e.preventDefault();
           button?.focus();

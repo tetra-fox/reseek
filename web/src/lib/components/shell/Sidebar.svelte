@@ -179,7 +179,7 @@
     <Dialog.Portal>
       <Scrim />
       <Dialog.Content
-        class="fixed inset-y-0 left-0 z-50 w-72 p-2 data-[state=closed]:animate-sheet-out data-[state=open]:animate-sheet-in">
+        class="fixed inset-y-0 left-0 z-50 box-content w-68 safe-t pr-2 safe-b safe-l [--safe-pad:--spacing(2)] data-[state=closed]:animate-sheet-out data-[state=open]:animate-sheet-in">
         <Dialog.Title class="sr-only">Navigation</Dialog.Title>
         {@render panel()}
       </Dialog.Content>

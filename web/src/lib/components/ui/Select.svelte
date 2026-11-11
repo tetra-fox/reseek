@@ -5,6 +5,7 @@
   import type { ClassValue } from "svelte/elements";
 
   import { cn } from "#lib/ui/cn.js";
+  import { safeArea } from "#lib/ui/safearea.svelte.js";
 
   type Props = {
     "value": T;
@@ -52,6 +53,7 @@
   <Select.Portal>
     <Select.Content
       sideOffset={4}
+      collisionPadding={safeArea.padding(0)}
       class="z-50 max-h-(--bits-select-content-available-height) min-w-(--bits-select-anchor-width) origin-(--bits-select-content-transform-origin) overflow-y-auto rounded-control border bg-overlay p-1 text-fg shadow-raised data-[state=closed]:animate-popover-out data-[state=open]:animate-popover-in">
       {#each items as item (item.value)}
         <Select.Item
