@@ -4,7 +4,17 @@ import { defineConfig } from "@playwright/test";
 
 import { SESSION } from "./e2e/support/session";
 
-const port = Number(process.env.E2E_PORT ?? 5139);
+/**
+ * The daemon's port: E2E_PORT, else one free now, so gates run at once pick their own. It is
+ * chosen once, by the runner, and reaches the workers and serve.sh through the environment
+ */
+const freePort = (): string => {
+  const ask = `const s = require("node:net").createServer();
+    s.listen(0, "127.0.0.1", () => { console.log(s.address().port); s.close(); });`;
+  return execFileSync(process.execPath, ["-e", ask], { encoding: "utf8" }).trim();
+};
+process.env.E2E_PORT ??= freePort();
+const port = Number(process.env.E2E_PORT);
 
 /** The browser to drive: CHROMIUM_BIN, else a chromium on PATH */
 const chromium = (): string => {
