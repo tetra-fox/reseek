@@ -19,7 +19,7 @@ bitflags::bitflags! {
   pub struct SearchState: u32 {
     /// accepted, its token taken
     const REQUESTED = 1;
-    /// sent to the server; responses are taken
+    /// being sent to the server or sent; responses are taken
     const IN_PROGRESS = 2;
     /// over, with one of the reasons below
     const COMPLETED = 4;

@@ -20,7 +20,7 @@ bitflags::bitflags! {
   pub struct SearchStates: u32 {
     /// the record exists and the request is not sent yet
     const Requested = 1;
-    /// the request was written to the server and responses are accepted
+    /// the request is being written to the server or was, and responses are accepted
     const InProgress = 2;
     /// finished, with one reason flag
     const Completed = 4;

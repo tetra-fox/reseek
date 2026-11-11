@@ -304,7 +304,8 @@ impl Client {
   ) -> Result<Search, ClientError> {
     self.set_search_state(search, SearchState::REQUESTED);
     self.set_search_state(search, SearchState::QUEUED);
-    // a disconnect ends the search while it still waits for its turn or is being sent
+    // another task can end the search while it waits for its turn or is being sent: a disconnect,
+    // or, once it takes responses, a limit a response reached
     let mut outcome = search.outcome.subscribe();
     let limit = self.options().maximum_concurrent_searches;
     let slot = tokio::select! {
@@ -318,23 +319,31 @@ impl Client {
       },
     };
     let requests = search.scope.requests(search.token, text);
+    // an answer can come back as soon as the request is on its way, before the write is seen to
+    // end, so the search takes responses from here
+    self.set_search_state(search, SearchState::IN_PROGRESS);
     let sent = tokio::select! {
       biased;
-      () = ended(&mut outcome) => {
-        return Err(self.end_search(search, SearchState::CANCELLED, ClientError::Canceled));
-      }
-      sent = self.write_server_messages(&requests) => sent,
+      // ended meanwhile, by a disconnect or by a limit an early answer reached
+      () = ended(&mut outcome) => None,
+      sent = self.write_server_messages(&requests) => Some(sent),
     };
-    if let Err(error) = sent {
-      let error = match error {
-        error @ ClientError::Timeout(_) => error,
-        error => failed(&format!("search for {text}"), error),
-      };
-      return Err(self.end_search(search, SearchState::ERRORED, error));
+    match sent {
+      Some(Ok(())) => {
+        tracing::info!(text, scope = ?search.scope, "search sent");
+        // the timeout counts from the send, however long the write waited
+        lock(&search.counts).deadline = Instant::now() + search.options.search_timeout;
+      }
+      Some(Err(error)) => {
+        let error = match error {
+          error @ ClientError::Timeout(_) => error,
+          error => failed(&format!("search for {text}"), error),
+        };
+        return Err(self.end_search(search, SearchState::ERRORED, error));
+      }
+      // the loop below ends at once with how it ended
+      None => tracing::debug!("search ended while its request was sent"),
     }
-    tracing::info!(text, scope = ?search.scope, "search sent");
-    lock(&search.counts).deadline = Instant::now() + search.options.search_timeout;
-    self.set_search_state(search, SearchState::IN_PROGRESS);
     let reason = loop {
       let deadline = lock(&search.counts).deadline;
       tokio::select! {
@@ -457,8 +466,9 @@ impl Client {
   }
 }
 
-/// Resolves once the search was ended from outside, by a disconnect. The value's read guard is
-/// let go before this returns, since ending the search writes the value.
+/// Resolves once the search was ended by another task: a disconnect, or a limit a response
+/// reached. The value's read guard is let go before this returns, since ending the search writes
+/// the value.
 async fn ended(outcome: &mut watch::Receiver<Option<SearchState>>) {
   if outcome.wait_for(Option::is_some).await.is_err() {
     // the search holds the sender, so this cannot end without a value
