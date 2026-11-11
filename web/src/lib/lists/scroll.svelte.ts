@@ -152,13 +152,24 @@ export class Saver {
   }
 }
 
+/** Whether `line` moves with `box`'s scroll, not with that of a box inside it that scrolls */
+const scrollsWith = (line: Element, box: Element) => {
+  for (let at = line.parentElement; at && at !== box; at = at.parentElement) {
+    const { overflowY } = getComputedStyle(at);
+    if ((overflowY === "auto" || overflowY === "scroll") && at.scrollHeight > at.clientHeight) {
+      return false;
+    }
+  }
+  return true;
+};
+
 /** The line at the box's top, of those carrying `data-line`, and where it is */
 const markIn = (box: HTMLElement): ScrollMark => {
   const top = box.getBoundingClientRect().top;
   const lines = box.querySelectorAll<HTMLElement>("[data-line]");
   for (const [index, line] of [...lines].entries()) {
     const rect = line.getBoundingClientRect();
-    if (rect.bottom > top) {
+    if (rect.bottom > top && scrollsWith(line, box)) {
       return { key: line.dataset.line ?? null, index, delta: rect.top - top, top: box.scrollTop };
     }
   }
