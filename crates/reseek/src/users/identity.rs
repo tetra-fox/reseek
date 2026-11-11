@@ -151,7 +151,7 @@ mod tests {
   }
 
   #[test]
-  fn an_address_is_warned_of_once_a_minute_for_each_name() {
+  fn an_address_is_warned_of_once_for_each_name() {
     let warned = Impersonations::default();
     let lan: IpAddr = "192.168.1.20".parse().unwrap();
     let elsewhere: IpAddr = "198.51.100.7".parse().unwrap();
