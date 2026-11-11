@@ -1,1 +1,18 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect width="24" height="24" rx="5" fill="#c65102"/><path d="M5 12h2l2-5 3 10 3-8 2 3h2" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" class="logo" viewBox="0 0 256 256" fill="none" stroke-width="36" stroke-linecap="round" stroke-linejoin="round">
+  <style>
+    /* by itself, as a tab's icon, the file takes the system's theme; drawn inline in the page,
+       where its root is not the document's, it takes the page's .dark. Inline, this style
+       applies to the whole page, so it names only the logo's own classes */
+    .logo { --mark: #b7410e; --ink: #1f1c19; --mark-dark: #e0693a; --ink-dark: #efebe5 }
+    @media (prefers-color-scheme: dark) {
+      .logo:root { --mark: var(--mark-dark); --ink: var(--ink-dark) }
+    }
+    .dark .logo { --mark: var(--mark-dark); --ink: var(--ink-dark) }
+    .logo-mark { stroke: var(--mark) }
+    .logo-ink { stroke: var(--ink) }
+  </style>
+  <path class="logo-mark" d="M202 216 V108 A50 50 0 0 0 152 58 H72"/>
+  <path class="logo-mark" d="M108 22 L70 58 L108 94"/>
+  <path class="logo-ink" d="M74 152 V200"/>
+  <path class="logo-ink" d="M138 132 V216"/>
+</svg>

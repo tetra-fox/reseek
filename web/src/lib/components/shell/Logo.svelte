@@ -1,15 +1,12 @@
 <script lang="ts">
-  import AudioWaveformIcon from "@lucide/svelte/icons/audio-waveform";
-
   import { cn } from "#lib/ui/cn.js";
+
+  import logo from "../../../../static/favicon.svg?raw";
 
   let { class: className }: { class?: string } = $props();
 </script>
 
-<span
-  class={cn(
-    "flex size-control shrink-0 items-center justify-center rounded-control bg-accent text-accent-fg shadow-xs",
-    className
-  )}>
-  <AudioWaveformIcon class="size-1/2" />
-</span>
+<!-- the app's icon, the tab's own file drawn inline so it takes the app's theme: as an image it
+     would answer prefers-color-scheme from the system in Safari -->
+<span aria-hidden="true" class={cn("block size-control shrink-0 *:block *:size-full", className)}
+  >{@html logo}</span>

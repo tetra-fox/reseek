@@ -18,6 +18,7 @@
   import { REPOSITORY } from "#lib/shell/project.js";
   import { shortcutAria, shortcutText } from "#lib/ui/keys.js";
 
+  import Logo from "./Logo.svelte";
   import SpeedLimits from "./SpeedLimits.svelte";
 
   const connected = $derived(app.isServerConnected);
@@ -141,7 +142,7 @@
       target="_blank"
       rel="noreferrer"
       class="flex h-control-sm min-w-0 flex-wrap items-center justify-end gap-x-1.5 overflow-hidden text-fg-muted before:h-control-sm hover:text-fg">
-      <img src="./favicon.svg" width="18" height="18" alt="" class="h-control-sm object-contain" />
+      <Logo class="size-[18px] self-center" />
       <span class="leading-(--spacing-control-sm) font-medium">reseek</span>
       <span class="font-mono leading-(--spacing-control-sm) opacity-70"
         >{app.state?.version.current ?? ""}</span>
