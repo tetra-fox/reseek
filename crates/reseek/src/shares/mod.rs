@@ -34,6 +34,7 @@ pub fn setup(
     volatile: options.flags.volatile,
     case_sensitive: options.flags.case_sensitive_regex,
     rescan_on_schedule: false,
+    browse_caches: true,
     scans: crate::jobs::scans::hook(jobs.clone()),
     publish: Box::new(move |shares| state.update(|current| current.shares = shares)),
   }

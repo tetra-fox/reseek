@@ -239,6 +239,9 @@ pub struct Setup {
   /// scan again when `shares.cache.retention` finds it due; off when the program schedules the
   /// rescans itself through [`Shares::scan`]
   pub rescan_on_schedule: bool,
+  /// write the browse caches, the listing a browsing peer is sent; off for a program that
+  /// answers no browse
+  pub browse_caches: bool,
   /// told of every scan as it starts and ends
   pub scans: ScanHook,
   /// told the share state each time it changes, while the engine's lock on it is held, so the
@@ -267,6 +270,8 @@ pub struct Shares {
   workers: u32,
   /// whether the share filters match case, as the engine started with
   case_sensitive: bool,
+  /// whether the browse caches are written
+  browse_caches: bool,
   quiet: Duration,
   shutdown: CancellationToken,
   /// the configured shares with their counts
@@ -356,6 +361,7 @@ impl Shares {
       in_memory: storage.in_memory,
       workers: startup.cache.scan_workers(),
       case_sensitive: setup.case_sensitive,
+      browse_caches: setup.browse_caches,
       quiet,
       shutdown,
       covered: Mutex::new(None),
@@ -508,6 +514,9 @@ impl Shares {
   /// Rewrites the browse cache of every view a peer browsed with, and of the view that hides
   /// nothing, after the shares changed; a failure is logged.
   async fn refresh_browse_caches(&self) {
+    if !self.browse_caches {
+      return;
+    }
     let files: Vec<(View, PathBuf)> = {
       let views = lock(&self.browse_views);
       std::iter::once(View::everything())

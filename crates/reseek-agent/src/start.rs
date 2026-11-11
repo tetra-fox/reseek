@@ -254,6 +254,8 @@ async fn serve(config: Watcher<Options>, paths: Paths) -> ExitCode {
     volatile: options.flags.volatile,
     case_sensitive: options.flags.case_sensitive_regex,
     rescan_on_schedule: true,
+    // the controller answers browses from the index the agent uploads
+    browse_caches: false,
     // nothing but the engine's own log follows the scans
     scans: Box::new(|_| Box::pin(async {})),
     // nothing shows the share state but the log the engine writes

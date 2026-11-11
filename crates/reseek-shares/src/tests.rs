@@ -82,6 +82,7 @@ fn setup(dir: &Path, cache: &Path) -> (Setup, watch::Receiver<SharesState>) {
     volatile: false,
     case_sensitive: false,
     rescan_on_schedule: true,
+    browse_caches: true,
     scans: Box::new(|_| Box::pin(async {})),
     publish: Box::new(move |shares| {
       told.send_replace(shares);
