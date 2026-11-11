@@ -9,11 +9,14 @@
 
   type Props = {
     open: boolean;
-    /** the users with an upload in the list as it is filtered */
+    /** who the message goes to */
     usernames: string[];
+    title: string;
+    /** who `usernames` are, in a few words */
+    description: string;
   };
 
-  let { open = $bindable(), usernames }: Props = $props();
+  let { open = $bindable(), usernames, title, description }: Props = $props();
 
   let text = $state("");
   let sent = $state(0);
@@ -27,7 +30,7 @@
   const send = async () => {
     const message = text.trim();
     if (!message) return;
-    // the list as it was when Send was pressed, though it changes as uploads come and go
+    // the users as they were when Send was pressed, though the list can change while sending
     const to = usernames;
     sending = true;
     canceled = false;
@@ -64,11 +67,7 @@
   };
 </script>
 
-<Dialog
-  bind:open
-  busy={sending}
-  title="Message everyone downloading from you"
-  description={`To the ${plural(usernames.length, "user", "users")} in the filtered list`}>
+<Dialog bind:open busy={sending} {title} {description}>
   <form
     id="message-all"
     onsubmit={(e) => {

@@ -10,10 +10,12 @@
 
 <script lang="ts">
   import { goto } from "$app/navigation";
+  import MessageSquareIcon from "@lucide/svelte/icons/message-square";
   import UserMinusIcon from "@lucide/svelte/icons/user-minus";
   import UserPlusIcon from "@lucide/svelte/icons/user-plus";
   import UsersIcon from "@lucide/svelte/icons/users";
 
+  import MessageAll from "#lib/components/chat/MessageAll.svelte";
   import LoadError from "#lib/components/LoadError.svelte";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
@@ -132,7 +134,9 @@
     ties: "user"
   });
   const shown = $derived(grid.rows);
-  const online = $derived(shown.filter((u) => u.presence && u.presence !== "Offline").length);
+  const online = $derived(
+    shown.filter((u) => u.presence && u.presence !== "Offline").map((u) => u.username)
+  );
   const write = $derived(session.can("ReadWrite"));
 
   let headerHeight = $state(0);
@@ -158,6 +162,7 @@
     })
   );
 
+  let messaging = $state(false);
   let adding = $state("");
   let busy = $state(false);
   const add = async () => {
@@ -216,9 +221,24 @@
   {/if}
   {#if shown.length}
     <span class="ml-auto text-sm text-fg-muted"
-      >{formatCount(online)} of {plural(shown.length, "buddy", "buddies")} online</span>
+      >{formatCount(online.length)} of {plural(shown.length, "buddy", "buddies")} online</span>
+    {#if write}
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={!online.length}
+        onclick={() => (messaging = true)}><MessageSquareIcon />Message online</Button>
+    {/if}
   {/if}
 </div>
+
+{#if write}
+  <MessageAll
+    bind:open={messaging}
+    usernames={online}
+    title="Message buddies online"
+    description={`To the ${plural(online.length, "buddy", "buddies")} online now`} />
+{/if}
 
 <LoadError loader={{ error, load }} />
 

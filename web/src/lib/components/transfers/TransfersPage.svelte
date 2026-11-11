@@ -8,6 +8,7 @@
   import { analyzableDownload, analyzeBatch, downloadCandidate } from "#lib/analysis/batch.js";
   import { MARK_FILTERS, type MarkFilter, passes } from "#lib/analysis/marks.js";
   import { analyzerOffered, marks } from "#lib/analysis/marks.svelte.js";
+  import MessageAll from "#lib/components/chat/MessageAll.svelte";
   import ErrorSegment from "#lib/components/ErrorSegment.svelte";
   import TransferInspector from "#lib/components/inspector/TransferInspector.svelte";
   import Button from "#lib/components/ui/Button.svelte";
@@ -54,7 +55,6 @@
   import { users } from "#lib/users/users.svelte.js";
 
   import AddDownload from "./AddDownload.svelte";
-  import MessageAll from "./MessageAll.svelte";
   import Toolbar from "./Toolbar.svelte";
   import TransferTable from "./TransferTable.svelte";
 
@@ -439,7 +439,12 @@
 
 <AddDownload bind:open={adding} />
 {#if direction === "upload"}
-  <MessageAll bind:open={messaging} usernames={[...new Set(filtered.map((t) => t.username))]} />
+  {@const usernames = [...new Set(filtered.map((t) => t.username))]}
+  <MessageAll
+    bind:open={messaging}
+    {usernames}
+    title="Message everyone downloading from you"
+    description={`To the ${plural(usernames.length, "user", "users")} in the filtered list`} />
 {/if}
 
 {#if confirm}

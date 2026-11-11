@@ -6,7 +6,7 @@ import { fakeNetwork } from "#lib/testing/network.js";
 
 import MessageAll from "./MessageAll.svelte";
 
-describe("messaging everyone downloading from us", () => {
+describe("messaging several users", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     document.body.innerHTML = "";
@@ -21,7 +21,7 @@ describe("messaging everyone downloading from us", () => {
     });
     const component = mount(MessageAll, {
       target: document.body,
-      props: { open: true, usernames: ["alice", "bob", "carol"] }
+      props: { open: true, usernames: ["alice", "bob", "carol"], title: "", description: "" }
     });
     flushSync();
     const box = document.querySelector("textarea")!;
