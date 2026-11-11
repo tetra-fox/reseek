@@ -207,7 +207,11 @@
   onmiddleclick={canDownload ? (r) => void downloadNow([r]) : undefined}
   inspect={(r) => inspect(pick(r))}>
   {#snippet header(all)}
-    <GridHeader {grid} {all} class="h-8 border-b bg-surface-muted text-sm text-fg-muted" />
+    <GridHeader
+      {grid}
+      {all}
+      rowindex={1}
+      class="h-8 border-b bg-surface-muted text-sm text-fg-muted" />
   {/snippet}
   <!-- a right-click, a long press or the menu key opens what the row's ... button offers -->
   {#snippet menu(line)}

@@ -16,6 +16,7 @@
   import { GAP_REM, insetCss, itemStart, stepRem } from "#lib/tree/indent.js";
   import { nesting, pins } from "#lib/tree/pins.js";
   import { inControl } from "#lib/ui/keys.js";
+  import { untabbable } from "#lib/ui/untabbable.js";
   import { rem, viewport } from "#lib/ui/viewport.svelte.js";
   import { LONG_PRESS_MS } from "#lib/users/hover.svelte.js";
 
@@ -321,9 +322,9 @@
     if (!menuable(line)) return;
     const anchor = at
       ? { getBoundingClientRect: () => new DOMRect(at.x, at.y, 0, 0) }
-      : activeId === undefined
+      : shownId === undefined
         ? null
-        : document.getElementById(activeId);
+        : document.getElementById(shownId);
     menuAt = { key: line.key, anchor };
   };
   const lineOf = (target: EventTarget | null) => {
@@ -397,8 +398,11 @@
   );
 
   const pinnedId = (index: number) => `${list.uid}-pinned-${index}`;
+  /** the focused line's element on screen: its pinned copy while it has one, else the line */
   const focusedPin = $derived(pinned.find((pin) => pin.line.key === list.focusedKey));
-  const activeId = $derived(focusedPin ? pinnedId(focusedPin.index) : list.activeId);
+  const shownId = $derived(focusedPin ? pinnedId(focusedPin.index) : list.activeId);
+  /** the rows before the lines: the column header's */
+  const above = $derived(header ? 1 : 0);
   /**
    * A folder line's tint, opaque so the lines scrolling under its pinned copy don't show through;
    * the line's state tints it over this as any line's
@@ -445,9 +449,9 @@
   style:--step={step}
   role="treegrid"
   aria-label={label}
-  aria-rowcount={lines.length}
+  aria-rowcount={lines.length + above}
   aria-multiselectable={selected ? "true" : undefined}
-  aria-activedescendant={activeId}
+  aria-activedescendant={list.activeId}
   tabindex="0"
   onscroll={(e) => (scrollTop = e.currentTarget.scrollTop)}
   oncontextmenu={contextmenu}
@@ -463,13 +467,16 @@
   {@attach view.attach}
   {@attach list.attach}>
   <!-- the pinned folder lines are drawn under the column header, which a pushed one goes under,
-       and over the lines -->
+       and over the lines. Each copies a line the keys and assistive technology reach in the lines:
+       it is hidden from assistive technology, Tab skips its controls, and focus that comes to one
+       goes back to the tree -->
   <div class="sticky top-0 z-10" style:min-width={least} bind:offsetHeight={rowsTop}>
     {#if header && !framed}
       {@render header(selected ? list.allTick : undefined)}
     {:else if header}
       <div
         role="row"
+        aria-rowindex={1}
         class="grid items-center border-b bg-surface-muted py-1.5 text-fg-muted *:text-xs *:font-medium"
         style:grid-template-columns={columns}
         style:padding-left={inset(0, "item")}>
@@ -479,6 +486,7 @@
     {#each pinned as pin, n (pin.line.key)}
       <div
         role="row"
+        aria-hidden="true"
         class={[
           "group absolute inset-x-0 flex items-center list-row",
           framed && "pr-1",
@@ -489,12 +497,11 @@
         style:height={`${row}px`}
         style:z-index={n - pinned.length}
         style:padding-left={inset(pin.line.depth, "folder")}
-        aria-level={pin.line.depth + 1}
-        aria-expanded={expansion.isOpen(pin.line.node.key)}
         data-line={pin.line.key}
         data-focused={list.isFocused(pin.line) || undefined}
         aria-selected={folderId && selected ? selected.has(folderId(pin.line.node)) : undefined}
-        data-pinned="true">
+        data-pinned="true"
+        {@attach untabbable(list.focus)}>
         {@render folderLine(pin.line)}
       </div>
     {/each}
@@ -510,6 +517,7 @@
         <div
           role="row"
           {...list.line(line, index)}
+          aria-rowindex={index + 1 + above}
           class={[
             "group absolute inset-x-0 top-0 flex items-center list-row",
             framed && "pr-1",
@@ -530,6 +538,7 @@
         <div
           role="row"
           {...list.line(line, index)}
+          aria-rowindex={index + 1 + above}
           class={[
             "group absolute inset-x-0 top-0 isolate grid items-center list-row",
             arrivals.isFresh(line.key) && "animate-line-in",
