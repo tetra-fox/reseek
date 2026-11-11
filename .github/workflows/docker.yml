@@ -50,7 +50,7 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}
           # a prerelease gets only its version; `latest` is added for any other version. no major
-          # tag while the major is 0, where a minor may break
+          # tag while the major is 0
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
