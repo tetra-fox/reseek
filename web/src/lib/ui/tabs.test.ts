@@ -310,4 +310,71 @@ describe("the tabs of one browser", () => {
     clock.pass(SETTLE_MS, [down, up]);
     expect([down.leads(), up.leads()]).toEqual([false, true]);
   });
+
+  describe("after a suspension or a freeze", () => {
+    /** Tabs x and y following the stream, each at its own end of the channel */
+    const two = () => {
+      const clock = time();
+      const channel = bus();
+      const ends = [channel(), channel()];
+      const [x, y] = ends.map((end, i) => new Tabs(end, 100 * (i + 1), clock.now));
+      for (const tab of [x, y]) {
+        tab.join();
+        tab.connected(true);
+      }
+      clock.pass(SETTLE_MS, [x, y]);
+      return { clock, x, y, ends };
+    };
+
+    it("asks again on its first word, whatever says it, after a suspension with no word", () => {
+      const { clock, x, y, ends } = two();
+      y.focus();
+      expect([x.leads(), y.leads()]).toEqual([false, true]);
+      // suspended without a freeze: no bye, and it hears nothing while x is focused
+      const hear = ends[1].onmessage;
+      ends[1].onmessage = null;
+      x.focus();
+      clock.pass(QUIET_MS + BEAT_MS, [x]);
+      ends[1].onmessage = hear;
+      // back on screen, its stream found dead and connected again before its timer runs
+      y.connected(false);
+      expect([x.leads(), y.leads()]).toEqual([true, false]);
+      y.connected(true);
+      expect([x.leads(), y.leads()]).toEqual([true, false]);
+      clock.pass(SETTLE_MS, [x, y]);
+      expect([x.leads(), y.leads()]).toEqual([true, false]);
+      clock.pass(5 * BEAT_MS, [x, y]);
+      expect([x.leads(), y.leads()]).toEqual([true, false]);
+    });
+
+    it("counts at once a tab back from a freeze whose focus comes before it asks", () => {
+      const { clock, x, y } = two();
+      y.focus();
+      clock.pass(BEAT_MS, [x, y]);
+      x.focus();
+      expect([x.leads(), y.leads()]).toEqual([true, false]);
+      // y freezes, saying bye; the browser hands it focus before it hears it resumed
+      y.leave();
+      clock.pass(5 * BEAT_MS, [x]);
+      y.focus();
+      expect([x.leads(), y.leads()]).toEqual([false, true]);
+    });
+
+    it("forgets a tab that closed while it was frozen, rather than defer to it", () => {
+      const { clock, x, y, ends } = two();
+      x.focus();
+      expect([x.leads(), y.leads()]).toEqual([true, false]);
+      // y frozen, hearing nothing, while x, the only other tab, closes
+      const hear = ends[1].onmessage;
+      ends[1].onmessage = null;
+      y.leave();
+      x.leave();
+      ends[0].onmessage = null;
+      clock.pass(5 * BEAT_MS);
+      ends[1].onmessage = hear;
+      y.back();
+      clock.pass(SETTLE_MS, [y]);
+      expect(y.leads()).toBe(true);
+    });
+  });
 });

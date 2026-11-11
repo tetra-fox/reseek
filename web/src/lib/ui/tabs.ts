@@ -49,10 +49,13 @@ export const SETTLE_MS = 250;
  *
  * A tab that asks the others to answer, as it joins, comes back or wakes, leads nothing for
  * `SETTLE_MS`, the time they have to answer, and the others rank it nothing for `SETTLE_MS` from
- * hearing it ask, so it takes over after its settle and the one before stands down when its own
- * count ends. A tab that becomes first by a focus, or as its stream connects, says so at once:
- * it leads at once and the one before stands down when that message reaches it. Either way both
- * lead for the time a message takes to cross the channel, and there is no time where neither does
+ * hearing it ask, so the asker leads at the end of its settle and the one before stands down at
+ * the end of its own count of that settle, one crossing later. A tab that becomes first by a
+ * focus, or as its stream connects, says so at once: it leads at once and the one before stands
+ * down when that message reaches it. Either way both lead for the time a message takes to cross
+ * the channel, and a hand-over leaves no time where neither does. Some times have no leader all
+ * the same: a lone tab's settle as it asks again, every tab asking in the same instant, and the
+ * `QUIET_MS` a leader that went without a word is still counted
  */
 export class Tabs {
   /** sorts by when the page loaded, a random part keeping two loaded together apart */
@@ -94,14 +97,14 @@ export class Tabs {
   /** This tab gains focus, which puts it first once its stream is connected */
   focus() {
     this.#focusedAt = this.#now();
-    if (this.#in && this.#connected) this.#say("beat");
+    if (this.#in && this.#connected) this.#speak();
   }
 
   /** This tab's stream is connected, or no longer is; the others hear at once */
   connected(on: boolean) {
     if (on === this.#connected) return;
     this.#connected = on;
-    if (this.#in) this.#say("beat");
+    if (this.#in) this.#speak();
   }
 
   /** This tab no longer takes part, as its shell stops following the stream */
@@ -122,9 +125,7 @@ export class Tabs {
    * after a suspension whether it was shown or hidden, it asks again instead
    */
   beat() {
-    if (!this.#in) return;
-    if (this.#dropped()) this.#ask();
-    else this.#say("beat");
+    if (this.#in) this.#speak();
   }
 
   /** This tab goes for now, as its page is hidden for good or frozen */
@@ -161,6 +162,16 @@ export class Tabs {
     return this.#connected ? this.#focusedAt : 0;
   }
 
+  /**
+   * Says this tab is there, or, silent longer than the others count a tab, asks again: whatever
+   * it says first after a suspension, a focus, its stream or its timer, the others may have
+   * dropped it and it may have missed them
+   */
+  #speak() {
+    if (this.#dropped()) this.#ask();
+    else this.#say("beat");
+  }
+
   /** whether this tab has been silent longer than the others count it */
   #dropped() {
     return this.#now() - this.#spoke > QUIET_MS;
@@ -179,9 +190,10 @@ export class Tabs {
     const asked =
       message.kind === "hello" ? now : (this.#heard.get(message.id)?.asked ?? -Infinity);
     const { focusedAt, connected } = message;
+    // a tab that joins hears every other at once, rather than after a beat. Answered first, so
+    // an ask this tab makes in answer keeps the asker it heard
+    if (message.kind === "hello" && this.#in) this.#speak();
     this.#heard.set(message.id, { at: now, asked, focusedAt, connected });
-    // a tab that joins hears every other at once, rather than after a beat
-    if (message.kind === "hello" && this.#in) this.#say("beat");
   }
 
   #say(kind: TabMessage["kind"]) {
