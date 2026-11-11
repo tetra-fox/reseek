@@ -3500,7 +3500,6 @@ version = "0.1.0"
 dependencies = [
  "api-types",
  "hmac 0.13.0",
- "rand 0.10.3",
  "serde_json",
  "sha2 0.11.1",
  "subtle",

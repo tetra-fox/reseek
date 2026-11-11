@@ -11,11 +11,13 @@
 //!
 //! The crate also holds what the share index is built on and the daemon shares: the SQLite
 //! databases ([`db`]), the entries a walk leaves out ([`entries`]), the patterns users write
-//! ([`patterns`]), [`lock`] and [`traverses`].
+//! ([`patterns`]), how a loop that keeps failing waits before it tries again ([`backoff`]),
+//! [`lock`] and [`traverses`].
 
 #![warn(missing_docs)]
 
 mod attributes;
+pub mod backoff;
 mod browse;
 pub mod db;
 pub mod entries;

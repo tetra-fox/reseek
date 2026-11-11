@@ -14,9 +14,8 @@ use tokio::io::AsyncWriteExt;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
-use reseek_relay_proto::backoff;
 use reseek_relay_proto::credential::Purpose;
-use reseek_shares::traverses;
+use reseek_shares::{backoff, traverses};
 
 use super::AgentClient;
 

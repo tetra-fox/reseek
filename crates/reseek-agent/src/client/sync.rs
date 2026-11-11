@@ -13,10 +13,9 @@ use std::time::{Duration, Instant};
 
 use api_types::relay::{RelayErrorCode, RelayMessage};
 use reqwest::multipart::{Form, Part};
-use reseek_relay_proto::backoff;
 use reseek_relay_proto::credential::Purpose;
 use reseek_relay_proto::frames;
-use reseek_shares::Shares;
+use reseek_shares::{Shares, backoff};
 use tokio_util::io::ReaderStream;
 use tracing::{Instrument, debug, info, warn};
 use uuid::Uuid;

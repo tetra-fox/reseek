@@ -10,6 +10,7 @@ use std::time::Duration;
 use api_types::events::{DownloadFailureStage, DownloadFileFailed, Event};
 use api_types::transfers::TransferStates;
 use chrono::Utc;
+use reseek_shares::{backoff, lock};
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, info, info_span, warn};
@@ -21,9 +22,7 @@ use super::destination::incomplete_path;
 use super::starts::Turn;
 use crate::files::WriteGuard;
 use crate::safety::Os;
-use crate::sync::lock;
 use crate::transfers::{Record, removal, store};
-use reseek_relay_proto::backoff;
 
 /// How long a download may hold its turn among the files of its request before its peer has
 /// it queued.

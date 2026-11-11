@@ -17,9 +17,8 @@ use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 
 use cascade::Watcher;
-use reseek_relay_proto::backoff;
 use reseek_relay_proto::frames::close;
-use reseek_shares::{Shares, lock};
+use reseek_shares::{Shares, backoff, lock};
 use tokio::sync::Notify;
 use tokio::sync::broadcast::error::RecvError;
 use tokio_util::sync::CancellationToken;

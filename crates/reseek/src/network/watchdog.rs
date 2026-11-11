@@ -14,6 +14,7 @@ use std::time::Duration;
 use api_types::state::ConnectionWatchdogState;
 use cascade::Watcher;
 use chrono::Utc;
+use reseek_shares::{backoff, lock};
 use soulseek_client::{Client, ClientError, ClientState};
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
@@ -22,8 +23,6 @@ use tracing::{Instrument, debug, error, info, info_span, warn};
 use crate::config::Options;
 use crate::shares::Shares;
 use crate::state::StateOwner;
-use crate::sync::lock;
-use reseek_relay_proto::backoff;
 
 /// How often the timer starts a loop while the watchdog is on and no loop runs.
 const BACKSTOP: Duration = Duration::from_millis(100);
