@@ -123,8 +123,10 @@ export const editabilityOf = (view: ConfigView, keys: string[]): Editability => 
 /**
  * Writes a change made on a page outside Settings, from the options `views` holds, as
  * `editabilityOf` says: to each key's file, or as runtime overrides that last until removed.
- * Ends once `views` holds the options the write left, so the page's next change is made from
- * them; one refused because the options changed since says what changed
+ * Files are written one after another in the order of their first key in `set`, then `unset`,
+ * so what must already hold should a later write fail goes first. Ends once `views` holds the
+ * options the write left, so the page's next change is made from them; one refused because the
+ * options changed since says what changed
  */
 export const writeFromPage = async (
   views: Views,

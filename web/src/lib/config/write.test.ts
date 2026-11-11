@@ -60,4 +60,20 @@ describe("a write from a page", () => {
     expect(sent.map((b) => b.optionsRevision)).toEqual(["fixture", `after ${sent[0].file}`]);
     expect(reads).toBe(1);
   });
+
+  it("writes the files in the order of their first key", async () => {
+    const two = structuredClone(view);
+    two.files.push({ ...two.files[0], name: "config.d/10-groups.toml" });
+    two.fields["transfers.groups.order"].file = "config.d/10-groups.toml";
+    const network = fakeNetwork((_url, method) =>
+      method === "PATCH" ? written({ optionsRevision: "after" }) : undefined
+    );
+    const views = { data: two, load: async () => {} };
+    await writeFromPage(views, {
+      "transfers.groups.order": ["mine"],
+      "transfers.groups.user_defined": { mine: {} }
+    });
+    const files = network.requests.map((r) => (r.body as { file: string }).file);
+    expect(files).toEqual(["config.d/10-groups.toml", "config.toml"]);
+  });
 });

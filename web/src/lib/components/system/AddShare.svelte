@@ -14,24 +14,34 @@
   import Notice from "#lib/components/ui/Notice.svelte";
   import Segmented from "#lib/components/ui/Segmented.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
-  import { editability, fileOf, managerOf } from "#lib/config/editability.js";
+  import AudiencePicker from "#lib/components/users/groups/AudiencePicker.svelte";
+  import { editability, managerOf } from "#lib/config/editability.js";
   import { valueAt } from "#lib/config/sections.js";
-  import { changedUnder, patchFile, refusedUnder } from "#lib/config/write.js";
+  import { writeFromPage } from "#lib/config/write.js";
   import { Busy } from "#lib/feedback/busy.svelte.js";
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { FILE_ACTIONS as A } from "#lib/files/actions.js";
+  import { same } from "#lib/lists/keyed.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
   import { Loader } from "#lib/loader.svelte.js";
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
-  import { entryPath, shareEntry } from "#lib/system/shares.js";
+  import {
+    addition,
+    aliasOf,
+    DIRECTORIES as KEY,
+    entryPath,
+    shareEntry,
+    takenAliases
+  } from "#lib/system/shares.js";
   import { Expansion } from "#lib/tree/expansion.svelte.js";
   import { folderNode, type FolderNode, treeLines } from "#lib/tree/folders.js";
+  import { audienceOf, groupChoices, VISIBLE_TO, type VisibleTo } from "#lib/users/groups.js";
 
-  // adds a folder of the daemon's machine to the shares, picked from a tree of its folders, then
-  // offers the scan that puts it on the network. The paths are the daemon's own, which in a
-  // container means the container's
+  // adds a folder of the daemon's machine to the shares, picked from a tree of its folders, with
+  // who sees it, then offers the scan that puts it on the network. The paths are the daemon's
+  // own, which in a container means the container's
   type Props = {
     /** says beside the button why it can't be used, where nothing near it says so */
     explain?: boolean;
@@ -39,8 +49,6 @@
   };
 
   let { explain = true, onadded }: Props = $props();
-
-  const KEY = "shares.directories";
 
   const admin = $derived(session.can("Administrator"));
   const view = new Loader(() => call(() => api.GET("/api/v0/options/view")));
@@ -63,6 +71,9 @@
     return edit?.mode === "save" ? null : edit?.notice;
   });
   const entries = $derived((valueAt(data?.values, KEY) ?? []) as string[]);
+  const visibleTo = $derived((valueAt(data?.values, VISIBLE_TO) ?? {}) as VisibleTo);
+  const choices = $derived(groupChoices(data?.values));
+  const audienceSettable = $derived(!!data && editability(data, VISIBLE_TO).mode === "save");
 
   let open = $state(false);
   /** what each folder read so far holds, by its path, the top of the machine under "" */
@@ -72,6 +83,8 @@
   let chosen = $state<string | null>(null);
   let alias = $state("");
   let kind = $state<"share" | "exclude">("share");
+  /** who is to see the new share, once picked; until then, who sees a share of its alias now */
+  let picked = $state.raw<{ groups: string[] | null } | null>(null);
   let error = $state("");
   let saving = $state(false);
   /** the folder just added, and whether as an exclusion, which the dialog offers a scan for */
@@ -95,6 +108,7 @@
     chosen = null;
     alias = "";
     kind = "share";
+    picked = null;
     error = "";
     added = null;
     open = true;
@@ -111,29 +125,35 @@
   );
   const cut = $derived([...folders.values()].filter((f) => f.truncated));
   const taken = $derived(!!chosen && entries.some((entry) => entryPath(entry) === chosen));
+  /** the alias the new share goes by, which decides who sees it */
+  const shareAlias = $derived(chosen ? aliasOf(chosen, alias) : "");
+  /** another share goes by the same alias, which the daemon refuses */
+  const aliasTaken = $derived.by(() => {
+    if (!chosen || taken) return false;
+    const downloads = (valueAt(data?.values, "directories.downloads") ?? null) as string | null;
+    const shareDownloads = valueAt(data?.values, "shares.share_downloads") === true;
+    return takenAliases(entries, shareDownloads, downloads).has(shareAlias.toLowerCase());
+  });
+  /** who sees a share of that alias now, which the new share is seen by too */
+  const current = $derived(audienceOf(visibleTo, shareAlias));
+  const audience = $derived(picked ? picked.groups : current);
 
   const add = async () => {
-    if (!data || !chosen || taken) return;
-    const file = fileOf(data, KEY);
+    if (!data || !chosen || taken || aliasTaken) return;
     const path = chosen;
     const exclude = kind === "exclude";
     const entry = shareEntry(path, alias, exclude);
+    const changed = !exclude && !same(audience, current);
+    const set = addition(entries, entry, visibleTo, changed ? audience : undefined);
     saving = true;
-    const outcome = await patchFile(data, file, { [KEY]: [...entries, entry] }, []);
-    if (!outcome.ok && changedUnder(outcome)) {
-      error = (await refusedUnder(view, data, outcome)).error;
-      saving = false;
-      return;
-    }
+    // ends once the options are read again, so the next share is added to those this one left
+    const outcome = await writeFromPage(view, set);
+    saving = false;
     if (!outcome.ok) {
-      saving = false;
       const detail = (outcome.body as { detail?: string | null } | undefined)?.detail;
       error = detail ?? outcome.error;
       return;
     }
-    // the next share is added to the shares as this one left them
-    await view.load();
-    saving = false;
     added = { path, exclude };
     onadded?.();
   };
@@ -234,11 +254,27 @@
           bind:value={kind} />
         <label class="flex min-w-48 flex-1 flex-col gap-1 text-xs font-medium text-fg-muted">
           Alias, the name others see
-          <Input class="h-control-sm" placeholder="The folder's name" bind:value={alias} />
+          <Input
+            class="h-control-sm"
+            placeholder="The folder's name"
+            aria-invalid={aliasTaken || undefined}
+            bind:value={alias} />
+          {#if aliasTaken}<span class="font-normal">Another share has this alias</span>{/if}
         </label>
       </div>
       {#if kind === "exclude"}
         <p class="text-xs text-fg-muted">Exclude keeps a folder inside a share off the network</p>
+      {:else}
+        <div class="flex flex-col gap-1 text-xs font-medium text-fg-muted">
+          Visible to
+          <AudiencePicker
+            value={audience}
+            {choices}
+            label="Who sees the new share"
+            disabled={!chosen || !audienceSettable}
+            class="w-fit min-w-40"
+            onchange={(groups) => (picked = { groups })} />
+        </div>
       {/if}
       {#if error}<Notice kind="error">{error}</Notice>{/if}
     {/if}
@@ -249,7 +285,7 @@
         <Button disabled={scanning.running} onclick={() => void rescan()}>Rescan now</Button>
       {:else}
         <Button variant="ghost" disabled={saving} onclick={() => (open = false)}>Cancel</Button>
-        <Button disabled={!chosen || taken || saving} onclick={() => void add()}>
+        <Button disabled={!chosen || taken || aliasTaken || saving} onclick={() => void add()}>
           {kind === "exclude" ? "Exclude folder" : "Add share"}
         </Button>
       {/if}
