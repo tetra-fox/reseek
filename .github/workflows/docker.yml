@@ -14,13 +14,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # the binaries go into the image only once SHA256SUMS is signed by reseek.pub and lists
+      # each of them with the hash it has
       - name: Gather the build context
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.event.release.tag_name }}
         run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y minisign
           mkdir context
-          gh release download "$TAG" --pattern 'reseek-linux-*' --dir context
+          gh release download "$TAG" --dir context --pattern 'reseek-linux-*' \
+            --pattern SHA256SUMS --pattern SHA256SUMS.minisig
+          minisign -Vm context/SHA256SUMS -p reseek.pub
+          for arch in amd64 arm64; do
+            grep -Eq "^[0-9a-f]{64} [ *]reseek-linux-$arch\$" context/SHA256SUMS
+          done
+          (cd context && sha256sum --check --strict --ignore-missing SHA256SUMS)
+          rm context/SHA256SUMS context/SHA256SUMS.minisig
           for arch in amd64 arm64; do
             mv "context/reseek-linux-$arch" "context/reseek-$arch"
             chmod +x "context/reseek-$arch"
