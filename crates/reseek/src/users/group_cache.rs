@@ -46,6 +46,9 @@ pub struct GroupCache {
   asked: Mutex<HashMap<String, u32>>,
   /// the users whose statistics are being asked for again
   refetching: Mutex<HashSet<String>>,
+  /// the presence of each buddy as we knew it when a server session ended, until a status of
+  /// theirs arrives in the next
+  missed: Mutex<HashMap<String, UserPresence>>,
 }
 
 impl GroupCache {
@@ -93,7 +96,7 @@ impl GroupCache {
 pub struct StatusReceived {
   /// it answered our own request
   pub asked: bool,
-  /// the user's presence before it, when it was known
+  /// the user's presence before it, when it was known in this server session
   pub previous: Option<UserPresence>,
 }
 
@@ -240,14 +243,34 @@ impl Directory {
       }
     };
     let presence = UserPresence::from(status.presence);
-    self.groups.update(username, true, |facts| {
-      facts.presence = Some(presence);
-      facts.privileged = status.is_privileged;
-    });
+    self.status_fetched(username, presence, status.is_privileged);
     Ok(UserStatus {
       presence,
       is_privileged: status.is_privileged,
     })
+  }
+
+  /// The status we asked for of `username`, kept. The same reply is also raised as a status
+  /// change, and either may be taken first, so both tell of a change missed while disconnected.
+  pub(super) fn status_fetched(&self, username: &str, presence: UserPresence, is_privileged: bool) {
+    self.tell_missed(username, presence);
+    self.groups.update(username, true, |facts| {
+      facts.presence = Some(presence);
+      facts.privileged = is_privileged;
+    });
+  }
+
+  /// Tells of a buddy's move from the presence we knew when the last server session ended to
+  /// `presence`, the first we hear in this one; says whether it was that first word. Only the
+  /// first caller finds the presence we knew, so a change is told once.
+  fn tell_missed(&self, username: &str, presence: UserPresence) -> bool {
+    let Some(before) = lock(&self.groups.missed).remove(username) else {
+      return false;
+    };
+    if before != presence {
+      self.presence_moved(username, before, presence);
+    }
+    true
   }
 
   /// Asks the server to tell us when `username`'s status changes, and takes their statistics
@@ -339,18 +362,25 @@ impl Directory {
   }
 
   /// A status the server sent of `username`: kept when we know them, and counted off when it
-  /// answered our own request. Says whether we asked for it and the presence known before.
+  /// answered our own request. Says whether we asked for it and the presence known before in
+  /// this session, or none when this is the first word on a buddy after a reconnect, whose
+  /// change while we were not connected is told of here unless our own request's reply was
+  /// taken first.
   pub fn status_received(
     &self,
     username: &str,
     presence: UserPresence,
     is_privileged: bool,
   ) -> StatusReceived {
+    let first = self.tell_missed(username, presence);
     let mut previous = None;
     self.groups.update(username, false, |facts| {
       previous = facts.presence.replace(presence);
       facts.privileged = is_privileged;
     });
+    if first {
+      previous = None;
+    }
     let mut asked = lock(&self.groups.asked);
     let asked = match asked.get_mut(username) {
       Some(count) => {
@@ -406,10 +436,21 @@ impl Directory {
     users
   }
 
-  /// The server session ended, and with it the server's watching of every user.
+  /// The server session ended, and with it the server's watching of every user. The presence
+  /// of each buddy is kept as what we last knew, against which the next session's first word
+  /// on them is told of.
   pub fn session_ended(&self) {
     self.groups.watched().clear();
     lock(&self.groups.asked).clear();
+    let known: HashMap<String, UserPresence> = self
+      .buddy_names()
+      .into_iter()
+      .filter_map(|username| {
+        let presence = self.groups.facts(&username)?.presence?;
+        Some((username, presence))
+      })
+      .collect();
+    *lock(&self.groups.missed) = known;
   }
 
   /// Makes `change` to the groups or buddy standing of `usernames`, then has the shares forget

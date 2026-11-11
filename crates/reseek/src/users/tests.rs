@@ -676,6 +676,74 @@ async fn a_change_to_what_a_user_sees_forgets_the_kept_browse_views() {
 }
 
 #[tokio::test]
+async fn a_buddys_presence_moved_while_disconnected_is_told_once_whichever_reply_comes_first() {
+  let app = app(CONFIG, &[]).await;
+  let (seen, mut received) = tokio::sync::mpsc::unbounded_channel();
+  app.state.events.subscribe(
+    "test",
+    Some(EventType::BuddyPresenceChanged),
+    move |record| {
+      let seen = seen.clone();
+      async move {
+        seen.send(record).unwrap();
+        Ok(())
+      }
+    },
+  );
+  let users = &app.state.users;
+  let notify = BuddyChange {
+    notify_presence: Some(true),
+  };
+  for name in ["alice", "bob"] {
+    users.set_buddy(name, notify).await.unwrap();
+  }
+  // a user in a group is known, so a status the server pushes is kept
+  users
+    .set_groups("alice", vec!["friends".into()])
+    .await
+    .unwrap();
+  users.status_received("alice", UserPresence::Online, false);
+  users.session_ended();
+  users.status_received("bob", UserPresence::Online, false);
+  let first = users.status_received("alice", UserPresence::Offline, false);
+  assert_eq!(
+    first.previous, None,
+    "told of here, not again by the caller"
+  );
+  let again = users.status_received("alice", UserPresence::Offline, false);
+  assert_eq!(again.previous, Some(UserPresence::Offline));
+  // the reply to our own request is taken by the watch before the event reaches the directory
+  users.session_ended();
+  users.status_fetched("alice", UserPresence::Online, false);
+  let event = users.status_received("alice", UserPresence::Online, false);
+  assert_eq!(event.previous, Some(UserPresence::Online));
+  users.presence_moved("alice", UserPresence::Online, UserPresence::Away);
+  let mut told = Vec::new();
+  for _ in 0..3 {
+    let record = tokio::time::timeout(std::time::Duration::from_secs(5), received.recv())
+      .await
+      .unwrap()
+      .unwrap();
+    match &record.event {
+      Event::BuddyPresenceChanged(changed) => {
+        told.push((changed.username.clone(), changed.previous, changed.presence));
+      }
+      other => panic!("{other:?}"),
+    }
+  }
+  let alice = |previous, presence| ("alice".to_string(), previous, presence);
+  assert_eq!(
+    told,
+    [
+      alice(UserPresence::Online, UserPresence::Offline),
+      alice(UserPresence::Offline, UserPresence::Online),
+      alice(UserPresence::Online, UserPresence::Away),
+    ],
+    "bob's presence was not known before, and each of alice's changes is told once"
+  );
+}
+
+#[tokio::test]
 async fn two_buddy_changes_made_at_once_both_hold() {
   let app = app(CONFIG, &[]).await;
   let users = &app.state.users;
