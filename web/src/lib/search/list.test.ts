@@ -22,10 +22,4 @@ describe("the results list's saved view", () => {
     });
     expect(resultList.hidden).toEqual(["queue", "folder"]);
   });
-
-  it("takes what was kept under the dense view's key, once", async () => {
-    const { resultList } = await load("reseek.search.dense", { dragged: { file: 400 } });
-    expect(resultList.dragged).toEqual({ file: 400 });
-    expect(localStorage.getItem("reseek.search.dense")).toBeNull();
-  });
 });

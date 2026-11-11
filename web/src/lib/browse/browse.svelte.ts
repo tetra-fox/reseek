@@ -35,8 +35,6 @@ type Meta = {
   expansion: ExpansionSnapshot | null;
   /** full paths of the ticked files */
   selected: string[];
-  /** a folder to go to once the listing is back, from a screen that showed one folder at a time */
-  target: string | null;
 };
 
 const EMPTY_TREE: Listing = { roots: [], byPath: new Map() };
@@ -194,7 +192,6 @@ class Browse {
       this.#show(listing.username, listing.directories, listing.separator, listing.info);
       if (meta.expansion) this.expansion.restore(meta.expansion);
       for (const f of meta.selected) this.selected.add(f);
-      this.target = meta.target && this.tree.byPath.has(meta.target) ? meta.target : null;
     } else {
       this.separator = meta.separator;
       this.info = meta.info;
@@ -212,8 +209,7 @@ class Browse {
       separator: this.separator,
       info: this.info,
       expansion: this.expansion.snapshot(),
-      selected: [...this.selected],
-      target: null
+      selected: [...this.selected]
     };
     try {
       localStorage.setItem(META_KEY, JSON.stringify(meta));
@@ -236,16 +232,12 @@ class Browse {
 const strings = (list: unknown) =>
   Array.isArray(list) ? list.filter((f): f is string => typeof f === "string") : [];
 
-/**
- * A saved meta as far as it makes sense; a browse saved as under way comes back as idle. A meta
- * whose `selected` is an object names a folder in it, which the tab goes to once
- */
+/** A saved meta as far as it makes sense; a browse saved as under way comes back as idle */
 const readMeta = (saved: unknown): Meta | null => {
   const s = fields(saved);
   if (typeof s.username !== "string") return null;
   const phase = s.phase === "complete" || s.phase === "error" ? s.phase : "idle";
   const expansion = fields(s.expansion);
-  const older = fields(s.selected);
   return {
     username: s.username,
     phase,
@@ -256,8 +248,7 @@ const readMeta = (saved: unknown): Meta | null => {
       typeof expansion.openByDefault === "boolean"
         ? { openByDefault: expansion.openByDefault, flipped: strings(expansion.flipped) }
         : null,
-    selected: Array.isArray(s.selected) ? strings(s.selected) : strings(older.files),
-    target: typeof older.directoryName === "string" ? older.directoryName : null
+    selected: strings(s.selected)
   };
 };
 

@@ -153,10 +153,10 @@ const readResultList = (saved: unknown) => {
 
 /**
  * The list layout's sort, the columns the user hid and the widths they dragged columns to, in
- * pixels, in this browser, once kept as `reseek.search.dense`. Only a drag is kept, so a column
- * never dragged follows its default as that changes
+ * pixels, in this browser. Only a drag is kept, so a column never dragged follows its default as
+ * that changes
  */
-export const resultList = stored("reseek.search.list", readResultList, "reseek.search.dense");
+export const resultList = stored("reseek.search.list", readResultList);
 
 /** The list layout as it is with nothing saved, which Reset view goes back to */
 export const resultListDefaults = () => readResultList(undefined);
