@@ -186,7 +186,11 @@ impl Client {
     let key = WaitKey::BrowseResponseConnection {
       username: username.to_owned(),
     };
-    let limit = self.options().limits.max_message_size;
+    let limit = self
+      .options()
+      .limits
+      .frame_limits()
+      .peer_message_bytes(PeerCode::BrowseResponse);
     if len > limit {
       if let Some(suppressed) = OVERSIZE.allow() {
         tracing::debug!(
