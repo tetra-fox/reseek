@@ -17039,13 +17039,13 @@
           "encoderGuess": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/EncoderGuess",
-                "description": "the encoder profile the cutoff matches, null when it matches none"
+                "$ref": "#/components/schemas/EncoderGuess"
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "the encoder profile the cutoff matches, null when it matches none"
           },
           "flags": {
             "type": "array",
@@ -17068,13 +17068,13 @@
           "override": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/AnalysisOverride",
-                "description": "the user's judgment, shown in place of the verdict; null until the user sets one"
+                "$ref": "#/components/schemas/AnalysisOverride"
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "the user's judgment, shown in place of the verdict; null until the user sets one"
           },
           "path": {
             "type": "string",
@@ -17097,13 +17097,13 @@
           "spectrogram": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/SpectrogramLayout",
-                "description": "how the spectrogram and the waveform are served and how their axes run; null when the file\ncould not be read as audio and has neither"
+                "$ref": "#/components/schemas/SpectrogramLayout"
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "how the spectrogram and the waveform are served and how their axes run; null when the file\ncould not be read as audio and has neither"
           },
           "spectrogramUrl": {
             "type": "string",
@@ -17166,13 +17166,13 @@
           "blocklistFile": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/BlocklistFile",
-                "description": "the managed blocklist file, null when none is configured"
+                "$ref": "#/components/schemas/BlocklistFile"
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "the managed blocklist file, null when none is configured"
           },
           "cidrs": {
             "type": "array",
@@ -17644,24 +17644,24 @@
           "statistics": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/StatisticsSnapshot",
-                "description": "the last statistics fetched or pushed, null before any"
+                "$ref": "#/components/schemas/StatisticsSnapshot"
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "the last statistics fetched or pushed, null before any"
           },
           "status": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/UserStatus",
-                "description": "the last status fetched or pushed, null before any"
+                "$ref": "#/components/schemas/UserStatus"
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "the last status fetched or pushed, null before any"
           },
           "username": {
             "type": "string",
@@ -18073,13 +18073,13 @@
           "lastMessage": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/PrivateMessage",
-                "description": "the newest message either way, null when none is stored"
+                "$ref": "#/components/schemas/PrivateMessage"
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "the newest message either way, null when none is stored"
           },
           "messages": {
             "type": [
@@ -18173,13 +18173,13 @@
           "redelivered": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/PrivateMessage",
-                "description": "the message the server delivered again, unread once more, when that is what changed: a\nclient that holds it shows it unread, and does not announce it as new"
+                "$ref": "#/components/schemas/PrivateMessage"
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "the message the server delivered again, unread once more, when that is what changed: a\nclient that holds it shows it unread, and does not announce it as new"
           }
         }
       },
@@ -18265,13 +18265,13 @@
               "session": {
                 "oneOf": [
                   {
-                    "$ref": "#/components/schemas/CurrentSession",
-                    "description": "the browser session the request came with, null for an API token, a config API key or a\ntrusted network"
+                    "$ref": "#/components/schemas/CurrentSession"
                   },
                   {
                     "type": "null"
                   }
-                ]
+                ],
+                "description": "the browser session the request came with, null for an API token, a config API key or a\ntrusted network"
               }
             }
           }
@@ -18936,25 +18936,7 @@
           "error": {
             "oneOf": [
               {
-                "type": "object",
-                "description": "What went wrong, sent with every 4xx and 5xx status.",
-                "required": [
-                  "error"
-                ],
-                "properties": {
-                  "detail": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
-                    "description": "a longer explanation, null when the message says it all"
-                  },
-                  "error": {
-                    "type": "string",
-                    "description": "a short message, or a fixed code such as `soulseek_unavailable`",
-                    "example": "invalid configuration"
-                  }
-                }
+                "$ref": "#/components/schemas/ErrorBody"
               },
               {
                 "type": "null"
@@ -19698,13 +19680,13 @@
           "notApplied": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/NotApplied",
-                "description": "the files' value when it is not the one in effect, and why"
+                "$ref": "#/components/schemas/NotApplied"
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "the files' value when it is not the one in effect, and why"
           },
           "secret": {
             "type": "boolean",
@@ -19813,13 +19795,13 @@
           "suspect": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/SuspectHint",
-                "description": "the size does not fit the duration and the declared format; null when it fits, when\nthere is too little to tell, and outside search responses"
+                "$ref": "#/components/schemas/SuspectHint"
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "the size does not fit the duration and the declared format; null when it fits, when\nthere is too little to tell, and outside search responses"
           }
         }
       },
@@ -20553,13 +20535,13 @@
           "ending": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/JobEnding",
-                "description": "how it ended, null until it does"
+                "$ref": "#/components/schemas/JobEnding"
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "how it ended, null until it does"
           },
           "error": {
             "type": [
@@ -20876,13 +20858,13 @@
           "lastEnding": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/JobEnding",
-                "description": "how its last run ended"
+                "$ref": "#/components/schemas/JobEnding"
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "how its last run ended"
           },
           "lastError": {
             "type": [
@@ -21092,13 +21074,13 @@
           "lastMessage": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/RoomMessage",
-                "description": "the newest stored message not hidden, null when there is none"
+                "$ref": "#/components/schemas/RoomMessage"
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "the newest stored message not hidden, null when there is none"
           },
           "lastMessageAt": {
             "type": [
@@ -21165,35 +21147,35 @@
           "block": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/Block",
-                "description": "our block of the user, or the configuration's; null when not blocked"
+                "$ref": "#/components/schemas/Block"
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "our block of the user, or the configuration's; null when not blocked"
           },
           "buddy": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/Buddy",
-                "description": "the user is our buddy, with what that buddy may do and what we hear of them; null for a\nuser who is not"
+                "$ref": "#/components/schemas/Buddy"
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "the user is our buddy, with what that buddy may do and what we hear of them; null for a\nuser who is not"
           },
           "conversation": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/ConversationSummary",
-                "description": "our private conversation with the user, null when there is none"
+                "$ref": "#/components/schemas/ConversationSummary"
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "our private conversation with the user, null when there is none"
           },
           "countryCode": {
             "type": [
@@ -21206,13 +21188,13 @@
           "endpoint": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/UserEndpoint",
-                "description": "the user's address from the endpoint cache, null when not cached; never a round trip"
+                "$ref": "#/components/schemas/UserEndpoint"
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "the user's address from the endpoint cache, null when not cached; never a round trip"
           },
           "firstSeenAt": {
             "type": [
@@ -21252,13 +21234,13 @@
           "presence": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/UserPresence",
-                "description": "the last presence observed, null when never observed"
+                "$ref": "#/components/schemas/UserPresence"
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "the last presence observed, null when never observed"
           },
           "presenceAt": {
             "type": [
@@ -21271,13 +21253,13 @@
           "statistics": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/StoredStatistics",
-                "description": "the last statistics fetched, null when never"
+                "$ref": "#/components/schemas/StoredStatistics"
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "the last statistics fetched, null when never"
           },
           "uploads": {
             "$ref": "#/components/schemas/UserUploads",
@@ -22812,13 +22794,13 @@
           "endpoints": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/OidcEndpoints",
-                "description": "the endpoints the discovery document lists, null when it could not be read"
+                "$ref": "#/components/schemas/OidcEndpoints"
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "the endpoints the discovery document lists, null when it could not be read"
           },
           "error": {
             "type": [
@@ -23505,13 +23487,13 @@
           "method": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/PortMappingMethod",
-                "description": "how the router was asked, null until a mapping holds"
+                "$ref": "#/components/schemas/PortMappingMethod"
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "how the router was asked, null until a mapping holds"
           },
           "state": {
             "$ref": "#/components/schemas/PortMappingStatus",
@@ -25612,13 +25594,13 @@
           "exception": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/EventError",
-                "description": "the error that ended it, null when it ended without one"
+                "$ref": "#/components/schemas/EventError"
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "the error that ended it, null when it ended without one"
           },
           "message": {
             "type": "string",
@@ -26876,13 +26858,13 @@
           "failures": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/UploadLimitUsage",
-                "description": "failed uploads, null for the queued window, which has no failure limit"
+                "$ref": "#/components/schemas/UploadLimitUsage"
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "failed uploads, null for the queued window, which has no failure limit"
           },
           "files": {
             "$ref": "#/components/schemas/UploadLimitUsage",
@@ -27321,13 +27303,13 @@
               "info": {
                 "oneOf": [
                   {
-                    "$ref": "#/components/schemas/StoredInfo",
-                    "description": "the last info fetched, null when never"
+                    "$ref": "#/components/schemas/StoredInfo"
                   },
                   {
                     "type": "null"
                   }
-                ]
+                ],
+                "description": "the last info fetched, null when never"
               },
               "notes": {
                 "type": "string",
@@ -27537,13 +27519,13 @@
               "info": {
                 "oneOf": [
                   {
-                    "$ref": "#/components/schemas/StoredInfoSummary",
-                    "description": "the last info fetched without the description, null when never"
+                    "$ref": "#/components/schemas/StoredInfoSummary"
                   },
                   {
                     "type": "null"
                   }
-                ]
+                ],
+                "description": "the last info fetched without the description, null when never"
               },
               "notes": {
                 "type": [

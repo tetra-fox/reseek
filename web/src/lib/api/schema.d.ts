@@ -3797,6 +3797,7 @@ export interface components {
              * @description how long the audio is, in seconds
              */
             durationSeconds: number;
+            /** @description the encoder profile the cutoff matches, null when it matches none */
             encoderGuess?: components["schemas"]["EncoderGuess"] | null;
             /** @description findings independent of the verdict, empty when there are none */
             flags: components["schemas"]["AnalysisFlag"][];
@@ -3804,6 +3805,7 @@ export interface components {
             limitations: string[];
             /** @description the aggregate measures over the non-silent windows */
             measures: components["schemas"]["AnalysisMeasures"];
+            /** @description the user's judgment, shown in place of the verdict; null until the user sets one */
             override?: components["schemas"]["AnalysisOverride"] | null;
             /** @description the file's local path */
             path: string;
@@ -3816,6 +3818,10 @@ export interface components {
              * @description the file's size in bytes when it was analyzed
              */
             size: number;
+            /**
+             * @description how the spectrogram and the waveform are served and how their axes run; null when the file
+             *     could not be read as audio and has neither
+             */
             spectrogram?: components["schemas"]["SpectrogramLayout"] | null;
             /** @description where the overview of this report's spectrogram is served */
             spectrogramUrl: string;
@@ -3850,6 +3856,7 @@ export interface components {
         };
         /** @description The configuration's rules that block users by pattern, address or file. */
         BlacklistRules: {
+            /** @description the managed blocklist file, null when none is configured */
             blocklistFile?: components["schemas"]["BlocklistFile"] | null;
             /**
              * @description networks whose addresses are blocked
@@ -4091,7 +4098,9 @@ export interface components {
         ByeReason: "unauthorized" | "lagged" | "shutdown";
         /** @description A user the in-memory user cache holds, as `GET /users/cache` lists it. */
         CachedUser: {
+            /** @description the last statistics fetched or pushed, null before any */
             statistics?: components["schemas"]["StatisticsSnapshot"] | null;
+            /** @description the last status fetched or pushed, null before any */
             status?: components["schemas"]["UserStatus"] | null;
             /** @description the user */
             username: string;
@@ -4308,6 +4317,7 @@ export interface components {
              *     count as unread
              */
             isServerNotice: boolean;
+            /** @description the newest message either way, null when none is stored */
             lastMessage?: components["schemas"]["PrivateMessage"] | null;
             /** @description the newest messages, oldest first; null in lists and frames and unless asked for */
             messages?: components["schemas"]["PrivateMessage"][] | null;
@@ -4356,6 +4366,10 @@ export interface components {
         ConversationUpdate: {
             /** @description the conversation, without its messages */
             conversation: components["schemas"]["Conversation"];
+            /**
+             * @description the message the server delivered again, unread once more, when that is what changed: a
+             *     client that holds it shows it unread, and does not announce it as new
+             */
             redelivered?: components["schemas"]["PrivateMessage"] | null;
         };
         /** @description The body of `POST /tokens`. At most one of `expiresIn` and `expiresAt` is given. */
@@ -4402,6 +4416,10 @@ export interface components {
              * @example authentik
              */
             provider?: string | null;
+            /**
+             * @description the browser session the request came with, null for an API token, a config API key or a
+             *     trusted network
+             */
             session?: components["schemas"]["CurrentSession"] | null;
         };
         /** @description The browser session a request came with. */
@@ -4771,15 +4789,7 @@ export interface components {
              * @description why none of the group's files was enqueued, such as its user being offline; null when
              *     the group was tried
              */
-            error?: {
-                /** @description a longer explanation, null when the message says it all */
-                detail?: string | null;
-                /**
-                 * @description a short message, or a fixed code such as `soulseek_unavailable`
-                 * @example invalid configuration
-                 */
-                error: string;
-            } | null;
+            error?: components["schemas"]["ErrorBody"] | null;
             /** @description the files of the group that were not enqueued, and why */
             failures: components["schemas"]["EnqueueFailure"][];
             /** @description the user the group's files come from */
@@ -5026,6 +5036,7 @@ export interface components {
             file?: string | null;
             /** @description what kind of value the key holds */
             kind: components["schemas"]["OptionKind"];
+            /** @description the files' value when it is not the one in effect, and why */
             notApplied?: components["schemas"]["NotApplied"] | null;
             /** @description whether the value is shown as `*****` */
             secret: boolean;
@@ -5086,6 +5097,10 @@ export interface components {
              * @description in bytes
              */
             size: number;
+            /**
+             * @description the size does not fit the duration and the declared format; null when it fits, when
+             *     there is too little to tell, and outside search responses
+             */
             suspect?: components["schemas"]["SuspectHint"] | null;
         };
         /** @description The data of `FileAnalysisComplete`: the report without its per-window measures. */
@@ -5446,6 +5461,7 @@ export interface components {
              * @description when it ended, null until it does
              */
             endedAt?: string | null;
+            /** @description how it ended, null until it does */
             ending?: components["schemas"]["JobEnding"] | null;
             /** @description why it failed, when the job itself did */
             error?: string | null;
@@ -5614,6 +5630,7 @@ export interface components {
              * @description when its last run ended
              */
             lastEndedAt?: string | null;
+            /** @description how its last run ended */
             lastEnding?: components["schemas"]["JobEnding"] | null;
             /** @description why its last run failed */
             lastError?: string | null;
@@ -5723,6 +5740,7 @@ export interface components {
         };
         /** @description A room we are in, as `GET /rooms/joined` lists it and `rooms.list` frames carry it. */
         JoinedRoom: {
+            /** @description the newest stored message not hidden, null when there is none */
             lastMessage?: components["schemas"]["RoomMessage"] | null;
             /**
              * Format: date-time
@@ -5764,14 +5782,21 @@ export interface components {
         Judgment: "legit" | "fake";
         /** @description What the known-users directory holds about a user, shared by the summary and the profile. */
         KnownUser: {
+            /** @description our block of the user, or the configuration's; null when not blocked */
             block?: components["schemas"]["Block"] | null;
+            /**
+             * @description the user is our buddy, with what that buddy may do and what we hear of them; null for a
+             *     user who is not
+             */
             buddy?: components["schemas"]["Buddy"] | null;
+            /** @description our private conversation with the user, null when there is none */
             conversation?: components["schemas"]["ConversationSummary"] | null;
             /**
              * @description the user's country as ISO 3166-1 alpha-2, from a room member list; null when never seen
              * @example DE
              */
             countryCode?: string | null;
+            /** @description the user's address from the endpoint cache, null when not cached; never a round trip */
             endpoint?: components["schemas"]["UserEndpoint"] | null;
             /**
              * Format: date-time
@@ -5798,6 +5823,7 @@ export interface components {
             lastSeenAt?: string | null;
             /** @description chat notifications for the user are off */
             muted: boolean;
+            /** @description the last presence observed, null when never observed */
             presence?: components["schemas"]["UserPresence"] | null;
             /**
              * Format: date-time
@@ -5805,6 +5831,7 @@ export interface components {
              *     last seen to change, which cannot reach back past a time we were not connected
              */
             presenceAt?: string | null;
+            /** @description the last statistics fetched, null when never */
             statistics?: components["schemas"]["StoredStatistics"] | null;
             /** @description what the user's uploads get, each setting from the highest group they are in that sets it */
             uploads: components["schemas"]["UserUploads"];
@@ -6342,6 +6369,7 @@ export interface components {
          *     `POST /auth/oidc/{name}/test` returns it.
          */
         OidcTestResult: {
+            /** @description the endpoints the discovery document lists, null when it could not be read */
             endpoints?: components["schemas"]["OidcEndpoints"] | null;
             /** @description why the test failed, null when it passed */
             error?: string | null;
@@ -6656,6 +6684,7 @@ export interface components {
              * @description the port the router forwards to us, null until a mapping holds
              */
             externalPort?: number | null;
+            /** @description how the router was asked, null until a mapping holds */
             method?: components["schemas"]["PortMappingMethod"] | null;
             /** @description where asking the router stands */
             state: components["schemas"]["PortMappingStatus"];
@@ -7787,6 +7816,7 @@ export interface components {
         SortOrder: "asc" | "desc";
         /** @description The data of `SoulseekClientDisconnected`. */
         SoulseekClientDisconnected: {
+            /** @description the error that ended it, null when it ended without one */
             exception?: components["schemas"]["EventError"] | null;
             /**
              * @description why the connection ended, as the client reports it
@@ -8514,6 +8544,7 @@ export interface components {
         UploadLimitWindow: {
             /** @description bytes, the limit converted from megabytes of 1 000 000 bytes */
             bytes: components["schemas"]["UploadLimitUsage"];
+            /** @description failed uploads, null for the queued window, which has no failure limit */
             failures?: components["schemas"]["UploadLimitUsage"] | null;
             /** @description files */
             files: components["schemas"]["UploadLimitUsage"];
@@ -8739,6 +8770,7 @@ export interface components {
         UserProfile: components["schemas"]["KnownUser"] & {
             /** @description what we did with the user */
             figures: components["schemas"]["UserFigures"];
+            /** @description the last info fetched, null when never */
             info?: components["schemas"]["StoredInfo"] | null;
             /** @description our private notes about the user */
             notes: string;
@@ -8838,6 +8870,7 @@ export interface components {
             description?: string | null;
             /** @description what we did with the user */
             figures: components["schemas"]["SummaryFigures"];
+            /** @description the last info fetched without the description, null when never */
             info?: components["schemas"]["StoredInfoSummary"] | null;
             /** @description the first two lines of our private notes about the user, null when there are none */
             notes?: string | null;

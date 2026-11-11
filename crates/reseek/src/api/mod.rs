@@ -25,6 +25,8 @@ mod validate;
 use axum::Router;
 use axum::middleware;
 use utoipa::OpenApi;
+use utoipa::openapi::RefOr;
+use utoipa::openapi::schema::{AdditionalProperties, ArrayItems, Schema, SchemaType, Type};
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_swagger_ui::{Config, SwaggerUi};
 
@@ -136,7 +138,55 @@ pub fn swagger(url_base: &str) -> Router {
 
 /// The OpenAPI document of every route.
 pub fn openapi() -> utoipa::openapi::OpenApi {
-  routes().split_for_parts().1
+  let mut document = routes().split_for_parts().1;
+  let schemas = document
+    .components
+    .iter_mut()
+    .flat_map(|c| c.schemas.values_mut());
+  schemas.for_each(lift_nullable_descriptions);
+  document
+}
+
+/// Moves the description of every nullable reference in `schema` from its reference arm up to
+/// its `oneOf`. utoipa writes an optional field of a named type as `oneOf: [{$ref, description},
+/// {type: null}]`, and generated clients read a field's description only from the `oneOf`.
+fn lift_nullable_descriptions(schema: &mut RefOr<Schema>) {
+  let RefOr::T(schema) = schema else { return };
+  match schema {
+    Schema::Object(object) => {
+      object
+        .properties
+        .values_mut()
+        .for_each(lift_nullable_descriptions);
+      if let Some(AdditionalProperties::RefOr(values)) = object.additional_properties.as_deref_mut()
+      {
+        lift_nullable_descriptions(values);
+      }
+    }
+    Schema::Array(array) => {
+      if let ArrayItems::RefOrSchema(items) = &mut array.items {
+        lift_nullable_descriptions(items);
+      }
+    }
+    Schema::AllOf(all) => all.items.iter_mut().for_each(lift_nullable_descriptions),
+    Schema::AnyOf(any) => any.items.iter_mut().for_each(lift_nullable_descriptions),
+    Schema::OneOf(one) => {
+      one.items.iter_mut().for_each(lift_nullable_descriptions);
+      let null = |item: &RefOr<Schema>| match item {
+        RefOr::T(Schema::Object(o)) => o.schema_type == SchemaType::Type(Type::Null),
+        _ => false,
+      };
+      if let [RefOr::Ref(reference), other] | [other, RefOr::Ref(reference)] = &mut one.items[..]
+        && null(other)
+        && one.description.is_none()
+        && !reference.description.is_empty()
+      {
+        one.description = Some(std::mem::take(&mut reference.description));
+      }
+    }
+    // `Schema` is non-exhaustive
+    _ => {}
+  }
 }
 
 #[cfg(test)]

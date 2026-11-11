@@ -20,25 +20,38 @@ fn the_committed_openapi_document_is_current() {
 }
 
 /// What makes `document` unusable to a type generator: a `$ref` to a schema it does not list,
-/// and an `operationId` two operations share.
+/// an `operationId` two operations share, and a nullable reference whose description sits on
+/// its reference arm, where generated types leave it out.
 fn invalid(document: &Value) -> Vec<String> {
-  fn refs<'a>(value: &'a Value, found: &mut Vec<&'a str>) {
+  /// Walks `value`, found at the JSON pointer `at`, collecting each `$ref` into `found` and the
+  /// problem of each nullable reference that keeps its description in its `oneOf` into `buried`.
+  fn refs<'a>(value: &'a Value, at: &str, found: &mut Vec<&'a str>, buried: &mut Vec<String>) {
     match value {
       Value::Object(entries) => {
+        if let Some(arms) = entries.get("oneOf").and_then(Value::as_array) {
+          let nullable = arms.iter().any(|arm| arm["type"] == "null");
+          if nullable && arms.iter().any(|arm| arm.get("description").is_some()) {
+            buried.push(format!("{at} keeps its description inside its oneOf"));
+          }
+        }
         for (key, v) in entries {
           match (key.as_str(), v) {
             ("$ref", Value::String(target)) => found.push(target),
-            _ => refs(v, found),
+            _ => refs(v, &format!("{at}/{key}"), found, buried),
           }
         }
       }
-      Value::Array(items) => items.iter().for_each(|v| refs(v, found)),
+      Value::Array(items) => {
+        for (index, v) in items.iter().enumerate() {
+          refs(v, &format!("{at}/{index}"), found, buried);
+        }
+      }
       _ => {}
     }
   }
-  let mut problems = Vec::new();
   let mut found = Vec::new();
-  refs(document, &mut found);
+  let mut problems = Vec::new();
+  refs(document, "", &mut found, &mut problems);
   let schemas = &document["components"]["schemas"];
   for target in found {
     let listed = target
