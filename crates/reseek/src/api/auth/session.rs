@@ -31,6 +31,7 @@ use crate::config::Options;
 
 static LOGIN_FAILED: LogLimiter = LogLimiter::new();
 static HEADLESS_LOGIN: LogLimiter = LogLimiter::new();
+static LOGIN_BUSY: LogLimiter = LogLimiter::new();
 
 /// The session routes.
 pub fn routes() -> OpenApiRouter<AppState> {
@@ -71,7 +72,8 @@ async fn get_session(
   responses(
     (status = 204, description = "signed in; the session cookie is set"),
     (status = 400, body = api_types::ErrorBody), (status = 401, body = api_types::ErrorBody),
-    (status = 403, body = api_types::ErrorBody), (status = 429, body = api_types::ErrorBody)
+    (status = 403, body = api_types::ErrorBody), (status = 429, body = api_types::ErrorBody),
+    (status = 503, body = api_types::ErrorBody)
   )
 )]
 async fn login(
@@ -123,7 +125,13 @@ async fn login(
     Err(Busy) => {
       // a check that never ran is not a failed one
       app.auth.limits.logins.forgive(attempt);
-      return Err(ApiError::rate_limited());
+      if let Some(suppressed) = LOGIN_BUSY.allow() {
+        warn!(
+          suppressed,
+          "password login refused, every password check stayed busy"
+        );
+      }
+      return Err(ApiError::busy("Too many sign-ins at once").logged());
     }
   };
   let session = start_session(

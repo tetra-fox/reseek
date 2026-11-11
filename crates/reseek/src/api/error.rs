@@ -81,6 +81,18 @@ impl ApiError {
     e
   }
 
+  /// A 503 for work the daemon has too much of at the moment, telling the client to try again
+  /// in a second.
+  pub fn busy(error: impl Into<String>) -> Self {
+    let mut e = Self::new(
+      StatusCode::SERVICE_UNAVAILABLE,
+      error,
+      Some("Try again in a moment".to_string()),
+    );
+    e.retry_after = Some(1);
+    e
+  }
+
   /// A 408: the client stopped sending the request's body.
   pub fn request_timeout(error: impl Into<String>) -> Self {
     Self::new(StatusCode::REQUEST_TIMEOUT, error, None)

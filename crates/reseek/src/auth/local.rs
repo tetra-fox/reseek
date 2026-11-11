@@ -3,11 +3,12 @@
 //! from the configuration is hashed when the accounts are loaded, so every check takes the same
 //! path, and a username that has no account is checked against a stand-in hash, so the time a
 //! check takes does not tell whether the account exists. Only a few checks run at once, since
-//! each one holds about 19 MiB while it hashes.
+//! each one holds about 19 MiB while it hashes; a check waits a few seconds for its turn.
 
 use std::collections::BTreeMap;
 use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex, OnceLock};
+use std::time::Duration;
 
 use api_types::auth::Role;
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
@@ -36,6 +37,9 @@ impl Account {
   }
 }
 
+/// How long a password check waits for one of those running to finish.
+const CHECK_WAIT: Duration = Duration::from_secs(5);
+
 /// The accounts with their password hashes, rebuilt when their configuration changes.
 pub struct Accounts {
   loaded: Mutex<Option<(Settings, Arc<Hashed>)>>,
@@ -54,7 +58,7 @@ impl Default for Accounts {
   }
 }
 
-/// Every password check that may run at once is running.
+/// Every password check that may run at once kept running for as long as a check waits.
 #[derive(Debug)]
 pub struct Busy;
 
@@ -75,15 +79,18 @@ struct Hashed {
 
 impl Accounts {
   /// The account `username` with the password `password`, when there is one. Hashing runs on
-  /// a blocking thread; [`Busy`] when as many checks as may run at once are running.
+  /// a blocking thread; [`Busy`] when as many checks as may run at once kept running for
+  /// [`CHECK_WAIT`].
   pub async fn check(
     &self,
     authentication: &Authentication,
     username: String,
     password: String,
   ) -> Result<Option<Account>, Busy> {
-    // the semaphore is never closed, so the only error is that no permit is free
-    let permit = self.checks.clone().try_acquire_owned().map_err(|_| Busy)?;
+    let permit = tokio::time::timeout(CHECK_WAIT, self.checks.clone().acquire_owned())
+      .await
+      .map_err(|_| Busy)?
+      .expect("the check semaphore is never closed");
     let Some((hashed, permit)) = self.hashed(authentication, permit).await else {
       return Ok(None);
     };
@@ -278,6 +285,32 @@ mod tests {
     assert!(check("nobody", "hunter2").await.is_none());
     assert!(parses(&hash("x")).is_ok());
     assert!(parses("$2b$12$abcdefghijklmnopqrstuv").is_err());
+  }
+
+  // paused time moves on to the end of the wait whenever every task waits
+  #[tokio::test(start_paused = true)]
+  async fn a_check_waits_for_its_turn_and_gives_up_when_none_comes() {
+    let authentication = Authentication {
+      username: "admin".into(),
+      password: "hunter2".into(),
+      ..Authentication::default()
+    };
+    let accounts = Accounts {
+      loaded: Mutex::default(),
+      checks: Arc::new(Semaphore::new(1)),
+    };
+    let check = || accounts.check(&authentication, "admin".into(), "hunter2".into());
+    let running = accounts.checks.clone().acquire_owned().await.unwrap();
+    assert!(
+      matches!(check().await, Err(Busy)),
+      "the running check never ends"
+    );
+    let (checked, ()) = tokio::join!(check(), async move {
+      tokio::time::sleep(CHECK_WAIT / 2).await;
+      drop(running);
+    });
+    let account = checked.expect("the turn came within the wait");
+    assert_eq!(account.unwrap().username, "admin");
   }
 
   #[test]
