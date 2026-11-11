@@ -7,7 +7,6 @@
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
 use api_types::analysis::AnalysisUpload;
 use api_types::files::FileRoot;
@@ -20,6 +19,7 @@ use uuid::Uuid;
 
 use super::{Analysis, store};
 use crate::api::error::ApiError;
+use crate::http::idle;
 use crate::safety::{Os, creatable, file_name_safely};
 
 /// The folder under the analysis directory that holds the uploads.
@@ -28,8 +28,6 @@ const FOLDER: &str = "uploads";
 const PARTIAL: &str = "upload.part";
 /// How many of the newest uploads stay whatever they take, one for each slot of the page.
 const ALWAYS_KEPT: usize = 2;
-/// How long an upload waits for its next bytes before it is given up.
-const IDLE: Duration = Duration::from_secs(60);
 
 /// Where uploads are held under the data directory.
 pub fn uploads_dir(data: &Path) -> PathBuf {
@@ -172,15 +170,12 @@ impl Analysis {
       .map_err(ApiError::internal)?;
     let mut size = 0;
     let mut stream = body.into_data_stream();
-    loop {
-      let Ok(next) = tokio::time::timeout(IDLE, stream.next()).await else {
-        debug!(waited = ?IDLE, "an upload stopped sending");
-        return Err(ApiError::request_timeout("The upload stopped sending"));
-      };
-      let Some(piece) = next else {
-        break;
-      };
+    while let Some(piece) = stream.next().await {
       let piece = piece.map_err(|e| {
+        if idle::stalled(&e) {
+          debug!(error = %e, "an upload stopped sending");
+          return ApiError::request_timeout("The upload stopped sending");
+        }
         debug!(error = %e, "an upload stopped before its end");
         ApiError::bad_request("The upload stopped before its end")
       })?;

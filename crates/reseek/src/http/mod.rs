@@ -1,5 +1,6 @@
 //! The HTTP host: the listeners, serving connections on them, and the request pipeline.
 
+pub(crate) mod idle;
 mod listen;
 pub mod outbound;
 pub mod pipeline;

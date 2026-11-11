@@ -1,8 +1,8 @@
-//! The request pipeline, outermost first: CORS, the HTTPS redirect and HSTS, the URL base taken
-//! off the path, a span and log line per request, a panic turned into a 500, then the API
-//! with its authentication, `/health`, the Prometheus endpoint when `metrics.enabled` is on,
-//! the OpenAPI document and Swagger UI when `feature.swagger` is on, the 404 for unknown API
-//! paths, and the web UI.
+//! The request pipeline, outermost first: the bound on how long a body may stall, CORS, the
+//! HTTPS redirect and HSTS, the URL base taken off the path, a span and log line per request, a
+//! panic turned into a 500, then the API with its authentication, `/health`, the Prometheus
+//! endpoint when `metrics.enabled` is on, the OpenAPI document and Swagger UI when
+//! `feature.swagger` is on, the 404 for unknown API paths, and the web UI.
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -20,7 +20,7 @@ use tracing::{Instrument, debug, info, info_span};
 
 use cascade::Watcher;
 
-use super::{Peer, Transport};
+use super::{Peer, Transport, idle};
 use crate::api::{self, error::ApiError};
 use crate::app::AppState;
 use crate::auth::{self, Presented, client, networks};
@@ -65,6 +65,7 @@ pub fn app(state: AppState, ui: Ui) -> Router {
   let force = (https.force && !https.disabled).then_some(https.port);
   let config = state.config.clone();
   let service = ServiceBuilder::new()
+    .map_request(|request: Request| request.map(idle::bounded))
     .option_layer(cors(&startup))
     .layer(middleware::from_fn(move |request, next| {
       let config = config.clone();
@@ -528,5 +529,20 @@ mod app_tests {
     );
     let untrusted = app.send_from(OUTSIDE, proxied("https")).await;
     assert_eq!(untrusted.status, 307, "only a trusted proxy is believed");
+  }
+
+  // paused time moves on to the end of the wait whenever every task waits
+  #[tokio::test(start_paused = true)]
+  async fn a_body_that_stops_coming_ends_its_request() {
+    let app = app("", &[]).await;
+    let mut login = request("POST", "/api/v0/session", Some(serde_json::json!({})));
+    let stalled = futures_util::stream::pending::<Result<Vec<u8>, std::io::Error>>();
+    *login.body_mut() = axum::body::Body::from_stream(stalled);
+    let started = tokio::time::Instant::now();
+    let answer = tokio::time::timeout(std::time::Duration::from_secs(3600), app.send(login))
+      .await
+      .expect("the request ends once its body stops coming");
+    assert_eq!(answer.status, 400);
+    assert!(started.elapsed() < std::time::Duration::from_secs(120));
   }
 }

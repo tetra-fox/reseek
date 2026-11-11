@@ -735,6 +735,22 @@ async fn an_upload_that_stops_sending_ends_and_frees_its_slot() {
   assert_eq!(status, 201, "{answer}");
 }
 
+// paused time moves on to the end of the wait whenever every task waits
+#[tokio::test(start_paused = true)]
+async fn an_upload_that_sends_slowly_but_steadily_is_taken() {
+  let app = app(TRUSTED, &[]).await;
+  // a piece every 40 seconds, three times: two minutes in all, but never a minute's silence
+  let pieces = futures_util::stream::unfold(0, |sent| async move {
+    if sent == 3 {
+      return None;
+    }
+    tokio::time::sleep(std::time::Duration::from_secs(40)).await;
+    Some((Ok::<_, std::io::Error>(vec![0; 10]), sent + 1))
+  });
+  let (status, answer) = upload(&app, "a.flac", Body::from_stream(pieces)).await;
+  assert_eq!(status, 201, "{answer}");
+}
+
 #[tokio::test]
 async fn an_upload_is_not_held_to_the_size_of_a_json_body() {
   let app = app(TRUSTED, &[]).await;
