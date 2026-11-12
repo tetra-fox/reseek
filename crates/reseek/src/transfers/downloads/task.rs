@@ -25,6 +25,7 @@ use super::{Downloads, InFlight};
 use crate::files::WriteGuard;
 use crate::safety::Os;
 use crate::transfers::state::State;
+use crate::transfers::store::Saved;
 use crate::transfers::{Record, removal, store};
 
 /// How long a download may hold its turn among the files of its request before its peer has
@@ -325,8 +326,13 @@ impl Downloads {
         return debug!(%refused, "download ended already");
       }
       record.paused = true;
-      self.save(&record, true).await;
-      return info!("download paused");
+      return match self.save(&record, true).await {
+        Some(Saved::Written) => info!("download paused"),
+        // a cancel ended it first, and its end stands
+        Some(Saved::Refused(refused)) => debug!(%refused, "download not paused; it was canceled"),
+        // logged by the save
+        Some(Saved::Gone) | None => {}
+      };
     }
     let reason = lock(&self.in_flight)
       .get(&record.id)

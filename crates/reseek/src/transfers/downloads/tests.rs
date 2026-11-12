@@ -1653,3 +1653,28 @@ async fn a_bulk_pause_during_a_purge_leaves_the_download_ended_and_removed() {
   assert_eq!(answer["ok"], json!([]), "{answer}");
   ended_canceled_and_removed(&app, id).await;
 }
+
+#[tokio::test]
+async fn a_paused_download_canceled_is_pushed_as_no_longer_paused() {
+  let app = app(TRUSTED, &[]).await;
+  let mut paused = Record::download("alice", "@@a\\1.flac", 10);
+  paused.paused = true;
+  insert(&app, &paused).await;
+  let mut stream = app
+    .stream_from(
+      "127.0.0.1:1",
+      request("GET", "/api/v0/live?topics=transfers", None),
+    )
+    .await;
+  assert_eq!(stream.next().await.unwrap().event, "hello");
+  let uri = format!("/api/v0/transfers/downloads/alice/{}", paused.id);
+  let (status, _) = app.call("DELETE", &uri, None).await;
+  assert_eq!(status, 204);
+  let updated = stream.next().await.unwrap();
+  assert_eq!(updated.event, "transfers.updated");
+  assert_eq!(
+    (&updated.data["state"], &updated.data["paused"]),
+    (&json!("Completed, Cancelled"), &json!(false))
+  );
+  assert!(!read(&app, paused.id).await.paused);
+}

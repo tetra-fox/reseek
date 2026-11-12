@@ -470,6 +470,8 @@ impl Downloads {
     let unfinished = record
       .complete(TransferOutcome::Cancelled, Some(CANCELED.to_string()))
       .is_ok();
+    // as the end writes it: a download ended is no longer paused
+    record.paused = false;
     if !unfinished && !remove {
       return Ok(false);
     }
