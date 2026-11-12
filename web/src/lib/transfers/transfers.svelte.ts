@@ -42,6 +42,12 @@ export class Transfers {
    * daemon's order when it is read or moved, so downloads queued since come after
    */
   places = $state.raw(new Map<string, number>());
+  /** counts the queue orders taken from frames, which are newer than any answer on its way */
+  #orderFrames = 0;
+  /** counts the queue orders taken from frames and from answers to moves */
+  #orderWrites = 0;
+  /** counts the reads of the queue order begun, so only the last one's answer is taken */
+  #orderReads = 0;
   /**
    * Each transfer by `fileKey`, the newest when a file was transferred more than once, leaving
    * out those removed on screen. Made again only when a transfer comes, goes or is hidden: a
@@ -69,7 +75,11 @@ export class Transfers {
         );
       }
     });
-    live.on("transfers.queue", ({ ids }) => this.#ordered(ids));
+    live.on("transfers.queue", ({ ids }) => {
+      this.#orderFrames += 1;
+      this.#orderWrites += 1;
+      this.#ordered(ids);
+    });
     live.on("transfers.removed", (t) => {
       if (!mine(t)) return;
       this.list.remove(t.id);
@@ -86,22 +96,36 @@ export class Transfers {
     this.places = new Map(ids.map((id, i) => [id, i + 1]));
   }
 
-  /** Moves waiting downloads to start just before `before`, or last when it is null */
+  /**
+   * Moves waiting downloads to start just before `before`, or last when it is null. The answer
+   * gives the order, unless a frame gave one since, which is as new or newer
+   */
   move = async (ids: string[], before: string | null) => {
+    const frames = this.#orderFrames;
     const outcome = await call(() =>
       api.POST("/api/v0/transfers/downloads/queue", { body: { ids, before } })
     );
-    if (outcome.ok) this.#ordered(outcome.data.ids);
-    else toast(outcome.error, "error");
+    if (!outcome.ok) {
+      toast(outcome.error, "error");
+      return;
+    }
+    if (frames !== this.#orderFrames) return;
+    this.#orderWrites += 1;
+    this.#ordered(outcome.data.ids);
+  };
+
+  /** Reads the queue order, taken unless a later read began or a frame or a move gave one since */
+  #readOrder = async () => {
+    const read = ++this.#orderReads;
+    const writes = this.#orderWrites;
+    const order = await call(() => api.GET("/api/v0/transfers/downloads/queue"));
+    if (read !== this.#orderReads) return;
+    if (!order.ok) toast(`Could not load the queue order: ${order.error}`, "error");
+    else if (writes === this.#orderWrites) this.#ordered(order.data.ids);
   };
 
   load = async () => {
-    if (this.direction === "download") {
-      void call(() => api.GET("/api/v0/transfers/downloads/queue")).then((order) => {
-        if (order.ok) this.#ordered(order.data.ids);
-        else toast(`Could not load the queue order: ${order.error}`, "error");
-      });
-    }
+    if (this.direction === "download") void this.#readOrder();
     const turn = this.list.reading();
     const outcome =
       this.direction === "download"
@@ -214,6 +238,10 @@ export class Transfers {
     this.speeds.clear();
     this.queueErrors.clear();
     this.hidden.clear();
+    this.places = new Map();
+    // an order on its way belongs to the session that ended
+    this.#orderReads += 1;
+    this.#orderFrames += 1;
     this.loaded = false;
   }
 }
