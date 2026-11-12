@@ -550,6 +550,71 @@ mod tests {
     );
   }
 
+  #[tokio::test]
+  async fn a_session_holding_only_a_stream_goes_idle() {
+    use std::time::Duration;
+    let idle = Duration::from_secs(2);
+    let app = app("[web.authentication]\nsession_idle = \"2s\"\n", &[]).await;
+    let login = app
+      .send_from(
+        OUTSIDE,
+        request(
+          "POST",
+          "/api/v0/session",
+          Some(json!({ "username": "reseek", "password": "reseek" })),
+        ),
+      )
+      .await;
+    let signed_in = tokio::time::Instant::now();
+    let cookie = crate::testing::set_cookie(&login.headers, "reseek_session").unwrap();
+    let id = cookie.split_once('=').unwrap().1.split_once('.').unwrap().0;
+    let last_seen = async || {
+      crate::auth::sessions::find(&app.state.auth.db, id)
+        .await
+        .unwrap()
+        .unwrap()
+        .last_seen_at
+    };
+    let at_login = last_seen().await;
+    // past the least gap between two recorded uses, a tenth of the idle limit
+    tokio::time::sleep(idle / 4).await;
+    let mut stream = app
+      .stream_from(
+        OUTSIDE,
+        with(request("GET", "/api/v0/live", None), "cookie", &cookie),
+      )
+      .await;
+    assert_eq!(stream.next().await.unwrap().event, "hello");
+    let peer = crate::http::Peer {
+      remote: Some(OUTSIDE.parse().unwrap()),
+      transport: crate::http::Transport::Plain,
+    };
+    let mut headers = axum::http::HeaderMap::new();
+    headers.insert("cookie", cookie.parse().unwrap());
+    let presented = crate::auth::Presented::read(
+      &peer,
+      &"/api/v0/live".parse().unwrap(),
+      &headers,
+      &app.state.config.current().values,
+    );
+    let check = super::recheck(
+      &app.state,
+      presented,
+      "local:reseek".to_string(),
+      &[crate::live::Topic::Application],
+    );
+    assert!(check().await);
+    // a use would be recorded by a task of its own
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    assert_eq!(
+      last_seen().await,
+      at_login,
+      "neither the stream's opening nor its check is a use"
+    );
+    tokio::time::sleep_until(signed_in + idle + Duration::from_millis(200)).await;
+    assert!(!check().await, "the session went idle under the stream");
+  }
+
   // the clock's ticks run on paused time, which moves on whenever every task waits
   #[tokio::test(start_paused = true)]
   async fn transfer_figures_go_out_each_second_they_changed_while_a_stream_follows_them() {

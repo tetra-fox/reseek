@@ -40,6 +40,9 @@ pub struct Presented {
   cookie: Option<String>,
   /// the request's headers, for a proxy's forwarded identity and the user agent
   headers: HeaderMap,
+  /// the request opens the event stream, which a browser does again by itself after a drop, so
+  /// it is no use of a session
+  opens_stream: bool,
 }
 
 impl Presented {
@@ -53,8 +56,9 @@ impl Presented {
   ) -> Self {
     let proxies = networks::ranges(&options.web.trusted_proxies);
     let client = client::resolve(peer, uri, headers, &proxies);
+    let opens_stream = uri.path() == LIVE_PATH;
     let in_query = || {
-      (uri.path() == LIVE_PATH)
+      opens_stream
         .then(|| uri.query())
         .flatten()
         .and_then(|query| {
@@ -71,6 +75,7 @@ impl Presented {
         .filter(|credential| !credential.is_empty()),
       cookie: cookies::find(headers, cookies::SESSION).map(str::to_string),
       headers: headers.clone(),
+      opens_stream,
       client,
     }
   }
@@ -111,7 +116,7 @@ pub struct Identified {
 }
 
 /// Whether the chain runs for a new request, or checks again the credential of one already
-/// accepted, which counts no failures.
+/// accepted, which counts no failures and is no use of a session.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Check {
   /// a new request
@@ -187,7 +192,8 @@ pub async fn identify(
   let scope = Scope::new(&app.url_base, presented.client.https);
   let mut identified = Identified::default();
   if let Some(value) = &presented.cookie {
-    match cookie_session(app, value, presented, options).await? {
+    let used = check == Check::Request && !presented.opens_stream;
+    match cookie_session(app, value, presented, options, used).await? {
       Some(session) => {
         identified.principal = Some(session.principal());
         identified.session = Some(session);
@@ -246,7 +252,7 @@ pub async fn page_session(
   let scope = Scope::new(&app.url_base, presented.client.https);
   let mut cookies = Vec::new();
   if let Some(value) = &presented.cookie {
-    match cookie_session(app, value, presented, options).await? {
+    match cookie_session(app, value, presented, options, true).await? {
       Some(_) => return Ok(cookies),
       None => cookies.push(scope.clear(cookies::SESSION)),
     }
@@ -280,14 +286,16 @@ pub async fn page_session(
 }
 
 /// The session a cookie value names, unless the proxy step started it and the proxy now forwards
-/// someone else or a different role; that session is revoked.
+/// someone else or a different role; that session is revoked. `used` records the request as a
+/// use of the session, which keeps it from going idle.
 async fn cookie_session(
   app: &AppState,
   value: &str,
   presented: &Presented,
   options: &crate::config::Options,
+  used: bool,
 ) -> Result<Option<StoredSession>, ApiError> {
-  let Some(session) = session_of(app, value, presented).await? else {
+  let Some(session) = session_of(app, value, presented, used).await? else {
     return Ok(None);
   };
   if session.origin != Origin::Proxy {
@@ -311,11 +319,13 @@ async fn cookie_session(
   Ok(None)
 }
 
-/// The active session a cookie value names, recording its use when the record is stale.
+/// The active session a cookie value names, recording its use when `used` and the record is
+/// stale.
 async fn session_of(
   app: &AppState,
   value: &str,
   presented: &Presented,
+  used: bool,
 ) -> Result<Option<StoredSession>, ApiError> {
   let Some(id) = sessions::verified_id(&app.auth.secret, value) else {
     debug!(ip = %presented.client.ip, "session cookie with a wrong signature ignored");
@@ -337,7 +347,7 @@ async fn session_of(
     );
     return Ok(None);
   }
-  if session.seen_due(now, idle) {
+  if used && session.seen_due(now, idle) {
     let db = app.auth.db.clone();
     let id = session.id.clone();
     let ip = presented.client.ip.to_string();
