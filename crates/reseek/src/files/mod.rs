@@ -122,7 +122,12 @@ impl Files {
       bucket: Arc::new(TokenBucket::for_speed(limit.unwrap_or(0))),
       shutdown: shutdown.clone(),
     };
-    tokio::spawn(follow_speed(config.clone(), speed.bucket.clone(), shutdown));
+    tokio::spawn(follow_speed(
+      config.clone(),
+      limit,
+      speed.bucket.clone(),
+      shutdown,
+    ));
     Arc::new(Self {
       config,
       transfers,
@@ -526,9 +531,11 @@ impl FileService for Files {
   }
 }
 
-/// Takes every change of `web.files.serve_speed_limit` into `bucket` until `shutdown`.
+/// Takes every change of `web.files.serve_speed_limit` into `bucket`, which serves at `set`,
+/// until `shutdown`.
 async fn follow_speed(
   config: Watcher<Options>,
+  mut set: Option<u32>,
   bucket: Arc<TokenBucket>,
   shutdown: CancellationToken,
 ) {
@@ -545,7 +552,14 @@ async fn follow_speed(
       }
       Err(tokio::sync::broadcast::error::RecvError::Closed) => return,
     };
+    if limit == set {
+      continue;
+    }
+    set = limit;
     bucket.set_speed(limit.unwrap_or(0));
-    debug!(limit, "speed files are served at");
+    match limit {
+      Some(limit) => debug!(limit, "files are served at a new speed limit"),
+      None => debug!("files are served without a speed limit"),
+    }
   }
 }
