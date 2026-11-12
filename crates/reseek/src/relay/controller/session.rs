@@ -33,12 +33,13 @@ use reseek_relay_proto::frames::{
 enum Phase {
   /// sent its challenge, which is `None` once a login used it
   Challenged(Option<Challenge>),
-  /// logged in as `name`; `sync_by` is when it must have begun sending its shares, `None`
-  /// once it has, which a deferral moves up to `deferred_until` at the latest
+  /// logged in as `name` at `at`; `sync_by` is when it must have begun sending its shares,
+  /// `None` once it has, which a deferral moves up to the deferral the options allow at the
+  /// latest
   LoggedIn {
     name: String,
+    at: Instant,
     sync_by: Option<Instant>,
-    deferred_until: Instant,
   },
 }
 
@@ -264,12 +265,14 @@ impl Session {
       (
         Phase::LoggedIn {
           name,
+          at,
           sync_by: Some(by),
-          deferred_until,
         },
         RelayMessage::SyncDeferred { reason },
       ) => {
-        *by = deferred(Instant::now(), *deferred_until);
+        let current = self.controller.config.current();
+        let allowed = current.values.relay.controller_timeouts.sync_deferral;
+        *by = deferred(Instant::now(), *at + SYNC_WITHIN + allowed);
         debug!(
           agent = name.as_str(),
           reason, "agent defers sending its shares"
@@ -377,8 +380,8 @@ impl Session {
     // a socket lost from here on is registered, which its end undoes
     self.phase = Phase::LoggedIn {
       name: name.clone(),
+      at: now,
       sync_by: Some(now + SYNC_WITHIN),
-      deferred_until: now + SYNC_WITHIN + timeouts.sync_deferral,
     };
     let accepted = frames::encode(
       None,
