@@ -310,6 +310,31 @@ impl Uploads {
     Ok(())
   }
 
+  /// Cancels every unfinished upload to `username`, each leaving the listings once it has ended
+  /// as a cancel with removal does, then takes out the finished ones; for a user forgotten with
+  /// their transfers.
+  pub async fn purge(&self, username: &str) -> Result<(), ApiError> {
+    let direction = TransferDirection::Upload;
+    let ids = super::listing::unfinished(&self.db, direction, username)
+      .await
+      .map_err(ApiError::internal)?;
+    let mut canceled = 0;
+    for id in ids {
+      match self.cancel(username, id, true).await {
+        Ok(()) => canceled += 1,
+        Err(e) => warn!(%id, username, error = e.message(), "upload of a purged user not canceled"),
+      }
+    }
+    let removed = removal::remove_finished_of(&self.db, &self.live, direction, username)
+      .await
+      .map_err(ApiError::internal)?;
+    info!(
+      username,
+      canceled, removed, "uploads of a forgotten user purged"
+    );
+    Ok(())
+  }
+
   /// Stops the running upload `id`, marking it for removal with `remove` and noting `reason`;
   /// false when it is not running.
   fn cancel_running(&self, id: Uuid, remove: bool, reason: Option<&'static str>) -> bool {

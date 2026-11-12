@@ -32,7 +32,6 @@ use api_types::transfers::{TransferDirection, TransferOutcome, TransferStates};
 use cascade::Watcher;
 use chrono::Utc;
 use reseek_shares::lock;
-use rusqlite::params;
 use tokio::sync::{Semaphore, mpsc, watch};
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
@@ -40,9 +39,8 @@ use tokio_util::task::TaskTracker;
 use tracing::{Instrument, debug, info, warn};
 use uuid::Uuid;
 
-use super::categories::UNFINISHED;
 use super::store::Saved;
-use super::{BLOCKED, Record, STOPPING, direction_text, removal, store};
+use super::{BLOCKED, Record, STOPPING, removal, store};
 use crate::analysis::Analysis;
 use crate::api::error::ApiError;
 use crate::config::Options;
@@ -524,33 +522,45 @@ impl Downloads {
     if !scopes.contains(&api_types::users::blocking::BlockScope::Downloads) {
       return;
     }
-    let name = username.to_string();
-    let unfinished = self
-      .db
-      .read(move |conn| {
-        let mut statement = conn.prepare(&format!(
-          "SELECT Id FROM Transfers WHERE Username = ?1 AND Direction = ?2 AND {UNFINISHED}"
-        ))?;
-        let ids = statement
-          .query_map(
-            params![name, direction_text(TransferDirection::Download)],
-            |row| row.get::<_, String>(0),
-          )?
-          .collect::<rusqlite::Result<Vec<_>>>()?;
-        Ok(ids)
-      })
-      .await;
-    let ids = match unfinished {
+    let direction = TransferDirection::Download;
+    let ids = match super::listing::unfinished(&self.db, direction, username).await {
       Ok(ids) => ids,
       Err(e) => return warn!(username, error = %e, "downloads from a blocked user not canceled"),
     };
     let mut canceled = 0;
-    for id in self::ids(ids) {
+    for id in ids {
       if self.cancel_running(id, false, Some(BLOCKED)) == Running::Stopped {
         canceled += 1;
       }
     }
     info!(username, canceled, "downloads from a blocked user canceled");
+  }
+
+  /// Cancels every unfinished download from `username`, each leaving the listings once it has
+  /// ended as a cancel with removal does, then takes out the finished ones; for a user forgotten
+  /// with their transfers.
+  pub async fn purge(&self, username: &str) -> Result<(), ApiError> {
+    let direction = TransferDirection::Download;
+    let ids = super::listing::unfinished(&self.db, direction, username)
+      .await
+      .map_err(internal)?;
+    let mut canceled = 0;
+    for id in ids {
+      match self.cancel(username, id, true).await {
+        Ok(_) => canceled += 1,
+        Err(e) => {
+          warn!(%id, username, error = e.message(), "download of a purged user not canceled")
+        }
+      }
+    }
+    let removed = removal::remove_finished_of(&self.db, &self.live, direction, username)
+      .await
+      .map_err(internal)?;
+    info!(
+      username,
+      canceled, removed, "downloads of a forgotten user purged"
+    );
+    Ok(())
   }
 
   /// Waits, at shutdown and once the client is stopped, for the download tasks the shutdown
@@ -588,19 +598,6 @@ impl Downloads {
     self.moving.spawn(moving);
     true
   }
-}
-
-/// Reads the ids of `rows`, logging the ones that are not ids.
-fn ids(rows: Vec<String>) -> Vec<Uuid> {
-  rows
-    .into_iter()
-    .filter_map(|text| {
-      text
-        .parse()
-        .inspect_err(|e| warn!(id = text, error = %e, "transfer with a malformed id skipped"))
-        .ok()
-    })
-    .collect()
 }
 
 /// A database failure as the API answers it.

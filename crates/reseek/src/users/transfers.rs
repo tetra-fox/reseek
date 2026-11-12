@@ -166,7 +166,8 @@ pub async fn page(
 }
 
 /// Takes every finished transfer with `username` out of the listings, keeping them for the
-/// reports. One still running or queued stays listed, as its task writes it until it ends.
+/// reports. The ones not finished are the engines' to stop and take out as they end, since
+/// their tasks still write them.
 pub async fn remove_all(transfers: &Database, username: &str) -> Result<usize, DbError> {
   let username = username.to_string();
   transfers

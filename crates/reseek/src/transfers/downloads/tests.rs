@@ -1265,3 +1265,67 @@ async fn canceling_a_job_held_for_a_login_ends_it_and_no_login_enqueues_its_file
     .unwrap();
   assert!(left.is_empty(), "{left:?}");
 }
+
+#[tokio::test]
+async fn a_purge_stops_and_removes_every_transfer_of_the_user_and_leaves_the_others() {
+  let config = format!("[transfers.download.retry]\ndelay = \"1h\"\nmax_delay = \"1h\"\n{TRUSTED}");
+  let app = app(&config, &[]).await;
+  app
+    .state
+    .users
+    .set_buddy("alice", Default::default())
+    .await
+    .unwrap();
+  // one whose task tries alice, who cannot be reached, and waits to try again
+  let mut running = Record::download("alice", "@@a\\Album\\1.flac", 10);
+  running.paused = true;
+  insert(&app, &running).await;
+  let resume = json!({ "ids": [running.id], "action": "resume" });
+  app
+    .call("POST", "/api/v0/transfers/downloads/bulk", Some(resume))
+    .await;
+  read_until(&app, running.id, |r| r.next_attempt_at().is_some()).await;
+  let mut paused = Record::download("alice", "@@a\\Album\\2.flac", 10);
+  paused.paused = true;
+  let queued_upload = Record::upload("alice", "@@shared\\x.flac", 10);
+  let mut bobs = Record::download("bob", "@@b\\1.flac", 10);
+  bobs.paused = true;
+  for record in [
+    &paused,
+    &queued_upload,
+    &done("alice", "@@a\\Album\\3.flac"),
+    &bobs,
+  ] {
+    insert(&app, record).await;
+  }
+
+  let (status, _) = app
+    .call("DELETE", "/api/v0/users/alice?purge=true", None)
+    .await;
+  assert_eq!(status, 204);
+  let listed = |username: &'static str| {
+    app.state.transfers.read(move |conn| {
+      conn.query_row(
+        "SELECT COUNT(*) FROM Transfers WHERE Username = ?1 AND Removed = 0",
+        [username],
+        |row| row.get::<_, i64>(0),
+      )
+    })
+  };
+  let gone = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+    while listed("alice").await.unwrap() > 0
+      || reseek_shares::lock(&app.state.downloads.in_flight).contains_key(&running.id)
+    {
+      tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+  })
+  .await;
+  assert!(
+    gone.is_ok(),
+    "a transfer of alice is still listed or running"
+  );
+  for id in [running.id, paused.id, queued_upload.id] {
+    assert!(read(&app, id).await.is_completed(), "{id} was ended");
+  }
+  assert_eq!(listed("bob").await.unwrap(), 1, "bob's download stays");
+}

@@ -12,7 +12,7 @@ use rusqlite::params_from_iter;
 use rusqlite::types::Value;
 use uuid::Uuid;
 
-use super::categories::condition;
+use super::categories::{UNFINISHED, condition};
 use super::state::in_states;
 use super::{ASKED_ORDER, COLUMNS, Record, direction_text, readable, store, transfer};
 use crate::db::{Database, DbError, timestamp};
@@ -223,6 +223,34 @@ pub async fn one(
       transfer.state_history = Some(store::history(conn, id)?);
     }
     Ok(Some(transfer))
+  })
+  .await
+}
+
+/// The ids of the transfers of `direction` with `username` that have not finished, removed or
+/// not.
+pub async fn unfinished(
+  db: &Database,
+  direction: TransferDirection,
+  username: &str,
+) -> Result<Vec<Uuid>, DbError> {
+  let username = username.to_string();
+  db.read(move |conn| {
+    let mut statement = conn.prepare_cached(&format!(
+      "SELECT Id FROM Transfers WHERE Username = ?1 AND Direction = ?2 AND {UNFINISHED}"
+    ))?;
+    let ids = statement.query_map(
+      rusqlite::params![username, direction_text(direction)],
+      |row| {
+        readable(row, |row| {
+          let id: String = row.get(0)?;
+          id.parse::<Uuid>().map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, e.into())
+          })
+        })
+      },
+    )?;
+    ids.filter_map(Result::transpose).collect()
   })
   .await
 }

@@ -8,7 +8,7 @@ use api_types::users::{
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::Response;
-use tracing::info;
+use tracing::{Instrument, info};
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
@@ -278,8 +278,8 @@ async fn transfers(
     .map(Json)
 }
 
-/// Forgets a user and their block; `purge` also removes their finished transfers from the
-/// listings and deletes the conversation with them.
+/// Forgets a user and their block; `purge` also removes their transfers from the listings and
+/// deletes the conversation with them.
 #[utoipa::path(
   delete, path = "/users/{username}", tag = "users",
   params(("username" = String, Path, description = "the user"), UsernameQuery, DeleteUserQuery),
@@ -295,7 +295,26 @@ async fn remove(
   NamedUser(username): NamedUser,
   Query(query): Query<DeleteUserQuery>,
 ) -> Result<StatusCode, ApiError> {
-  app.services.users.remove(&username, query.purge).await?;
+  // on a task of its own, so a request dropped half way leaves no user half purged
+  let name = username.clone();
+  let purge = query.purge;
+  let forgetting = tokio::spawn(
+    async move {
+      app.services.users.remove(&name, purge).await?;
+      if purge {
+        // the transfers not finished are stopped and leave the listings as they end
+        app.downloads.purge(&name).await?;
+        app.uploads.purge(&name).await?;
+      }
+      Ok::<(), ApiError>(())
+    }
+    .in_current_span(),
+  );
+  match forgetting.await {
+    Ok(forgotten) => forgotten?,
+    Err(e) if e.is_panic() => std::panic::resume_unwind(e.into_panic()),
+    Err(e) => return Err(ApiError::internal(e)),
+  }
   info!(
     by = admin.principal.subject,
     username,

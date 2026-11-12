@@ -103,6 +103,31 @@ pub async fn remove_unreadable(
   Ok(!removed.is_empty())
 }
 
+/// Removes every completed transfer of `direction` with `username` that is not removed already,
+/// pushing each; returns how many.
+pub async fn remove_finished_of(
+  db: &Database,
+  live: &Live,
+  direction: TransferDirection,
+  username: &str,
+) -> Result<usize, DbError> {
+  let name = username.to_string();
+  let removed = db
+    .write(move |conn| {
+      returned(
+        conn,
+        &format!(
+          "UPDATE Transfers SET Removed = 1, RemovedAt = ?3 WHERE Direction = ?1 \
+           AND Username = ?2 AND Removed = 0 AND {COMPLETED} RETURNING Id, Username"
+        ),
+        params![direction_text(direction), name, timestamp(Utc::now())],
+      )
+    })
+    .await?;
+  push(live, direction, &removed);
+  Ok(removed.len())
+}
+
 /// Removes every completed transfer of `direction` that is not removed already, pushing each.
 pub async fn remove_completed(
   db: &Database,
