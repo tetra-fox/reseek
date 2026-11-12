@@ -83,14 +83,20 @@ fn next(conn: &Connection) -> rusqlite::Result<Option<WishlistItem>> {
 }
 
 /// Marks the files `found` as seen by the item `id` and records its turn; returns those not
-/// seen before.
+/// seen before, or `None` when the item was removed meanwhile.
 fn seen(
   conn: &mut Connection,
   id: Uuid,
   search: Uuid,
   found: &[(String, String)],
-) -> rusqlite::Result<Vec<(String, String)>> {
+) -> rusqlite::Result<Option<Vec<(String, String)>>> {
   let tx = conn.transaction()?;
+  let kept = tx
+    .prepare_cached("SELECT 1 FROM wishlist WHERE id = ?1")?
+    .exists([id.to_string()])?;
+  if !kept {
+    return Ok(None);
+  }
   let mut fresh = Vec::new();
   {
     let mut insert = tx.prepare_cached(
@@ -113,7 +119,7 @@ fn seen(
     ],
   )?;
   tx.commit()?;
-  Ok(fresh)
+  Ok(Some(fresh))
 }
 
 impl Searches {
@@ -271,7 +277,19 @@ impl Searches {
       .write(move |conn| seen(conn, id, search_id, &found))
       .await
     {
-      Ok(fresh) => fresh,
+      Ok(Some(fresh)) => fresh,
+      Ok(None) => {
+        debug!(id = %item.id, "wishlist item removed during its search");
+        return RunOutcome {
+          ending: JobEnding::Succeeded,
+          error: None,
+          summary: Some(format!(
+            "Searched for \"{}\", which was removed from the wishlist meanwhile",
+            item.search_text
+          )),
+          job_id: None,
+        };
+      }
       Err(e) => return failed(e.to_string()),
     };
     let count = u32::try_from(fresh.len()).unwrap_or(u32::MAX);
@@ -335,6 +353,7 @@ mod tests {
         db.write(move |conn| seen(conn, item, Uuid::new_v4(), &found))
           .await
           .unwrap()
+          .unwrap()
       }
     };
     let first = turn(vec![file("alice", "a\\1.flac"), file("bob", "b\\1.flac")]).await;
@@ -353,5 +372,21 @@ mod tests {
     assert_eq!(items[0].last_new_files, 2);
     assert!(items[0].last_search_id.is_some());
     assert_eq!(db.read(next).await.unwrap().unwrap().id, item);
+
+    let gone = Uuid::new_v4();
+    let found = vec![file("dave", "d\\1.flac")];
+    let removed = db
+      .write(move |conn| seen(conn, gone, Uuid::new_v4(), &found))
+      .await
+      .unwrap();
+    assert_eq!(
+      removed, None,
+      "an item removed during its turn sees nothing"
+    );
+    let rows: i64 = db
+      .read(|conn| conn.query_row("SELECT count(*) FROM wishlist_seen", [], |r| r.get(0)))
+      .await
+      .unwrap();
+    assert_eq!(rows, 4, "and keeps no files for it");
   }
 }

@@ -210,7 +210,7 @@ pub fn list(conn: &Connection, query: &SearchListQuery) -> rusqlite::Result<Vec<
   Ok(listed)
 }
 
-/// Deletes the search `id`. `None` when there is none, else the search as it was, without its responses, or
+/// Deletes the search `id` and clears the wishlist's link to it. `None` when there is none, else the search as it was, without its responses, or
 /// why its row cannot be read: such a row is deleted all the same.
 pub fn delete(
   conn: &mut Connection,
@@ -222,14 +222,19 @@ pub fn delete(
     .query_row([id.to_string()], |row| Ok(search(row)))
     .optional()?;
   if found.is_some() {
-    tx.execute("DELETE FROM searches WHERE id = ?1", [id.to_string()])?;
+    let id = id.to_string();
+    tx.execute("DELETE FROM searches WHERE id = ?1", [&id])?;
+    tx.execute(
+      "UPDATE wishlist SET last_search_id = NULL WHERE last_search_id = ?1",
+      [&id],
+    )?;
   }
   tx.commit()?;
   Ok(found)
 }
 
-/// Deletes every search that ended before `before` and returns the ones it could read as they
-/// were. A row it cannot read is deleted and logged.
+/// Deletes every search that ended before `before`, clears the wishlist's links to them, and
+/// returns the ones it could read as they were. A row it cannot read is deleted and logged.
 pub fn prune(conn: &mut Connection, before: DateTime<Utc>) -> rusqlite::Result<Vec<Search>> {
   const ENDED: &str = "ended_at IS NOT NULL AND ended_at < ?1";
   let before = timestamp(before);
@@ -244,6 +249,13 @@ pub fn prune(conn: &mut Connection, before: DateTime<Utc>) -> rusqlite::Result<V
       }
     }
   }
+  tx.execute(
+    &format!(
+      "UPDATE wishlist SET last_search_id = NULL \
+       WHERE last_search_id IN (SELECT id FROM searches WHERE {ENDED})"
+    ),
+    [&before],
+  )?;
   tx.execute(&format!("DELETE FROM searches WHERE {ENDED}"), [&before])?;
   tx.commit()?;
   Ok(pruned)
@@ -440,5 +452,41 @@ mod tests {
       [running.id, lost.id],
       "oldest first"
     );
+  }
+
+  #[tokio::test]
+  async fn deleting_or_pruning_a_search_clears_the_wishlists_link_to_it() {
+    let db = db().await;
+    let mut ended = requested("2026-10-26T09:00:00Z");
+    ended.state = SearchState::Completed(SearchOutcome::TimedOut);
+    ended.ended_at = Some("2026-10-26T09:00:15Z".parse().unwrap());
+    let kept = requested("2026-10-26T10:00:00Z");
+    let (old, new) = (ended.id, kept.id);
+    db.write(move |conn| {
+      insert(conn, &ended)?;
+      insert(conn, &kept)?;
+      conn.execute(
+        "INSERT INTO wishlist (id, search_text, added_at, last_search_id) VALUES \
+         ('a', 'x', '2026-10-26T08:00:00Z', ?1), ('b', 'y', '2026-10-26T08:00:00Z', ?2)",
+        [old.to_string(), new.to_string()],
+      )
+    })
+    .await
+    .unwrap();
+    let links = || {
+      db.read(|conn| {
+        conn
+          .prepare("SELECT last_search_id FROM wishlist ORDER BY id")?
+          .query_map([], |row| row.get::<_, Option<String>>(0))?
+          .collect::<rusqlite::Result<Vec<_>>>()
+      })
+    };
+
+    let before: DateTime<Utc> = "2026-10-26T11:00:00Z".parse().unwrap();
+    db.write(move |conn| prune(conn, before)).await.unwrap();
+    assert_eq!(links().await.unwrap(), [None, Some(new.to_string())]);
+    let deleted = db.write(move |conn| delete(conn, new)).await.unwrap();
+    assert!(matches!(deleted, Some(Ok(_))));
+    assert_eq!(links().await.unwrap(), [None, None]);
   }
 }
