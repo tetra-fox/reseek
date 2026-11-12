@@ -474,4 +474,26 @@ describe("a room's pane at the newest messages", () => {
     expect(ids(pane)).toEqual(Array.from({ length: 200 }, (_, n) => n + 51));
     expect(pane.hasNewer).toBe(true);
   });
+
+  it("keeps a message being sent when a read brings an older one with its text", async () => {
+    const said = (localId: number) =>
+      localId === 1
+        ? { ...message(1), username: "me", message: "ok", self: true }
+        : message(localId);
+    fakeNetwork((url, method) => {
+      if (url.pathname.endsWith("/rooms/joined")) return [];
+      if (url.pathname.endsWith("/conversations")) return [];
+      if (!url.pathname.endsWith("/messages")) return undefined;
+      if (method === "POST") return { status: 201 };
+      const before = Number(url.searchParams.get("before") ?? 102);
+      const up = Array.from({ length: 101 }, (_, n) => n + 1).filter((id) => id < before);
+      return { messages: up.slice(-PAGE).map(said), hasMore: up.length > PAGE, gaps: [] };
+    });
+    const pane = new MessagePane(room, () => "me");
+    await pane.load();
+    await pane.send("ok");
+    await pane.older();
+    const ours = pane.ordered.filter((m) => m.text === "ok");
+    expect(ours.map((m) => m.localId > 0)).toEqual([true, false]);
+  });
 });

@@ -311,6 +311,7 @@ export class MessagePane {
       unread: false,
       sending: "sending"
     };
+    this.#sentAfter.set(pending.localId, this.#newestStored);
     // the row the list keeps, which `#deliver` marks as the request ends
     return this.#deliver(this.messages.upsert(pending));
   };
@@ -339,6 +340,13 @@ export class MessagePane {
   #reading = false;
   /** room messages the daemon took that the server never echoed, shown as not sent */
   #unechoed = new Set<number>();
+  /** the newest stored message the pane has held */
+  #newestStored = 0;
+  /**
+   * for each message being sent, the newest stored message held when it was sent: only a stored
+   * one newer than that can be it
+   */
+  #sentAfter = new Map<number, number>();
 
   async #markRead() {
     const { kind, name } = this.target;
@@ -413,18 +421,22 @@ export class MessagePane {
   }
 
   /**
-   * Keeps a stored message; one of ours takes the place of the oldest row still waiting for
-   * it, the one sent with the same text, or else of one whose echo was given up on
+   * Keeps a stored message; one of ours stored after a row still waiting for it was sent takes
+   * the place of the oldest such row with the same text, or else of one whose echo was given up
+   * on. A message stored before, which a reload brings again, takes no row's place
    */
   #store(m: Message) {
     this.messages.upsert(m);
+    this.#newestStored = Math.max(this.#newestStored, m.localId);
     if (!m.self) return;
-    const mine = (r: Message) => r.localId < 0 && r.text === m.text;
+    const mine = (r: Message) =>
+      r.localId < 0 && r.text === m.text && m.localId > (this.#sentAfter.get(r.localId) ?? 0);
     const waiting =
       this.ordered.find((r) => mine(r) && r.sending !== "failed") ??
       this.ordered.find((r) => mine(r) && this.#unechoed.has(r.localId));
     if (!waiting) return;
     this.#unechoed.delete(waiting.localId);
+    this.#sentAfter.delete(waiting.localId);
     this.messages.remove(String(waiting.localId));
   }
 
