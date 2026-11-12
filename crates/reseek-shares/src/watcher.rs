@@ -13,7 +13,10 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use notify::{Config, ErrorKind, Event, RecommendedWatcher, RecursiveMode, Watcher as _};
+use notify::event::{AccessKind, AccessMode};
+use notify::{
+  Config, ErrorKind, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher as _,
+};
 use soulseek_client::LogLimiter;
 use tokio::sync::mpsc;
 use tracing::{Instrument, debug, info, warn};
@@ -62,6 +65,9 @@ impl Watching {
 pub(super) async fn start(shares: Arc<Shares>, settings: Arc<Settings>) -> Option<Watching> {
   let (sender, receiver) = mpsc::channel(BACKLOG);
   let handler = move |event: notify::Result<Event>| {
+    if event.as_ref().is_ok_and(changes_nothing) {
+      return;
+    }
     // the receiver is gone once the watches are dropped, and then nothing needs the event
     drop(sender.blocking_send(event));
   };
@@ -120,6 +126,14 @@ pub(super) async fn start(shares: Arc<Shares>, settings: Arc<Settings>) -> Optio
   };
   tokio::spawn(apply_changes(shares, settings, roots.clone(), receiver).in_current_span());
   Some(Watching { watcher, roots })
+}
+
+/// Whether `event` only says a file was opened, read or closed without being written, as when
+/// a peer downloads it; a close after writing is a change.
+fn changes_nothing(event: &Event) -> bool {
+  !event.need_rescan()
+    && matches!(event.kind, EventKind::Access(access)
+      if access != AccessKind::Close(AccessMode::Write))
 }
 
 /// What a watched path needs.
@@ -446,4 +460,40 @@ fn remote_filesystem(root: &Path) -> Option<String> {
   let remote =
     matches!(kind.as_str(), "nfs" | "nfs4" | "cifs" | "smb3" | "smbfs") || kind.starts_with("fuse");
   remote.then_some(kind)
+}
+
+#[cfg(test)]
+mod tests {
+  use notify::event::{CreateKind, DataChange, Flag, ModifyKind, RemoveKind};
+
+  use super::*;
+
+  #[test]
+  fn a_file_opened_or_read_without_writing_changes_nothing() {
+    let read = [
+      AccessKind::Open(AccessMode::Read),
+      AccessKind::Open(AccessMode::Any),
+      AccessKind::Read,
+      AccessKind::Close(AccessMode::Read),
+      AccessKind::Any,
+    ];
+    for access in read {
+      assert!(
+        changes_nothing(&Event::new(EventKind::Access(access))),
+        "{access:?}"
+      );
+    }
+    let changed = [
+      EventKind::Access(AccessKind::Close(AccessMode::Write)),
+      EventKind::Modify(ModifyKind::Data(DataChange::Any)),
+      EventKind::Create(CreateKind::File),
+      EventKind::Remove(RemoveKind::Any),
+      EventKind::Any,
+    ];
+    for kind in changed {
+      assert!(!changes_nothing(&Event::new(kind)), "{kind:?}");
+    }
+    let dropped = Event::new(EventKind::Access(AccessKind::Read)).set_flag(Flag::Rescan);
+    assert!(!changes_nothing(&dropped), "a lost notice is scanned again");
+  }
 }
