@@ -281,7 +281,9 @@ async fn transfers(
 /// Forgets a user and their block; `purge` also cancels their transfers that have not finished,
 /// removes their transfers from the listings and deletes the conversation with them. The 204
 /// comes once every unfinished transfer was told to stop: one no task runs is ended and removed
-/// by then, a running one leaves the listings when it has written its end.
+/// by then, a running one leaves the listings when it has written its end. A purge of a user
+/// no longer in the directory, forgotten earlier without one, answers 204 when it found
+/// transfers of theirs to cancel or remove, and 404 when it found none.
 #[utoipa::path(
   delete, path = "/users/{username}", tag = "users",
   params(("username" = String, Path, description = "the user"), UsernameQuery, DeleteUserQuery),
@@ -301,13 +303,18 @@ async fn remove(
   let forget = {
     let (app, name) = (app.clone(), username.clone());
     async move {
+      let mut purged = 0;
       if purge {
         // first, so their removals are pushed, and a forget that fails after them can be
         // asked again
-        app.downloads.purge(&name).await?;
-        app.uploads.purge(&name).await?;
+        purged += app.downloads.purge(&name).await?;
+        purged += app.uploads.purge(&name).await?;
       }
-      app.services.users.remove(&name, purge).await
+      match app.services.users.remove(&name, purge).await {
+        // the user was forgotten earlier; their transfers, which the call asked to go, went
+        Err(e) if e.status() == StatusCode::NOT_FOUND && purged > 0 => Ok(()),
+        forgotten => forgotten,
+      }
     }
   };
   app.downloads.forget_user(&username, forget).await?;
