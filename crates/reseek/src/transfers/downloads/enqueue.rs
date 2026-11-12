@@ -408,7 +408,7 @@ impl Downloads {
       return Ok(());
     }
     client
-      .connect_to_user(username, false)
+      .connect_to_user(username)
       .await
       .map_err(|e| unreachable(username, e))
   }

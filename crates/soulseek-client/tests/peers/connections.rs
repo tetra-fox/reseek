@@ -130,29 +130,6 @@ async fn concurrent_callers_share_one_attempt_and_later_ones_the_cache() {
 }
 
 #[tokio::test]
-async fn invalidating_replaces_the_cached_connection() {
-  let Some(server) = soulfind::server() else {
-    return;
-  };
-  let (alice, bob) = two(&server, soulfind::listening(), soulfind::listening()).await;
-  let old = connect(&bob.client, &alice).await;
-  let pending = unanswered_info(&bob.client, &alice.username);
-  bob
-    .client
-    .connect_to_user(&alice.username, true)
-    .await
-    .unwrap();
-  let reason = tokio::time::timeout(PATIENCE, old.handle().disconnected())
-    .await
-    .unwrap();
-  assert_eq!(reason.message, "Invalidated");
-  fails_on_close(pending, &alice.username, "Invalidated").await;
-  let new = connect(&bob.client, &alice).await;
-  assert_ne!(new.handle().id(), old.handle().id());
-  info_over(&bob.client, &new, &alice.username).await;
-}
-
-#[tokio::test]
 async fn a_full_cache_evicts_the_idlest_connection() {
   let Some(server) = soulfind::server() else {
     return;

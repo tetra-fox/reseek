@@ -175,18 +175,6 @@ impl PeerConnections {
       .collect()
   }
 
-  /// Drops the cached connection to `username` and closes it; returns whether there was one
-  pub(crate) fn invalidate(&self, username: &str) -> bool {
-    let Some(entry) = self.cache().remove(username) else {
-      return false;
-    };
-    if let Some(conn) = entry.connection() {
-      self.close(username, &conn, "Invalidated");
-    }
-    tracing::debug!(username, "message connection invalidated");
-    true
-  }
-
   /// Closes the connection to `username` after its entry left the cache, and fails the waits
   /// on that user's replies, which it can no longer bring. Its own watcher finds the entry gone
   /// and leaves the waits alone, so ones registered for a replacement are kept.

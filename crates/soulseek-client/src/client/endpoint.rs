@@ -164,19 +164,11 @@ impl Client {
     }
   }
 
-  /// Makes sure we have a message connection to `username`, replacing the one we have when
-  /// `invalidate_cache` is set; for warming up or refreshing a connection ahead of use.
-  pub async fn connect_to_user(
-    &self,
-    username: &str,
-    invalidate_cache: bool,
-  ) -> Result<(), ClientError> {
+  /// Makes sure we have a message connection to `username`, for warming one up ahead of use
+  pub async fn connect_to_user(&self, username: &str) -> Result<(), ClientError> {
     non_blank("username", username)?;
     let verb = format!("connect to user {username}");
     let endpoint = self.get_user_endpoint(username).await?;
-    if invalidate_cache {
-      self.peers().invalidate(username);
-    }
     self
       .message_connection(username, Some(endpoint), &CancellationToken::new())
       .await
