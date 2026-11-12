@@ -1,22 +1,24 @@
 <script lang="ts">
   import CheckIcon from "@lucide/svelte/icons/check";
+  import CircleHelpIcon from "@lucide/svelte/icons/circle-help";
   import CircleStopIcon from "@lucide/svelte/icons/circle-stop";
   import ClockIcon from "@lucide/svelte/icons/clock";
   import LoaderCircleIcon from "@lucide/svelte/icons/loader-circle";
   import XIcon from "@lucide/svelte/icons/x";
 
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
-  import { searchStage, type SearchState } from "#lib/search/searches.svelte.js";
+  import { type SearchStage, searchStage, type SearchState } from "#lib/search/searches.svelte.js";
 
   // a search's state as an icon, the state's own words in its tooltip
   let { state }: { state: SearchState } = $props();
 
-  const ICONS = {
+  const ICONS: Record<SearchStage, { Icon: typeof CheckIcon; tone: string; spin: boolean }> = {
     waiting: { Icon: ClockIcon, tone: "text-fg-muted", spin: false },
     running: { Icon: LoaderCircleIcon, tone: "text-success", spin: true },
     found: { Icon: CheckIcon, tone: "text-success", spin: false },
     cancelled: { Icon: CircleStopIcon, tone: "text-success", spin: false },
-    errored: { Icon: XIcon, tone: "text-danger", spin: false }
+    errored: { Icon: XIcon, tone: "text-danger", spin: false },
+    unknown: { Icon: CircleHelpIcon, tone: "text-warning", spin: false }
   };
 
   const icon = $derived(ICONS[searchStage(state)]);

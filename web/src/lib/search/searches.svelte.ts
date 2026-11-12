@@ -16,8 +16,11 @@ export type Search = Schemas["Search"];
 export type SearchScope = Schemas["SearchScope"];
 export type SearchState = Schemas["SearchState"];
 
-/** Where a search is: waiting for its turn, running, or over in one of four ways */
-export type SearchStage = "waiting" | "running" | "found" | "cancelled" | "errored";
+/**
+ * Where a search is: waiting for its turn, running, or over in one of three ways. A state this
+ * page does not know, from a daemon newer than it, is unknown: neither running nor over
+ */
+export type SearchStage = "waiting" | "running" | "found" | "cancelled" | "errored" | "unknown";
 
 const STAGES: Record<SearchState, SearchStage> = {
   "Requested": "waiting",
@@ -30,12 +33,13 @@ const STAGES: Record<SearchState, SearchStage> = {
   "Completed, Errored": "errored"
 };
 
-export const searchStage = (state: SearchState) => STAGES[state];
+export const searchStage = (state: SearchState): SearchStage =>
+  Object.hasOwn(STAGES, state) ? STAGES[state] : "unknown";
 
 /** The search is over and its responses are stored */
 export const isDone = (state: SearchState) => {
-  const stage = STAGES[state];
-  return stage !== "waiting" && stage !== "running";
+  const stage = searchStage(state);
+  return stage === "found" || stage === "cancelled" || stage === "errored";
 };
 
 /** How many of a scope's subjects its label names before it counts the rest */
