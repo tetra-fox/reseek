@@ -244,11 +244,6 @@ impl Messaging {
     }
   }
 
-  /// Whether the conversation with `username` is open.
-  pub fn is_open(&self, username: &str) -> bool {
-    lock(&self.active).contains(username)
-  }
-
   /// Handles the events taken, in order, until the stop and every event taken before it.
   async fn work(self: Arc<Self>, mut receiver: mpsc::Receiver<Event>) {
     loop {

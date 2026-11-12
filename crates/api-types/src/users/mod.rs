@@ -185,17 +185,6 @@ pub struct CachedUser {
   pub status: Option<UserStatus>,
 }
 
-/// A user's presence changed, the data of a `users.status` frame. Sent only for our buddies and
-/// users with an open conversation or a transfer.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct UserStatusChanged {
-  /// the user
-  pub username: String,
-  /// the new status
-  pub status: UserStatus,
-}
-
 /// Names a user by query parameter instead of by path segment, for usernames such as `.` and
 /// `..` that a path cannot carry. When present it wins over the path's username.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, IntoParams)]

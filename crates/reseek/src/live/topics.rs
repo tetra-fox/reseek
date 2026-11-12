@@ -162,9 +162,7 @@ pub fn routes(frame: &LiveFrame) -> Vec<Topic> {
     | F::RoomsUserStatus(_)
     | F::RoomsGap(_) => Topic::Rooms,
     F::RoomsPublicMessage(_) => Topic::PublicRooms,
-    F::UsersStatus(_) | F::UsersBrowseProgress(_) | F::UsersUpdated(_) | F::UsersRemoved(_) => {
-      Topic::Users
-    }
+    F::UsersBrowseProgress(_) | F::UsersUpdated(_) | F::UsersRemoved(_) => Topic::Users,
     F::EventsRaised(_) => Topic::Events,
     F::ActivityBuffer(_) | F::ActivityEntry(_) => Topic::Activity,
   };

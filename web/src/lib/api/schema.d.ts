@@ -6106,11 +6106,6 @@ export interface components {
             /** @enum {string} */
             type: "rooms.public_message";
         } | {
-            /** @description a watched user's status changed */
-            data: components["schemas"]["UserStatusChanged"];
-            /** @enum {string} */
-            type: "users.status";
-        } | {
             /**
              * @description how far a browse of a user's shares has come, at most every 250 ms per user and once
              *     more at 100 %
@@ -8865,16 +8860,6 @@ export interface components {
             isPrivileged: boolean;
             /** @description whether the user is online, away or offline */
             presence: components["schemas"]["UserPresence"];
-        };
-        /**
-         * @description A user's presence changed, the data of a `users.status` frame. Sent only for our buddies and
-         *     users with an open conversation or a transfer.
-         */
-        UserStatusChanged: {
-            /** @description the new status */
-            status: components["schemas"]["UserStatus"];
-            /** @description the user */
-            username: string;
         };
         /**
          * @description A user as the directory lists them, the data of a `users.updated` frame and the reply of

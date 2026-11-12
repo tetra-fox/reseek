@@ -11,7 +11,7 @@ use api_types::events::{Event as BusEvent, EventError, NoFields, SoulseekClientD
 use api_types::live::LiveFrame;
 use api_types::messaging::ServerMessage;
 use api_types::state::{DistributedNetworkState, ServerConnectionState};
-use api_types::users::{UserPresence, UserStatus, UserStatusChanged};
+use api_types::users::UserPresence;
 use chrono::Utc;
 use soulseek_client::{
   ClientError, ClientState, DistributedNetworkInfo, Event, LogLimiter, PrivateMessage, SessionEnd,
@@ -398,10 +398,9 @@ async fn handle(app: &AppState, event: Event, session: &mut Session) {
 }
 
 /// A user's presence, which the server sends for watched users, for room members and in reply
-/// to our own requests. A watched user's row is touched with it, and their statistics are
-/// asked for again when the server sent it on its own, since it pushes their presence and not
-/// what they share; a buddy whose presence it moved is told of. It is pushed as
-/// `users.status` for a buddy and for a user we have a conversation or a transfer with.
+/// to our own requests. A watched user's row is touched with it, which pushes their summary, and
+/// their statistics are asked for again when the server sent it on its own, since it pushes
+/// their presence and not what they share; a buddy whose presence it moved is told of.
 async fn user_status(app: &AppState, status: &soulseek_proto::server::UserStatus) {
   let username = &status.username;
   let presence = UserPresence::from(status.presence);
@@ -425,21 +424,6 @@ async fn user_status(app: &AppState, status: &soulseek_proto::server::UserStatus
     {
       app.users.presence_moved(username, previous, presence);
     }
-  }
-  let client = app.network.client();
-  let transferring = client
-    .uploads()
-    .iter()
-    .chain(client.downloads().iter())
-    .any(|transfer| transfer.username == *username);
-  if transferring || app.messaging.is_open(username) || app.users.buddy(username).is_some() {
-    app.live.publish(LiveFrame::UsersStatus(UserStatusChanged {
-      username: username.clone(),
-      status: UserStatus {
-        presence,
-        is_privileged: status.is_privileged,
-      },
-    }));
   }
 }
 
