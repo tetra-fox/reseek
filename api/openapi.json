@@ -17582,6 +17582,17 @@
           }
         }
       },
+      "BuiltinGroup": {
+        "type": "string",
+        "description": "A name every instance gives a group of its own, which a user-defined group cannot take.",
+        "enum": [
+          "privileged",
+          "leechers",
+          "buddies",
+          "default",
+          "blacklisted"
+        ]
+      },
       "BulkAction": {
         "type": "string",
         "description": "What a bulk call does to each of its transfers.",
@@ -20942,9 +20953,8 @@
             "description": "what its last run came to in words"
           },
           "name": {
-            "type": "string",
-            "description": "the schedule's name, which its jobs' starter carries",
-            "example": "cleanup"
+            "$ref": "#/components/schemas/ScheduleName",
+            "description": "the schedule's name, which its jobs' starter carries"
           },
           "nextRunAt": {
             "type": [
@@ -23167,7 +23177,8 @@
             },
             "description": "the keys whose override ends"
           }
-        }
+        },
+        "additionalProperties": false
       },
       "OverrideView": {
         "type": "object",
@@ -24691,6 +24702,17 @@
             "description": "the member"
           }
         }
+      },
+      "ScheduleName": {
+        "type": "string",
+        "description": "The recurring work the schedules card shows, by the name the API, the jobs it starts and\nits kept last run know it by.",
+        "enum": [
+          "share-rescan",
+          "cleanup",
+          "vacuum",
+          "release-check",
+          "wishlist"
+        ]
       },
       "ScriptRunCompleted": {
         "type": "object",

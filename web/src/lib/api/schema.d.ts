@@ -4081,6 +4081,11 @@ export interface components {
             version: number;
         };
         /**
+         * @description A name every instance gives a group of its own, which a user-defined group cannot take.
+         * @enum {string}
+         */
+        BuiltinGroup: "privileged" | "leechers" | "buddies" | "default" | "blacklisted";
+        /**
          * @description What a bulk call does to each of its transfers.
          * @enum {string}
          */
@@ -5669,11 +5674,8 @@ export interface components {
             lastRunAt?: string | null;
             /** @description what its last run came to in words */
             lastSummary?: string | null;
-            /**
-             * @description the schedule's name, which its jobs' starter carries
-             * @example cleanup
-             */
-            name: string;
+            /** @description the schedule's name, which its jobs' starter carries */
+            name: components["schemas"]["ScheduleName"];
             /**
              * Format: date-time
              * @description when it runs next, null when it is off
@@ -7320,6 +7322,12 @@ export interface components {
             /** @description the member */
             username: string;
         };
+        /**
+         * @description The recurring work the schedules card shows, by the name the API, the jobs it starts and
+         *     its kept last run know it by.
+         * @enum {string}
+         */
+        ScheduleName: "share-rescan" | "cleanup" | "vacuum" | "release-check" | "wishlist";
         /** @description The data of `ScriptRunCompleted`: how one run of a script went. */
         ScriptRunCompleted: {
             /**
