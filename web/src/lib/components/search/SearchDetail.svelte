@@ -71,6 +71,7 @@
   keepCurrent(
     () => {
       if (!searches.starting.has(id)) void searches.fetch(id);
+      void readBlocked();
     },
     () => `search:${id}`
   );
@@ -139,9 +140,20 @@
     untrack(() => void results.fetch(count));
   });
 
-  // results from blocked users are hidden unless asked for. A frame tells of a block or an
-  // unblock made since, and outranks the read, which may have been answered before it
+  // results from blocked users are hidden unless asked for. The blocked users are read at mount
+  // and with every reload, and a frame tells of a block or an unblock made since; a frame that
+  // came while a read was under way outranks that read, which may have been answered before it
   const framed = new Set<string>();
+  let reads = 0;
+  const readBlocked = async () => {
+    const turn = ++reads;
+    framed.clear();
+    const names = await users.blocked();
+    // a read that failed leaves the set as it was, and one a later read overtook is dropped
+    if (!names || turn !== reads) return;
+    for (const name of blocked) if (!names.has(name) && !framed.has(name)) blocked.delete(name);
+    for (const name of names) if (!framed.has(name)) blocked.add(name);
+  };
   const blockChanged = (username: string, isBlocked: boolean) => {
     framed.add(username);
     if (isBlocked) blocked.add(username);
@@ -149,9 +161,7 @@
   };
   $effect(() => live.on("users.updated", (user) => blockChanged(user.username, !!user.block)));
   $effect(() => live.on("users.removed", ({ username }) => blockChanged(username, false)));
-  void users.blocked().then((names) => {
-    for (const name of names ?? []) if (!framed.has(name)) blocked.add(name);
-  });
+  void readBlocked();
 
   // the filter applies a moment after typing stops
   $effect(() => {

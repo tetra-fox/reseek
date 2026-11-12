@@ -71,17 +71,21 @@ describe("search results", () => {
   });
 
   /**
-   * Mounts the page on a running search that had taken no response yet and opens the stream;
-   * `stored` is what the search stores once it completes. Gives the fake network
+   * Mounts the page on a running search and opens the stream. `stored` is what the search stores
+   * once it completes, `taken` what it took while it runs, `blocked` the users blocked; the last
+   * two are read at every request, so a test can change them. Gives the fake network
    */
-  const open = async (stored: Schemas["SearchResponse"][], blocked: string[] = []) => {
+  const open = async (
+    stored: Schemas["SearchResponse"][],
+    { taken = [], blocked = [] }: { taken?: Schemas["SearchResponse"][]; blocked?: string[] } = {}
+  ) => {
     const net = connected((url) => {
       if (url.pathname.endsWith("/api/v0/users")) {
         return { users: blocked.map((username) => userSummary(username)), total: blocked.length };
       }
       if (url.pathname.endsWith(`/searches/${ID}/responses`)) {
         const state = searches.list.get(ID)?.state;
-        return state && isDone(state) ? stored : [];
+        return state && isDone(state) ? stored : taken;
       }
       if (url.pathname.endsWith(`/searches/${ID}`)) return search({ id: ID });
       if (url.pathname.endsWith("/api/v0/options")) {
@@ -216,7 +220,8 @@ describe("search results", () => {
 
   it("hide a user's results once they are blocked, and show them once unblocked", async () => {
     const stored = [response("alice", 300), response("bob", 200), response("carol", 100)];
-    const net = await open(stored, ["carol"]);
+    const blocked = ["carol"];
+    const net = await open(stored, { blocked });
     for (const r of stored) net.frame("search.response", { searchId: ID, response: r });
     await streamed();
     const cards = () =>
@@ -235,6 +240,13 @@ describe("search results", () => {
     net.frame("users.updated", userSummary("carol", { block: null }));
     await flushFaked();
     expect(cards()).toEqual(["folder:user:0:alice", "folder:user:0:carol"]);
+
+    // blocked while the stream missed it: the page reads the blocked users again
+    blocked.splice(0, blocked.length, "alice");
+    net.frame("lagged", {});
+    await flushFaked();
+    await flushFaked();
+    expect(cards()).toEqual(["folder:user:0:bob", "folder:user:0:carol"]);
   });
 
   it("show no file in the inspector once the filter takes it out of the results", async () => {
