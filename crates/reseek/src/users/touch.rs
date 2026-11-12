@@ -169,9 +169,13 @@ pub fn write(
     if pending.room {
       let rows = tx.execute(
         "UPDATE users SET last_seen_at = max(last_seen_at, ?2), \
-         presence_at = CASE WHEN last_presence = 'Online' THEN coalesce(presence_at, ?2) ELSE ?2 END, \
-         last_presence = 'Online' WHERE username = ?1",
-        params![username, timestamp(seen_at)],
+         presence_at = CASE WHEN last_presence = ?3 THEN coalesce(presence_at, ?2) ELSE ?2 END, \
+         last_presence = ?3 WHERE username = ?1",
+        params![
+          username,
+          timestamp(seen_at),
+          presence_text(UserPresence::Online)
+        ],
       )?;
       if rows == 0 {
         continue;
