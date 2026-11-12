@@ -699,9 +699,10 @@ async fn private_message(app: &AppState, message: PrivateMessage) {
     .await;
 }
 
-/// A transfer moved on: logged, its direction's queued and in-progress gauges counted again, and
-/// an upload that succeeded reports its speed to the server, which keeps our average speed from
-/// it.
+/// A transfer moved on: logged, the upload gauges counted again for an upload, and an upload
+/// that succeeded reports its speed to the server, which keeps our average speed from it. The
+/// download gauges count the downloads waiting here too, which only the database holds, so
+/// [`observe_transfers`] alone counts them.
 fn transfer_state(app: &AppState, previous: Option<TransferState>, transfer: &Transfer) {
   let name = transfer.filename.as_str();
   let basename = name.rsplit(['\\', '/']).next().unwrap_or(name);
@@ -720,19 +721,18 @@ fn transfer_state(app: &AppState, previous: Option<TransferState>, transfer: &Tr
     speed = transfer.average_speed,
     "transfer state changed"
   );
-  if transfer.direction == soulseek_proto::TransferDirection::Upload {
-    upload_activity(app, previous, transfer);
+  if transfer.direction != soulseek_proto::TransferDirection::Upload {
+    return;
   }
+  upload_activity(app, previous, transfer);
   let client = app.network.client();
-  {
-    let family = app.telemetry.metrics().transfers();
-    match transfer.direction {
-      soulseek_proto::TransferDirection::Download => family.downloads.count(&client.downloads()),
-      soulseek_proto::TransferDirection::Upload => family.uploads.count(&client.uploads()),
-    }
-  }
-  if transfer.direction == soulseek_proto::TransferDirection::Upload
-    && transfer.state.succeeded()
+  app
+    .telemetry
+    .metrics()
+    .transfers()
+    .uploads
+    .count(&client.uploads());
+  if transfer.state.succeeded()
     && transfer.average_speed > 0.0
   {
     // servers read the speed as a signed 32-bit number
@@ -819,8 +819,8 @@ pub fn observe_client(app: &AppState) {
   trace!(latency, kept, "client figures observed");
 }
 
-/// Counts both directions' queued and in-progress transfers again from the client's, and moves
-/// their speed averages; run every five seconds.
+/// Counts the uploads queued and in progress again from the client's and the downloads from the
+/// database, and moves both directions' speed averages; run every five seconds.
 pub async fn observe_transfers(app: &AppState) {
   // downloads waiting here are queued too, which the client does not hold yet
   let tallies = app.downloads.tallies().await;
