@@ -3055,8 +3055,10 @@ export interface paths {
         put?: never;
         post?: never;
         /**
-         * Forgets a user and their block; `purge` also removes their transfers from the listings and
-         *     deletes the conversation with them.
+         * Forgets a user and their block; `purge` also cancels their transfers that have not finished,
+         *     removes their transfers from the listings and deletes the conversation with them. The 204
+         *     comes once every unfinished transfer was told to stop: one no task runs is ended and removed
+         *     by then, a running one leaves the listings when it has written its end.
          */
         delete: operations["remove"];
         options?: never;
@@ -20175,7 +20177,11 @@ export interface operations {
             query?: {
                 /** @description the username, exactly */
                 username?: string;
-                /** @description also remove the user's transfers, close the conversation and delete its messages */
+                /**
+                 * @description also cancel the user's unfinished transfers and remove their transfers, close the
+                 *     conversation and delete its messages; a running transfer leaves the listings once it has
+                 *     ended
+                 */
                 purge?: boolean;
             };
             header?: never;

@@ -14448,7 +14448,7 @@
         "tags": [
           "users"
         ],
-        "summary": "Forgets a user and their block; `purge` also removes their transfers from the listings and\ndeletes the conversation with them.",
+        "summary": "Forgets a user and their block; `purge` also cancels their transfers that have not finished,\nremoves their transfers from the listings and deletes the conversation with them. The 204\ncomes once every unfinished transfer was told to stop: one no task runs is ended and removed\nby then, a running one leaves the listings when it has written its end.",
         "operationId": "remove",
         "parameters": [
           {
@@ -14472,7 +14472,7 @@
           {
             "name": "purge",
             "in": "query",
-            "description": "also remove the user's transfers, close the conversation and delete its messages",
+            "description": "also cancel the user's unfinished transfers and remove their transfers, close the\nconversation and delete its messages; a running transfer leaves the listings once it has\nended",
             "required": false,
             "schema": {
               "type": "boolean"
