@@ -272,9 +272,12 @@ impl Transfers {
   /// The download `token` is about to ask its uploader for the file, or to take its offer: a
   /// refusal or failure the uploader reports from now on can be about it
   pub(crate) fn asked(&self, token: u32) {
-    if let Some(tracked) = self.table().by_token.get_mut(&token) {
-      tracked.asked = true;
-    }
+    self
+      .table()
+      .by_token
+      .get_mut(&token)
+      .expect("a download is tracked while its task runs")
+      .asked = true;
   }
 
   /// whether a download of `filename` from `username` is tracked and has asked for the file
@@ -434,13 +437,16 @@ impl RequestTurn {
 
   /// this download holds its slot: the next one may take one
   pub(crate) fn slotted(&self) {
-    if let Some(waiting) = lock(&self.transfers.request_turns).get(&self.username) {
-      waiting.send_modify(|waiting| {
-        for turn in waiting.iter_mut().filter(|turn| turn.id == self.id) {
-          turn.slotted = true;
-        }
+    lock(&self.transfers.request_turns)
+      .get(&self.username)
+      .expect("a user's turns are kept while one of them is held")
+      .send_modify(|waiting| {
+        waiting
+          .iter_mut()
+          .find(|turn| turn.id == self.id)
+          .expect("a held turn is in its user's queue")
+          .slotted = true;
       });
-    }
   }
 
   /// resolves once every download from the user that started before this one has asked or ended
