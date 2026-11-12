@@ -167,11 +167,6 @@ impl Shares {
       .collect()
   }
 
-  /// Whether a scan of the local shares is running.
-  pub fn scanning(&self) -> bool {
-    matches!(lock(&self.status).phase, Phase::Scanning { .. })
-  }
-
   /// Whether the index is being loaded at startup or a scan of the local shares is running,
   /// which is what the share state reports as scanning. A scan that ended while the scan hook
   /// is told of its end is neither: the index it filled is complete.
