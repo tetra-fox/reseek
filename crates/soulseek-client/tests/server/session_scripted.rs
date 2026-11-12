@@ -13,11 +13,11 @@ use soulseek_client::{
   Client, ClientError, ClientOptions, ClientOptionsPatch, ClientState, ConnectionErrorKind, Event,
 };
 use soulseek_proto::server::{
-  AcceptChildren, BranchLevel, BranchRoot, HaveNoParents, LoginResponse, PrivateRoomToggle,
-  SetListenPort,
+  AcceptChildren, BranchLevel, BranchRoot, HaveNoParents, LoginResponse, NewPassword,
+  PrivateRoomToggle, SetListenPort,
 };
 use soulseek_proto::{
-  PROTOCOL_MAJOR_VERSION, PROTOCOL_MINOR_VERSION, ServerRequest, ServerResponse,
+  PROTOCOL_MAJOR_VERSION, PROTOCOL_MINOR_VERSION, Secret, ServerRequest, ServerResponse,
 };
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -690,4 +690,54 @@ async fn a_reconfigure_resends_the_configuration_and_the_status_only_when_it_cha
       }),
     ]
   );
+}
+
+#[tokio::test]
+async fn a_connect_queued_behind_a_login_is_compared_with_the_password_changed_since() {
+  let fake = FakeServer::start().await;
+  let client = Client::new(listening_options()).unwrap();
+  let first = connect(&client, &fake, CancellationToken::new());
+  let mut server = fake.accept().await;
+  server.read_login().await;
+  server.send(&login_success()).await;
+  first.await.unwrap().unwrap();
+
+  // the first connect logs in again with the old password while the second, made with the new
+  // one, waits for the lock the first holds
+  let address = fake.address();
+  let host = address.ip().to_string();
+  let cancel = CancellationToken::new();
+  let changed = "n3w password";
+  let mut disconnecting = Box::pin(client.disconnect(None, None));
+  let mut relogging = Box::pin(client.connect(&host, address.port(), USERNAME, PASSWORD, &cancel));
+  let mut queued = Box::pin(client.connect(&host, address.port(), USERNAME, changed, &cancel));
+  assert!(poll_once(&mut disconnecting).await.is_pending());
+  assert!(poll_once(&mut relogging).await.is_pending());
+  assert!(poll_once(&mut queued).await.is_pending());
+  let serve = async {
+    let mut relogged = fake.accept().await;
+    relogged.read_login().await;
+    relogged.send(&login_success()).await;
+    relogged
+  };
+  let ((), relogged, mut relogged_server) = tokio::join!(disconnecting, relogging, serve);
+  relogged.unwrap();
+  let echo = async {
+    relogged_server
+      .request_matching(|request| matches!(request, ServerRequest::NewPassword(_)).then_some(()))
+      .await;
+    relogged_server
+      .send(&ServerResponse::NewPassword(NewPassword {
+        new_password: Secret::new(changed),
+      }))
+      .await;
+  };
+  let (changing, ()) = tokio::join!(client.change_password(changed), echo);
+  changing.unwrap();
+  let joined = tokio::time::timeout(Duration::from_secs(2), queued)
+    .await
+    .expect("the queued connect ends");
+  assert!(joined.is_ok(), "{joined:?}");
+  assert_eq!(client.state(), ClientState::LoggedIn);
+  drop(server);
 }
