@@ -9,6 +9,8 @@ import { session } from "#lib/session.svelte.js";
 import { conversation, joinedRoom } from "#lib/testing/fixtures.js";
 import { active, press, ticked } from "#lib/testing/keys.js";
 import { fakeNetwork } from "#lib/testing/network.js";
+import { CHAT } from "#lib/ui/bindings.js";
+import { keysAria } from "#lib/ui/keys.js";
 import { users } from "#lib/users/users.svelte.js";
 
 import ChatList from "./ChatList.svelte";
@@ -252,5 +254,34 @@ describe("the chat list", () => {
     [...document.querySelectorAll("button")].find((b) => b.textContent === "Retry")!.click();
     await vi.waitFor(() => expect(document.querySelector("[role=alert]")).toBeNull());
     expect(document.querySelector('[data-line="user:alice"]')).not.toBeNull();
+  });
+});
+
+describe("the chat list's pinned chats, to assistive technology", () => {
+  afterEach(() => {
+    chat.clear();
+    session.principal = null;
+    vi.unstubAllGlobals();
+    document.body.innerHTML = "";
+  });
+
+  it("says how to move a pin in words, and names the keys of a pinned row", () => {
+    session.principal = { name: "me", role: "ReadWrite" } as never;
+    fakeNetwork(() => undefined);
+    chat.rooms.reconcile([joinedRoom("jazz")]);
+    const component = mount(ChatList, {
+      target: document.body,
+      props: { current: null, onjoin: () => {}, onnew: () => {} }
+    });
+    pins.list = [{ kind: "room", name: "jazz" }];
+    flushSync();
+    const header = document.querySelector('[data-line="h:pinned"]')!;
+    expect(header.querySelector(".sr-only")?.textContent).toBe(
+      "Move a pin with Alt+Shift+Up or Down"
+    );
+    expect(
+      document.querySelector('[data-line="room:jazz"]')!.getAttribute("aria-keyshortcuts")
+    ).toBe(keysAria(CHAT.movePin));
+    unmount(component);
   });
 });

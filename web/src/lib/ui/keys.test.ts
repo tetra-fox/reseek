@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import Select from "#lib/components/ui/Select.svelte";
 
 import { APP, CHAT, DETAILS, LIST } from "./bindings";
-import { isPressed, keepsKey, keysAria, keysText, keyStep, layerOpen } from "./keys";
+import { isPressed, keepsKey, keysAria, keysSpoken, keysText, keyStep, layerOpen } from "./keys";
 
 describe("which keys a focused element keeps", () => {
   afterEach(() => (document.body.innerHTML = ""));
@@ -138,5 +138,15 @@ describe("a key binding", () => {
     expect(keysText(CHAT.movePin, false)).toBe("Alt+Shift+↑ or Alt+Shift+↓");
     expect(keysAria(APP.palette, true)).toBe("Meta+K");
     expect(keysAria(LIST.menu, false)).toBe("ContextMenu Shift+F10");
+  });
+
+  it("says its keys in words a screen reader reads, naming what every chord holds once", () => {
+    expect(keysSpoken(CHAT.movePin, false)).toBe("Alt+Shift+Up or Down");
+    expect(keysSpoken(CHAT.movePin, true)).toBe("Option+Shift+Up or Down");
+    expect(keysSpoken(APP.palette, true)).toBe("Command+K");
+    expect(keysSpoken(APP.palette, false)).toBe("Control+K");
+    // chords holding different keys are each named in full
+    expect(keysSpoken(LIST.menu, false)).toBe("Menu or Shift+F10");
+    expect(keysSpoken(DETAILS.details, false)).toBe("Space or I");
   });
 });

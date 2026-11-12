@@ -40,7 +40,7 @@
   import { session } from "#lib/session.svelte.js";
   import { CHAT } from "#lib/ui/bindings.js";
   import { clock } from "#lib/ui/clock.svelte.js";
-  import { inControl, keyStep, keysText } from "#lib/ui/keys.js";
+  import { inControl, keysAria, keysSpoken, keyStep, keysText } from "#lib/ui/keys.js";
   import { disclose } from "#lib/ui/motion.js";
   import { nameColor } from "#lib/users/colors.js";
   import { pictureOf } from "#lib/users/profile.svelte.js";
@@ -270,7 +270,7 @@
             {line.title}
           </button>
           {#if write && line.key === PINNED}<span class="sr-only"
-              >Move a pin with {keysText(CHAT.movePin)}.</span
+              >Move a pin with {keysSpoken(CHAT.movePin)}</span
             >{/if}
         </div>
       {:else}
@@ -306,7 +306,7 @@
           {...list.line(line, i)}
           transition:disclose
           aria-current={current === line.key ? "page" : undefined}
-          aria-keyshortcuts={movable ? "Alt+Shift+ArrowUp Alt+Shift+ArrowDown" : undefined}
+          aria-keyshortcuts={movable ? keysAria(CHAT.movePin) : undefined}
           style:translate={drag.shift(line.key)}
           class={[
             "relative flex items-center gap-2 pick-row py-1.5 pr-3",

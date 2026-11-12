@@ -96,29 +96,44 @@ export const keyStep = (binding: Binding, e: KeyboardEvent): -1 | 0 | 1 => {
   return forward && chordPressed(forward, e) ? 1 : 0;
 };
 
-/** What a key cap says, where it isn't the key's own name */
-const CAPS: Record<string, string> = {
-  "ArrowUp": "↑",
-  "ArrowDown": "↓",
-  "ArrowLeft": "←",
-  "ArrowRight": "→",
-  " ": "Space",
-  "Escape": "Esc",
-  "PageUp": "Page Up",
-  "PageDown": "Page Down",
-  "ContextMenu": "Menu"
+/** Where a key's name is used: on its key cap, in `aria-keyshortcuts`, and read aloud */
+type Naming = "cap" | "aria" | "spoken";
+
+/**
+ * The keys held with another, in the order a chord names them, with what each naming calls
+ * them on a Mac and elsewhere
+ */
+const HELD: [held: "mod" | "alt" | "shift", names: Record<Naming, [mac: string, other: string]>][] =
+  [
+    ["mod", { cap: ["⌘", "Ctrl"], aria: ["Meta", "Control"], spoken: ["Command", "Control"] }],
+    ["alt", { cap: ["⌥", "Alt"], aria: ["Alt", "Alt"], spoken: ["Option", "Alt"] }],
+    ["shift", { cap: ["⇧", "Shift"], aria: ["Shift", "Shift"], spoken: ["Shift", "Shift"] }]
+  ];
+
+/** What each naming calls a key, where it isn't the key's own name */
+const KEY_NAMES: Record<string, Partial<Record<Naming, string>>> = {
+  "ArrowUp": { cap: "↑", spoken: "Up" },
+  "ArrowDown": { cap: "↓", spoken: "Down" },
+  "ArrowLeft": { cap: "←", spoken: "Left" },
+  "ArrowRight": { cap: "→", spoken: "Right" },
+  " ": { cap: "Space", aria: "Space", spoken: "Space" },
+  "Escape": { cap: "Esc" },
+  "PageUp": { cap: "Page Up", spoken: "Page Up" },
+  "PageDown": { cap: "Page Down", spoken: "Page Down" },
+  "ContextMenu": { cap: "Menu", spoken: "Menu" }
 };
+
+/** A chord's names as one naming gives them, in order: what is held, then the key */
+const named = (c: Chord, naming: Naming, onMac: boolean): string[] => [
+  ...HELD.filter(([held]) => c[held]).map(([, names]) => names[naming][onMac ? 0 : 1]),
+  KEY_NAMES[c.key]?.[naming] ?? (c.key.length === 1 ? c.key.toUpperCase() : c.key)
+];
 
 /**
  * A chord as the key caps pressed for it, in order: the Command sign and "K" on a Mac, "Ctrl"
  * and "K" elsewhere
  */
-export const capsOf = (c: Chord, onMac = mac): string[] => [
-  ...(c.mod ? [onMac ? "⌘" : "Ctrl"] : []),
-  ...(c.alt ? [onMac ? "⌥" : "Alt"] : []),
-  ...(c.shift ? [onMac ? "⇧" : "Shift"] : []),
-  CAPS[c.key] ?? (c.key.length === 1 ? c.key.toUpperCase() : c.key)
-];
+export const capsOf = (c: Chord, onMac = mac): string[] => named(c, "cap", onMac);
 
 /** A binding's keys as text for a tooltip or a hint: "Ctrl+K", or the Command sign and K on a Mac */
 export const keysText = (binding: Binding, onMac = mac) =>
@@ -126,13 +141,15 @@ export const keysText = (binding: Binding, onMac = mac) =>
 
 /** A binding's keys for `aria-keyshortcuts`: "Control+K", or "Meta+K" on a Mac */
 export const keysAria = (binding: Binding, onMac = mac) =>
-  binding.keys
-    .map((c) =>
-      [
-        ...(c.mod ? [onMac ? "Meta" : "Control"] : []),
-        ...(c.alt ? ["Alt"] : []),
-        ...(c.shift ? ["Shift"] : []),
-        c.key === " " ? "Space" : c.key.length === 1 ? c.key.toUpperCase() : c.key
-      ].join("+")
-    )
-    .join(" ");
+  binding.keys.map((c) => named(c, "aria", onMac).join("+")).join(" ");
+
+/**
+ * A binding's keys in words, for text a screen reader reads: "Alt+Shift+Up or Down", or
+ * "Option+Shift+Up or Down" on a Mac. Keys held with every chord are named once
+ */
+export const keysSpoken = (binding: Binding, onMac = mac) => {
+  const chords = binding.keys.map((c) => named(c, "spoken", onMac));
+  const held = (names: string[]) => names.slice(0, -1).join("+");
+  const shared = chords.every((names) => held(names) === held(chords[0]));
+  return chords.map((names, i) => (shared && i ? names.at(-1) : names.join("+"))).join(" or ");
+};
