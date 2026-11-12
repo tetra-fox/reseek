@@ -42,11 +42,17 @@ impl Shares {
       .expect("the holder of the scan slot moves its own phase")
   }
 
-  /// Asks the running scan to stop.
+  /// Asks the running scan to stop; a scan that ended while its end is still being told needs
+  /// nothing more.
   pub fn cancel_scan(&self) -> Result<(), ScanConflict> {
-    match lock(&self.status).phase.cancel() {
+    let status = lock(&self.status);
+    match status.phase.cancel() {
       Some(cancel) => {
         cancel.cancel();
+        Ok(())
+      }
+      None if status.phase.holds_slot() => {
+        debug!("the share scan asked to stop has already ended");
         Ok(())
       }
       None => Err(ScanConflict::NotRunning),

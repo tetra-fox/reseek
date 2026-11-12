@@ -307,6 +307,28 @@ async fn a_scan_is_one_at_a_time_and_only_a_running_one_cancels() {
 }
 
 #[tokio::test]
+async fn a_cancel_after_the_scan_ended_while_its_end_is_told_is_no_conflict() {
+  let (_files, engine) = shared_engine().await;
+  let shares = &engine.shares;
+  eventually(async || idle(shares)).await;
+  shares.take_slot(Edge::Scan).unwrap();
+  shares.hold(Edge::ScanEnded(ScanResult::Completed(
+    SharedCounts::default(),
+  )));
+  assert_eq!(
+    shares.cancel_scan(),
+    Ok(()),
+    "the scan still holds the slot, as a scan asked for now is told"
+  );
+  assert_eq!(
+    shares.scan(false, ScanOrigin::Asked),
+    Err(ScanConflict::Running)
+  );
+  shares.hold(Edge::Release);
+  assert_eq!(shares.cancel_scan(), Err(ScanConflict::NotRunning));
+}
+
+#[tokio::test]
 async fn a_scan_asked_for_while_the_index_loads_is_the_one_that_follows_it() {
   let (_files, engine) = shared_engine().await;
   let shares = &engine.shares;
