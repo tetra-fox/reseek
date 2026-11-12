@@ -1,6 +1,7 @@
 //! Keeping the server connection up. The watchdog runs from the start and after a connection
 //! is lost, and stops once the client is connected, when asked to disconnect, and at shutdown;
-//! a refused login or a disconnect asked for does not start it again. One connect loop runs at a
+//! a refused login does not start it again, and once a disconnect was asked for, or at
+//! shutdown, a lost connection does not either: only a start does. One connect loop runs at a
 //! time: the first attempt at once, then each after an exponential back-off with jitter, or,
 //! after a login the server never answered, 15 minutes, an hour and then 6 hours apart. A timer
 //! starts a new loop while the watchdog is on and none runs. The back-off goes on across loops
@@ -55,8 +56,8 @@ struct Inner {
   state: StateOwner,
   shares: Arc<Shares>,
   shutdown: CancellationToken,
-  /// the watchdog is on: the timer runs and the loop keeps trying
-  enabled: watch::Sender<bool>,
+  /// whether the watchdog is on, and what may turn it on
+  mode: watch::Sender<Mode>,
   /// held by the loop that runs
   running: Arc<tokio::sync::Mutex<()>>,
   /// cancels the running loop's wait or attempt
@@ -67,6 +68,17 @@ struct Inner {
   unanswered: AtomicU32,
   /// whether a loop runs and when its next attempt starts
   status: Mutex<Status>,
+}
+
+/// Whether the watchdog is on, and what may turn it on
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Mode {
+  /// the timer runs and the loop keeps trying
+  On,
+  /// off while connected or after a login it cannot retry; a lost connection turns it on
+  Off,
+  /// off since a disconnect was asked for or the daemon began to stop; only a start turns it on
+  Held,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -92,7 +104,7 @@ impl Watchdog {
         state,
         shares,
         shutdown,
-        enabled: watch::Sender::new(false),
+        mode: watch::Sender::new(Mode::Off),
         running: Arc::new(tokio::sync::Mutex::new(())),
         attempt: Mutex::new(None),
         failures: AtomicU32::new(0),
@@ -111,23 +123,65 @@ impl Watchdog {
 
   /// Whether the watchdog is on.
   pub fn is_enabled(&self) -> bool {
-    *self.inner.enabled.borrow()
+    *self.inner.mode.borrow() == Mode::On
   }
 
   /// Turns the watchdog on and starts a loop at once, unless one runs.
   pub fn start(&self) {
-    self.inner.enabled.send_replace(true);
+    self.inner.mode.send_replace(Mode::On);
     self.publish();
     self.attempt_connection();
   }
 
-  /// Turns the watchdog off, so no new loop starts and the running one ends after its attempt.
-  /// With `abort`, its wait or attempt is canceled too, which a connect in progress reports as
-  /// canceled.
-  pub fn stop(&self, abort: bool) {
-    self.inner.enabled.send_replace(false);
+  /// A session that reached the server was lost: the watchdog is turned on as by a start,
+  /// unless it was held off since.
+  pub fn lost(&self) {
+    let mut held = false;
+    self.inner.mode.send_if_modified(|mode| match mode {
+      Mode::Held => {
+        held = true;
+        false
+      }
+      Mode::On => false,
+      Mode::Off => {
+        *mode = Mode::On;
+        true
+      }
+    });
+    if held {
+      return debug!("a disconnect was asked for; the lost connection is not reconnected");
+    }
     self.publish();
-    if abort && let Some(attempt) = lock(&self.inner.attempt).as_ref() {
+    self.attempt_connection();
+  }
+
+  /// Turns the watchdog off, so no new loop starts and the running one ends after its attempt;
+  /// a watchdog held off stays held. With `abort`, its wait or attempt is canceled too, which a
+  /// connect in progress reports as canceled.
+  pub fn stop(&self, abort: bool) {
+    self.inner.mode.send_if_modified(|mode| {
+      let on = *mode == Mode::On;
+      if on {
+        *mode = Mode::Off;
+      }
+      on
+    });
+    self.publish();
+    if abort {
+      self.cancel_attempt();
+    }
+  }
+
+  /// Turns the watchdog off until it is started again, canceling its wait or attempt: a
+  /// connection lost before or after does not turn it on.
+  pub fn hold(&self) {
+    self.inner.mode.send_replace(Mode::Held);
+    self.publish();
+    self.cancel_attempt();
+  }
+
+  fn cancel_attempt(&self) {
+    if let Some(attempt) = lock(&self.inner.attempt).as_ref() {
       attempt.cancel();
     }
   }
@@ -177,11 +231,11 @@ impl Watchdog {
 
   /// Starts a loop every [`BACKSTOP`] while the watchdog is on and none runs.
   async fn backstop(self) {
-    let mut enabled = self.inner.enabled.subscribe();
+    let mut mode = self.inner.mode.subscribe();
     loop {
       tokio::select! {
         () = self.inner.shutdown.cancelled() => return,
-        on = enabled.wait_for(|on| *on) => if on.is_err() { return },
+        on = mode.wait_for(|mode| *mode == Mode::On) => if on.is_err() { return },
       }
       let mut every = tokio::time::interval(BACKSTOP);
       every.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);

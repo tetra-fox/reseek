@@ -278,7 +278,7 @@ impl Network {
 
   /// Disconnects with `reason` and stops reconnecting until asked to connect again.
   pub async fn disconnect(&self, reason: Option<String>) {
-    self.watchdog.stop(true);
+    self.watchdog.hold();
     if self.client.state() != ClientState::Disconnected {
       let message = reason.unwrap_or_else(|| Intent::User.to_string());
       self
@@ -292,7 +292,7 @@ impl Network {
   /// client disconnected and disposed, and the events this raised are handled before this
   /// returns.
   pub async fn stop(&self) {
-    self.watchdog.stop(true);
+    self.watchdog.hold();
     self.mapper.stop().await;
     self
       .client

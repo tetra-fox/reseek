@@ -560,8 +560,8 @@ pub async fn follow_shared_counts(app: AppState) {
 }
 
 /// The server session ended: why is logged, the watchdog starts again after a session that
-/// reached the server unless the daemon asked for the end, the server refused our login or
-/// another session took our name, and the event is raised.
+/// reached the server unless a disconnect was asked for, by this end or since, the server
+/// refused our login or another session took our name, and the event is raised.
 fn disconnected(app: &AppState, message: &str, error: Option<&ClientError>, reached: bool) {
   app.network.forget_reconnect();
   let intent = error.and_then(Intent::of);
@@ -593,7 +593,7 @@ fn disconnected(app: &AppState, message: &str, error: Option<&ClientError>, reac
     _ if !reached => debug!(message, "connection attempt failed"),
     _ => {
       warn!(message, "Disconnected from the Soulseek server");
-      app.network.watchdog().start();
+      app.network.watchdog().lost();
     }
   }
   raise_disconnected(app, message, error);
