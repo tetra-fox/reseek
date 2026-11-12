@@ -382,7 +382,8 @@ impl Downloads {
       let download = api_types::transfers::TransferDirection::Download;
       match removal::remove(&self.db, download, id).await {
         Ok(Some(taken)) => self.taken_out(&[taken]).await,
-        // its end was written removed already
+        // its end was written removed already, or the task wrote it paused and the cancel ends
+        // and removes the row itself
         Ok(None) => {}
         Err(e) => warn!(%id, error = %e, "ended download not removed"),
       }
