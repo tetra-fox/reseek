@@ -148,25 +148,31 @@ impl Messaging {
     }
     // clients announce a pushed message unless it came from the offline store, so a repeat is
     // not pushed as one; the conversation update carries it, unread again, and its count
-    let redelivered = if new {
+    let (pushed, redelivered) = if new {
+      (Some(stored), None)
+    } else {
+      (None, Some(stored))
+    };
+    // the conversation goes first, so a client has its notification level when the message comes
+    if !notice {
+      self.conversation_changed(&username, redelivered).await;
+    }
+    if let Some(message) = pushed {
       self
         .live
         .publish(LiveFrame::ConversationsMessage(ConversationMessage {
-          username: username.clone(),
-          message: stored,
+          username,
+          message,
         }));
-      None
-    } else {
-      Some(stored)
-    };
-    if !notice {
-      self.conversation_changed(&username, redelivered).await;
     }
   }
 
   /// Pushes the conversation with `username` as it is now, with `redelivered` when the server
-  /// delivered that message again, and the unread counts.
+  /// delivered that message again, and the unread counts. One push at a time, each reading the
+  /// conversation after the one before it was sent, so a push read before a change is never sent
+  /// after it.
   async fn conversation_changed(&self, username: &str, redelivered: Option<PrivateMessage>) {
+    let _pushing = self.conversations_pushing.lock().await;
     let name = username.to_string();
     match self
       .db
@@ -540,6 +546,12 @@ mod tests {
     let first = stream.until("conversations.message").await;
     let next = stream.until("conversations.message").await;
     assert_eq!(pushed(&first)["message"], "hello 1");
+    assert!(
+      first
+        .iter()
+        .any(|frame| frame.event == "conversations.update"),
+      "the conversation, with its notification level, comes before its message"
+    );
     assert_eq!(pushed(&next)["message"], "hello 2", "the repeat is no news");
     let redelivered: Vec<_> = next
       .iter()
@@ -547,15 +559,15 @@ mod tests {
       .map(|frame| frame.data["redelivered"].clone())
       .collect();
     assert_eq!(redelivered.len(), 2, "{redelivered:?}");
-    assert_eq!(redelivered[0], serde_json::Value::Null);
     assert_eq!(
       (
-        &redelivered[1]["message"],
-        &redelivered[1]["isAcknowledged"]
+        &redelivered[0]["message"],
+        &redelivered[0]["isAcknowledged"]
       ),
       (&serde_json::json!("hello 1"), &serde_json::json!(false)),
       "the update names the repeat"
     );
+    assert_eq!(redelivered[1], serde_json::Value::Null);
   }
 
   #[tokio::test]

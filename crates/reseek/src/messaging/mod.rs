@@ -106,6 +106,8 @@ pub struct Messaging {
   active: Arc<Mutex<HashSet<String>>>,
   /// the rooms we are in and the private rooms we belong to
   rooms: Rooms,
+  /// held from reading a conversation to pushing it, so the last push has the newest
+  conversations_pushing: tokio::sync::Mutex<()>,
   /// asks for the unread counts to be pushed
   unread: unread::Unread,
   /// the running session's row in the session log
@@ -160,6 +162,7 @@ impl Messaging {
       drained: CancellationToken::new(),
       active: Arc::new(Mutex::new(active.into_iter().collect())),
       rooms: Rooms::default(),
+      conversations_pushing: tokio::sync::Mutex::new(()),
       unread: unread::Unread::default(),
       session: Mutex::new(None),
       session_user: Mutex::new(None),
