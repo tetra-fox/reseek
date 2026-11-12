@@ -12,10 +12,16 @@ type Opened = {
   end: () => void;
 };
 
-/** A `fetch` for the event stream whose answers the test writes, frame by frame */
-const fakeServer = (status = 200) => {
+/**
+ * A `fetch` for the event stream whose answers the test writes, frame by frame. `refuse` may
+ * answer the request with that number, counted from 0, with something else than a stream
+ */
+const fakeServer = (refuse: (n: number) => Response | undefined = () => undefined) => {
   const opened: Opened[] = [];
+  let asked = 0;
   const fetcher = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+    const refused = refuse(asked++);
+    if (refused) return refused;
     let controller!: ReadableStreamDefaultController<Uint8Array>;
     const body = new ReadableStream<Uint8Array>({ start: (c) => void (controller = c) });
     const encoder = new TextEncoder();
@@ -28,7 +34,7 @@ const fakeServer = (status = 200) => {
       send: (text) => controller.enqueue(encoder.encode(text)),
       end: () => controller.close()
     });
-    return new Response(status === 200 ? body : null, { status });
+    return new Response(body);
   });
   return { opened, fetcher: fetcher as unknown as typeof fetch };
 };
@@ -86,9 +92,7 @@ describe("Live", () => {
     server.opened[0].send(frame(12, "users.removed", { username: "b" }));
     await settle();
     expect(live.status).toBe("connected");
-    expect(live.principal?.name).toBe("admin");
     expect(seen).toEqual(["state", "options", "removed a", "removed b"]);
-    expect(live.lastId).toBe("12");
   });
 
   it("reopens a lost stream from the last frame, and grows the wait after three quick losses", async () => {
@@ -142,7 +146,7 @@ describe("Live", () => {
     await vi.advanceTimersByTimeAsync(60_000);
     expect(server.opened).toHaveLength(1);
 
-    const refused = fakeServer(401);
+    const refused = fakeServer(() => new Response(null, { status: 401 }));
     const other = make(refused.fetcher);
     other.start();
     await settle();
@@ -242,5 +246,107 @@ describe("Live", () => {
     expect(live.status).toBe("polling");
     await vi.advanceTimersByTimeAsync(1000);
     expect(server.opened).toHaveLength(2);
+  });
+
+  it("hands a frame to every listener though one of them throws, and reads on", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const server = fakeServer();
+    const live = make(server.fetcher);
+    const seen: string[] = [];
+    live.on("users.removed", () => {
+      throw new TypeError("a state this page does not know");
+    });
+    live.on("users.removed", (data) => seen.push(data.username));
+    live.start();
+    server.opened[0].send(hello(1) + frame(2, "users.removed", { username: "a" }));
+    server.opened[0].send(frame(3, "users.removed", { username: "b" }));
+    await settle();
+    expect(seen).toEqual(["a", "b"]);
+    expect(live.status).toBe("connected");
+    expect(notices).toEqual([]);
+    expect(server.opened).toHaveLength(1);
+    expect(error).toHaveBeenCalledTimes(2);
+    error.mockRestore();
+  });
+
+  it("reopens from the last frame when new topics fail to open, which is no lost connection", async () => {
+    const server = fakeServer((n) => (n === 1 ? new Response(null, { status: 500 }) : undefined));
+    const live = make(server.fetcher);
+    live.retain("application");
+    const removed: string[] = [];
+    live.on("users.removed", (data) => removed.push(data.username));
+    live.start();
+    server.opened[0].send(hello(1) + frame(2, "users.removed", { username: "a" }));
+    await settle();
+    live.retain("users");
+    await vi.advanceTimersByTimeAsync(250);
+    await settle();
+    // the old stream dropped its frames while the new topics opened, and is closed when they
+    // fail; the stream that takes over brings those frames again
+    expect(server.opened[0].signal.aborted).toBe(true);
+    expect(live.status).toBe("connecting");
+    expect(live.retryAt).toBeNull();
+    expect(server.opened).toHaveLength(2);
+    expect(server.opened[1].url).toBe("/live?topics=application,users");
+    expect(server.opened[1].headers["Last-Event-ID"]).toBe("2");
+    server.opened[1].send(hello(2, true) + frame(3, "users.removed", { username: "again" }));
+    await settle();
+    expect(removed).toEqual(["a", "again"]);
+    expect(live.status).toBe("connected");
+    expect(notices).toEqual([]);
+  });
+
+  it("stops for a request it refuses as wrong, says why, and tries again for other topics", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const server = fakeServer((n) =>
+      n === 0 ? Response.json({ error: "Unknown topic bogus" }, { status: 400 }) : undefined
+    );
+    const live = make(server.fetcher);
+    const release = live.retain("bogus" as Topic);
+    live.start();
+    await settle();
+    expect(live.status).toBe("rejected");
+    expect(live.rejection).toBe("Unknown topic bogus");
+    expect(live.pollMs).not.toBeNull();
+    expect(notices).toEqual([]);
+    expect(error).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(server.fetcher).toHaveBeenCalledOnce();
+
+    release();
+    live.retain("users");
+    await vi.advanceTimersByTimeAsync(250);
+    expect(server.opened).toHaveLength(1);
+    server.opened[0].send(hello(1));
+    await settle();
+    expect(live.status).toBe("connected");
+    expect(live.rejection).toBeNull();
+    error.mockRestore();
+  });
+
+  it("says frames were missed once for a stream that greets without resuming", async () => {
+    const server = fakeServer();
+    const live = make(server.fetcher);
+    let missed = 0;
+    live.onMissed(() => (missed += 1));
+    live.start();
+    server.opened[0].send(hello(1));
+    await settle();
+    expect(missed).toBe(0);
+    server.opened[0].send(frame(2, "lagged", {}));
+    await settle();
+    expect(missed).toBe(1);
+
+    server.opened[0].end();
+    await vi.advanceTimersByTimeAsync(1000);
+    // the daemon could not resume: its greeting says so, and the lagged after it again
+    server.opened[1].send(hello(3) + frame(3, "lagged", {}));
+    await settle();
+    expect(missed).toBe(2);
+    server.opened[1].end();
+    await vi.advanceTimersByTimeAsync(1000);
+    server.opened[2].send(hello(3, true));
+    await settle();
+    expect(missed).toBe(2);
   });
 });

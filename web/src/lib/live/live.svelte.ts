@@ -13,7 +13,11 @@ import {
 
 export type { FrameData, FrameType, LiveFrame, Topic };
 
-export type LiveStatus = "off" | "connecting" | "connected" | "polling";
+/**
+ * Where the stream is. `polling` waits to open again after it was lost; `rejected` is not tried
+ * again until the topics change, as the daemon refused the request itself. Pages poll in both
+ */
+export type LiveStatus = "off" | "connecting" | "connected" | "polling" | "rejected";
 
 /** How often the shell and screens poll while the stream is down */
 export const FALLBACK_MS = 5_000;
@@ -51,21 +55,28 @@ type Handler<T extends FrameType> = (data: FrameData<T>) => void;
  */
 export class Live {
   status = $state<LiveStatus>("off");
-  /** who the stream is for, from its first frame */
-  principal = $state.raw<FrameData<"hello">["principal"] | null>(null);
   /** when the next attempt to reopen a lost stream is made, while one is waiting */
   retryAt = $state<number | null>(null);
+  /** why the daemon refused the stream, while it is `rejected` */
+  rejection = $state<string | null>(null);
 
   #deps: Deps;
   #wanted = new Map<Topic, number>();
   #handlers = new Map<FrameType, Set<(data: unknown) => void>>();
   #added = new Set<(topics: Topic[]) => void>();
+  #missed = new Set<() => void>();
   /** the topics of the stream that last greeted, whose frames are being handed over */
   #following: Topic[] = [];
   #stream: Stream | null = null;
   #replacing: Stream | null = null;
   #lastId: string | null = null;
   #epoch: string | null = null;
+  /** a stream greeted since `start`, so a later one that does not resume has missed frames */
+  #greeted = false;
+  /** the stream whose greeting already said frames were missed, so its `lagged` says it again */
+  #missedOn: Stream | null = null;
+  /** the topics the daemon refused, while `rejected` */
+  #rejectedFor: string | null = null;
   #running = false;
   /** when the recent losses happened, to tell a burst from an occasional drop */
   #failures: number[] = [];
@@ -77,11 +88,6 @@ export class Live {
 
   constructor(deps: Partial<Deps> = {}) {
     this.#deps = { ...defaults(), ...deps };
-  }
-
-  /** The id of the last frame handed to a listener */
-  get lastId() {
-    return this.#lastId;
   }
 
   /** The run of the daemon the last stream greeted from, new each time it starts */
@@ -106,8 +112,8 @@ export class Live {
     this.#shut();
     this.#lastId = null;
     this.#epoch = null;
+    this.#greeted = false;
     this.#following = [];
-    this.principal = null;
   }
 
   /** Asks for `topic` until the returned function is called; counted, so two screens can share one */
@@ -143,6 +149,16 @@ export class Live {
     return () => this.#added.delete(handler);
   }
 
+  /**
+   * Calls `handler` whenever frames may have been missed: a stream greeted without resuming
+   * after another had greeted, or the daemon said `lagged`. A store a snapshot does not fill
+   * reads again then
+   */
+  onMissed(handler: () => void): () => void {
+    this.#missed.add(handler);
+    return () => this.#missed.delete(handler);
+  }
+
   /** The topics asked for right now, in the order the stream asks for them */
   get topics(): Topic[] {
     return ordered(this.#wanted.keys());
@@ -153,6 +169,11 @@ export class Live {
     clearTimeout(this.#debounce);
     this.#debounce = setTimeout(() => {
       const now = this.topics.join(",");
+      // other topics may be ones the daemon takes
+      if (this.status === "rejected") {
+        if (now !== this.#rejectedFor) this.#open();
+        return;
+      }
       const open = (this.#replacing ?? this.#stream)?.topics.join(",");
       if (now !== open && this.status === "connected") this.#replace();
     }, DEBOUNCE_MS);
@@ -161,6 +182,8 @@ export class Live {
   #open() {
     clearTimeout(this.#retry);
     this.retryAt = null;
+    this.rejection = null;
+    this.#rejectedFor = null;
     if (this.status !== "polling") this.status = "connecting";
     this.#stream = this.#connect();
   }
@@ -195,7 +218,9 @@ export class Live {
         this.#stream = stream;
         this.#replacing = null;
       }
-      this.principal = frame.data.principal;
+      const missed = !frame.data.resumed && this.#greeted;
+      this.#greeted = true;
+      this.#missedOn = missed ? stream : null;
       this.#epoch = frame.data.epoch;
       this.#failures = [];
       this.#streak = 0;
@@ -208,28 +233,48 @@ export class Live {
         ? stream.topics.filter((topic) => !this.#following.includes(topic))
         : [];
       this.#following = stream.topics;
-      if (added.length) for (const handler of this.#added) handler(added);
+      if (added.length) for (const handler of this.#added) this.#call(handler, added);
+      if (missed) for (const handler of this.#missed) this.#call(handler);
+    }
+    if (frame.type === "lagged" && stream !== this.#missedOn) {
+      for (const handler of this.#missed) this.#call(handler);
     }
     if (id !== null) this.#lastId = id;
     const handlers = this.#handlers.get(frame.type);
     if (!handlers) return;
-    for (const handler of handlers) handler(frame.data);
+    for (const handler of handlers) this.#call(handler, frame.data);
+  }
+
+  /**
+   * Runs one listener, so a listener that throws leaves the others to run and the stream to go
+   * on. What it threw is a fault of the page: the console says what
+   */
+  #call<A extends unknown[]>(handler: (...args: A) => void, ...args: A) {
+    try {
+      handler(...args);
+    } catch (error) {
+      // oxlint-disable-next-line no-console
+      console.error("a live update could not be taken", error);
+    }
   }
 
   #ended(stream: Stream, end: End) {
     if (stream === this.#replacing) {
-      // the new topics failed to open: the old stream takes over again and the next attempt
-      // goes through the usual retry
       this.#replacing = null;
-      if (this.#stream) this.#stream.dispatching = true;
       if (end.kind === "unauthorized") return this.#unauthorized();
+      if (end.kind === "rejected") return this.#rejected(end);
+      // the new topics failed to open. The old stream has dropped its frames since the change
+      // began, so it is closed and a stream for the new topics opens from the last frame taken,
+      // which brings them again. The old one was working: this is no lost connection, and a
+      // stream that fails again from here is
       this.#stream?.close();
       this.#stream = null;
-      return this.#lost(end);
+      return this.#open();
     }
     if (stream !== this.#stream) return;
     this.#stream = null;
     if (end.kind === "unauthorized") return this.#unauthorized();
+    if (end.kind === "rejected") return this.#rejected(end);
     // the stream for the new topics replays from the last frame too, so it is the one being
     // opened now, and a retry is only waited for while no stream is open or opening
     if (this.#replacing) {
@@ -244,6 +289,22 @@ export class Live {
   #unauthorized() {
     this.stop();
     this.#deps.unauthorized();
+  }
+
+  /**
+   * The daemon refused the request itself, which asking again for the same topics would not
+   * change: no retry, and pages poll, until the topics change
+   */
+  #rejected(end: Extract<End, { kind: "rejected" }>) {
+    this.#stream?.close();
+    this.#replacing?.close();
+    this.#stream = null;
+    this.#replacing = null;
+    this.#rejectedFor = this.topics.join(",");
+    this.rejection = end.reason;
+    this.status = "rejected";
+    // oxlint-disable-next-line no-console
+    console.error(`the event stream was refused (HTTP ${end.status}): ${end.reason}`);
   }
 
   #lost(end: End) {
@@ -270,6 +331,8 @@ export class Live {
     clearTimeout(this.#retry);
     clearTimeout(this.#debounce);
     this.retryAt = null;
+    this.rejection = null;
+    this.#rejectedFor = null;
     this.#stream?.close();
     this.#replacing?.close();
     this.#stream = null;

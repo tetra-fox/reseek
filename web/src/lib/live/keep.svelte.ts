@@ -9,9 +9,9 @@ export const RECONCILE_MS = 60_000;
  * Keeps a screen current while it is mounted. It follows the topic `topic` gives on the event
  * stream (a function, so a route parameter such as a search's id can change it), and calls
  * `reload` to re-read the screen's data, which the screen reconciles into its rows in place:
- * every minute while the tab is visible, as soon as the tab is visible again, when the stream
- * greets after the connection was lost, when the stream says frames were missed, when a stream
- * that resumed starts following the topic, and on the polling timer while the stream is down. A
+ * every minute while the tab is visible, as soon as the tab is visible again, when frames may
+ * have been missed, when a stream that resumed starts following the topic, and on the polling
+ * timer while the stream is down. A stream that resumed after a lost one brings what it missed. A
  * reload due while the user holds a list still waits until they let go. Call it while the
  * component is being set up
  */
@@ -49,15 +49,9 @@ export const keepCurrent = (reload: () => void, topic?: () => Topic | undefined)
     document.addEventListener("visibilitychange", change);
     return () => document.removeEventListener("visibilitychange", change);
   });
-  // the screen may lack frames once a stream opens after a lost one, says it missed some, or
-  // resumed to start following the screen's topic: it reads again
-  let before = live.status;
-  $effect(() => {
-    const status = live.status;
-    if (status === "connected" && before === "polling") run();
-    before = status;
-  });
-  $effect(() => live.on("lagged", run));
+  // the screen may lack frames once the stream missed some, or resumed to start following the
+  // screen's topic: it reads again
+  $effect(() => live.onMissed(run));
   $effect(() =>
     live.onAdded((topics) => {
       const followed = topic?.();

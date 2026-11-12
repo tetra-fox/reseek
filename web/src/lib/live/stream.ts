@@ -1,4 +1,5 @@
 import type { Schemas } from "#lib/api/client.js";
+import { reason } from "#lib/request.js";
 
 import { SseParser } from "./sse";
 
@@ -50,6 +51,11 @@ export type End =
   | { kind: "unauthorized" }
   /** the server refused the stream for this principal or set of topics; polling takes over */
   | { kind: "refused"; status: number; retryAfterMs: number | null }
+  /**
+   * the server refused the request itself as wrong, such as a topic it does not know; asking
+   * again for the same topics gets the same answer
+   */
+  | { kind: "rejected"; status: number; reason: string }
   /** the connection failed or ended, or the server said goodbye for a reason other than auth */
   | { kind: "lost" };
 
@@ -126,22 +132,33 @@ export class Stream {
       if (response.status === 403 || response.status === 429) {
         return this.#end({ kind: "refused", status: response.status, retryAfterMs });
       }
+      if (response.status >= 400 && response.status < 500) {
+        // a body that is not JSON leaves the status to say why
+        const body: unknown = await response.json().catch(() => undefined);
+        return this.#end({
+          kind: "rejected",
+          status: response.status,
+          reason: reason(response.status, body)
+        });
+      }
       return this.#end({ kind: "lost" });
     }
     const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
     const parser = new SseParser();
-    try {
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done || this.#ended) break;
-        this.#hearing();
-        for (const event of parser.push(value)) {
-          if (this.#ended) break;
-          this.#event(event.event, event.data, event.id);
-        }
+    for (;;) {
+      let chunk: ReadableStreamReadResult<string>;
+      try {
+        chunk = await reader.read();
+      } catch {
+        // the connection broke, or close() aborted it
+        break;
       }
-    } catch {
-      // the connection broke, or close() aborted it
+      if (chunk.done || this.#ended) break;
+      this.#hearing();
+      for (const event of parser.push(chunk.value)) {
+        if (this.#ended) break;
+        this.#event(event.event, event.data, event.id);
+      }
     }
     this.#end({ kind: "lost" });
   }
