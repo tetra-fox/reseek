@@ -8,7 +8,9 @@ use std::time::Duration;
 
 use soulseek_proto::frame::FrameKind;
 use soulseek_proto::server::{LoginRequest, LoginResponse, PrivateRoomToggle, SetListenPort};
-use soulseek_proto::{LoginUsernameError, ServerCode, ServerRequest, validate_login_username};
+use soulseek_proto::{
+  LoginUsernameError, Secret, ServerCode, ServerRequest, validate_login_username,
+};
 use tokio::sync::Semaphore;
 use tokio::time::{Instant, MissedTickBehavior, interval_at};
 use tokio_util::sync::CancellationToken;
@@ -39,8 +41,10 @@ static UNIDENTIFIED_FULL: LogLimiter = LogLimiter::new();
 impl Client {
   /// Connects to the server at `address:port` and logs in. The listener starts first, so a busy
   /// listen port fails the connect before the server is contacted. `cancel`, or a call to
-  /// [`Client::disconnect`] while this runs, ends it with `Canceled`. Any failure after the
-  /// state changed leaves the client disconnected, with a `Disconnected` event naming the error.
+  /// [`Client::disconnect`] while this runs, ends it with `Canceled`. A call that finds a
+  /// session logged in by another call with the same server, username and password joins it,
+  /// and is refused otherwise. Any failure after the state changed leaves the client
+  /// disconnected, with a `Disconnected` event naming the error.
   pub async fn connect(
     &self,
     address: &str,
@@ -81,17 +85,22 @@ impl Client {
         match &session.stage {
           // the previous session is still being torn down; this waits for it below
           Stage::Disconnecting { .. } => {}
-          // another connect logged in while this one waited for the lock: the same login joins
-          // it
+          // another connect logged in while this one waited for the lock
           Stage::LoggedIn {
-            username: current, ..
+            link,
+            username: current,
+            password: current_password,
+            ..
           } => {
-            if current == username {
-              return Ok(());
-            }
-            return Err(ClientError::InvalidOperation(
-              "The client is already connected as another user".into(),
-            ));
+            return joined(
+              link,
+              current,
+              current_password,
+              address,
+              port,
+              username,
+              password,
+            );
           }
           // only a connect leaves disconnected, and connects take turns under the lock, so
           // with no teardown under way and no login to join, the session is disconnected
@@ -218,7 +227,10 @@ impl Client {
         .inner
         .transition(
           &mut session,
-          Edge::LogIn(username.to_owned()),
+          Edge::LogIn {
+            username: username.to_owned(),
+            password: Secret::new(password),
+          },
           "Logging in".into(),
           None,
         )
@@ -453,6 +465,31 @@ impl Drop for Unfinished<'_> {
       drop(teardown.spawn(self.client));
     }
   }
+}
+
+/// Joins the session logged in over `link` as `current` with `current_password` when a connect
+/// for `address:port` as `username` with `password` would have made the same one; refuses it
+/// otherwise, since that connect would report a session it did not make
+fn joined(
+  link: &Link,
+  current: &str,
+  current_password: &Secret,
+  address: &str,
+  port: u16,
+  username: &str,
+  password: &str,
+) -> Result<(), ClientError> {
+  let refused = |message: &str| Err(ClientError::InvalidOperation(message.into()));
+  if current != username {
+    return refused("The client is already connected as another user");
+  }
+  if link.address != address || link.ip_endpoint.port() != port {
+    return refused("The client is already connected to another server");
+  }
+  if current_password.expose() != password {
+    return refused("The client is already connected with another password");
+  }
+  Ok(())
 }
 
 /// fails when the connect was canceled

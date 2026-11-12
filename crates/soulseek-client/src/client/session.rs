@@ -4,6 +4,8 @@
 
 use std::net::SocketAddr;
 
+use soulseek_proto::Secret;
+
 use crate::conn::MessageConn;
 use crate::listener::Listener;
 use crate::state::ClientState;
@@ -31,16 +33,18 @@ pub(super) enum Stage {
     listener: Option<Listener>,
     link: Link,
   },
-  /// the login of `username` was sent
+  /// the login of `username` with `password` was sent
   LoggingIn {
     listener: Option<Listener>,
     link: Link,
     username: String,
+    password: Secret,
   },
   LoggedIn {
     listener: Option<Listener>,
     link: Link,
     username: String,
+    password: Secret,
   },
   /// the session is being torn down; `reached` when it had reached the server
   Disconnecting {
@@ -54,8 +58,9 @@ pub(super) enum Edge {
   Connect,
   /// from connecting to connected, once the TCP connection is up
   Reach(Link),
-  /// from connected to logging in, once the login of this username is about to be sent
-  LogIn(String),
+  /// from connected to logging in, once the login of `username` with `password` is about to be
+  /// sent
+  LogIn { username: String, password: Secret },
   /// from logging in to logged in, once the server accepted the login
   Accept,
   /// from connecting, connected, logging in or logged in to disconnecting
@@ -132,11 +137,12 @@ impl Stage {
       (Self::Connecting { listener }, Edge::Reach(link)) => {
         (Self::Connected { listener, link }, Released::default())
       }
-      (Self::Connected { listener, link }, Edge::LogIn(username)) => (
+      (Self::Connected { listener, link }, Edge::LogIn { username, password }) => (
         Self::LoggingIn {
           listener,
           link,
           username,
+          password,
         },
         Released::default(),
       ),
@@ -145,6 +151,7 @@ impl Stage {
           listener,
           link,
           username,
+          password,
         },
         Edge::Accept,
       ) => (
@@ -152,6 +159,7 @@ impl Stage {
           listener,
           link,
           username,
+          password,
         },
         Released::default(),
       ),
@@ -213,7 +221,7 @@ mod tests {
     match edge {
       Edge::Connect => "Connect",
       Edge::Reach(_) => "Reach",
-      Edge::LogIn(_) => "LogIn",
+      Edge::LogIn { .. } => "LogIn",
       Edge::Accept => "Accept",
       Edge::Disconnect => "Disconnect",
       Edge::Finish => "Finish",
@@ -225,7 +233,10 @@ mod tests {
     vec![
       Edge::Connect,
       Edge::Reach(link().await),
-      Edge::LogIn("alice".into()),
+      Edge::LogIn {
+        username: "alice".into(),
+        password: Secret::new("secret"),
+      },
       Edge::Accept,
       Edge::Disconnect,
       Edge::Finish,
