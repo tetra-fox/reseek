@@ -309,22 +309,23 @@ impl Watchdog {
     }
   }
 
-  /// Mirrors the watchdog into `State.connectionWatchdog`.
+  /// Mirrors the watchdog into `State.connectionWatchdog`. The watchdog is read inside the
+  /// update, which takes one at a time, so the last of several publishing at once reads what
+  /// every one of them changed before it.
   fn publish(&self) {
     let inner = &self.inner;
-    let status = *lock(&inner.status);
-    let watchdog = ConnectionWatchdogState {
-      is_enabled: self.is_enabled(),
-      is_attempting_connection: status.attempting,
-      next_attempt_at: status
-        .attempting
-        .then_some(status.next_attempt_at)
-        .flatten(),
-      is_login_unanswered: inner.unanswered.load(Ordering::Relaxed) > 0,
-    };
-    inner
-      .state
-      .update(|state| state.connection_watchdog = watchdog);
+    inner.state.update(|state| {
+      let status = *lock(&inner.status);
+      state.connection_watchdog = ConnectionWatchdogState {
+        is_enabled: self.is_enabled(),
+        is_attempting_connection: status.attempting,
+        next_attempt_at: status
+          .attempting
+          .then_some(status.next_attempt_at)
+          .flatten(),
+        is_login_unanswered: inner.unanswered.load(Ordering::Relaxed) > 0,
+      };
+    });
   }
 }
 
