@@ -34,7 +34,7 @@ use cascade::Watcher;
 use chrono::Utc;
 use reseek_shares::lock;
 use rusqlite::params;
-use tokio::sync::{Semaphore, watch};
+use tokio::sync::{Semaphore, mpsc, watch};
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
@@ -68,6 +68,9 @@ const STOPPING: Duration = Duration::from_secs(5);
 
 /// How many enqueue calls of the API run at once.
 const ENQUEUE_CALLS: usize = 2;
+
+/// How many places in queue peers sent on their own wait to be written.
+const PLACES_WAITING: usize = 64;
 
 /// Why a download canceled at block time ended.
 const BLOCKED: &str = "Blocked";
@@ -168,6 +171,8 @@ pub struct Downloads {
   resuming: tokio::sync::Mutex<resume::Resuming>,
   /// when each running download last asked its peer for its place in the queue
   asked: Mutex<HashMap<Uuid, Instant>>,
+  /// the places in queue peers sent on their own, written one at a time in the order they came
+  places: mpsc::Sender<queue::SentPlace>,
   /// held by a test to keep an arrived file's move from starting
   #[cfg(test)]
   move_gate: tokio::sync::Mutex<()>,
@@ -199,6 +204,7 @@ impl Downloads {
     paths: &Paths,
     shutdown: CancellationToken,
   ) -> Arc<Self> {
+    let (places, sent_places) = mpsc::channel(PLACES_WAITING);
     let engine = Arc::new_cyclic(|this| Self {
       this: this.clone(),
       db,
@@ -227,6 +233,7 @@ impl Downloads {
       enqueue_calls: Semaphore::new(ENQUEUE_CALLS),
       resuming: tokio::sync::Mutex::default(),
       asked: Mutex::new(HashMap::new()),
+      places,
       #[cfg(test)]
       move_gate: tokio::sync::Mutex::new(()),
     });
@@ -255,6 +262,8 @@ impl Downloads {
       }
       .in_current_span(),
     );
+    let placing = engine.clone();
+    tokio::spawn(async move { placing.write_places(sent_places).await }.in_current_span());
     engine
   }
 

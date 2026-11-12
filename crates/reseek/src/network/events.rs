@@ -320,15 +320,10 @@ async fn handle(app: &AppState, event: Event, session: &mut Session) {
       filename,
       place,
     } => {
-      let downloads = app.downloads.clone();
-      tokio::spawn(
-        async move {
-          downloads
-            .place_received(&username, filename.as_str(), place)
-            .await;
-        }
-        .in_current_span(),
-      );
+      app
+        .downloads
+        .place_sent(username, filename.as_str().to_string(), place)
+        .await;
     }
     Event::DownloadFailed { username, filename } => warn!(
       username,

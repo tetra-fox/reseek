@@ -8,6 +8,7 @@ use api_types::transfers::TransferStates;
 use api_types::users::blocking::BlockScope;
 use reseek_shares::lock;
 use soulseek_client::ClientError;
+use tokio::sync::mpsc;
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
@@ -22,6 +23,13 @@ use crate::transfers::store;
 
 /// How long a place a peer gave is answered again without asking it.
 const ASK_EVERY: Duration = Duration::from_secs(10);
+
+/// A place in queue a peer sent on its own, waiting to be written.
+pub(super) struct SentPlace {
+  username: String,
+  filename: String,
+  place: u32,
+}
 
 impl Downloads {
   /// The place of the download `id` of `username` in the peer's queue, asked of the peer and
@@ -75,8 +83,42 @@ impl Downloads {
   }
 
   /// A place in queue the peer `username` sent on its own for `filename`: kept on the running
-  /// download of that file while the peer has it queued.
-  pub async fn place_received(&self, username: &str, filename: &str, place: u32) {
+  /// download of that file while the peer has it queued, written after every place sent before
+  /// it.
+  pub async fn place_sent(&self, username: String, filename: String, place: u32) {
+    let sent = SentPlace {
+      username,
+      filename,
+      place,
+    };
+    if self.places.send(sent).await.is_err() {
+      debug!("place in queue not recorded; the download engine stopped");
+    }
+  }
+
+  /// Writes the places peers sent on their own, from `sent`, one at a time in the order they
+  /// came, until the daemon stops.
+  pub(super) async fn write_places(&self, mut sent: mpsc::Receiver<SentPlace>) {
+    loop {
+      let next = tokio::select! {
+        () = self.shutdown.cancelled() => return,
+        next = sent.recv() => next,
+      };
+      let Some(SentPlace {
+        username,
+        filename,
+        place,
+      }) = next
+      else {
+        return;
+      };
+      self.place_received(&username, &filename, place).await;
+    }
+  }
+
+  /// Keeps `place` on the running download of `filename` from `username` while the peer has it
+  /// queued.
+  async fn place_received(&self, username: &str, filename: &str, place: u32) {
     let name = username.to_string();
     let file = filename.to_string();
     let found = self
