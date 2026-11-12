@@ -4,7 +4,8 @@ import { marks } from "#lib/analysis/marks.svelte.js";
 import { api, onUnauthorized, type Schemas } from "#lib/api/client.js";
 import { browser } from "#lib/browse/browse.svelte.js";
 import { chat } from "#lib/chat/chat.svelte.js";
-import { withValueAt } from "#lib/config/sections.js";
+import type { OptionKey } from "#lib/config/keys.js";
+import { valueAt, withValueAt } from "#lib/config/sections.js";
 import { toast } from "#lib/feedback/toast.svelte.js";
 import { jobs } from "#lib/jobs/jobs.svelte.js";
 import { FALLBACK_MS, live } from "#lib/live/live.svelte.js";
@@ -143,6 +144,11 @@ class App {
     if (!this.options)
       return { caption: "Could not load the settings", detail: this.#optionsError };
     return null;
+  }
+
+  /** The value of the option `key` in effect, undefined before the options are read */
+  option(key: OptionKey): unknown {
+    return valueAt(this.options, key);
   }
 
   #tookOptions(document: Schemas["OptionsDocument"]) {

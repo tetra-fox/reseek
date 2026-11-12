@@ -47,7 +47,6 @@
   import { href } from "#lib/nav.js";
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
-  import { fields } from "#lib/stored.svelte.js";
   import { type Entry, entries, type SortBy } from "#lib/system/explorer.js";
   import { archiveUrl, fileUrl, joinPath, type Root } from "#lib/system/localfiles.js";
   import { encodePath } from "#lib/transfers/content.js";
@@ -177,7 +176,7 @@
     }
     return map;
   });
-  const managed = $derived(fields(app.options).remote_file_management === true);
+  const managed = $derived(app.option("remote_file_management") === true);
   $effect(() => marks.retain());
   const filters = $derived<ActiveFilter[]>(
     FILE_FILTERS.filter((f) => f.id === only).map((f) => ({

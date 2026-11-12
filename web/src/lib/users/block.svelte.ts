@@ -3,7 +3,6 @@ import { app } from "#lib/app.svelte.js";
 import { toast } from "#lib/feedback/toast.svelte.js";
 import { ago, plural } from "#lib/format.js";
 import { call } from "#lib/request.js";
-import { fields } from "#lib/stored.svelte.js";
 
 import { users } from "./users.svelte";
 
@@ -55,7 +54,7 @@ export const blockEnd = (block: Schemas["Block"], now: number): string | null =>
 
 /** The scopes a new block starts with: `blocking.default_scopes` from the options in effect */
 export const defaultScopes = (): BlockScope[] => {
-  const configured = fields(fields(app.options).blocking).default_scopes;
+  const configured = app.option("blocking.default_scopes");
   return Array.isArray(configured)
     ? ALL.filter((scope) => configured.includes(scope))
     : STOP_SCOPES.map((s) => s.scope);

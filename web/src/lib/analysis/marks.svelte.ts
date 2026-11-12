@@ -4,7 +4,6 @@ import { api, type Schemas } from "#lib/api/client.js";
 import { app } from "#lib/app.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { call } from "#lib/request.js";
-import { fields } from "#lib/stored.svelte.js";
 
 import type { Report } from "./analysis";
 import { type Mark, markOf } from "./marks";
@@ -115,7 +114,7 @@ export const marks = new Marks();
 
 /** The extensions the analyzer is offered for, lowercased, as the options name them */
 const extensions = $derived.by(() => {
-  const listed = fields(fields(app.options).analysis).extensions;
+  const listed = app.option("analysis.extensions");
   return new Set(Array.isArray(listed) ? listed.map((x) => String(x).toLowerCase()) : []);
 });
 

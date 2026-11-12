@@ -11,7 +11,6 @@
   import { getFileName, parseDuration } from "#lib/format.js";
   import type { Grid } from "#lib/lists/table.svelte.js";
   import { session } from "#lib/session.svelte.js";
-  import { fields } from "#lib/stored.svelte.js";
   import { type ColumnId, fileInset, MARK_REM } from "#lib/transfers/grid/columns.js";
   import type { ViewSettings } from "#lib/transfers/grid/settings.svelte.js";
   import { type Group, groupingOf, type Item, treeOf } from "#lib/transfers/grid/view.js";
@@ -121,9 +120,7 @@
   // the visible remotely queued downloads ask the peer for their place, each once a period and
   // the first time as soon as it shows; one ask a second at most, so a screenful doesn't ask at
   // once, and none while the tab is hidden
-  const refreshMs = $derived(
-    parseDuration(fields(fields(fields(app.options).transfers).ui).queue_refresh) ?? 120_000
-  );
+  const refreshMs = $derived(parseDuration(app.option("transfers.ui.queue_refresh")) ?? 120_000);
   /** when each download was last asked for its place; read by the timer only, never shown */
   const asked = new Map<string, number>();
   const ASK_EVERY_MS = 1_000;

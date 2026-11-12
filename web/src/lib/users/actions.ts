@@ -49,7 +49,7 @@ export const links = (username: string, folder?: string) => ({
 
 /** Our Soulseek name: the one logged in, or the configured one while disconnected, when the state names none */
 export const ownName = (): string | undefined => {
-  const configured = fields(fields(app.options).soulseek).username;
+  const configured = app.option("soulseek.username");
   return app.state?.user.username ?? (typeof configured === "string" ? configured : undefined);
 };
 
@@ -111,7 +111,7 @@ export const setBuddy = (username: string, on: boolean) =>
 
 /** The user-defined groups in the options in effect, by name, with their colors */
 export const userGroups = (): { name: string; color: string | null }[] =>
-  Object.entries(fields(fields(fields(fields(app.options).transfers).groups).user_defined))
+  Object.entries(fields(app.option("transfers.groups.user_defined")))
     .map(([name, group]) => {
       const color = fields(group).color;
       return { name, color: typeof color === "string" ? color : null };

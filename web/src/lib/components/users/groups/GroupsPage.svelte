@@ -148,8 +148,8 @@
   const who = (g: GroupSummary) => {
     if (g.name === PRIVILEGED) return "Privileged on the server";
     if (g.name === LEECHERS) {
-      const files = valueAt(app.options, "transfers.groups.leechers.thresholds.files");
-      const folders = valueAt(app.options, "transfers.groups.leechers.thresholds.directories");
+      const files = app.option("transfers.groups.leechers.thresholds.files");
+      const folders = app.option("transfers.groups.leechers.thresholds.directories");
       return typeof files === "number" && typeof folders === "number"
         ? `Share fewer than ${plural(files, "file", "files")} or ${plural(folders, "folder", "folders")}`
         : "Share too little";
