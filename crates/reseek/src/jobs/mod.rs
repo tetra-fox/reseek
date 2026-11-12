@@ -155,6 +155,9 @@ pub struct Jobs {
   progress: Mutex<HashMap<Uuid, f64>>,
   /// the cancel of each maintenance run going on
   cancels: Mutex<HashMap<Uuid, CancellationToken>>,
+  /// held from reading the counts to putting them into the state, so the last read is the one
+  /// left there
+  summarizing: tokio::sync::Mutex<()>,
   /// woken when a schedule's last run or what it shows changed, for the schedules to be pushed
   pub schedules_changed: tokio::sync::Notify,
   /// the schedules with a run going on
@@ -180,6 +183,7 @@ impl Jobs {
       state,
       progress: Mutex::default(),
       cancels: Mutex::default(),
+      summarizing: tokio::sync::Mutex::default(),
       schedules_changed: tokio::sync::Notify::new(),
       running_schedules: Mutex::default(),
       scheduler_started: Utc::now(),
@@ -635,6 +639,7 @@ impl Jobs {
 
   /// Puts how many jobs run and are paused, and the last failure, into the state.
   async fn summarize(&self) {
+    let _summarizing = self.summarizing.lock().await;
     match self.db.read(store::summary).await {
       Ok(summary) => {
         if self.state.current().jobs != summary {

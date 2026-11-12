@@ -431,9 +431,13 @@ impl Downloads {
 
   /// Brings the job `job` in the jobs list in step with its downloads: ended with its files
   /// once every one of them ended and it is not being enqueued, canceled when every one was
-  /// removed, else its counts and whether it is paused. A job that never had a download is left
-  /// as it is, for the caller to end with its reason; returns whether it was one.
+  /// removed, else its counts and whether it is paused. Syncs of one job run one at a time, so
+  /// the last leaves what the downloads are now. A job that never had a download is left as it
+  /// is, for the caller to end with its reason; returns whether it was one.
   pub(super) async fn sync_job(&self, job: Uuid) -> bool {
+    // held from the read to the write, so of syncs that ran at once the one that read last
+    // writes last
+    let _turn = self.job_syncs.take(&job.to_string()).await;
     let open = self.open_jobs.contains(job);
     let read = self
       .db

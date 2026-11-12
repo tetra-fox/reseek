@@ -161,6 +161,8 @@ pub struct Downloads {
   senders: Arc<Mutex<received::Senders>>,
   /// one enqueue per user at a time
   turns: Turns,
+  /// one bringing in step of each job in the jobs list at a time, keyed by the job's id
+  job_syncs: Turns,
   /// the local queue: the order waiting downloads start in
   starts: starts::Starts,
   /// the jobs whose files are still being enqueued
@@ -228,6 +230,7 @@ impl Downloads {
       in_flight: Mutex::new(HashMap::new()),
       senders: Arc::default(),
       turns: Turns::default(),
+      job_syncs: Turns::default(),
       starts: starts::Starts::default(),
       open_jobs: jobs::Open::default(),
       enqueue_calls: Semaphore::new(ENQUEUE_CALLS),
