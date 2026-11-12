@@ -1,7 +1,7 @@
 //! One search while it runs: the client's state reports and the responses it takes are kept in
-//! memory, each state change written and pushed at once, the counts at most every 250 ms, and
-//! the end written with every response in one statement before anyone is told the search
-//! completed.
+//! memory, each state change written and pushed at once, the counts with the responses taken
+//! since at most every 250 ms, and the end written with every response in one transaction before
+//! anyone is told the search completed.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -12,7 +12,7 @@ use api_types::search::{
   Search, SearchOutcome, SearchResponse, SearchResponseReceived, SearchState,
 };
 use chrono::Utc;
-use reseek_shares::lock;
+use reseek_shares::{backoff, lock};
 use soulseek_client::ClientError;
 use soulseek_client::SearchState as ClientState;
 use soulseek_proto::peer;
@@ -27,6 +27,9 @@ use crate::users::Directory;
 
 /// How often the counts of a running search are written and pushed at most.
 const COUNTS_EVERY: Duration = Duration::from_millis(250);
+
+/// The longest wait before an end that could not be written is tried again.
+const RETRY_AT_MOST: Duration = Duration::from_secs(60);
 
 /// A search while its task runs.
 pub(super) struct Running {
@@ -43,7 +46,10 @@ pub(super) struct Running {
 /// What the client reported so far.
 struct Progress {
   record: Search,
-  responses: Vec<SearchResponse>,
+  /// every response taken, in order; a reader takes the list without copying it under the lock
+  responses: Arc<Vec<SearchResponse>>,
+  /// how many of `responses` are saved
+  saved: usize,
   /// a state change not yet written
   moved: bool,
   /// told once the client took the search, or with the error it refused it with
@@ -106,7 +112,8 @@ impl Running {
       done: watch::channel(false).0,
       progress: Mutex::new(Progress {
         record,
-        responses: Vec::new(),
+        responses: Arc::default(),
+        saved: 0,
         moved: false,
         accepted: Some(accepted),
       }),
@@ -160,7 +167,7 @@ impl Running {
     record.locked_file_count = record
       .locked_file_count
       .saturating_add(taken.locked_file_count);
-    progress.responses.push(taken);
+    Arc::make_mut(&mut progress.responses).push(taken);
     drop(progress);
     self.changed.notify_one();
   }
@@ -225,35 +232,7 @@ impl Searches {
       running.done.send_replace(true);
       return;
     }
-    self.finish(&running, result).await;
-    running.done.send_replace(true);
-  }
-
-  /// Writes and pushes the search's state and counts as they stand.
-  async fn write_progress(&self, running: &Running) {
-    let record = running.record();
-    let written = record.clone();
-    match self
-      .db
-      .write(move |conn| store::update(conn, &written))
-      .await
-    {
-      Ok(true) => self.live.publish(LiveFrame::SearchUpdate(record)),
-      Ok(false) => debug!("search deleted while it ran; its progress is not written"),
-      Err(e) => warn!(error = %e, "search progress not written"),
-    }
-  }
-
-  /// Writes how the search ended with its responses, then pushes it as completed.
-  async fn finish(&self, running: &Running, result: Result<soulseek_client::Search, ClientError>) {
-    let (mut record, responses) = {
-      let mut progress = lock(&running.progress);
-      (
-        progress.record.clone(),
-        std::mem::take(&mut progress.responses),
-      )
-    };
-    record.state = match result {
+    let ended = match result {
       Ok(search) => state(search.state),
       Err(ClientError::Canceled) if running.canceled.load(Ordering::Relaxed) => {
         SearchState::Completed(SearchOutcome::Cancelled)
@@ -263,34 +242,101 @@ impl Searches {
         SearchState::Completed(SearchOutcome::Errored)
       }
     };
-    record.ended_at = Some(Utc::now());
+    self.finish(&running, ended).await;
+    running.done.send_replace(true);
+  }
+
+  /// Writes and pushes the search's state and counts as they stand, and saves the responses
+  /// taken since the last write.
+  async fn write_progress(&self, running: &Running) {
+    let (record, first, batch) = {
+      let progress = lock(&running.progress);
+      let batch = progress.responses[progress.saved..].to_vec();
+      (progress.record.clone(), progress.saved, batch)
+    };
+    let taken = first + batch.len();
     let written = record.clone();
-    let stored = self
+    let saved = self
       .db
       .write(move |conn| {
-        let blob = store::compress(&responses)
-          .map_err(|e| rusqlite::Error::ToSqlConversionFailure(e.into()))?;
-        let found = store::finish(conn, &written, &blob)?;
-        Ok(found.then_some(blob.len()))
+        let blob = (!batch.is_empty())
+          .then(|| store::compressed(&batch))
+          .transpose()?;
+        store::save(conn, &written, first, blob.as_deref())
       })
       .await;
-    match stored {
-      Ok(Some(bytes)) => {
-        record.response_bytes = bytes as u64;
-        debug!(
-          state = %record.state,
-          responses = record.response_count,
-          files = record.file_count,
-          bytes,
-          "search stored"
-        );
+    match saved {
+      Ok(true) => {
+        lock(&running.progress).saved = taken;
         self.live.publish(LiveFrame::SearchUpdate(record));
       }
-      Ok(None) => debug!("search deleted while it ran; its end is not written"),
-      Err(e) => error!(
-        error = %e,
-        "search responses not stored; the search is ended at the next start"
-      ),
+      Ok(false) => debug!("search deleted while it ran; its progress is not written"),
+      Err(e) => warn!(error = %e, "search progress not written"),
+    }
+  }
+
+  /// Writes that the search ended as `ended` with its responses, then pushes it as completed. A
+  /// write that fails is tried again until it is written or the engine stops; the responses it
+  /// saved while running then end it at the next start.
+  async fn finish(&self, running: &Running, ended: SearchState) {
+    let (mut record, responses) = {
+      let progress = lock(&running.progress);
+      (progress.record.clone(), progress.responses.clone())
+    };
+    record.state = ended;
+    record.ended_at = Some(Utc::now());
+    let mut failures = 0;
+    loop {
+      let (written, responses) = (record.clone(), responses.clone());
+      let stored = self
+        .db
+        .write(move |conn| {
+          let blob = store::compressed(&responses)?;
+          let found = store::finish(conn, &written, &blob)?;
+          Ok(found.then_some(blob.len()))
+        })
+        .await;
+      let error = match stored {
+        Ok(Some(bytes)) => {
+          record.response_bytes = bytes as u64;
+          debug!(
+            state = %record.state,
+            responses = record.response_count,
+            files = record.file_count,
+            bytes,
+            failures,
+            "search stored"
+          );
+          self.live.publish(LiveFrame::SearchUpdate(record));
+          return;
+        }
+        Ok(None) => {
+          debug!("search deleted while it ran; its end is not written");
+          return;
+        }
+        Err(e) => e,
+      };
+      failures += 1;
+      if failures == 1 {
+        error!(error = %error, "search end not written; trying again until it is");
+      } else {
+        debug!(error = %error, failures, "search end not written again");
+      }
+      let wait = backoff::wait(
+        failures,
+        backoff::doubling(Duration::from_secs(1)),
+        RETRY_AT_MOST,
+      );
+      tokio::select! {
+        () = tokio::time::sleep(wait) => {}
+        () = self.stopping.cancelled() => {
+          warn!(
+            "search end not written by the stop; it ends with the responses it saved at the \
+             next start"
+          );
+          return;
+        }
+      }
     }
   }
 }

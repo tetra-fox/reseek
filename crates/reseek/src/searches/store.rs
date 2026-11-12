@@ -1,5 +1,6 @@
 //! `search.db`: one row per search we started, its responses kept as one compressed blob
-//! written when the search finished.
+//! written when the search finished. While it runs, the responses it takes are saved in batches
+//! beside it, so a stop that does not end it keeps them.
 
 use std::io::{Read, Write};
 
@@ -19,7 +20,7 @@ use uuid::Uuid;
 use crate::db::{self, Schema, enum_at, enum_text, read_timestamp, timestamp};
 
 /// `search.db`: the `searches` table and the wishlist.
-pub static SCHEMA: Schema = db::schema!("search", ["0001_initial"]);
+pub static SCHEMA: Schema = db::schema!("search", ["0001_initial", "0002_running_responses"]);
 
 /// The columns [`search`] reads, in its order: every one but the responses.
 const COLUMNS: &str = "id, search_text, token, scope_type, scope_subjects, state, started_at, \
@@ -134,10 +135,38 @@ pub fn update(conn: &Connection, search: &Search) -> rusqlite::Result<bool> {
   Ok(updated == 1)
 }
 
-/// Writes how `search` ended with its compressed `responses`, in one statement, so a search
-/// reads as completed only once its responses are there; false when it is gone.
-pub fn finish(conn: &Connection, search: &Search, responses: &[u8]) -> rusqlite::Result<bool> {
-  let updated = conn.execute(
+/// Writes the state and counts of the running `search` with `batch`, the compressed responses
+/// it took after the `first` it saved before, when it took any; false when it is gone.
+pub fn save(
+  conn: &mut Connection,
+  search: &Search,
+  first: usize,
+  batch: Option<&[u8]>,
+) -> rusqlite::Result<bool> {
+  let tx = conn.transaction()?;
+  if !update(&tx, search)? {
+    return Ok(false);
+  }
+  if let Some(batch) = batch {
+    tx.execute(
+      "INSERT INTO running_responses (search_id, first, responses) VALUES (?1, ?2, ?3)",
+      params![
+        search.id.to_string(),
+        i64::try_from(first).unwrap_or(i64::MAX),
+        batch
+      ],
+    )?;
+  }
+  tx.commit()?;
+  Ok(true)
+}
+
+/// Writes how `search` ended with its compressed `responses` and drops the batches it saved
+/// while it ran, in one transaction, so a search reads as completed only once its responses are
+/// there; false when it is gone.
+pub fn finish(conn: &mut Connection, search: &Search, responses: &[u8]) -> rusqlite::Result<bool> {
+  let tx = conn.transaction()?;
+  let updated = tx.execute(
     "UPDATE searches SET state = ?2, ended_at = ?3, response_count = ?4, file_count = ?5, \
      locked_file_count = ?6, response_bytes = ?7, responses = ?8 WHERE id = ?1",
     params![
@@ -151,6 +180,11 @@ pub fn finish(conn: &Connection, search: &Search, responses: &[u8]) -> rusqlite:
       responses,
     ],
   )?;
+  tx.execute(
+    "DELETE FROM running_responses WHERE search_id = ?1",
+    [search.id.to_string()],
+  )?;
+  tx.commit()?;
   Ok(updated == 1)
 }
 
@@ -210,7 +244,8 @@ pub fn list(conn: &Connection, query: &SearchListQuery) -> rusqlite::Result<Vec<
   Ok(listed)
 }
 
-/// Deletes the search `id` and clears the wishlist's link to it. `None` when there is none, else the search as it was, without its responses, or
+/// Deletes the search `id` with the batches it saved while it ran, and clears the wishlist's
+/// link to it. `None` when there is none, else the search as it was, without its responses, or
 /// why its row cannot be read: such a row is deleted all the same.
 pub fn delete(
   conn: &mut Connection,
@@ -224,6 +259,7 @@ pub fn delete(
   if found.is_some() {
     let id = id.to_string();
     tx.execute("DELETE FROM searches WHERE id = ?1", [&id])?;
+    tx.execute("DELETE FROM running_responses WHERE search_id = ?1", [&id])?;
     tx.execute(
       "UPDATE wishlist SET last_search_id = NULL WHERE last_search_id = ?1",
       [&id],
@@ -261,20 +297,67 @@ pub fn prune(conn: &mut Connection, before: DateTime<Utc>) -> rusqlite::Result<V
   Ok(pruned)
 }
 
-/// Ends the searches a stop left running: their responses were only ever in memory, so each
-/// is completed as timed out at `now`, with no responses and its counts at zero. Returns how
-/// many there were.
-pub fn end_dangling(conn: &Connection, now: DateTime<Utc>) -> rusqlite::Result<usize> {
-  conn.execute(
-    "UPDATE searches SET state = ?1, ended_at = ?2, response_count = 0, file_count = 0, \
-     locked_file_count = 0, response_bytes = 0, responses = NULL \
-     WHERE ended_at IS NULL OR state & ?3 = 0",
-    params![
-      state_bits(SearchState::Completed(SearchOutcome::TimedOut)),
-      timestamp(now),
-      COMPLETED,
-    ],
-  )
+/// Ends the searches a stop left running. Each is completed as timed out at `now` with the
+/// responses it saved while it ran and its counts made from them; a batch that cannot be read is
+/// logged and left out. Every saved batch goes, as no search runs yet. Returns how many searches
+/// there were.
+pub fn end_dangling(conn: &mut Connection, now: DateTime<Utc>) -> rusqlite::Result<usize> {
+  let tx = conn.transaction()?;
+  let dangling: Vec<String> = tx
+    .prepare("SELECT id FROM searches WHERE ended_at IS NULL OR state & ?1 = 0")?
+    .query_map([COMPLETED], |row| row.get(0))?
+    .collect::<rusqlite::Result<_>>()?;
+  for id in &dangling {
+    let responses = saved(&tx, id)?;
+    let total = |count: fn(&SearchResponse) -> u32| {
+      responses
+        .iter()
+        .fold(0u32, |sum, response| sum.saturating_add(count(response)))
+    };
+    let blob = compressed(&responses)?;
+    tx.execute(
+      "UPDATE searches SET state = ?2, ended_at = ?3, response_count = ?4, file_count = ?5, \
+       locked_file_count = ?6, response_bytes = ?7, responses = ?8 WHERE id = ?1",
+      params![
+        id,
+        state_bits(SearchState::Completed(SearchOutcome::TimedOut)),
+        timestamp(now),
+        u32::try_from(responses.len()).unwrap_or(u32::MAX),
+        total(|response| response.file_count),
+        total(|response| response.locked_file_count),
+        i64::try_from(blob.len()).unwrap_or(i64::MAX),
+        blob,
+      ],
+    )?;
+  }
+  tx.execute("DELETE FROM running_responses", [])?;
+  tx.commit()?;
+  Ok(dangling.len())
+}
+
+/// The responses the search `id` saved while it ran, in the order it took them; a batch that
+/// cannot be read is logged and left out.
+fn saved(conn: &Connection, id: &str) -> rusqlite::Result<Vec<SearchResponse>> {
+  let mut statement = conn.prepare_cached(
+    "SELECT first, responses FROM running_responses WHERE search_id = ?1 ORDER BY first",
+  )?;
+  let batches = statement.query_map([id], |row| {
+    Ok((row.get::<_, i64>(0)?, row.get::<_, Vec<u8>>(1)?))
+  })?;
+  let mut responses = Vec::new();
+  for batch in batches {
+    let (first, blob) = batch?;
+    match decompress(&blob) {
+      Ok(batch) => responses.extend(batch),
+      Err(error) => warn!(
+        search = id,
+        first,
+        %error,
+        "saved search responses cannot be read; the search ends without them"
+      ),
+    }
+  }
+  Ok(responses)
 }
 
 /// `responses` as stored: a JSON array, zlib-compressed.
@@ -283,6 +366,11 @@ pub fn compress(responses: &[SearchResponse]) -> std::io::Result<Vec<u8>> {
   let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
   encoder.write_all(&json)?;
   encoder.finish()
+}
+
+/// [`compress`] for a write that stores the result.
+pub fn compressed(responses: &[SearchResponse]) -> rusqlite::Result<Vec<u8>> {
+  compress(responses).map_err(|e| rusqlite::Error::ToSqlConversionFailure(e.into()))
 }
 
 /// The responses [`compress`] stored.
@@ -452,6 +540,87 @@ mod tests {
       [running.id, lost.id],
       "oldest first"
     );
+  }
+
+  fn response(username: &str, files: usize, locked: usize) -> SearchResponse {
+    let file = |locked| api_types::search::File {
+      code: 1,
+      filename: format!("@@{username}\\a.flac"),
+      size: 1,
+      extension: "flac".into(),
+      bit_rate: None,
+      length: None,
+      is_variable_bit_rate: None,
+      sample_rate: None,
+      bit_depth: None,
+      is_locked: locked,
+      suspect: None,
+      attribute_count: 0,
+      attributes: Vec::new(),
+    };
+    SearchResponse {
+      username: username.into(),
+      country: None,
+      token: 7,
+      has_free_upload_slot: true,
+      upload_speed: 0,
+      queue_length: 0,
+      file_count: files as u32,
+      files: (0..files).map(|_| file(false)).collect(),
+      locked_file_count: locked as u32,
+      locked_files: (0..locked).map(|_| file(true)).collect(),
+    }
+  }
+
+  #[tokio::test]
+  async fn a_search_a_stop_left_running_ends_with_the_responses_it_saved() {
+    let db = db().await;
+    let mut search = requested("2026-10-26T10:00:00Z");
+    search.state = SearchState::InProgress;
+    let id = search.id;
+    db.write(move |conn| {
+      insert(conn, &search)?;
+      let first = compressed(&[response("alice", 2, 0)])?;
+      save(conn, &search, 0, Some(&first))?;
+      let second = compressed(&[response("bob", 1, 1)])?;
+      save(conn, &search, 1, Some(&second))
+    })
+    .await
+    .unwrap();
+
+    let now: DateTime<Utc> = "2026-10-26T12:00:00Z".parse().unwrap();
+    assert_eq!(
+      db.write(move |conn| end_dangling(conn, now)).await.unwrap(),
+      1
+    );
+    let ended = db.read(move |conn| get(conn, id)).await.unwrap().unwrap();
+    assert_eq!(ended.state, SearchState::Completed(SearchOutcome::TimedOut));
+    assert_eq!(
+      (
+        ended.response_count,
+        ended.file_count,
+        ended.locked_file_count
+      ),
+      (2, 3, 1)
+    );
+    let blob = db
+      .read(move |conn| responses(conn, id))
+      .await
+      .unwrap()
+      .unwrap()
+      .unwrap();
+    assert_eq!(ended.response_bytes, blob.len() as u64);
+    let users: Vec<_> = decompress(&blob)
+      .unwrap()
+      .into_iter()
+      .map(|r| r.username)
+      .collect();
+    assert_eq!(users, ["alice", "bob"], "in the order they were taken");
+    let batches: i64 = db
+      .read(|conn| conn.query_row("SELECT count(*) FROM running_responses", [], |r| r.get(0)))
+      .await
+      .unwrap();
+    assert_eq!(batches, 0);
   }
 
   #[tokio::test]

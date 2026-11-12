@@ -1,7 +1,7 @@
 //! Searches we start on the network: each is recorded before it is sent, followed while peers
-//! answer, and stored with every response it took once it ends. Searches that a stop left
-//! running are ended at the next start, and finished ones older than `retention.search` are
-//! deleted every five minutes.
+//! answer, its responses saved as they come, and stored with every response it took once it
+//! ends. Searches that a stop left running are ended at the next start with the responses they
+//! saved, and finished ones older than `retention.search` are deleted every five minutes.
 //!
 //! [`Searches`] is the engine; it answers the API's search calls and the search topic's
 //! snapshot, and tells the download engine what a download's search was for. A search of the
@@ -29,6 +29,7 @@ use reseek_shares::lock;
 use soulseek_client::{ClientError, SearchOptions, SearchStateChanged};
 use soulseek_proto::SearchQuery;
 use tokio::sync::oneshot;
+use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use tracing::{Instrument, debug, info_span, warn};
 use uuid::Uuid;
@@ -69,6 +70,8 @@ pub struct Searches {
   running: Mutex<HashMap<Uuid, Arc<Running>>>,
   /// every search's task, so the stop waits for them
   tasks: TaskTracker,
+  /// canceled by the stop, which ends a search's tries to write its end
+  stopping: CancellationToken,
 }
 
 fn internal(error: DbError) -> ApiError {
@@ -151,6 +154,7 @@ impl Searches {
       starting: tokio::sync::Mutex::new(()),
       running: Mutex::new(HashMap::new()),
       tasks: TaskTracker::new(),
+      stopping: CancellationToken::new(),
     }))
   }
 
@@ -170,8 +174,8 @@ impl Searches {
       .expect("the engine is alive while a method runs on it")
   }
 
-  /// Ends the searches the last run left running, before the client connects: their
-  /// responses were only in memory, so they end timed out with none.
+  /// Ends the searches the last run left running, before the client connects: each ends timed
+  /// out with the responses it saved.
   pub async fn end_dangling(&self) {
     let now = Utc::now();
     match self
@@ -220,6 +224,7 @@ impl Searches {
   /// Ends every running search as canceled at shutdown, before the client is stopped, and
   /// waits for each to write how it ended.
   pub async fn stop(&self) {
+    self.stopping.cancel();
     for running in self.running().values() {
       running.canceled.store(true, Ordering::Relaxed);
       running.cancel.cancel();
