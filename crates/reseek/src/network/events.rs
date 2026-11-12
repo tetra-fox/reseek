@@ -403,9 +403,10 @@ async fn handle(app: &AppState, event: Event, session: &mut Session) {
 }
 
 /// A user's presence, which the server sends for watched users, for room members and in reply
-/// to our own requests. A watched user's row is touched with it, which pushes their summary, and
-/// their statistics are asked for again when the server sent it on its own, since it pushes
-/// their presence and not what they share; a buddy whose presence it moved is told of.
+/// to our own requests. A watched user's row, when they have one, is touched with it, which
+/// pushes their summary, and their statistics are asked for again when the server sent it on
+/// its own, since it pushes their presence and not what they share; a buddy whose presence it
+/// moved is told of.
 async fn user_status(app: &AppState, status: &soulseek_proto::server::UserStatus) {
   let username = &status.username;
   let presence = UserPresence::from(status.presence);

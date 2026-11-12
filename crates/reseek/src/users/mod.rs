@@ -326,9 +326,9 @@ impl Directory {
     user
   }
 
-  /// Marks that we dealt with `username` for the reason `touch` gives, storing what came with
-  /// it; makes the user's row when there is none, except for a room message. The write
-  /// happens within a second.
+  /// Marks that we dealt with `username` now for the reason `touch` gives, storing what came
+  /// with it; makes the user's row when there is none, except for a room message, a presence
+  /// or statistics, which only fill in a row. The write happens within a second.
   pub async fn touch(&self, username: &str, touch: Touch) {
     // a touch dropped for a full channel is logged where it is dropped
     self.toucher.send(username, touch).await;
@@ -339,12 +339,17 @@ impl Directory {
   /// changed.
   async fn touch_now(&self, username: &str, touches: Vec<Touch>) {
     let now = Utc::now();
+    let made = std::time::Instant::now();
     let mut pending = touch::Pending::default();
     for touch in touches {
-      pending.fold(touch, now);
+      pending.fold(touch, now, made);
     }
     let batch = BTreeMap::from([(username.to_string(), pending)]);
-    match self.db.write(move |conn| touch::write(conn, &batch)).await {
+    let forgotten = self.toucher.forgotten().clone();
+    let written = self
+      .db
+      .write(move |conn| touch::write(conn, &batch, &forgotten));
+    match written.await {
       Ok(changed) => {
         for username in changed {
           self.changed(&username).await;
@@ -514,14 +519,12 @@ impl Directory {
     mut receiver: tokio::sync::mpsc::Receiver<touch::Touched>,
     shutdown: CancellationToken,
   ) {
-    while let Some(mut batch) = touch::gather(&mut receiver, &shutdown).await {
+    while let Some(batch) = touch::gather(&mut receiver, &shutdown).await {
       let count = batch.len();
       let forgotten = self.toucher.forgotten().clone();
-      // checked in the write, so a user forgotten before it was made is left out
-      let written = self.db.write(move |conn| {
-        forgotten.drop_from(&mut batch);
-        touch::write(conn, &batch)
-      });
+      let written = self
+        .db
+        .write(move |conn| touch::write(conn, &batch, &forgotten));
       match written.await {
         Ok(changed) => {
           for username in changed {

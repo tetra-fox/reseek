@@ -189,6 +189,10 @@ impl Users {
     if let Some(fresh) = refreshed("statistics", username, statistics) {
       touches.push(Touch::Statistics(fresh.statistics));
     }
+    // asking for the profile is a reason to know the user, which the answers alone are not
+    if !touches.is_empty() {
+      touches.push(Touch::Asked);
+    }
     self.directory.touch_now(username, touches).await;
 
     let mut profile = self.directory.profile(username).await?;
@@ -348,7 +352,10 @@ impl UserService for Users {
       .directory
       .watch_again(self.network.client(), username)
       .await
-      .map_err(|e| unanswered(username, e))
+      .map_err(|e| unanswered(username, e))?;
+    // a watch asked for by hand is a reason to know the user, which its answer alone is not
+    self.directory.touch(username, Touch::Asked).await;
+    Ok(())
   }
 
   async fn unwatch(&self, username: &str) -> Result<(), ApiError> {

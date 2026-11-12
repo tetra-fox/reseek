@@ -162,12 +162,15 @@ impl Directory {
       .spawn(async move { this.watch(&client, &username).await }.in_current_span());
   }
 
-  /// After a login: every buddy is watched, so the server tells us their presence.
+  /// After a login: every buddy is watched, so the server tells us their presence. One taken
+  /// off the list while the others are watched is passed over.
   pub async fn watch_buddies(&self, client: &Client) {
     let names = self.buddy_names();
     debug!(buddies = names.len(), "buddies watched after the login");
     for username in names {
-      self.watch(client, &username).await;
+      if self.buddy(&username).is_some() {
+        self.watch(client, &username).await;
+      }
     }
   }
 

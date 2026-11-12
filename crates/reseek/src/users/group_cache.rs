@@ -13,7 +13,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use api_types::state::UserStatistics;
 use api_types::users::{CachedUser, StatisticsSnapshot, UserPresence, UserStatus};
@@ -218,8 +218,22 @@ impl Directory {
     placement
   }
 
-  /// Asks the server for `username`'s statistics now, keeps them and touches the user.
+  /// Asks the server for `username`'s statistics now for ourselves, through the API or for
+  /// their upload groups, keeps them and touches the user, which makes their row when there is
+  /// none.
   pub async fn statistics_of(
+    &self,
+    client: &Client,
+    username: &str,
+  ) -> Result<StatisticsSnapshot, ClientError> {
+    let taken = self.statistics_reported(client, username).await?;
+    self.touch(username, Touch::Asked).await;
+    Ok(taken)
+  }
+
+  /// Asks the server for `username`'s statistics again, keeps them and fills them into the
+  /// user's row when there is one.
+  async fn statistics_reported(
     &self,
     client: &Client,
     username: &str,
@@ -239,12 +253,11 @@ impl Directory {
     Ok(self.statistics_kept(username, &fetched.stats))
   }
 
-  /// Statistics we asked for: kept, and the user touched with them.
+  /// Statistics the server gave: kept, and filled into the user's row when there is one.
   async fn statistics_fetched(&self, username: &str, stats: &UserStats) -> StatisticsSnapshot {
     let taken = self.statistics_kept(username, stats);
-    self
-      .touch(username, Touch::Statistics(taken.statistics.clone()))
-      .await;
+    let touch = Touch::Statistics(taken.statistics.clone());
+    self.touch(username, touch).await;
     taken
   }
 
@@ -346,10 +359,18 @@ impl Directory {
     if completed(&self.groups) != before || (!again && self.is_watched(username)) {
       return Ok(());
     }
+    let asked = Instant::now();
     let watched = client.watch_user(username).await?;
     // the server watches them from its answer on, so the status asked for next, which the
     // follower of the client's events may take before this task does, finds them watched
-    self.groups.watched().insert(username.to_string());
+    if !self.watch_taken(username, asked) {
+      debug!(
+        username,
+        "user forgotten while the watch was asked for; not watched"
+      );
+      self.unwatch_forgotten(username).await;
+      return Ok(());
+    }
     self.statistics_fetched(username, &watched.stats).await;
     if let Err(e) = self.status_of(client, username).await {
       warn!(username, error = %e, "status of a watched user not fetched");
@@ -369,16 +390,37 @@ impl Directory {
     Ok(())
   }
 
-  /// Takes `username` off the users the server watches for us, without telling it, so what it
-  /// says of their presence is dropped from now on; says whether they were on it.
-  pub(super) fn drop_watch(&self, username: &str) -> bool {
-    self.groups.watched().remove(username)
+  /// Puts `username`, whose watch was asked for at `asked`, among the watched users, unless
+  /// they were forgotten since; says whether they were. Decided with the watched users held,
+  /// as [`Directory::forget_watched`] forgets with them held, so the two never cross.
+  fn watch_taken(&self, username: &str, asked: Instant) -> bool {
+    let mut watched = self.groups.watched();
+    if self.toucher.forgotten().outdates(username, asked) {
+      return false;
+    }
+    watched.insert(username.to_string());
+    true
   }
 
-  /// Puts `username` back among the users the server watches for us, after
-  /// [`Directory::drop_watch`] when the server was not told.
-  pub(super) fn keep_watch(&self, username: &str) {
-    self.groups.watched().insert(username.to_string());
+  /// Forgets `username`: off the watched users, without telling the server, and marked
+  /// forgotten now, both with the watched users held; says whether they were watched. A status
+  /// of theirs handled from here on makes no touch, and whatever was told of them before the
+  /// mark is not written.
+  pub(super) fn forget_watched(&self, username: &str) -> bool {
+    let mut watched = self.groups.watched();
+    let was = watched.remove(username);
+    self.toucher.forgotten().forget(username);
+    was
+  }
+
+  /// Undoes [`Directory::forget_watched`] when nothing was forgotten after all: `username` is
+  /// watched again when they were, and what is told of them is written.
+  pub(super) fn unforget_watched(&self, username: &str, was: bool) {
+    let mut watched = self.groups.watched();
+    if was {
+      watched.insert(username.to_string());
+    }
+    self.toucher.forgotten().remember(username);
   }
 
   /// Tells the server to stop watching `username`, who was forgotten and is off the watched
@@ -410,7 +452,7 @@ impl Directory {
     let (this, username) = (self.clone(), username.to_string());
     self.tasks.spawn(
       async move {
-        if let Err(e) = this.statistics_of(&client, &username).await
+        if let Err(e) = this.statistics_reported(&client, &username).await
           && let Some(suppressed) = REFETCH_FAILED.allow()
         {
           warn!(username, suppressed, error = %e, "statistics of a user not fetched again");

@@ -323,19 +323,12 @@ impl Directory {
     // a buddy change made meanwhile would leave the map holding a buddy without a row
     let _changing = self.buddies.changing().await;
     let _regrouping = self.groups.regrouping().await;
-    // off the watched users before the forget time is noted, so a status of theirs handled from
-    // here on makes no touch and every touch made before is older than the forget
-    let watched = self.drop_watch(username);
-    let forgotten = self.toucher.forgotten();
-    forgotten.forget(username);
+    let watched = self.forget_watched(username);
     let name = username.to_string();
     let deleted = self.db.write(move |conn| store::delete(conn, &name)).await;
     if !matches!(deleted, Ok(true)) {
       // nobody was forgotten: they stay watched and their touches are written
-      if watched {
-        self.keep_watch(username);
-      }
-      forgotten.remember(username);
+      self.unforget_watched(username, watched);
       deleted.map_err(internal)?;
       return Err(ApiError::not_found(format!(
         "{username} is not in the directory"
