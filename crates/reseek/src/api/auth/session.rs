@@ -86,9 +86,8 @@ async fn login(
   if login.username.trim().is_empty() || login.password.trim().is_empty() {
     return Err(missing());
   }
-  let mut current = app.config.current();
-  let options = &current.values;
-  if options.headless {
+  // headless takes effect at a restart, like the UI it turns off
+  if app.startup.values.headless {
     if let Some(suppressed) = HEADLESS_LOGIN.allow() {
       warn!(
         username = login.username,
@@ -97,8 +96,9 @@ async fn login(
     }
     return Err(ApiError::forbidden("The web UI is disabled in headless mode").logged());
   }
+  let mut current = app.config.current();
   let client = &presented.client;
-  password_login_offered(options, client)?;
+  password_login_offered(&current.values, client)?;
   // counted as a failure from the start, so attempts made at the same time are limited too
   let Some(attempt) = app.auth.limits.logins.attempt(client.ip) else {
     return Err(ApiError::rate_limited());
