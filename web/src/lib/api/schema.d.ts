@@ -3055,8 +3055,8 @@ export interface paths {
         put?: never;
         post?: never;
         /**
-         * Forgets a user and their block; `purge` also removes their finished transfers from the
-         *     listings and deletes the conversation with them.
+         * Forgets a user and their block; `purge` also removes their transfers from the listings and
+         *     deletes the conversation with them.
          */
         delete: operations["remove"];
         options?: never;
@@ -20175,7 +20175,7 @@ export interface operations {
             query?: {
                 /** @description the username, exactly */
                 username?: string;
-                /** @description also remove the user's finished transfers, close the conversation and delete its messages */
+                /** @description also remove the user's transfers, close the conversation and delete its messages */
                 purge?: boolean;
             };
             header?: never;
