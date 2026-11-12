@@ -194,8 +194,10 @@ impl Watchdog {
     if was {
       info!("(Re)connection process restarted");
     }
-    self.stop(true);
+    // cleared before the running turn is canceled, so a turn that begins in between reads the
+    // cleared counts and one that began before is canceled
     self.forget_failures();
+    self.stop(true);
     self.start();
     was
   }
@@ -260,8 +262,8 @@ impl Watchdog {
       }
       let attempt = inner.shutdown.child_token();
       *lock(&inner.attempt) = Some(attempt.clone());
-      // read once this turn's token is in place, so a restart either cancels this turn or has
-      // already cleared what it reads
+      // read once this turn's token is in place: a restart clears these before it cancels the
+      // stored token, so it either cancels this turn or has already cleared what it reads
       let failed = inner.failures.load(Ordering::Relaxed);
       let unanswered = inner.unanswered.load(Ordering::Relaxed);
       let wait = match unanswered_wait(unanswered) {
