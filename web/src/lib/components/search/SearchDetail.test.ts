@@ -10,7 +10,7 @@ import { inspectorPrefs } from "#lib/inspector/inspector.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { resultList } from "#lib/search/list.js";
 import { STREAM_MS } from "#lib/search/results.svelte.js";
-import { searches } from "#lib/search/searches.svelte.js";
+import { isDone, searches } from "#lib/search/searches.svelte.js";
 import { session } from "#lib/session.svelte.js";
 import { searchOptions } from "#lib/settings.svelte.js";
 import { search, sharedFile, userSummary } from "#lib/testing/fixtures.js";
@@ -71,15 +71,18 @@ describe("search results", () => {
   });
 
   /**
-   * Mounts the page on a running search and opens the stream, with `blocked` the users blocked;
-   * gives the fake network
+   * Mounts the page on a running search that had taken no response yet and opens the stream;
+   * `stored` is what the search stores once it completes. Gives the fake network
    */
   const open = async (stored: Schemas["SearchResponse"][], blocked: string[] = []) => {
     const net = connected((url) => {
       if (url.pathname.endsWith("/api/v0/users")) {
         return { users: blocked.map((username) => userSummary(username)), total: blocked.length };
       }
-      if (url.pathname.endsWith(`/searches/${ID}/responses`)) return stored;
+      if (url.pathname.endsWith(`/searches/${ID}/responses`)) {
+        const state = searches.list.get(ID)?.state;
+        return state && isDone(state) ? stored : [];
+      }
       if (url.pathname.endsWith(`/searches/${ID}`)) return search({ id: ID });
       if (url.pathname.endsWith("/api/v0/options")) {
         return { applied: [], reconnectRequired: [], restartRequired: [], optionsRevision: "next" };

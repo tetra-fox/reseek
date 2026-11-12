@@ -12,11 +12,13 @@ export const RETRY_EMPTY_MS = 1_000;
 export const STREAM_MS = 250;
 
 /**
- * The responses of one search: appended as the `search:<id>` topic streams them while the
- * search runs, then replaced once by the stored responses when it completes, which are the
- * ones that count. Each response keeps its key across both, so its card stays where it is.
- * Streamed responses are added at most every `STREAM_MS`, since every change to `results` runs
- * the page's filters and counts over all of them
+ * The responses of one search: read once the page opens and whenever a stream starts following
+ * the `search:<id>` topic, since the daemon streams a response only to a stream that follows its
+ * search when it comes; appended as the topic streams them while the search runs; then replaced
+ * once by the stored responses when it completes, which are the ones that count. Each response
+ * keeps its key throughout, so its card stays where it is. Streamed responses are added at most
+ * every `STREAM_MS`, since every change to `results` runs the page's filters and counts over all
+ * of them
  */
 export class Results {
   readonly id: string;
@@ -29,16 +31,31 @@ export class Results {
   #stop: () => void;
   #waiting: Result[] = [];
   #timer: ReturnType<typeof setTimeout> | undefined;
+  /** the reads of a running search's responses started, and the last one whose answer was taken */
+  #reads = 0;
+  #caught = 0;
 
   constructor(id: string) {
     this.id = id;
-    this.#stop = live.on("search.response", ({ searchId, response }) => {
-      if (searchId === this.id && !this.stored) this.add(response);
-    });
+    const stops = [
+      live.on("search.response", ({ searchId, response }) => {
+        if (searchId === this.id && !this.stored) this.add(response);
+      }),
+      live.on("hello", ({ topics }) => {
+        if (topics.includes(`search:${this.id}`)) void this.catchUp();
+      })
+    ];
+    this.#stop = () => {
+      for (const stop of stops) stop();
+    };
   }
 
-  /** Adds one streamed response at the end, with the others that come within `STREAM_MS` */
+  /**
+   * Adds one streamed response at the end, with the others that come within `STREAM_MS`. A search
+   * takes one response from each user, so one from a user already here came with a read
+   */
   add(response: SearchResponse) {
+    if (this.#keys.has(response.username)) return;
     this.#waiting.push(this.#keys.next(readResponse(response)));
     this.#timer ??= setTimeout(this.#flush, STREAM_MS);
   }
@@ -57,6 +74,30 @@ export class Results {
     this.#timer = undefined;
     this.#waiting = [];
   }
+
+  /**
+   * Reads the responses the running search took so far, which take the order the search took
+   * them in, with the ones streamed since after them. A read answered after a later one, or
+   * after the stored responses, is dropped
+   */
+  catchUp = async () => {
+    if (this.stored) return;
+    const turn = ++this.#reads;
+    const outcome = await this.#get();
+    // a failed read leaves what is shown; the next greeting or the stored responses read again
+    if (!outcome.ok || this.stored || turn < this.#caught) return;
+    this.#caught = turn;
+    this.#flush();
+    const read = new Set(outcome.data.map((response) => response.username));
+    const keys = new ResultKeys();
+    this.results = [
+      ...outcome.data.map((response) => keys.next(readResponse(response))),
+      ...this.results
+        .filter((r) => !read.has(r.response.username))
+        .map((r) => keys.next(r.response))
+    ];
+    this.#keys = keys;
+  };
 
   /**
    * Fetches the stored responses once the search completed. The search says it is complete

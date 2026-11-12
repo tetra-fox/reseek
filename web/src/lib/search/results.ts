@@ -32,6 +32,11 @@ export class ResultKeys {
     this.#seen.set(response.username, n + 1);
     return { key: `${n}:${response.username}`, response };
   }
+
+  /** Whether a response from `username` was keyed */
+  has(username: string) {
+    return this.#seen.has(username);
+  }
 }
 
 /** A toggle that hides results */

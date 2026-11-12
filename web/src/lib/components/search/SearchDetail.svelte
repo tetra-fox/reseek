@@ -109,6 +109,7 @@
   const canWrite = $derived(session.can("ReadWrite"));
   const connected = $derived(app.isServerConnected);
   const complete = $derived(!!search && isDone(search.state));
+  const running = $derived(!!search && !complete);
   const pinned = $derived(!!search && recent.pinned.includes(search.searchText));
 
   // a page opened before its frame arrived asks for the search; one that is gone goes back. One
@@ -124,6 +125,12 @@
         void goto(href("/searches"), { replace: true });
       }
     });
+  });
+
+  // the responses a running search took before the page opened; those it takes until the stream
+  // follows it are read again once the stream greets
+  $effect(() => {
+    if (running) untrack(() => void results.catchUp());
   });
 
   $effect(() => {
