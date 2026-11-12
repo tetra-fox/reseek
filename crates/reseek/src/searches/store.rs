@@ -13,6 +13,7 @@ use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
 use rusqlite::types::Type;
 use rusqlite::{Connection, OptionalExtension, Row, params};
+use tracing::warn;
 use uuid::Uuid;
 
 use crate::db::{self, Schema, enum_at, enum_text, read_timestamp, timestamp};
@@ -161,6 +162,13 @@ pub fn get(conn: &Connection, id: Uuid) -> rusqlite::Result<Option<Search>> {
     .optional()
 }
 
+/// Whether the search `id` is kept, found without reading its row.
+pub fn exists(conn: &Connection, id: Uuid) -> rusqlite::Result<bool> {
+  conn
+    .prepare_cached("SELECT 1 FROM searches WHERE id = ?1")?
+    .exists([id.to_string()])
+}
+
 /// The compressed responses of the search `id`: `None` without a search, `Some(None)` when
 /// none are stored.
 pub fn responses(conn: &Connection, id: Uuid) -> rusqlite::Result<Option<Option<Vec<u8>>>> {
@@ -178,7 +186,8 @@ pub fn text(conn: &Connection, id: Uuid) -> rusqlite::Result<Option<String>> {
     .optional()
 }
 
-/// The searches `query` asks for, without their responses, by when they started.
+/// The searches `query` asks for, without their responses, by when they started. A row this
+/// version cannot read is logged and left out, so it does not keep the others from being listed.
 pub fn list(conn: &Connection, query: &SearchListQuery) -> rusqlite::Result<Vec<Search>> {
   let order = match query.order {
     SortOrder::Asc => "ASC",
@@ -186,19 +195,32 @@ pub fn list(conn: &Connection, query: &SearchListQuery) -> rusqlite::Result<Vec<
   };
   // -1 is no limit to SQLite
   let limit = query.limit.map_or(-1, i64::from);
-  conn
-    .prepare(&format!(
-      "SELECT {COLUMNS} FROM searches ORDER BY started_at {order}, rowid {order} \
-       LIMIT ?1 OFFSET ?2"
-    ))?
-    .query_map(params![limit, query.offset], search)?
-    .collect()
+  let mut listed = Vec::new();
+  let mut statement = conn.prepare(&format!(
+    "SELECT {COLUMNS} FROM searches ORDER BY started_at {order}, rowid {order} \
+     LIMIT ?1 OFFSET ?2"
+  ))?;
+  // the outer error is the query failing, the inner one a row that cannot be read
+  for row in statement.query_map(params![limit, query.offset], |row| Ok(search(row)))? {
+    match row? {
+      Ok(search) => listed.push(search),
+      Err(error) => warn!(%error, "search not listed: its row cannot be read"),
+    }
+  }
+  Ok(listed)
 }
 
-/// Deletes the search `id` and returns it as it was, without its responses.
-pub fn delete(conn: &mut Connection, id: Uuid) -> rusqlite::Result<Option<Search>> {
+/// Deletes the search `id`. `None` when there is none, else the search as it was, without its responses, or
+/// why its row cannot be read: such a row is deleted all the same.
+pub fn delete(
+  conn: &mut Connection,
+  id: Uuid,
+) -> rusqlite::Result<Option<rusqlite::Result<Search>>> {
   let tx = conn.transaction()?;
-  let found = get(&tx, id)?;
+  let found = tx
+    .prepare_cached(&format!("SELECT {COLUMNS} FROM searches WHERE id = ?1"))?
+    .query_row([id.to_string()], |row| Ok(search(row)))
+    .optional()?;
   if found.is_some() {
     tx.execute("DELETE FROM searches WHERE id = ?1", [id.to_string()])?;
   }
@@ -206,19 +228,23 @@ pub fn delete(conn: &mut Connection, id: Uuid) -> rusqlite::Result<Option<Search
   Ok(found)
 }
 
-/// Deletes every search that ended before `before` and returns them as they were.
+/// Deletes every search that ended before `before` and returns the ones it could read as they
+/// were. A row it cannot read is deleted and logged.
 pub fn prune(conn: &mut Connection, before: DateTime<Utc>) -> rusqlite::Result<Vec<Search>> {
+  const ENDED: &str = "ended_at IS NOT NULL AND ended_at < ?1";
+  let before = timestamp(before);
   let tx = conn.transaction()?;
-  let pruned: Vec<Search> = tx
-    .prepare(&format!(
-      "SELECT {COLUMNS} FROM searches WHERE ended_at IS NOT NULL AND ended_at < ?1"
-    ))?
-    .query_map([timestamp(before)], search)?
-    .collect::<rusqlite::Result<_>>()?;
-  tx.execute(
-    "DELETE FROM searches WHERE ended_at IS NOT NULL AND ended_at < ?1",
-    [timestamp(before)],
-  )?;
+  let mut pruned = Vec::new();
+  {
+    let mut statement = tx.prepare(&format!("SELECT {COLUMNS} FROM searches WHERE {ENDED}"))?;
+    for row in statement.query_map([&before], |row| Ok(search(row)))? {
+      match row? {
+        Ok(search) => pruned.push(search),
+        Err(error) => warn!(%error, "search pruned whose row cannot be read"),
+      }
+    }
+  }
+  tx.execute(&format!("DELETE FROM searches WHERE {ENDED}"), [&before])?;
   tx.commit()?;
   Ok(pruned)
 }

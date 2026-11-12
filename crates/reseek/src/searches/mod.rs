@@ -457,10 +457,9 @@ impl SearchService for Searches {
     }
     let exists = self
       .db
-      .read(move |conn| store::get(conn, id))
+      .read(move |conn| store::exists(conn, id))
       .await
-      .map_err(internal)?
-      .is_some();
+      .map_err(internal)?;
     if exists {
       Ok(Canceled::Already)
     } else {
@@ -487,7 +486,11 @@ impl SearchService for Searches {
       .await
       .map_err(internal)?
       .ok_or_else(|| not_found(id))?;
-    self.live.publish(LiveFrame::SearchDelete(deleted));
+    match deleted {
+      Ok(search) => self.live.publish(LiveFrame::SearchDelete(search)),
+      // no list showed it, so no page waits to hear it went
+      Err(error) => warn!(%id, %error, "search deleted whose row could not be read"),
+    }
     Ok(())
   }
 }
