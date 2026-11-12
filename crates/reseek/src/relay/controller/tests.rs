@@ -1,7 +1,8 @@
 //! An agent's socket served without a network, on a clock the test moves: an agent whose
 //! shares are being scanned is waited for past the two minutes, but not past its deferral, an
-//! agent whose configuration no longer admits it is disconnected, and a share upload cut off
-//! partway leaves no file behind.
+//! agent whose configuration no longer admits it is disconnected, a login checked
+//! against a configuration that changed meanwhile is refused, a share upload cut off partway
+//! leaves no file behind, and a file in flight stops when its agent is kicked.
 
 use std::collections::BTreeMap;
 use std::net::IpAddr;
@@ -10,16 +11,20 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
-use api_types::relay::{RELAY_PROTOCOL, RelayEnvelope, RelayMessage};
+use api_types::relay::{
+  LoginFailure, RELAY_PROTOCOL, RelayAgentState, RelayEnvelope, RelayMessage,
+};
 use axum::extract::FromRequest;
 use axum::extract::ws::Message;
 use cascade::Lasts;
 use futures_util::{Sink, Stream, StreamExt};
+use reseek_shares::lock;
+use tokio::io::AsyncReadExt;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 
-use super::Controller;
+use super::{Controller, Registration};
 use crate::services::AgentCredential;
 use crate::testing::app;
 use reseek_relay_proto::credential::{Key, Purpose};
@@ -247,7 +252,8 @@ async fn a_share_upload_cut_off_partway_leaves_no_file_behind() {
   let controller = app.state.relay.controller.clone().unwrap();
   let home: IpAddr = [127, 0, 0, 1].into();
   let _socket = log_in(&controller, home, SECRET).await;
-  let begun = controller.begin_shares("nas", 0, crate::shares::Shares::schema_version(), 1024);
+  let socket = lock(&controller.registry).agents["nas"].socket;
+  let begun = controller.begin_shares("nas", socket, crate::shares::Shares::schema_version(), 1024);
   let RelayMessage::SharesToken { token, .. } = read(&Message::Text(begun.into())) else {
     panic!("no share token");
   };
@@ -295,4 +301,119 @@ async fn a_share_upload_cut_off_partway_leaves_no_file_behind() {
     }
   });
   removed.await.expect("the cut-off upload's file is removed");
+}
+
+#[tokio::test]
+async fn a_login_whose_agent_was_removed_while_it_was_checked_is_refused() {
+  let config = format!(
+    "[relay]\nenabled = true\nmode = \"controller\"\n\
+     [relay.agents.nas]\ninstance_name = \"nas\"\nsecret = \"{SECRET}\"\n"
+  );
+  let app = app(&config, &[]).await;
+  let controller = app.state.relay.controller.clone().unwrap();
+  let home: IpAddr = [127, 0, 0, 1].into();
+  // the login read the configuration and checked the credential with it; then the agent goes
+  let removed = BTreeMap::from([("relay.agents".to_string(), serde_json::json!({}))]);
+  app
+    .state
+    .config
+    .set_overrides(removed, Vec::new(), "test", Lasts::UntilRestart, None)
+    .await
+    .unwrap();
+  let (outbound, _queued) = mpsc::channel(8);
+  let registration = Registration {
+    socket: controller.next_socket(),
+    record: RelayAgentState {
+      name: "nas".into(),
+      ip_address: home.to_string(),
+      connected_at: chrono::Utc::now(),
+      ready: false,
+      shares_updated_at: None,
+      version: crate::version::info().current,
+    },
+    outbound,
+    address: home,
+    secret: SECRET.into(),
+    key: Key::derive(SECRET, "nas"),
+    left: tokio_util::sync::CancellationToken::new(),
+  };
+  assert_eq!(
+    controller.register(registration),
+    Err(LoginFailure::UnknownAgent)
+  );
+  assert!(controller.agents().is_empty());
+}
+
+#[tokio::test]
+async fn a_kicked_agents_file_in_flight_stops_and_the_upload_reading_it_fails() {
+  let config = format!(
+    "[relay]\nenabled = true\nmode = \"controller\"\n\
+     [relay.agents.nas]\ninstance_name = \"nas\"\nsecret = \"{SECRET}\"\n"
+  );
+  let app = app(&config, &[]).await;
+  let controller = app.state.relay.controller.clone().unwrap();
+  let home: IpAddr = [127, 0, 0, 1].into();
+  let (_to_socket, mut from_socket, _served) = log_in(&controller, home, SECRET).await;
+  lock(&controller.registry)
+    .agents
+    .get_mut("nas")
+    .unwrap()
+    .record
+    .ready = true;
+  let opening = tokio::spawn({
+    let controller = controller.clone();
+    async move {
+      controller
+        .open_stream("nas", "a.flac", 0, Uuid::new_v4())
+        .await
+    }
+  });
+  settle().await;
+  let token = written(&mut from_socket)
+    .iter()
+    .find_map(|m| match read(m) {
+      RelayMessage::FileRequest { token, .. } => Some(token),
+      _ => None,
+    })
+    .expect("the agent is asked for the file");
+  // the file's first bytes arrive, then nothing more for now
+  let start = "--cut\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.flac\"\r\n\r\n\
+    first bytes";
+  let body = futures_util::stream::iter([Ok::<_, std::io::Error>(start.as_bytes().to_vec())])
+    .chain(futures_util::stream::pending());
+  let request = axum::http::Request::builder()
+    .header("content-type", "multipart/form-data; boundary=cut")
+    .body(axum::body::Body::from_stream(body))
+    .unwrap();
+  let form = axum::extract::Multipart::from_request(request, &())
+    .await
+    .unwrap();
+  let caller = AgentCredential {
+    agent: "nas".into(),
+    credential: Key::derive(SECRET, "nas").credential(Purpose::File, &token.to_string()),
+    address: home,
+  };
+  let sending = tokio::spawn({
+    let controller = controller.clone();
+    async move { controller.receive_file(token, caller, form).await }
+  });
+  let mut stream = opening.await.unwrap().expect("the file arrives");
+  let mut first = [0u8; 5];
+  stream.read_exact(&mut first).await.unwrap();
+  assert_eq!(&first, b"first");
+
+  assert!(controller.kick("nas"));
+  let sent = tokio::time::timeout(Duration::from_secs(10), sending)
+    .await
+    .expect("the agent's call ends")
+    .unwrap();
+  assert_eq!(sent.unwrap_err().status(), 409);
+  let mut rest = Vec::new();
+  let read = tokio::time::timeout(Duration::from_secs(10), stream.read_to_end(&mut rest))
+    .await
+    .expect("the upload's read ends");
+  assert_eq!(
+    read.unwrap_err().kind(),
+    std::io::ErrorKind::ConnectionAborted
+  );
 }

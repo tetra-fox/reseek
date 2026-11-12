@@ -2,7 +2,9 @@
 //! the agent is asked for the file from the peer's offset with a fresh token: it
 //! acknowledges on its socket, then sends the bytes in an HTTP call that stays open while the
 //! peer reads them, and is answered with how the upload ended. A refusal on the socket fails
-//! the upload at once, as does the agent leaving before its bytes arrive.
+//! the upload at once, as does the agent leaving before its bytes arrive. An agent that leaves
+//! while they flow, kicked, logged in again or no longer configured, stops them, and the upload
+//! reading them fails.
 
 use std::io;
 use std::pin::Pin;
@@ -16,6 +18,7 @@ use reseek_shares::traverses;
 use tokio::io::{AsyncRead, AsyncSeek, ReadBuf};
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::{Instant, timeout};
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
@@ -49,6 +52,8 @@ pub(super) struct StreamWait {
   transfer: Uuid,
   /// when the token stops being accepted
   expires: Instant,
+  /// canceled when the agent's registration ends
+  left: CancellationToken,
   /// the agent acknowledged it
   ack: Option<oneshot::Sender<()>>,
   stream: Option<oneshot::Sender<Result<Chunks, StreamFailure>>>,
@@ -69,7 +74,9 @@ impl StreamWait {
 pub struct RelayStream {
   chunks: Chunks,
   /// the part of the last chunk not read yet
-  left: Bytes,
+  rest: Bytes,
+  /// canceled when the agent's registration ends, after which the bytes stop short
+  left: CancellationToken,
 }
 
 impl AsyncRead for RelayStream {
@@ -78,16 +85,22 @@ impl AsyncRead for RelayStream {
     cx: &mut Context<'_>,
     buf: &mut ReadBuf<'_>,
   ) -> Poll<io::Result<()>> {
-    while self.left.is_empty() {
+    while self.rest.is_empty() {
       match self.chunks.poll_recv(cx) {
-        Poll::Ready(Some(Ok(chunk))) => self.left = chunk,
+        Poll::Ready(Some(Ok(chunk))) => self.rest = chunk,
         Poll::Ready(Some(Err(e))) => return Poll::Ready(Err(e)),
+        Poll::Ready(None) if self.left.is_cancelled() => {
+          return Poll::Ready(Err(io::Error::new(
+            io::ErrorKind::ConnectionAborted,
+            "the agent disconnected while it sent the file",
+          )));
+        }
         Poll::Ready(None) => return Poll::Ready(Ok(())),
         Poll::Pending => return Poll::Pending,
       }
     }
-    let n = self.left.len().min(buf.remaining());
-    let chunk = self.left.split_to(n);
+    let n = self.rest.len().min(buf.remaining());
+    let chunk = self.rest.split_to(n);
     buf.put_slice(&chunk);
     Poll::Ready(Ok(()))
   }
@@ -201,17 +214,29 @@ impl Controller {
     let token = Uuid::new_v4();
     let (ack, acknowledged) = oneshot::channel();
     let (stream, arrived) = oneshot::channel();
-    lock(&self.registry).streams.insert(
-      token,
-      StreamWait {
-        agent: agent.to_string(),
-        filename: filename.to_string(),
-        transfer,
-        expires: Instant::now() + timeouts.file_ack + timeouts.file_stream,
-        ack: Some(ack),
-        stream: Some(stream),
-      },
-    );
+    let left = {
+      let mut registry = lock(&self.registry);
+      // leaving takes the waits on the agent under this lock, so this one is taken with them
+      let Some(left) = registry.agents.get(agent).map(|r| r.left.clone()) else {
+        return Err(io::Error::new(
+          io::ErrorKind::NotFound,
+          format!("Agent {agent} is not connected"),
+        ));
+      };
+      registry.streams.insert(
+        token,
+        StreamWait {
+          agent: agent.to_string(),
+          filename: filename.to_string(),
+          transfer,
+          expires: Instant::now() + timeouts.file_ack + timeouts.file_stream,
+          left: left.clone(),
+          ack: Some(ack),
+          stream: Some(stream),
+        },
+      );
+      left
+    };
     let _waiting = Waiting {
       controller: self,
       token,
@@ -268,7 +293,8 @@ impl Controller {
         info!(agent, filename, %token, "Agent provided file stream for file");
         Ok(RelayStream {
           chunks,
-          left: Bytes::new(),
+          rest: Bytes::new(),
+          left,
         })
       }
       Ok(Err(StreamFailure::Refused(FileFailure::NotFound, detail))) => {
@@ -349,9 +375,16 @@ impl Controller {
         .streams
         .get_mut(&token)
         .filter(|w| w.agent == name && w.expires > Instant::now());
-      found.map(|w| (w.filename.clone(), w.transfer, w.stream.take()))
+      found.map(|w| {
+        (
+          w.filename.clone(),
+          w.transfer,
+          w.left.clone(),
+          w.stream.take(),
+        )
+      })
     };
-    let Some((filename, transfer, stream)) = wait else {
+    let Some((filename, transfer, left, stream)) = wait else {
       warn!(agent = name, %token, "file upload with an unknown or expired token");
       return Err(ApiError::unauthorized("The token is unknown or expired").logged());
     };
@@ -400,7 +433,15 @@ impl Controller {
     let _flowing = InFlight::start(&self.relay_metrics().uploads_in_flight);
     loop {
       let chunk = tokio::select! {
-        () = self.shutdown.cancelled() => break,
+        // the daemon stopping ends the registration too
+        () = left.cancelled() => {
+          lock(&self.registry).completions.remove(&transfer);
+          info!(agent = name, filename, %token, "agent's file stopped: the agent disconnected");
+          return Err(ApiError::conflict(
+            "agent_disconnected",
+            Some(format!("Agent {name} disconnected while it sent the file")),
+          ));
+        }
         chunk = field.chunk() => chunk,
       };
       let sent = match chunk {

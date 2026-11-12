@@ -1,7 +1,8 @@
 //! The controller: the agents logged in on their sockets, the tokens and waits of what it asked
 //! them for, and what follows an agent's coming and going. An agent is registered under its
-//! instance name once its login checks out; a second login under the same name closes the
-//! first socket. Leaving, an agent takes its shares with it, and every wait on it fails at once.
+//! instance name once its login checks out and while its configuration still admits it; a
+//! second login under the same name closes the first socket. Leaving, an agent takes its shares
+//! with it, every wait on it fails at once, and what it was still sending stops.
 
 mod downloads;
 mod files;
@@ -19,7 +20,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use api_types::events::{Event, RelayAgentConnected, RelayAgentDisconnected};
-use api_types::relay::{RelayAgentState, RelayFileUploadResult};
+use api_types::relay::{LoginFailure, RelayAgentState, RelayFileUploadResult};
 use cascade::Watcher;
 use reseek_shares::lock;
 use tokio::sync::broadcast::error::RecvError;
@@ -71,6 +72,9 @@ struct Registration {
   secret: String,
   /// the key derived from that secret, which its calls over HTTP are checked with
   key: Key,
+  /// canceled when the registration ends, which stops the share upload and the files it is
+  /// still sending
+  left: CancellationToken,
 }
 
 /// A token handed to an agent on its socket to upload its shares with.
@@ -89,6 +93,14 @@ struct DownloadToken {
   /// the download's path relative to the downloads directory
   filename: String,
   expires: Instant,
+}
+
+/// What an ended registration leaves behind: its waits, which fail, and what it was sending,
+/// which stops.
+struct Left {
+  registration: Registration,
+  infos: Vec<FileInfoWait>,
+  streams: Vec<StreamWait>,
 }
 
 /// Everything the controller keeps about its agents, under one lock.
@@ -202,12 +214,21 @@ impl Controller {
   }
 
   /// Whether the agent `name`, logged in as `registration`, is still configured with the
-  /// secret it logged in with and may still connect from the address it logged in from.
-  fn still_configured(options: &Options, name: &str, registration: &Registration) -> bool {
-    Self::configured(options, name).is_some_and(|agent| {
-      agent.secret.as_deref() == Some(registration.secret.as_str())
-        && Self::address_allowed(&agent, registration.address)
-    })
+  /// secret it logged in with and may still connect from the address it logged in from; why
+  /// not, as its login would be refused.
+  fn admits(
+    options: &Options,
+    name: &str,
+    registration: &Registration,
+  ) -> Result<(), LoginFailure> {
+    let agent = Self::configured(options, name).ok_or(LoginFailure::UnknownAgent)?;
+    if !Self::address_allowed(&agent, registration.address) {
+      return Err(LoginFailure::AddressNotAllowed);
+    }
+    if agent.secret.as_deref() != Some(registration.secret.as_str()) {
+      return Err(LoginFailure::BadCredential);
+    }
+    Ok(())
   }
 
   /// Checks a call an agent makes over HTTP with `token` for `purpose`: it is logged in,
@@ -266,17 +287,28 @@ impl Controller {
   }
 
   /// Registers the agent of `registration` in place of any earlier socket of the same name,
-  /// which is closed, and raises `RelayAgentConnected`.
-  fn register(&self, registration: Registration) {
+  /// which is closed, and raises `RelayAgentConnected`; refused when the configuration no
+  /// longer admits it, as when it changed while the login was checked.
+  fn register(&self, registration: Registration) -> Result<(), LoginFailure> {
     let name = registration.record.name.clone();
-    let earlier = lock(&self.registry).agents.get(&name).map(|r| r.socket);
-    if let Some(earlier) = earlier {
-      self.leave(&name, earlier, close::SUPERSEDED, "superseded");
-    }
     let ip_address = registration.record.ip_address.clone();
-    lock(&self.registry)
-      .agents
-      .insert(name.clone(), registration);
+    let earlier = {
+      let mut registry = lock(&self.registry);
+      // read under the lock, so a configuration change after this finds the registration when
+      // it looks for agents it no longer admits
+      let options = self.config.current();
+      Self::admits(&options.values, &name, &registration)?;
+      let earlier = registry
+        .agents
+        .get(&name)
+        .map(|r| r.socket)
+        .and_then(|socket| take(&mut registry, &name, socket));
+      registry.agents.insert(name.clone(), registration);
+      earlier
+    };
+    if let Some(earlier) = earlier {
+      self.closed_on_leaving(&name, earlier, close::SUPERSEDED, "superseded");
+    }
     self.publish();
     self
       .events
@@ -285,58 +317,50 @@ impl Controller {
         agent: name,
         ip_address,
       }));
+    Ok(())
   }
 
   /// Ends the registration of the agent `name` on `socket`, closing it with `code`, when that
   /// socket is the one registered.
   fn leave(&self, name: &str, socket: u64, code: u16, reason: &'static str) {
-    let outbound = lock(&self.registry)
-      .agents
-      .get(name)
-      .filter(|r| r.socket == socket)
-      .map(|r| r.outbound.clone());
-    if let Some(outbound) = outbound {
-      // a socket whose queue is full or closed is ending on its own and deregisters with this
-      if let Err(e) = outbound.try_send(Outbound::Close(code, reason)) {
-        debug!(agent = name, error = %e, "close not queued for the agent's socket");
-      }
+    let left = take(&mut lock(&self.registry), name, socket);
+    if let Some(left) = left {
+      self.closed_on_leaving(name, left, code, reason);
     }
-    self.deregister(name, socket, reason);
   }
 
-  /// Removes the agent `name` when it is registered on `socket` and not on a newer one: its
-  /// shares are unloaded, every wait on it fails, and `RelayAgentDisconnected` is raised.
+  /// Asks the socket of the registration in `left` to close with `code`, then does what
+  /// follows its leaving.
+  fn closed_on_leaving(&self, name: &str, left: Left, code: u16, reason: &'static str) {
+    // a socket whose queue is full or closed is ending on its own
+    if let Err(e) = left
+      .registration
+      .outbound
+      .try_send(Outbound::Close(code, reason))
+    {
+      debug!(agent = name, error = %e, "close not queued for the agent's socket");
+    }
+    self.after_leaving(name, left, reason);
+  }
+
+  /// Removes the agent `name` when it is registered on `socket` and not on a newer one, and
+  /// does what follows its leaving.
   fn deregister(&self, name: &str, socket: u64, reason: &str) {
-    let failed = {
-      let mut registry = lock(&self.registry);
-      if registry.agents.get(name).is_none_or(|r| r.socket != socket) {
-        return;
-      }
-      registry.agents.remove(name);
-      registry.share_tokens.retain(|_, t| t.agent != name);
-      let infos: Vec<Uuid> = registry
-        .file_infos
-        .iter()
-        .filter(|(_, w)| w.agent == name)
-        .map(|(id, _)| *id)
-        .collect();
-      let streams: Vec<Uuid> = registry
-        .streams
-        .iter()
-        .filter(|(_, w)| w.agent == name)
-        .map(|(id, _)| *id)
-        .collect();
-      let infos: Vec<_> = infos
-        .iter()
-        .filter_map(|id| registry.file_infos.remove(id))
-        .collect();
-      let streams: Vec<_> = streams
-        .iter()
-        .filter_map(|id| registry.streams.remove(id))
-        .collect();
-      (infos, streams)
-    };
-    let (infos, streams) = failed;
+    let left = take(&mut lock(&self.registry), name, socket);
+    if let Some(left) = left {
+      self.after_leaving(name, left, reason);
+    }
+  }
+
+  /// What follows the agent `name` leaving: what it was sending stops, every wait on it fails,
+  /// its shares are unloaded, and `RelayAgentDisconnected` is raised.
+  fn after_leaving(&self, name: &str, left: Left, reason: &str) {
+    let Left {
+      registration,
+      infos,
+      streams,
+    } = left;
+    registration.left.cancel();
     let pending = infos.len() + streams.len();
     // the waits learn their agent left by their sender going
     drop(infos);
@@ -429,13 +453,13 @@ impl Controller {
     }
   }
 
-  /// Disconnects each logged-in agent that is not [`Controller::still_configured`].
+  /// Disconnects each logged-in agent that [`Controller::admits`] no more.
   fn drop_unconfigured(&self) {
     let options = self.config.current();
     let unconfigured: Vec<(String, u64)> = lock(&self.registry)
       .agents
       .iter()
-      .filter(|(name, r)| !Self::still_configured(&options.values, name, r))
+      .filter(|(name, r)| Self::admits(&options.values, name, r).is_err())
       .map(|(name, r)| (name.clone(), r.socket))
       .collect();
     for (name, socket) in unconfigured {
@@ -451,4 +475,40 @@ impl Controller {
   fn next_socket(&self) -> u64 {
     self.sockets.fetch_add(1, Ordering::Relaxed) + 1
   }
+}
+
+/// Takes the registration of the agent `name` out of `registry` when it is on `socket` and not
+/// a newer one, with its share tokens, and the waits on it.
+fn take(registry: &mut Registry, name: &str, socket: u64) -> Option<Left> {
+  if registry.agents.get(name).is_none_or(|r| r.socket != socket) {
+    return None;
+  }
+  let registration = registry
+    .agents
+    .remove(name)
+    .expect("the registration was just found");
+  registry.share_tokens.retain(|_, t| t.agent != name);
+  let infos: Vec<Uuid> = registry
+    .file_infos
+    .iter()
+    .filter(|(_, w)| w.agent == name)
+    .map(|(id, _)| *id)
+    .collect();
+  let streams: Vec<Uuid> = registry
+    .streams
+    .iter()
+    .filter(|(_, w)| w.agent == name)
+    .map(|(id, _)| *id)
+    .collect();
+  Some(Left {
+    registration,
+    infos: infos
+      .iter()
+      .filter_map(|id| registry.file_infos.remove(id))
+      .collect(),
+    streams: streams
+      .iter()
+      .filter_map(|id| registry.streams.remove(id))
+      .collect(),
+  })
 }

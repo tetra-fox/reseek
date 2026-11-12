@@ -305,8 +305,35 @@ impl Session {
       &ours,
       |secret| Key::derive(secret, &name),
     );
-    let counted = match checked {
-      Ok(_) => "accepted",
+    let cidr = configured.as_ref().map(|a| a.cidr.clone());
+    // used once the login checked out, when the agent is configured, with a secret loading the
+    // options checked
+    let secret = configured.and_then(|a| a.secret).unwrap_or_default();
+    let now = Instant::now();
+    let registered = checked.and_then(|key| {
+      let record = RelayAgentState {
+        name: name.clone(),
+        ip_address: self.address.to_string(),
+        connected_at: Utc::now(),
+        ready: false,
+        shares_updated_at: None,
+        // the refusal's log below still reads the login's own
+        version: version.clone(),
+      };
+      // checked again against the configuration as it is now, which may have changed while
+      // the credential was being checked
+      self.controller.register(Registration {
+        socket: self.id,
+        record,
+        outbound: self.outbound.clone(),
+        address: self.address,
+        secret,
+        key,
+        left: self.controller.shutdown.child_token(),
+      })
+    });
+    let counted = match registered {
+      Ok(()) => "accepted",
       Err(LoginFailure::UnknownAgent) => "unknown_agent",
       Err(LoginFailure::AddressNotAllowed) => "address_not_allowed",
       Err(LoginFailure::ChallengeExpired) => "challenge_expired",
@@ -314,21 +341,21 @@ impl Session {
       Err(LoginFailure::IncompatibleVersion) => "incompatible_version",
     };
     self.controller.count("login", counted);
-    let key = match checked {
-      Ok(key) => key,
-      Err(reason) => {
-        log_refusal(&name, &login, reason, configured.map(|a| a.cidr), &ours);
-        let refusal = frames::encode(None, RelayMessage::LoginFailed { reason });
-        if socket.send(Message::Text(refusal.into())).await.is_err() {
-          return Some(LOST);
-        }
-        return Some(closing(socket, close::UNAUTHORIZED, "unauthorized").await);
+    if let Err(reason) = registered {
+      log_refusal(&name, &login, reason, cidr, &ours);
+      let refusal = frames::encode(None, RelayMessage::LoginFailed { reason });
+      if socket.send(Message::Text(refusal.into())).await.is_err() {
+        return Some(LOST);
       }
-    };
-    // the login checked out, so the agent is configured, with a secret loading the options
-    // checked
-    let secret = configured.and_then(|a| a.secret).unwrap_or_default();
+      return Some(closing(socket, close::UNAUTHORIZED, "unauthorized").await);
+    }
     let timeouts = &options.values.relay.controller_timeouts;
+    // a socket lost from here on is registered, which its end undoes
+    self.phase = Phase::LoggedIn {
+      name: name.clone(),
+      sync_by: Some(now + SYNC_WITHIN),
+      deferred_until: now + SYNC_WITHIN + timeouts.sync_deferral,
+    };
     let accepted = frames::encode(
       None,
       RelayMessage::LoginOk {
@@ -345,29 +372,7 @@ impl Session {
     if socket.send(Message::Text(accepted.into())).await.is_err() {
       return Some(LOST);
     }
-    let record = RelayAgentState {
-      name: name.clone(),
-      ip_address: self.address.to_string(),
-      connected_at: Utc::now(),
-      ready: false,
-      shares_updated_at: None,
-      version,
-    };
-    self.controller.register(Registration {
-      socket: self.id,
-      record,
-      outbound: self.outbound.clone(),
-      address: self.address,
-      secret,
-      key,
-    });
     info!(agent = name, "Agent connection authenticated");
-    let now = Instant::now();
-    self.phase = Phase::LoggedIn {
-      name,
-      sync_by: Some(now + SYNC_WITHIN),
-      deferred_until: now + SYNC_WITHIN + timeouts.sync_deferral,
-    };
     None
   }
 

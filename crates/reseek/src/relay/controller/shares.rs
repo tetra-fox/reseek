@@ -4,6 +4,7 @@
 //! with the token; the call is checked before its body is read, the database is written to a
 //! file in the cache directory as it arrives, at most the configured size, and checked and
 //! loaded as the agent's host. Only then is the agent ready, and the agent's socket told so.
+//! An upload whose socket closes before its database arrived stops there.
 
 use std::path::{Path, PathBuf};
 use std::time::Instant as Clock;
@@ -169,15 +170,39 @@ impl Controller {
       }
     };
     self.authenticate(&caller, Purpose::Shares, token)?;
-    if !lock(&self.registry).syncing.insert(name.clone()) {
-      return Err(ApiError::conflict("sync_in_progress", None));
-    }
+    let left = {
+      let mut registry = lock(&self.registry);
+      let Some(left) = registry
+        .agents
+        .get(&name)
+        .filter(|r| r.socket == socket)
+        .map(|r| r.left.clone())
+      else {
+        drop(registry);
+        warn!(agent = name, "share upload for a socket that closed");
+        return Err(ApiError::unauthorized(format!("Agent {name} is not registered")).logged());
+      };
+      if !registry.syncing.insert(name.clone()) {
+        return Err(ApiError::conflict("sync_in_progress", None));
+      }
+      left
+    };
     let _loading = Loading {
       controller: self,
       agent: name.clone(),
     };
     let file = UploadFile(Some(self.shares.upload_file(&name)));
-    let received = self.read_upload(&name, &mut form, file.path()).await;
+    // the upload ends with the socket it was asked on, so the agent's next socket can send one
+    let received = tokio::select! {
+      () = left.cancelled() => {
+        info!(agent = name, "share upload from agent stopped: its socket closed");
+        Err(ApiError::conflict(
+          "agent_disconnected",
+          Some(format!("Agent {name} disconnected while it sent its shares")),
+        ))
+      }
+      received = self.read_upload(&name, &mut form, file.path()) => received,
+    };
     let loaded = match received {
       Ok(shares) => self.load(&name, socket, shares, file.path()).await,
       Err(e) => Err(e),
