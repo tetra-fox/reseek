@@ -17,24 +17,40 @@ pub fn insert_scan(conn: &Connection, started_at: i64, options: &str) -> rusqlit
     .map(drop)
 }
 
-/// Marks the scan that started at `started_at` finished at `ended_at`.
+/// Marks the running scan that started at `started_at` finished at `ended_at`.
 pub fn end_scan(conn: &Connection, started_at: i64, ended_at: i64) -> rusqlite::Result<()> {
   conn
     .execute(
-      "UPDATE scans SET \"end\" = ?1, state = 'finished' WHERE timestamp = ?2",
+      "UPDATE scans SET \"end\" = ?1, state = 'finished' WHERE timestamp = ?2 \
+       AND state = 'running'",
       params![ended_at, started_at],
     )
     .map(drop)
 }
 
-/// Marks the scan that started at `started_at` stopped without completing, as `state` says.
-pub fn stop_scan(conn: &Connection, started_at: i64, state: ScanState) -> rusqlite::Result<()> {
+/// Marks the running scan that started at `started_at` stopped at `ended_at` without
+/// completing, as `state` says.
+pub fn stop_scan(
+  conn: &Connection,
+  started_at: i64,
+  ended_at: i64,
+  state: ScanState,
+) -> rusqlite::Result<()> {
   conn
     .execute(
-      "UPDATE scans SET state = ?1 WHERE timestamp = ?2",
-      params![state.as_str(), started_at],
+      "UPDATE scans SET state = ?1, \"end\" = ?2 WHERE timestamp = ?3 AND state = 'running'",
+      params![state.as_str(), ended_at, started_at],
     )
     .map(drop)
+}
+
+/// Marks every scan recorded as running failed, at a time not known, and returns how many: run
+/// only while no scan runs, when each such row was left by a scan a stop cut off.
+pub fn end_interrupted_scans(conn: &Connection) -> rusqlite::Result<usize> {
+  conn.execute(
+    "UPDATE scans SET state = 'failed' WHERE state = 'running'",
+    [],
+  )
 }
 
 pub fn mark_latest_suspect(conn: &Connection) -> rusqlite::Result<()> {

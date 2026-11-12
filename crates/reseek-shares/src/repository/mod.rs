@@ -20,7 +20,10 @@ mod writes;
 pub use writes::*;
 
 /// `shares.<host>.db`: the scans, directories, files and the filename index.
-pub static SCHEMA: Schema = db::schema!("shares", ["0001_initial", "0002_scan_state"]);
+pub static SCHEMA: Schema = db::schema!(
+  "shares",
+  ["0001_initial", "0002_scan_state", "0003_scan_end"]
+);
 
 /// Where a scan's row stands.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -61,7 +64,7 @@ pub struct Scan {
   /// the share options it ran with, as JSON
   pub options: String,
   pub state: ScanState,
-  /// when it finished, `None` unless it did
+  /// when it ended, `None` while it runs and for one a stop cut off
   pub ended_at: Option<i64>,
   /// the index may have drifted from the disk since
   pub suspect: bool,
@@ -164,6 +167,19 @@ pub fn latest_scan(conn: &Connection) -> rusqlite::Result<Option<Scan>> {
       scan,
     )
     .optional()
+}
+
+/// The newest scan that finished, with every scan started after it, newest first; `None` when
+/// no scan finished.
+pub fn since_last_finished(conn: &Connection) -> rusqlite::Result<Option<(Scan, Vec<Scan>)>> {
+  let mut statement = conn.prepare(
+    "SELECT timestamp, options, \"end\", suspect, state FROM scans WHERE timestamp >= \
+     (SELECT MAX(timestamp) FROM scans WHERE state = 'finished') ORDER BY timestamp DESC",
+  )?;
+  let mut scans = statement
+    .query_map([], scan)?
+    .collect::<rusqlite::Result<Vec<_>>>()?;
+  Ok(scans.pop().map(|finished| (finished, scans)))
 }
 
 /// When the last scan that finished and is not suspect started, in epoch milliseconds.
@@ -604,18 +620,33 @@ pub(super) mod tests {
     db.write(|conn| {
       insert_scan(conn, 10, "{}")?;
       assert_eq!(latest_scan(conn)?.unwrap().state, ScanState::Running);
-      stop_scan(conn, 10, ScanState::Failed)?;
-      assert_eq!(latest_scan(conn)?.unwrap().state, ScanState::Failed);
+      stop_scan(conn, 10, 11, ScanState::Failed)?;
+      let stopped = latest_scan(conn)?.unwrap();
+      assert_eq!(
+        (stopped.state, stopped.ended_at),
+        (ScanState::Failed, Some(11))
+      );
       assert_eq!(
         latest_trusted_scan(conn)?,
         None,
         "a failed scan is not trusted"
       );
+      end_scan(conn, 10, 12)?;
+      assert_eq!(
+        latest_scan(conn)?.unwrap().state,
+        ScanState::Failed,
+        "a scan that stopped does not finish after"
+      );
       insert_scan(conn, 20, "{\"a\":1}")?;
       end_scan(conn, 20, 25)?;
+      stop_scan(conn, 20, 26, ScanState::Canceled)?;
       mark_latest_suspect(conn)?;
       let latest = latest_scan(conn)?.unwrap();
-      assert_eq!(latest.state, ScanState::Finished);
+      assert_eq!(
+        latest.state,
+        ScanState::Finished,
+        "a finished scan is not stopped after"
+      );
       assert_eq!(latest.ended_at, Some(25));
       assert!(latest.suspect);
       assert_eq!(
@@ -623,8 +654,50 @@ pub(super) mod tests {
         None,
         "the ended scan is suspect"
       );
+      insert_scan(conn, 5, "{}")?;
+      end_scan(conn, 5, 6)?;
+      assert_eq!(latest_trusted_scan(conn)?, Some(5));
+      Ok(())
+    })
+    .await
+    .unwrap();
+  }
+
+  #[tokio::test]
+  async fn a_scans_end_goes_with_its_state() {
+    let db = index().await;
+    db.write(|conn| {
+      insert_scan(conn, 10, "{}")?;
       end_scan(conn, 10, 12)?;
-      assert_eq!(latest_trusted_scan(conn)?, Some(10));
+      assert!(
+        conn
+          .execute("UPDATE scans SET \"end\" = NULL WHERE timestamp = 10", [])
+          .is_err(),
+        "a finished scan has an end"
+      );
+      assert!(
+        conn
+          .execute(
+            "INSERT INTO scans (timestamp, options, \"end\") VALUES (20, '{}', 21)",
+            []
+          )
+          .is_err(),
+        "a running scan has none"
+      );
+      insert_scan(conn, 30, "{}")?;
+      insert_scan(conn, 40, "{}")?;
+      stop_scan(conn, 40, 41, ScanState::Canceled)?;
+      assert_eq!(end_interrupted_scans(conn)?, 1);
+      let cut = conn.query_row(
+        "SELECT state, \"end\" FROM scans WHERE timestamp = 30",
+        [],
+        |row| Ok((row.get::<_, String>(0)?, row.get::<_, Option<i64>>(1)?)),
+      )?;
+      assert_eq!(
+        cut,
+        ("failed".to_string(), None),
+        "cut off by a stop, at a time not known"
+      );
       Ok(())
     })
     .await

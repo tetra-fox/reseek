@@ -11,11 +11,11 @@ use tokio::sync::broadcast::error::RecvError;
 use tracing::{Instrument, debug, error, info, info_span, warn};
 
 use super::phase::{Edge, Phase};
-use super::repository::{self, ScanState};
+use super::repository::{self, Scan};
 use super::scanner::{self, Settings};
 use super::schedule::Schedule;
 use super::{ScanOrigin, SharedCounts, Shares, share, storage};
-use crate::db::DbError;
+use crate::db::{Database, DbError};
 use crate::lock;
 use crate::options::{self, StorageMode};
 use chrono::{DateTime, Local, Utc};
@@ -51,6 +51,49 @@ pub(super) fn start<O: cascade::Root>(
   tokio::spawn(
     async move { engine.follow_options(changes, select).await }.instrument(info_span!("shares")),
   );
+}
+
+/// Whether the index the scan `finished` filled can be served under the share options whose
+/// content is `current`, with the scans `stopped` that started after it and did not complete:
+/// none of them is marked suspect, it recorded the options as they are now, and none of them
+/// ran with other options, which could have left rows those options do not share. Says why
+/// when it cannot.
+fn loadable(
+  finished: &Scan,
+  stopped: &[Scan],
+  current: Option<&serde_json::Value>,
+) -> Result<(), String> {
+  if finished.suspect || stopped.iter().any(|scan| scan.suspect) {
+    return Err("Previous share scan was marked as suspect".into());
+  }
+  let recorded = |scan: &Scan| {
+    scanner::content(&scan.options)
+      .map_err(|e| format!("Previous share scan recorded options that cannot be read: {e}"))
+  };
+  if recorded(finished)?.as_ref() != current {
+    return Err("Share options changed since previous scan".into());
+  }
+  for scan in stopped {
+    if recorded(scan)?.as_ref() != current {
+      return Err("A share scan with other options stopped before it completed".into());
+    }
+  }
+  Ok(())
+}
+
+/// Marks the scans `db` records as running failed. Run only while no scan runs, when the
+/// engine opens the index or has restored it, so each was cut off by a stop.
+pub(super) async fn end_interrupted(db: &Database) {
+  match db
+    .write(|conn| repository::end_interrupted_scans(conn))
+    .await
+  {
+    Ok(0) => {}
+    Ok(scans) => info!(scans, "share scan cut off by the last stop ended as failed"),
+    Err(e) => {
+      warn!(error = %e, "share scans cut off by the last stop not ended; they read as running")
+    }
+  }
 }
 
 /// Whether the scan that follows the load `left` reads every file again, and what started it.
@@ -137,9 +180,9 @@ impl Shares {
       .await
   }
 
-  /// Loads the index from its backup or its file and checks the last scan it records covers
-  /// the shares as configured now, returning the settings it covers and its totals; says why
-  /// when it cannot be used.
+  /// Loads the index from its backup or its file and checks the last scan that finished filled
+  /// it as the shares are configured now, returning the settings it covers and its totals; says
+  /// why when it cannot be used.
   async fn load(&self, mode: StorageMode) -> Result<(Arc<Settings>, SharedCounts), String> {
     if self.in_memory {
       info!("Share cache StorageMode is 'Memory'. Attempting to load from backup...");
@@ -157,29 +200,23 @@ impl Shares {
         format!("Share cache backup not used; the scan that follows writes a new one: {e}")
       })?;
       info!("Share cache successfully restored from backup");
+      end_interrupted(&self.db).await;
     } else if mode == StorageMode::Disk {
       info!("Share cache StorageMode is 'Disk'. Attempting to validate...");
     }
-    let latest = self
+    let (finished, stopped) = self
       .db
-      .read(repository::latest_scan)
+      .read(repository::since_last_finished)
       .await
       .map_err(|e| e.to_string())?
-      .ok_or("Shares not yet scanned")?;
-    match latest.state {
-      ScanState::Finished => {}
-      ScanState::Running => return Err("Previous share scan was interrupted".into()),
-      ScanState::Failed => return Err("Previous share scan failed".into()),
-      ScanState::Canceled => return Err("Previous share scan was canceled".into()),
-    }
-    if latest.suspect {
-      return Err("Previous share scan was marked as suspect".into());
-    }
+      .ok_or("No share scan has completed")?;
     let settings = Arc::new(self.scan_settings());
-    let recorded = scanner::content(&latest.options)
-      .map_err(|e| format!("Previous share scan recorded options that cannot be read: {e}"))?;
-    if recorded != settings.snapshot.get("content").cloned() {
-      return Err("Share options changed since previous scan".into());
+    loadable(&finished, &stopped, settings.snapshot.get("content"))?;
+    if !stopped.is_empty() {
+      debug!(
+        scans = stopped.len(),
+        "share scans that stopped since the last one that completed are passed over"
+      );
     }
     let counted = self
       .count_shares(&settings.shares)
@@ -316,5 +353,107 @@ impl Shares {
       self.mark_pending();
     }
     self.check_unmatched();
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use serde_json::{Value, json};
+
+  use super::*;
+  use crate::repository::tests::index;
+  use crate::repository::{
+    ScanState, end_interrupted_scans, end_scan, insert_scan, mark_latest_suspect, stop_scan,
+  };
+
+  /// What a load decides from the scans `db` records under the share options whose content is
+  /// `current`; `None` when no scan finished.
+  async fn verdict(db: &Database, current: &Value) -> Option<Result<(), String>> {
+    let (finished, stopped) = db.read(repository::since_last_finished).await.unwrap()?;
+    Some(loadable(&finished, &stopped, Some(current)))
+  }
+
+  /// Options recorded with the content `content`.
+  fn recorded(content: &Value) -> String {
+    json!({ "content": content, "shares": {} }).to_string()
+  }
+
+  #[tokio::test]
+  async fn a_load_trusts_the_last_finished_scan_past_those_that_stopped_unless_one_is_suspect() {
+    let now = json!({ "directories": ["/music"] });
+    let other = json!({ "directories": ["/music", "/private"] });
+    let (same, changed) = (recorded(&now), recorded(&other));
+
+    let db = index().await;
+    let options = same.clone();
+    db.write(move |conn| {
+      insert_scan(conn, 5, &options)?;
+      stop_scan(conn, 5, 6, ScanState::Failed)
+    })
+    .await
+    .unwrap();
+    assert_eq!(verdict(&db, &now).await, None, "no scan finished");
+    let options = same.clone();
+    db.write(move |conn| {
+      mark_latest_suspect(conn)?;
+      insert_scan(conn, 10, &options)?;
+      end_scan(conn, 10, 11)?;
+      insert_scan(conn, 20, &options)?;
+      stop_scan(conn, 20, 21, ScanState::Canceled)?;
+      insert_scan(conn, 30, &options)?;
+      stop_scan(conn, 30, 31, ScanState::Failed)?;
+      insert_scan(conn, 40, &options)?;
+      end_interrupted_scans(conn).map(drop)
+    })
+    .await
+    .unwrap();
+    assert_eq!(
+      verdict(&db, &now).await,
+      Some(Ok(())),
+      "scans canceled, failed or cut off after it are passed over, and one marked before it is \
+       not its concern"
+    );
+    assert_eq!(
+      verdict(&db, &other).await,
+      Some(Err("Share options changed since previous scan".into()))
+    );
+    db.write(|conn| mark_latest_suspect(conn)).await.unwrap();
+    assert_eq!(
+      verdict(&db, &now).await,
+      Some(Err("Previous share scan was marked as suspect".into())),
+      "a drift reported after it, on a scan that stopped"
+    );
+
+    let db = index().await;
+    let options = same.clone();
+    db.write(move |conn| {
+      insert_scan(conn, 10, &options)?;
+      end_scan(conn, 10, 11)?;
+      mark_latest_suspect(conn)
+    })
+    .await
+    .unwrap();
+    assert_eq!(
+      verdict(&db, &now).await,
+      Some(Err("Previous share scan was marked as suspect".into())),
+      "the finished scan itself"
+    );
+
+    let db = index().await;
+    db.write(move |conn| {
+      insert_scan(conn, 10, &same)?;
+      end_scan(conn, 10, 11)?;
+      insert_scan(conn, 20, &changed)?;
+      stop_scan(conn, 20, 21, ScanState::Canceled)
+    })
+    .await
+    .unwrap();
+    assert_eq!(
+      verdict(&db, &now).await,
+      Some(Err(
+        "A share scan with other options stopped before it completed".into()
+      )),
+      "its rows may be of a share no longer configured"
+    );
   }
 }

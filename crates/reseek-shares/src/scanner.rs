@@ -169,7 +169,7 @@ pub async fn scan(
     Err(_) => ScanState::Failed,
   };
   let marked = db
-    .write(move |conn| repository::stop_scan(conn, timestamp, stopped))
+    .write(move |conn| repository::stop_scan(conn, timestamp, now_ms(), stopped))
     .await;
   match (scanned, marked) {
     (scanned, Ok(())) => scanned,
@@ -543,6 +543,6 @@ pub(super) mod tests {
     assert_eq!(names(&db).await, before);
     let latest = db.read(repository::latest_scan).await.unwrap().unwrap();
     assert_eq!(latest.state, ScanState::Canceled);
-    assert!(latest.ended_at.is_none());
+    assert!(latest.ended_at.is_some());
   }
 }

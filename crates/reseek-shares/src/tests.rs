@@ -548,16 +548,27 @@ async fn a_restart_loads_the_backup_and_scans_once() {
   drop(files);
 }
 
+/// Makes an index the one the release before the scan state column wrote: its scans table as
+/// the first migration made it, with the same rows, and no later migration recorded.
+const BEFORE_SCAN_STATE: &str = "ALTER TABLE scans RENAME TO scans_now;
+  CREATE TABLE scans (
+    timestamp INTEGER PRIMARY KEY,
+    options TEXT NOT NULL,
+    \"end\" INTEGER DEFAULT NULL,
+    suspect INTEGER NOT NULL DEFAULT 0
+  );
+  INSERT INTO scans SELECT timestamp, options, \"end\", suspect FROM scans_now;
+  DROP TABLE scans_now;
+  CREATE INDEX idx_scans_timestamp ON scans(timestamp DESC);
+  DELETE FROM schema_migrations WHERE version > 1;";
+
 #[tokio::test]
 async fn a_backup_from_before_a_migration_is_migrated_and_loaded() {
   let (files, engine) = shared_engine().await;
   let backup = storage::backup_path(&engine.cache());
-  // the backup as the release before the scan state column wrote it
   rusqlite::Connection::open(&backup)
     .unwrap()
-    .execute_batch(
-      "ALTER TABLE scans DROP COLUMN state; DELETE FROM schema_migrations WHERE version = 2;",
-    )
+    .execute_batch(BEFORE_SCAN_STATE)
     .unwrap();
   let again = engine.again(CancellationToken::new(), QUIET).await;
   again.initialized().await;
@@ -583,11 +594,7 @@ async fn a_backup_that_does_not_migrate_is_scanned_over_and_replaced(version: u3
   let backup = storage::backup_path(&engine.cache());
   let conn = rusqlite::Connection::open(&backup).unwrap();
   if version == 1 {
-    conn
-      .execute_batch(
-        "ALTER TABLE scans DROP COLUMN state; DELETE FROM schema_migrations WHERE version = 2;",
-      )
-      .unwrap();
+    conn.execute_batch(BEFORE_SCAN_STATE).unwrap();
   }
   conn
     .execute(
@@ -638,7 +645,7 @@ async fn a_backup_whose_first_migration_differs_is_scanned_over_and_replaced() {
 
 #[tokio::test]
 async fn a_backup_whose_last_migration_differs_is_scanned_over_and_replaced() {
-  a_backup_that_does_not_migrate_is_scanned_over_and_replaced(2).await;
+  a_backup_that_does_not_migrate_is_scanned_over_and_replaced(storage::schema_version()).await;
 }
 
 #[tokio::test]
@@ -910,6 +917,79 @@ async fn options_changed_while_a_scan_runs_stay_pending_and_uncounted() {
   eventually(async || idle(&shares)).await;
   assert!(!engine.state().scan_pending);
   assert_eq!(counts(&shares, "Other"), (Some(1), Some(1)));
+}
+
+/// The state of the scan `shares` records as started at `started_at`.
+async fn scan_state(shares: &Shares, started_at: i64) -> String {
+  shares
+    .db
+    .read(move |conn| {
+      conn.query_row(
+        "SELECT state FROM scans WHERE timestamp = ?1",
+        [started_at],
+        |row| row.get(0),
+      )
+    })
+    .await
+    .unwrap()
+}
+
+/// A stop cuts off the scan after one that finished, in an engine whose configuration ends in
+/// `extra`: the next start ends its row as failed and loads the index, reusing its rows.
+async fn a_scan_cut_off_by_a_stop_is_ended_and_the_index_before_it_loaded(extra: &str) {
+  let files = tempfile::tempdir().unwrap();
+  let engine = engine(&(config(files.path()) + extra)).await;
+  let shares = &engine.shares;
+  eventually(async || idle(shares)).await;
+  mark_attributes(shares).await;
+  let finished = shares
+    .db
+    .read(repository::latest_scan)
+    .await
+    .unwrap()
+    .unwrap();
+  let cut = finished.started_at + 1;
+  if shares.in_memory {
+    // what the next start finds is the backup
+    let backup = storage::backup_path(&engine.cache());
+    storage::back_up(&shares.db, &backup).await.unwrap();
+    rusqlite::Connection::open(&backup)
+      .unwrap()
+      .execute(
+        "INSERT INTO scans (timestamp, options) VALUES (?1, ?2)",
+        rusqlite::params![cut, finished.options],
+      )
+      .unwrap();
+  } else {
+    let options = finished.options.clone();
+    shares
+      .db
+      .write(move |conn| repository::insert_scan(conn, cut, &options))
+      .await
+      .unwrap();
+  }
+  let again = engine.again(CancellationToken::new(), QUIET).await;
+  again.initialized().await;
+  eventually(async || idle(&again)).await;
+  assert_eq!(scan_state(&again, cut).await, "failed");
+  assert_eq!(
+    attributes(&again).await,
+    MARKER,
+    "loaded and scanned again reusing its rows, not scanned over"
+  );
+}
+
+#[tokio::test]
+async fn a_scan_cut_off_by_a_stop_leaves_the_backup_before_it_loaded() {
+  a_scan_cut_off_by_a_stop_is_ended_and_the_index_before_it_loaded("").await;
+}
+
+#[tokio::test]
+async fn a_scan_cut_off_by_a_stop_leaves_the_index_on_disk_before_it_loaded() {
+  a_scan_cut_off_by_a_stop_is_ended_and_the_index_before_it_loaded(
+    "[shares.cache]\nstorage_mode = \"disk\"\n",
+  )
+  .await;
 }
 
 #[tokio::test]

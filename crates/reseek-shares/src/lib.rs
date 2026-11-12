@@ -320,6 +320,8 @@ impl Shares {
       setup.volatile,
     )
     .await?;
+    // before the engine exists no scan can run, so a row still running was cut off by a stop
+    init::end_interrupted(&storage.db).await;
     browse::remove_stale(&setup.cache).await;
     remove_agent_hosts(&setup.cache).await;
     let current = config.clone();
