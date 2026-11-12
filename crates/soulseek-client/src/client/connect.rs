@@ -93,21 +93,21 @@ impl Client {
       guard = self.inner.state_lock.lock() => guard,
     };
     // declared after the lock so it drops first: a queued connect never sees this one's session
-    // half made
+    // half made, unless it was dropped outside a runtime
     let mut unfinished = Unfinished {
       client: self,
       armed: false,
     };
     let mut state = self.inner.state.subscribe();
     loop {
-      {
+      let left_behind = {
         let mut session = self.inner.session();
         // transitions publish the state under the session lock, so a change after this read is
         // one `changed` sees
         state.borrow_and_update();
         match &session.stage {
           // the previous session is still being torn down; this waits for it below
-          Stage::Disconnecting { .. } => {}
+          Stage::Disconnecting { .. } => false,
           // another connect logged in while this one waited for the lock
           Stage::LoggedIn {
             link,
@@ -125,19 +125,30 @@ impl Client {
               password,
             );
           }
-          // only a connect leaves disconnected, and connects take turns under the lock, so
-          // with no teardown under way and no login to join, the session is disconnected
-          _ => {
+          Stage::Disconnected { .. } => {
             // a disconnect cancels under the session lock, so one asked for while this call
             // waited is seen here and no session begins
             check_canceled(attempt)?;
             self
               .inner
               .transition(&mut session, Edge::Connect, "Connecting".into(), None)
-              .expect("a connect holding the lock starts from disconnected");
+              .expect("a disconnected session takes the connect edge");
             unfinished.armed = true;
             break;
           }
+          // connects take turns under the lock, so a session part made while this one holds it
+          // belongs to a connect dropped outside a runtime, where it could not end it
+          Stage::Connecting { .. } | Stage::Connected { .. } | Stage::LoggingIn { .. } => true,
+        }
+      };
+      if left_behind {
+        tracing::debug!("a session whose connect was dropped is ended before connecting");
+        if let Some(teardown) = self.inner.begin_disconnect(
+          Some("connect dropped"),
+          Some(ClientError::Canceled),
+          Cause::Abandoned,
+        ) {
+          drop(teardown.spawn(self));
         }
       }
       tokio::select! {
@@ -480,8 +491,9 @@ impl Drop for Unfinished<'_> {
     if !self.armed {
       return;
     }
-    // dropped outside a runtime, as after a `block_on` returns, nothing could run the teardown,
-    // and no connect can be queued behind this one either
+    // dropped outside a runtime, as after a `block_on` returns, nothing could run the teardown;
+    // a connect already waiting for the lock ends the session instead, else a disconnect must,
+    // since a new connect is refused while the session stays connecting
     if tokio::runtime::Handle::try_current().is_err() {
       return;
     }
