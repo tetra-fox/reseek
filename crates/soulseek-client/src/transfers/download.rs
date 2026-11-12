@@ -224,8 +224,9 @@ impl Download {
         })?;
       return self.take(offer).await;
     }
-    // the turn comes before the slot, so a download never holds a slot while one that started
-    // before it waits for one
+    // The user's downloads take their slots in the order they started, then connect side by
+    // side and ask in that order. A download holding its slot waits only for earlier ones that
+    // hold theirs, so nothing waits on a download that waits for a slot.
     let turn = self
       .request_turn
       .take()
@@ -233,7 +234,7 @@ impl Download {
     self
       .stop
       .run(async {
-        turn.reached().await;
+        turn.slot_reached().await;
         Ok(())
       })
       .await?;
@@ -244,11 +245,19 @@ impl Download {
       .stop
       .run(transfers.download_slots.acquire(limit, &cancel))
       .await?;
+    turn.slotted();
     let endpoint = self
       .stop
       .run(self.client.get_user_endpoint(&self.username))
       .await?;
     let conn = self.message_connection(endpoint).await?;
+    self
+      .stop
+      .run(async {
+        turn.reached().await;
+        Ok(())
+      })
+      .await?;
     let mut offered = self
       .offered
       .take()

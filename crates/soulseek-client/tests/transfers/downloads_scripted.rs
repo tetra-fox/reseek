@@ -517,3 +517,50 @@ async fn a_failure_reported_before_the_download_asked_for_its_file_leaves_it_run
   let done = waiting.result().await.unwrap();
   assert_eq!(done.bytes_transferred, SIZE);
 }
+
+/// Downloads from one user connect side by side and wait for each other only to ask, so an
+/// album from a user nobody can reach fails together after one connection attempt.
+#[tokio::test]
+async fn downloads_from_a_peer_nobody_can_reach_fail_together() {
+  let mut options = crate::support::listening_options();
+  options.peer_connection_options.connect_timeout = Duration::from_millis(500);
+  let mut scripted = Scripted::with_options(options).await;
+  let started = tokio::time::Instant::now();
+  let running: Vec<_> = (1..=5)
+    .map(|track| scripted.download(&format!("@@share\\gone\\{track}.flac"), |_| {}))
+    .collect();
+  let ended = async {
+    for download in running {
+      assert!(download.result().await.is_err());
+    }
+  };
+  // nothing listens where bob is said to be, and bob never acts on the relayed request
+  let nowhere = crate::support::free_port();
+  let server = &mut scripted.session.server;
+  let lookups = async {
+    loop {
+      server
+        .request_matching(|request| {
+          matches!(request, ServerRequest::GetPeerAddress(_)).then_some(())
+        })
+        .await;
+      server
+        .send(&ServerResponse::GetPeerAddress(GetPeerAddressResponse {
+          username: BOB.into(),
+          ip: std::net::Ipv4Addr::LOCALHOST,
+          port: u32::from(nowhere),
+          obfuscation: None,
+        }))
+        .await;
+    }
+  };
+  tokio::select! {
+    () = ended => {}
+    () = lookups => unreachable!("the server answers every lookup"),
+  }
+  assert!(
+    started.elapsed() < Duration::from_millis(1500),
+    "took {:?}",
+    started.elapsed()
+  );
+}

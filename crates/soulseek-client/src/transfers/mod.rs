@@ -98,7 +98,7 @@ pub(crate) struct Transfers {
   /// the offers of files users send us unasked, by user and file, until a download takes them
   offered: Mutex<HashMap<(String, RemoteFilename), TransferRequest>>,
   /// by user, the downloads that have yet to ask for their file, in the order they started
-  request_turns: Mutex<HashMap<String, watch::Sender<VecDeque<u64>>>>,
+  request_turns: Mutex<HashMap<String, watch::Sender<VecDeque<Turn>>>>,
   next_turn: AtomicU64,
 }
 
@@ -323,7 +323,7 @@ impl Transfers {
     lock(&self.request_turns)
       .entry(username.to_owned())
       .or_insert_with(|| watch::Sender::new(VecDeque::new()))
-      .send_modify(|waiting| waiting.push_back(id));
+      .send_modify(|waiting| waiting.push_back(Turn { id, slotted: false }));
     RequestTurn {
       transfers: self.clone(),
       username: username.to_owned(),
@@ -397,9 +397,19 @@ pub(crate) enum RemoteFailure {
   Untracked,
 }
 
+/// One download in its user's queue of downloads that have yet to ask
+#[derive(Clone, Copy)]
+struct Turn {
+  id: u64,
+  /// the download holds its download slot
+  slotted: bool,
+}
+
 /// A download's place among the downloads from one user that have yet to ask for their file.
 /// Requests to a user go out in the order the downloads started, so an album is queued at the
-/// peer track by track; leaving the place, by asking or by ending, lets the next one ask.
+/// peer track by track. The downloads take their slots in that order too, then connect side by
+/// side, sharing the attempt, and each waits only for the ones before it to write. Leaving the
+/// place, by asking or by ending, lets the next one ask.
 pub(crate) struct RequestTurn {
   transfers: Arc<Transfers>,
   username: String,
@@ -407,16 +417,47 @@ pub(crate) struct RequestTurn {
 }
 
 impl RequestTurn {
-  /// resolves once every download from the user that started before this one has asked or ended
-  pub(crate) async fn reached(&self) {
-    let mut waiting = lock(&self.transfers.request_turns)
-      .get(&self.username)
-      .expect("a user's turns are kept while one of them is held")
-      .subscribe();
-    waiting
-      .wait_for(|waiting| waiting.front() == Some(&self.id))
+  /// resolves once every download from the user that started before this one holds its slot,
+  /// has asked or has ended, so slots go to the user's downloads in the order they started
+  pub(crate) async fn slot_reached(&self) {
+    self
+      .waiting()
+      .wait_for(|waiting| {
+        waiting
+          .iter()
+          .take_while(|turn| turn.id != self.id)
+          .all(|turn| turn.slotted)
+      })
       .await
       .expect("a user's turns are kept while one of them is held");
+  }
+
+  /// this download holds its slot: the next one may take one
+  pub(crate) fn slotted(&self) {
+    if let Some(waiting) = lock(&self.transfers.request_turns).get(&self.username) {
+      waiting.send_modify(|waiting| {
+        for turn in waiting.iter_mut().filter(|turn| turn.id == self.id) {
+          turn.slotted = true;
+        }
+      });
+    }
+  }
+
+  /// resolves once every download from the user that started before this one has asked or ended
+  pub(crate) async fn reached(&self) {
+    self
+      .waiting()
+      .wait_for(|waiting| waiting.front().map(|turn| turn.id) == Some(self.id))
+      .await
+      .expect("a user's turns are kept while one of them is held");
+  }
+
+  /// follows the user's queue of downloads that have yet to ask
+  fn waiting(&self) -> watch::Receiver<VecDeque<Turn>> {
+    lock(&self.transfers.request_turns)
+      .get(&self.username)
+      .expect("a user's turns are kept while one of them is held")
+      .subscribe()
   }
 }
 
@@ -426,7 +467,7 @@ impl Drop for RequestTurn {
     let Some(waiting) = turns.get(&self.username) else {
       return;
     };
-    waiting.send_modify(|waiting| waiting.retain(|id| *id != self.id));
+    waiting.send_modify(|waiting| waiting.retain(|turn| turn.id != self.id));
     if waiting.borrow().is_empty() {
       turns.remove(&self.username);
     }
