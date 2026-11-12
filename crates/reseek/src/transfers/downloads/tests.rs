@@ -95,9 +95,34 @@ async fn canceling_a_download_no_task_runs_ends_its_wait_and_can_remove_it() {
   };
   insert(&app, &waiting).await;
   let id = waiting.id;
+  // a row an earlier build wrote with the place its peer last gave next to the retry time
+  app
+    .state
+    .transfers
+    .write(move |conn| {
+      conn.execute(
+        "UPDATE Transfers SET PlaceInQueue = 4 WHERE Id = ?1",
+        [id.to_string()],
+      )
+    })
+    .await
+    .unwrap();
   let uri = format!("/api/v0/transfers/downloads/alice/{id}?remove=true");
   let (status, _) = app.call("DELETE", &uri, None).await;
   assert_eq!(status, 204);
+  let columns: (Option<u32>, Option<String>) = app
+    .state
+    .transfers
+    .read(move |conn| {
+      conn.query_row(
+        "SELECT PlaceInQueue, NextAttemptAt FROM Transfers WHERE Id = ?1",
+        [id.to_string()],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+      )
+    })
+    .await
+    .unwrap();
+  assert_eq!(columns, (None, None), "the place and the retry time go with the wait");
   let ended = read(&app, id).await;
   assert_eq!(
     ended.state.kind(),
