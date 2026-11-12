@@ -26,6 +26,8 @@ class Marks {
   #reading = false;
   /** a report finished while a read ran, which that read may have missed */
   #again = false;
+  /** counts the times the marks were forgotten, so a read from before puts nothing back */
+  #cleared = 0;
 
   /** Keeps the marks current while the returned function has not been called */
   retain(): () => void {
@@ -46,6 +48,14 @@ class Marks {
       for (const stop of this.#stops) stop();
       this.#stops = [];
     };
+  }
+
+  /** Forgets every mark, as the session ends */
+  clear() {
+    this.#cleared += 1;
+    this.#files.clear();
+    this.#downloads.clear();
+    this.#newest = null;
   }
 
   /** Takes in a report read on its own, such as one whose judgment just changed */
@@ -87,10 +97,12 @@ class Marks {
 
   async #pages() {
     const since = this.#newest ?? undefined;
+    const cleared = this.#cleared;
     for (let offset = 0; ; offset += PAGE) {
       const outcome = await call(() =>
         api.GET("/api/v0/analysis", { params: { query: { since, offset, limit: PAGE } } })
       );
+      if (cleared !== this.#cleared) return;
       // a failed read leaves the marks as they are; the next report finished reads again
       if (!outcome.ok) return;
       for (const report of outcome.data) this.put(report);

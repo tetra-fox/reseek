@@ -15,6 +15,8 @@ export class Loader<T> {
   #kept: ((data: T) => void) | undefined;
   #running: Promise<void> | null = null;
   #again = false;
+  /** counts the times the data was forgotten, so a load from before leaves it so */
+  #cleared = 0;
 
   constructor(fetch: () => Promise<Outcome<T>>, kept?: (data: T) => void) {
     this.#fetch = fetch;
@@ -31,10 +33,20 @@ export class Loader<T> {
     return this.#running;
   };
 
+  /** Forgets the data, back to before the first load; a load on its way is not taken */
+  clear() {
+    this.#cleared += 1;
+    this.data = undefined;
+    this.error = "";
+    this.loading = true;
+  }
+
   async #run() {
     do {
       this.#again = false;
+      const cleared = this.#cleared;
       const outcome = await this.#fetch();
+      if (cleared !== this.#cleared) continue;
       if (outcome.ok) {
         this.#kept?.(outcome.data);
         this.data = outcome.data;

@@ -99,6 +99,13 @@ class Activity {
     this.#trim();
   };
 
+  /** Forgets the log, as the session ends */
+  clear() {
+    this.entries.clear();
+    this.clearedThrough = 0;
+    this.error = "";
+  }
+
   /** Clears the view up to the newest entry; the log itself is the daemon's */
   clearView() {
     this.clearedThrough = Math.max(0, ...this.entries.rows.map((e) => e.id));

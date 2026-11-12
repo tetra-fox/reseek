@@ -21,6 +21,8 @@ class Wishlist {
   async load() {
     const turn = this.rows.reading();
     const outcome = await call(() => api.GET("/api/v0/searches/wishlist"));
+    // a later read, or the end of the session, came meanwhile
+    if (!this.rows.latest(turn)) return;
     if (outcome.ok) {
       this.rows.reconcile(outcome.data, turn);
       this.error = null;
@@ -29,6 +31,13 @@ class Wishlist {
       this.error = outcome.error;
     }
     this.loaded = true;
+  }
+
+  /** Forgets the wishlist, as the session ends */
+  clear() {
+    this.rows.clear();
+    this.loaded = false;
+    this.error = null;
   }
 
   async add(searchText: string) {

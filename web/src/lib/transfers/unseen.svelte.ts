@@ -56,6 +56,12 @@ class Unseen {
     if (this.#viewing[direction]) return;
     this.#counts[direction][outcome] += 1;
   }
+
+  /** Forgets every count, as the session ends */
+  clear() {
+    this.#counts = { download: { succeeded: 0, failed: 0 }, upload: { succeeded: 0, failed: 0 } };
+    this.#counted.clear();
+  }
 }
 
 export const unseen = new Unseen();

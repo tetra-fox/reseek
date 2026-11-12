@@ -26,6 +26,12 @@ class Own {
     return this.loader.data;
   }
 
+  /** Forgets the profile, as the session ends; it is fetched again on the next need */
+  clear() {
+    this.#asked = false;
+    this.loader.clear();
+  }
+
   /** Fetches the profile unless it was fetched before */
   need() {
     if (this.#asked) return;

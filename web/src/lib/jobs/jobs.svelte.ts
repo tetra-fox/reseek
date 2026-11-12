@@ -73,6 +73,16 @@ class Jobs {
     this.loaded = true;
   }
 
+  /** Forgets the jobs, as the session ends; a read on its way is not taken */
+  clear() {
+    this.rows.clear();
+    this.#scheduleFrames += 1;
+    this.schedules = [];
+    this.loaded = false;
+    this.error = null;
+    this.schedulesError = null;
+  }
+
   /** One of a job's controls; the frames that follow bring its new state */
   control(id: string, what: "cancel" | "pause" | "resume"): Promise<Outcome<unknown>> {
     const path = { params: { path: { id } } };

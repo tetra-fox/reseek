@@ -20,6 +20,11 @@ class Waits {
     return this.#answers.get(id)?.status;
   }
 
+  /** Forgets every answer, as the session ends */
+  clear() {
+    this.#answers.clear();
+  }
+
   load = async (t: Transfer) => {
     const held = this.#answers.get(t.id);
     if ((held && Date.now() - held.at < FRESH_MS) || this.#asking.has(t.id)) return;

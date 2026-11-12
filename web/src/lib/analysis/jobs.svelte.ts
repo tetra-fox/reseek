@@ -95,6 +95,15 @@ class Jobs {
     }
   }
 
+  /** Forgets the queue, as the session ends; a read on its way is not taken */
+  clear() {
+    this.#turn += 1;
+    this.#reading = false;
+    this.#queuedDuring = [];
+    this.list = [];
+    this.backlog = 0;
+  }
+
   /** The job of the file a target names, if it waits or runs */
   of(target: Target): Job | undefined {
     return this.list.find((j) => names(target, j));
