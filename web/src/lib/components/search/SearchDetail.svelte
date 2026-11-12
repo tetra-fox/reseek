@@ -36,7 +36,13 @@
   import { recent, togglePin } from "#lib/search/recent.svelte.js";
   import { HIDING, type HideKey, pipeline, type Result } from "#lib/search/results.js";
   import { Results } from "#lib/search/results.svelte.js";
-  import { isDone, openSearch, scopeLabel, searches } from "#lib/search/searches.svelte.js";
+  import {
+    isDone,
+    openSearch,
+    scopeLabel,
+    searches,
+    searchStage
+  } from "#lib/search/searches.svelte.js";
   import { session } from "#lib/session.svelte.js";
   import {
     HIDE_DEFAULTS,
@@ -451,7 +457,7 @@
       <Spinner class="size-4" />
       {search.state === "InProgress"
         ? "Searching..."
-        : search.state.includes("Queued")
+        : search.state === "Queued"
           ? "Waiting for another search to finish"
           : "Starting search..."}
     </div>
@@ -464,7 +470,7 @@
     {/each}
   {:else if results.loading}
     <Skeleton class="h-28" />
-  {:else if search.state.includes("Errored")}
+  {:else if searchStage(search.state) === "errored"}
     <EmptyState
       icon={SearchXIcon}
       title="The search failed"
