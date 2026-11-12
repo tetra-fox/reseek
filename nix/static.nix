@@ -24,7 +24,7 @@ let
 in
 rustPlatform.buildRustPackage {
   pname = "reseek-${target}";
-  inherit (reseek) version src cargoDeps;
+  inherit (reseek) version src cargoDeps dontCargoUseSystemLibs;
 
   env = {
     WEBUI_DIR = web;

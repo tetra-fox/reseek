@@ -37,6 +37,9 @@ rustPlatform.buildRustPackage {
   };
 
   cargoLock.lockFile = ../Cargo.lock;
+  # aws-lc and SQLite are built from the crates' own sources (SQLite with FTS5); nixpkgs' cargo
+  # setup hook would otherwise make them link the system's, which the static builds cannot
+  dontCargoUseSystemLibs = true;
   cargoBuildFlags = [
     "--package"
     "reseek-bin"
