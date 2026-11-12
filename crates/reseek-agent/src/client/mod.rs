@@ -27,7 +27,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, info, info_span, warn};
 
 use crate::options::{Controller, Options};
-use dial::{DialError, Settings};
+use dial::{DialError, Settings, without_userinfo};
 use session::{Ended, Link};
 
 /// The longest wait between two attempts to reach the controller.
@@ -180,7 +180,7 @@ impl AgentClient {
           continue;
         }
       };
-      info!(address = %settings.address, "connected to the relay controller");
+      info!(address = %without_userinfo(&settings.address), "connected to the relay controller");
       let ended = self.serve(socket, settings).await;
       shut_down = ended.code == Some(close::SHUTTING_DOWN);
       // two agents with one instance name would otherwise take the socket from each other

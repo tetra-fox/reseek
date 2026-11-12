@@ -116,6 +116,15 @@ pub(super) fn call_error(e: reqwest::Error) -> String {
   text
 }
 
+/// `url` without the user name and password it may hold, to be logged or shown.
+pub(super) fn without_userinfo(url: &Url) -> Url {
+  let mut shown = url.clone();
+  // a URL that cannot take a user name or password has none
+  let _ = shown.set_username("");
+  let _ = shown.set_password(None);
+  shown
+}
+
 /// Why the relay socket did not open.
 #[derive(Debug, thiserror::Error)]
 pub enum DialError {
@@ -168,7 +177,7 @@ pub async fn open_socket(
   let mut socket = url.clone();
   socket
     .set_scheme(if secure { "wss" } else { "ws" })
-    .map_err(|()| format!("{url} is not an http or https address"))?;
+    .map_err(|()| format!("{} is not an http or https address", without_userinfo(url)))?;
   let mut request = socket
     .as_str()
     .into_client_request()
@@ -280,5 +289,27 @@ impl ServerCertVerifier for AnyCertificate {
 
   fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
     self.0.signature_verification_algorithms.supported_schemes()
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[tokio::test]
+  async fn a_socket_that_does_not_open_names_its_address_without_the_password() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    // a scheme that is not http or https connects and then fails
+    let url = Url::parse(&format!(
+      "relay://nas:hunter2@127.0.0.1:{port}/api/v0/relay/ws"
+    ))
+    .unwrap();
+    let tls = Arc::new(tls(false).unwrap());
+    let Err(DialError::Failed(e)) = open_socket(&url, &tls, HeaderMap::new()).await else {
+      panic!("the socket does not open");
+    };
+    assert!(e.contains(&format!("relay://127.0.0.1:{port}/")), "{e}");
+    assert!(!e.contains("hunter2"), "{e}");
   }
 }

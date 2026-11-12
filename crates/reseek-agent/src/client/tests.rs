@@ -11,13 +11,15 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
-use api_types::relay::{DownloadOutcome, RelayErrorCode, RelayMessage};
+use api_types::relay::{DownloadOutcome, RELAY_SUBPROTOCOL, RelayErrorCode, RelayMessage};
 use cascade::{Layers, Watcher};
 use reseek_relay_proto::frames;
 use reseek_shares::{ScanNotice, ScanOrigin, Setup, Shares, lock};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::sync::{Semaphore, mpsc};
+use tokio_tungstenite::tungstenite::handshake::server::{Request, Response};
+use tokio_tungstenite::tungstenite::http::HeaderValue;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
@@ -101,18 +103,24 @@ impl Agent {
   }
 }
 
-/// The warnings logged on this thread while it lives.
-struct Warnings {
+/// The lines logged on this thread while it lives.
+struct Logged {
   text: Arc<std::sync::Mutex<Vec<u8>>>,
   _logging: tracing::subscriber::DefaultGuard,
 }
 
-impl Warnings {
-  fn new() -> Self {
+impl Logged {
+  /// The warnings and errors.
+  fn warnings() -> Self {
+    Self::at(tracing::Level::WARN)
+  }
+
+  /// The lines at `level` and above.
+  fn at(level: tracing::Level) -> Self {
     let text = Arc::new(std::sync::Mutex::new(Vec::new()));
     let written = text.clone();
     let subscriber = tracing_subscriber::fmt()
-      .with_max_level(tracing::Level::WARN)
+      .with_max_level(level)
       .with_ansi(false)
       .with_writer(move || Written(written.clone()))
       .finish();
@@ -122,7 +130,7 @@ impl Warnings {
     }
   }
 
-  /// How many warnings hold `message`.
+  /// How many lines hold `message`.
   fn count(&self, message: &str) -> usize {
     String::from_utf8_lossy(&lock(&self.text))
       .lines()
@@ -131,7 +139,7 @@ impl Warnings {
   }
 }
 
-/// Where [`Warnings`] are written.
+/// Where [`Logged`] lines are written.
 struct Written(Arc<std::sync::Mutex<Vec<u8>>>);
 
 impl std::io::Write for Written {
@@ -197,6 +205,29 @@ async fn controller(answers: Vec<Answer>, calls: Arc<AtomicUsize>) -> String {
   format!("http://{address}/")
 }
 
+/// A controller's relay socket that takes one agent and holds it open; its address.
+async fn socket_controller() -> std::net::SocketAddr {
+  let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+  let address = listener.local_addr().unwrap();
+  tokio::spawn(async move {
+    let (connection, _) = listener.accept().await.unwrap();
+    // tungstenite sets the callback's error type, an HTTP response
+    #[allow(clippy::result_large_err)]
+    let choose = |_: &Request, mut response: Response| {
+      response.headers_mut().insert(
+        "sec-websocket-protocol",
+        HeaderValue::from_static(RELAY_SUBPROTOCOL),
+      );
+      Ok(response)
+    };
+    let _socket = tokio_tungstenite::accept_hdr_async(connection, choose)
+      .await
+      .unwrap();
+    std::future::pending::<()>().await
+  });
+  address
+}
+
 /// Reads one request from `connection`, its body as long as its `content-length`.
 async fn read_request(connection: &mut tokio::net::TcpStream) {
   let mut read = Vec::new();
@@ -230,9 +261,14 @@ async fn agent(answers: Vec<Answer>, ready: bool) -> Agent {
 
 /// [`agent`] with its share engine started as `start`.
 async fn agent_from(start: Start, answers: Vec<Answer>, ready: bool) -> Agent {
-  let dir = tempfile::tempdir().unwrap();
   let calls = Arc::new(AtomicUsize::new(0));
   let address = controller(answers, calls.clone()).await;
+  agent_at(start, &address, calls, ready).await
+}
+
+/// [`agent_from`] with its controller at `address`, which counts its calls in `calls`.
+async fn agent_at(start: Start, address: &str, calls: Arc<AtomicUsize>, ready: bool) -> Agent {
+  let dir = tempfile::tempdir().unwrap();
   let share = dir.path().join("share");
   std::fs::create_dir_all(&share).unwrap();
   std::fs::write(share.join("one.flac"), "one").unwrap();
@@ -420,7 +456,7 @@ async fn upload_once(agent: &mut Agent) {
 
 #[tokio::test]
 async fn a_run_of_upload_failures_after_one_succeeded_is_warned_about_again() {
-  let warnings = Warnings::new();
+  let warnings = Logged::warnings();
   let answers = [502, 200, 502, 200].map(Answer::Status).to_vec();
   let mut agent = agent(answers, true).await;
   agent.agent.request_sync();
@@ -440,7 +476,7 @@ async fn a_run_of_upload_failures_after_one_succeeded_is_warned_about_again() {
 
 #[tokio::test]
 async fn a_run_of_uploads_whose_connection_drops_is_warned_about_once() {
-  let warnings = Warnings::new();
+  let warnings = Logged::warnings();
   let answers = vec![Answer::Dropped, Answer::Dropped, Answer::Status(200)];
   let mut agent = agent(answers, true).await;
   agent.agent.request_sync();
@@ -463,7 +499,7 @@ async fn a_run_of_uploads_whose_connection_drops_is_warned_about_once() {
 
 #[tokio::test]
 async fn another_agent_taking_the_socket_is_warned_about_once_across_uploads() {
-  let warnings = Warnings::new();
+  let warnings = Logged::warnings();
   let mut agent = agent(vec![Answer::Status(200)], false).await;
   let superseded = Ended {
     ready: true,
@@ -488,7 +524,7 @@ fn names_call(text: &str, token: Uuid) -> bool {
 
 #[tokio::test]
 async fn a_file_whose_call_drops_fails_without_the_call_url() {
-  let warnings = Warnings::new();
+  let warnings = Logged::warnings();
   let mut agent = agent(vec![Answer::Dropped, Answer::Cut], true).await;
   let shared = &agent.agent.shares.browse().await.unwrap()[0];
   let filename = format!("{}\\{}", shared.name, shared.files[0].filename);
@@ -519,7 +555,7 @@ async fn a_file_whose_call_drops_fails_without_the_call_url() {
 
 #[tokio::test]
 async fn a_download_whose_calls_drop_fails_without_the_call_url() {
-  let warnings = Warnings::new();
+  let warnings = Logged::warnings();
   let mut agent = agent(vec![Answer::Dropped; 3], true).await;
   let token = Uuid::new_v4();
   let offer = RelayMessage::DownloadAvailable {
@@ -543,4 +579,19 @@ async fn a_download_whose_calls_drop_fails_without_the_call_url() {
     3
   );
   assert_eq!(warnings.count("relay/controller/downloads"), 0);
+}
+
+#[tokio::test]
+async fn the_controller_address_is_logged_without_its_password() {
+  let logged = Logged::at(tracing::Level::INFO);
+  let socket = socket_controller().await;
+  let address = format!("http://nas:hunter2@{socket}/");
+  let calls = Arc::new(AtomicUsize::new(0));
+  let agent = agent_at(Start::Scanned, &address, calls, false).await;
+  let running = tokio::spawn(agent.agent.clone().run());
+  eventually(|| logged.count("connected to the relay controller") == 1).await;
+  agent.shutdown.cancel();
+  running.await.unwrap();
+  assert_eq!(logged.count("hunter2"), 0);
+  assert_eq!(logged.count(&format!("address=http://{socket}/")), 1);
 }
