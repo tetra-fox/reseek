@@ -20,9 +20,10 @@ impl Shares {
       };
     };
     let settings = Arc::new(self.scan_settings());
+    // the scan outlives whatever asked for it, such as a request, so its span stands alone
     tokio::spawn(
       async move { shares.run_scan(force, origin, cancel, settings).await }
-        .instrument(info_span!("scan", force)),
+        .instrument(info_span!(parent: None, "scan", force)),
     );
     Ok(())
   }
