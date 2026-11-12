@@ -549,8 +549,10 @@ impl Downloads {
   }
 
   /// Cancels every download of the job `job` that has not finished; a job with none to
-  /// cancel is brought in step, and one that never had a download ends canceled.
+  /// cancel is brought in step, and one that never had a download ends canceled. A job a
+  /// resume holds for files that wait for a login is let go of first, so they are not enqueued.
   pub async fn cancel_job(&self, job: Uuid) -> Result<(), crate::api::error::ApiError> {
+    self.let_go(job).await;
     let unfinished = self.unfinished_of(job).await?;
     for part in &unfinished {
       self.cancel(&part.username, part.id, false).await?;

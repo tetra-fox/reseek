@@ -23,7 +23,7 @@ mod task;
 #[cfg(test)]
 mod tests;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, Weak};
 
@@ -161,8 +161,12 @@ pub struct Downloads {
   open_jobs: jobs::Open,
   /// the enqueue calls of the API that may run at once
   enqueue_calls: Semaphore,
-  /// how far resuming the downloads a stop interrupted has come, held by the resume under way
-  resuming: tokio::sync::Mutex<resume::Resuming>,
+  /// whether every download a stop interrupted was tried logged in, held by the resume under
+  /// way
+  resuming: tokio::sync::Mutex<bool>,
+  /// the jobs a resume holds open for files that wait for a login, changed only by a holder of
+  /// `resuming`
+  held: Mutex<HashSet<Uuid>>,
   /// when each running download last asked its peer for its place in the queue
   asked: Mutex<HashMap<Uuid, Instant>>,
   /// the places in queue peers sent on their own, written one at a time in the order they came
@@ -227,6 +231,7 @@ impl Downloads {
       open_jobs: jobs::Open::default(),
       enqueue_calls: Semaphore::new(ENQUEUE_CALLS),
       resuming: tokio::sync::Mutex::default(),
+      held: Mutex::default(),
       asked: Mutex::new(HashMap::new()),
       places,
       #[cfg(test)]
@@ -419,8 +424,8 @@ impl Downloads {
         let canceled = self.cancel_unrun(record, remove).await?;
         // a resume that started its task after the check above saved its record before the
         // cancel's write, which ended it, so that task is stopped here
-        if canceled && self.cancel_running(id, remove, None) == Running::Stopped {
-          debug!(%id, "task of a download resumed during its cancel stopped");
+        if canceled {
+          self.cancel_running(id, remove, None);
         }
         Ok(canceled)
       }

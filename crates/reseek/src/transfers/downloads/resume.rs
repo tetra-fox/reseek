@@ -1,24 +1,16 @@
 //! Resuming the downloads a stop interrupted, once a login can reach their users: each is
 //! enqueued again in its job, with its destination and search, as a new download that
 //! supersedes the old record. The files of a group refused for want of the server keep their
-//! marks and their job stays open, so the next login enqueues them.
+//! marks and their job stays open, so the next login enqueues them. A job held so is let go of
+//! by the next pass that does not find its files, which were removed meanwhile, and by a cancel
+//! of the job.
 
-use std::collections::HashSet;
-
+use reseek_shares::lock;
 use tracing::{info, warn};
 use uuid::Uuid;
 
 use super::{Downloads, Group};
 use crate::transfers::cleanup;
-
-/// How far resuming the interrupted downloads has come.
-#[derive(Default)]
-pub(super) struct Resuming {
-  /// every interrupted download was tried while logged in
-  done: bool,
-  /// the jobs held open for files that wait for a login to be enqueued
-  held: HashSet<Uuid>,
-}
 
 impl Downloads {
   /// Enqueues again the downloads a stop interrupted that were not removed since, each in its
@@ -29,20 +21,21 @@ impl Downloads {
   /// the next login makes; once every group was tried logged in, a call does nothing. A user
   /// that cannot be reached is logged, not tried again.
   pub async fn resume(&self) {
-    let mut resuming = self.resuming.lock().await;
-    if resuming.done {
+    let mut done = self.resuming.lock().await;
+    if *done {
       return;
     }
     let resumable = match cleanup::take_resumable(&self.db).await {
       Ok(resumable) => resumable,
       Err(e) => return warn!(error = %e, "interrupted downloads not resumed"),
     };
-    let mut waiting = false;
+    // the jobs earlier passes held; each this pass does not take again is let go of after it
+    let mut earlier = lock(&self.held).clone();
     for (job, groups) in resumable {
       let groups = self.whole_apart(groups).await;
       self.ensure_listed(job, &groups).await;
       // held open through the enqueue, so it does not end while some of its files wait
-      if !resuming.held.remove(&job) {
+      if !earlier.remove(&job) {
         self.open_job(job);
       }
       let asked: Vec<(String, Vec<String>)> = groups
@@ -87,16 +80,22 @@ impl Downloads {
         }
       }
       if kept {
-        resuming.held.insert(job);
-        waiting = true;
+        lock(&self.held).insert(job);
       } else {
+        lock(&self.held).remove(&job);
         self.close_job(job).await;
       }
     }
-    if waiting {
+    // held for files that were removed before a login could enqueue them
+    for job in earlier {
+      lock(&self.held).remove(&job);
+      info!(%job, "download job held for a login let go; its files were removed");
+      self.close_job(job).await;
+    }
+    if !lock(&self.held).is_empty() {
       return;
     }
-    resuming.done = true;
+    *done = true;
     // a job that ended or lost its downloads while the list was not told stays in step
     match self.jobs.unended(api_types::jobs::JobKind::Download).await {
       Ok(jobs) => {
@@ -115,6 +114,25 @@ impl Downloads {
       }
       Err(e) => warn!(error = %e, "download jobs not checked after the restart"),
     }
+  }
+
+  /// Lets go of the job `job` when a resume holds it for files that wait for a login: their
+  /// marks are cleared, so no login enqueues them, and the job is closed, which ends it as its
+  /// downloads ended. A resume under way is waited for, as it may be taking those files.
+  pub(super) async fn let_go(&self, job: Uuid) {
+    if !lock(&self.held).contains(&job) {
+      return;
+    }
+    let _resuming = self.resuming.lock().await;
+    // the resume waited for may have let go of it, or enqueued its files
+    if !lock(&self.held).remove(&job) {
+      return;
+    }
+    if let Err(e) = cleanup::forget_resumable(&self.db, job).await {
+      warn!(%job, error = %e, "files of a canceled job kept for the next login");
+    }
+    info!(%job, "download job held for a login let go");
+    self.close_job(job).await;
   }
 
   /// Whether the client is logged in to the server.

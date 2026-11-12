@@ -152,6 +152,19 @@ pub async fn keep_resumable(
   .await
 }
 
+/// Clears the marks of the downloads of the job `job`, whose files are no longer to be resumed.
+pub async fn forget_resumable(db: &Database, job: Uuid) -> Result<(), DbError> {
+  db.write(move |conn| {
+    conn
+      .execute(
+        "UPDATE Transfers SET Resumable = 0 WHERE JobId = ?1 AND Resumable = 1",
+        [job.to_string()],
+      )
+      .map(drop)
+  })
+  .await
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;

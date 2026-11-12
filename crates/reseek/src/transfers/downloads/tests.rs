@@ -1220,3 +1220,48 @@ async fn a_download_whose_row_cannot_be_read_is_taken_out_by_a_cancel_that_remov
     .unwrap();
   assert!(removed);
 }
+
+/// Writes an interrupted download of alice's in a listed job, as a stop leaves it, and resumes
+/// it while logged out, which holds the job for the next login.
+async fn held_for_a_login(app: &TestApp) -> (Uuid, Uuid) {
+  let job = Uuid::new_v4();
+  listed_job(app, job, "Album from alice").await;
+  let mut interrupted = Record::download("alice", "@@a\\Album\\1.flac", 10);
+  interrupted.job_id = Some(job);
+  insert(app, &interrupted).await;
+  crate::transfers::cleanup::end_unfinished(&app.state.transfers)
+    .await
+    .unwrap();
+  app.state.downloads.resume().await;
+  let listed = app.state.jobs.get(job).await.unwrap().unwrap();
+  assert_eq!(listed.state, api_types::jobs::JobState::Running);
+  (job, interrupted.id)
+}
+
+#[tokio::test]
+async fn a_job_held_for_a_login_whose_downloads_were_removed_ends_at_the_next_resume() {
+  let app = app(TRUSTED, &[]).await;
+  let (job, id) = held_for_a_login(&app).await;
+  let uri = format!("/api/v0/transfers/downloads/alice/{id}?remove=true");
+  let (status, _) = app.call("DELETE", &uri, None).await;
+  assert_eq!(status, 204);
+  app.state.downloads.resume().await;
+  let listed = app.state.jobs.get(job).await.unwrap().unwrap();
+  assert_eq!(listed.state, api_types::jobs::JobState::Ended);
+}
+
+#[tokio::test]
+async fn canceling_a_job_held_for_a_login_ends_it_and_no_login_enqueues_its_files() {
+  let app = app(TRUSTED, &[]).await;
+  let (job, _) = held_for_a_login(&app).await;
+  let (status, _) = app
+    .call("POST", &format!("/api/v0/jobs/{job}/cancel"), None)
+    .await;
+  assert_eq!(status, 204);
+  let listed = app.state.jobs.get(job).await.unwrap().unwrap();
+  assert_eq!(listed.state, api_types::jobs::JobState::Ended);
+  let left = crate::transfers::cleanup::take_resumable(&app.state.transfers)
+    .await
+    .unwrap();
+  assert!(left.is_empty(), "{left:?}");
+}
