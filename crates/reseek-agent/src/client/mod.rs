@@ -28,7 +28,7 @@ use tracing::{Instrument, debug, info, info_span, warn};
 
 use crate::options::{Controller, Options};
 use dial::{DialError, Settings};
-use session::Link;
+use session::{Ended, Link};
 
 /// The longest wait between two attempts to reach the controller.
 const BACKOFF_CAP: Duration = Duration::from_secs(30);
@@ -52,8 +52,12 @@ pub struct AgentClient {
   syncing: AtomicBool,
   /// another share upload was asked for while one ran
   again: AtomicBool,
-  /// the last configuration problem warned about, so a repeated one is not
+  /// the last refusal or configuration problem warned about, so a repeated one is not; forgotten
+  /// when the controller's settings change
   warned: Mutex<Option<String>>,
+  /// the last share upload failure warned about, so a repeated one is not; forgotten once an
+  /// upload succeeds
+  sync_warned: Mutex<Option<String>>,
   /// the controller's settings changed, so the next dial is at once
   redial: Notify,
 }
@@ -81,6 +85,7 @@ impl AgentClient {
       syncing: AtomicBool::new(false),
       again: AtomicBool::new(false),
       warned: Mutex::new(None),
+      sync_warned: Mutex::new(None),
       redial: Notify::new(),
     });
     let span = info_span!("relay_agent");
@@ -142,7 +147,7 @@ impl AgentClient {
         Ok(settings) => Arc::new(settings),
         Err(e) => {
           refused = true;
-          self.warn_once(&e, "relay controller settings not usable");
+          warn_once(&self.warned, &e, "relay controller settings not usable");
           continue;
         }
       };
@@ -154,7 +159,11 @@ impl AgentClient {
         Ok(socket) => socket,
         Err(DialError::Refused(reason)) => {
           refused = true;
-          self.warn_once(&reason, "the relay controller refused this agent");
+          warn_once(
+            &self.warned,
+            &reason,
+            "the relay controller refused this agent",
+          );
           continue;
         }
         Err(DialError::Failed(e)) => {
@@ -177,30 +186,30 @@ impl AgentClient {
       if ended.ready && !refused {
         failures = 1;
       }
-      match &ended.refusal {
-        Some(reason) => self.warn_once(reason, "the relay controller refused this agent"),
-        None if superseded => {
-          let current = self.config.current();
-          let name = &current.values.instance_name;
-          let reason = format!("another agent logged in as {name}");
-          self.warn_once(
-            &reason,
-            "the relay controller dropped this agent for another",
-          );
-        }
-        None => info!(code = ended.code, "relay controller connection lost"),
-      }
+      self.report_end(&ended);
     }
   }
 
-  /// Logs `reason` as a warning unless it was the last one warned about; then at debug.
-  fn warn_once(&self, reason: &str, message: &'static str) {
-    let mut warned = lock(&self.warned);
-    if warned.as_deref() == Some(reason) {
-      debug!(reason, message);
-    } else {
-      warn!(reason, message);
-      *warned = Some(reason.to_string());
+  /// Logs how a socket `ended`: a refusal or another agent taking it is warned about once per
+  /// reason, anything else told at info.
+  fn report_end(&self, ended: &Ended) {
+    match &ended.refusal {
+      Some(reason) => warn_once(
+        &self.warned,
+        reason,
+        "the relay controller refused this agent",
+      ),
+      None if ended.code == Some(close::SUPERSEDED) => {
+        let current = self.config.current();
+        let name = &current.values.instance_name;
+        let reason = format!("another agent logged in as {name}");
+        warn_once(
+          &self.warned,
+          &reason,
+          "the relay controller dropped this agent for another",
+        );
+      }
+      None => info!(code = ended.code, "relay controller connection lost"),
     }
   }
 
@@ -234,6 +243,7 @@ impl AgentClient {
       applied = now;
       info!("relay controller settings changed; connecting again with them");
       *lock(&self.warned) = None;
+      *lock(&self.sync_warned) = None;
       if let Some(link) = self.current() {
         link.close(close::NORMAL);
       }
@@ -252,5 +262,16 @@ impl AgentClient {
       debug!("local shares changed");
       self.request_sync();
     }
+  }
+}
+
+/// Logs `reason` as a warning unless it is the last one `warned` holds; then at debug.
+fn warn_once(warned: &Mutex<Option<String>>, reason: &str, message: &'static str) {
+  let mut warned = lock(warned);
+  if warned.as_deref() == Some(reason) {
+    debug!(reason, message);
+  } else {
+    warn!(reason, message);
+    *warned = Some(reason.to_string());
   }
 }

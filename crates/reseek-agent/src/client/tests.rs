@@ -2,7 +2,9 @@
 //! the test, and the uploads go to a server that answers as the test says. The upload waits
 //! only while a load or scan fills the index, or runs after an upload on the socket; a
 //! re-upload that fails is tried again with no change to ask for it, a first upload refused as
-//! too large copies nothing and is a refusal, and an upload stops when its socket closes.
+//! too large copies nothing and is a refusal, and an upload stops when its socket closes. A
+//! run of upload failures is warned about once per run, and a refusal or another agent taking
+//! the socket once however many uploads succeed between.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -20,7 +22,7 @@ use uuid::Uuid;
 
 use super::AgentClient;
 use super::dial::Settings;
-use super::session::Link;
+use super::session::{Ended, Link};
 use crate::options::Options;
 
 /// How the test's controller answers a share upload.
@@ -97,6 +99,50 @@ impl Agent {
 
   fn copied(&self) -> bool {
     self.dir.path().join("uploads/share_index.db").exists()
+  }
+}
+
+/// The warnings logged on this thread while it lives.
+struct Warnings {
+  text: Arc<std::sync::Mutex<Vec<u8>>>,
+  _logging: tracing::subscriber::DefaultGuard,
+}
+
+impl Warnings {
+  fn new() -> Self {
+    let text = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let written = text.clone();
+    let subscriber = tracing_subscriber::fmt()
+      .with_max_level(tracing::Level::WARN)
+      .with_ansi(false)
+      .with_writer(move || Written(written.clone()))
+      .finish();
+    Self {
+      text,
+      _logging: tracing::subscriber::set_default(subscriber),
+    }
+  }
+
+  /// How many warnings hold `message`.
+  fn count(&self, message: &str) -> usize {
+    String::from_utf8_lossy(&lock(&self.text))
+      .lines()
+      .filter(|line| line.contains(message))
+      .count()
+  }
+}
+
+/// Where [`Warnings`] are written.
+struct Written(Arc<std::sync::Mutex<Vec<u8>>>);
+
+impl std::io::Write for Written {
+  fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+    lock(&self.0).extend_from_slice(bytes);
+    Ok(bytes.len())
+  }
+
+  fn flush(&mut self) -> std::io::Result<()> {
+    Ok(())
   }
 }
 
@@ -355,5 +401,51 @@ async fn an_upload_stops_when_its_socket_closes() {
     agent.link.sync_failures(),
     0,
     "a closed socket is no failure"
+  );
+}
+
+/// Uploads once on `agent`'s socket, answering its ask with a token, and waits for the outcome.
+async fn upload_once(agent: &mut Agent) {
+  agent.answer_ask(token()).await;
+  eventually(|| !agent.agent.syncing.load(Ordering::SeqCst)).await;
+}
+
+#[tokio::test]
+async fn a_run_of_upload_failures_after_one_succeeded_is_warned_about_again() {
+  let warnings = Warnings::new();
+  let answers = [502, 200, 502, 200].map(Answer::Status).to_vec();
+  let mut agent = agent(answers, true).await;
+  agent.agent.request_sync();
+  agent.answer_ask(token()).await;
+  // the failure's retry succeeds
+  upload_once(&mut agent).await;
+  assert_eq!(agent.link.sync_failures(), 0);
+  agent.agent.request_sync();
+  agent.answer_ask(token()).await;
+  upload_once(&mut agent).await;
+  assert_eq!(agent.posts.load(Ordering::SeqCst), 4);
+  assert_eq!(
+    warnings.count("Failed to upload shares to relay controller"),
+    2
+  );
+}
+
+#[tokio::test]
+async fn another_agent_taking_the_socket_is_warned_about_once_across_uploads() {
+  let warnings = Warnings::new();
+  let mut agent = agent(vec![Answer::Status(200)], false).await;
+  let superseded = Ended {
+    ready: true,
+    code: Some(frames::close::SUPERSEDED),
+    refusal: None,
+  };
+  agent.agent.report_end(&superseded);
+  agent.agent.request_sync();
+  upload_once(&mut agent).await;
+  assert!(agent.link.ready(), "the upload succeeded");
+  agent.agent.report_end(&superseded);
+  assert_eq!(
+    warnings.count("the relay controller dropped this agent for another"),
+    1
   );
 }

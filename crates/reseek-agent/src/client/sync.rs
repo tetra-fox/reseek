@@ -30,8 +30,8 @@ use tokio_util::io::ReaderStream;
 use tracing::{Instrument, debug, info, warn};
 use uuid::Uuid;
 
-use super::AgentClient;
 use super::session::Link;
+use super::{AgentClient, warn_once};
 
 /// How many times the agent asks for an upload token.
 const TOKEN_ATTEMPTS: u32 = 3;
@@ -134,24 +134,26 @@ impl AgentClient {
       Ok(()) => {
         link.synced();
         // a later run of failures is warned about again
-        *lock(&self.warned) = None;
+        *lock(&self.sync_warned) = None;
         return info!("Shares uploaded. Ready to relay files.");
       }
       Err(SyncError::Closed) => return debug!("share upload stopped: the socket closed"),
       Err(e) => e,
     };
-    if first {
-      match e {
-        // warned about once as the socket ends, however often the agent dials again
-        SyncError::Refused(reason) => link.refused(format!("shares refused: {reason}")),
-        e => warn!(error = %e, "Failed to upload shares to relay controller"),
-      }
+    if let (true, SyncError::Refused(reason)) = (first, &e) {
+      // warned about once as the socket ends, however often the agent dials again
+      link.refused(format!("shares refused: {reason}"));
       return link.close(frames::close::NORMAL);
     }
-    self.warn_once(
+    // a run of failures is warned about once, across the sockets a failed first upload closes
+    warn_once(
+      &self.sync_warned,
       &e.to_string(),
       "Failed to upload shares to relay controller",
     );
+    if first {
+      return link.close(frames::close::NORMAL);
+    }
     let failures = link.sync_failed();
     let delay = backoff::wait(failures, backoff::AT_ONCE, RETRY_CAP);
     debug!(failures, ?delay, "share upload tried again after a wait");
