@@ -42,7 +42,7 @@ impl Client {
     }
     let socket = reseek_agent::open_socket(&url, &self.tls, headers)
       .await
-      .map_err(Error::Socket)?;
+      .map_err(|e| Error::Socket(e.to_string()))?;
     Ok(RelaySocket { socket })
   }
 }

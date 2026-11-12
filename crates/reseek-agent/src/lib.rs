@@ -15,7 +15,7 @@ mod client;
 mod options;
 mod start;
 
-pub use client::dial::{Socket, open_socket};
+pub use client::dial::{DialError, Socket, open_socket};
 pub use start::main;
 
 /// The version this agent tells its controller.

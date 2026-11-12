@@ -27,7 +27,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, info, info_span, warn};
 
 use crate::options::{Controller, Options};
-use dial::Settings;
+use dial::{DialError, Settings};
 use session::Link;
 
 /// The longest wait between two attempts to reach the controller.
@@ -152,7 +152,12 @@ impl AgentClient {
       };
       let socket = match socket {
         Ok(socket) => socket,
-        Err(e) => {
+        Err(DialError::Refused(reason)) => {
+          refused = true;
+          self.warn_once(&reason, "the relay controller refused this agent");
+          continue;
+        }
+        Err(DialError::Failed(e)) => {
           refused = false;
           warn!(
             attempt,

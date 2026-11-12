@@ -12,8 +12,9 @@ use rustls::{DigitallySignedStruct, SignatureScheme};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpStream;
 use tokio_tungstenite::WebSocketStream;
+use tokio_tungstenite::tungstenite;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
-use tokio_tungstenite::tungstenite::http::{HeaderMap, HeaderValue};
+use tokio_tungstenite::tungstenite::http::{HeaderMap, HeaderValue, StatusCode};
 use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 use url::Url;
 
@@ -86,13 +87,13 @@ impl Settings {
   }
 
   /// Opens the relay socket.
-  pub async fn dial(&self) -> Result<Socket, String> {
+  pub async fn dial(&self) -> Result<Socket, DialError> {
     tokio::time::timeout(DIAL, self.open())
       .await
       .map_err(|_| "the controller did not answer in time".to_string())?
   }
 
-  async fn open(&self) -> Result<Socket, String> {
+  async fn open(&self) -> Result<Socket, DialError> {
     let url = Url::parse(&self.url("relay/ws")).map_err(|e| e.to_string())?;
     let mut headers = HeaderMap::new();
     headers.insert(
@@ -103,6 +104,24 @@ impl Settings {
   }
 }
 
+/// Why the relay socket did not open.
+#[derive(Debug, thiserror::Error)]
+pub enum DialError {
+  /// the controller answered 401 or 403: it does not take the API key, or not with the role
+  /// an agent needs, which dialing again does not change
+  #[error("{0}")]
+  Refused(String),
+  /// anything else, which may pass
+  #[error("{0}")]
+  Failed(String),
+}
+
+impl From<String> for DialError {
+  fn from(e: String) -> Self {
+    Self::Failed(e)
+  }
+}
+
 /// Opens a relay socket to `url`, the `http` or `https` URL of the controller's relay route,
 /// over TLS with `tls` for `https`, sending `headers` with the upgrade. The controller must
 /// choose the relay protocol.
@@ -110,16 +129,16 @@ pub async fn open_socket(
   url: &Url,
   tls: &Arc<rustls::ClientConfig>,
   headers: HeaderMap,
-) -> Result<Socket, String> {
+) -> Result<Socket, DialError> {
   let host = url
     .host_str()
-    .ok_or("the controller address has no host")?
+    .ok_or_else(|| "the controller address has no host".to_string())?
     .trim_start_matches('[')
     .trim_end_matches(']')
     .to_string();
   let port = url
     .port_or_known_default()
-    .ok_or("the controller address has no port")?;
+    .ok_or_else(|| "the controller address has no port".to_string())?;
   let tcp = TcpStream::connect((host.as_str(), port))
     .await
     .map_err(|e| format!("{host}:{port}: {e}"))?;
@@ -152,15 +171,30 @@ pub async fn open_socket(
     .max_message_size(Some(2 * MAX_FRAME))
     .max_frame_size(Some(2 * MAX_FRAME));
   let (socket, response) =
-    tokio_tungstenite::client_async_with_config(request, stream, Some(config))
-      .await
-      .map_err(|e| e.to_string())?;
+    match tokio_tungstenite::client_async_with_config(request, stream, Some(config)).await {
+      Ok(opened) => opened,
+      Err(tungstenite::Error::Http(answer))
+        if matches!(
+          answer.status(),
+          StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN
+        ) =>
+      {
+        let (parts, body) = answer.into_parts();
+        let body = body.unwrap_or_default();
+        return Err(DialError::Refused(format!(
+          "the controller answered {} {}",
+          parts.status,
+          String::from_utf8_lossy(&body)
+        )));
+      }
+      Err(e) => return Err(e.to_string().into()),
+    };
   let chosen = response
     .headers()
     .get("sec-websocket-protocol")
     .and_then(|value| value.to_str().ok());
   if chosen != Some(RELAY_SUBPROTOCOL) {
-    return Err(format!("the controller chose the protocol {chosen:?}"));
+    return Err(format!("the controller chose the protocol {chosen:?}").into());
   }
   Ok(socket)
 }
