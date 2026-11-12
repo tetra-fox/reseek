@@ -1046,3 +1046,29 @@ async fn a_purge_of_a_users_transfers_leaves_no_download_running_out_of_the_list
     "the download still runs and no listing has it"
   );
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn places_a_peer_sends_on_its_own_are_kept_in_the_order_sent() {
+  let app = app(TRUSTED, &[]).await;
+  let queued = |filename: &str| {
+    let mut record = Record::download("alice", filename, 10);
+    record.state = State::QueuedRemotely {
+      place_in_queue: None,
+    };
+    record
+  };
+  let (sent_often, sent_last) = (queued("a.flac"), queued("b.flac"));
+  insert(&app, &sent_often).await;
+  insert(&app, &sent_last).await;
+  let downloads = &app.state.downloads;
+  for place in 1..=20 {
+    downloads
+      .place_sent("alice".into(), "a.flac".into(), place)
+      .await;
+  }
+  downloads
+    .place_sent("alice".into(), "b.flac".into(), 7)
+    .await;
+  read_until(&app, sent_last.id, |r| r.place_in_queue() == Some(7)).await;
+  assert_eq!(read(&app, sent_often.id).await.place_in_queue(), Some(20));
+}
