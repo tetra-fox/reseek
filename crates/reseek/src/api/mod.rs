@@ -44,7 +44,7 @@ use crate::app::AppState;
     license(name = "AGPL-3.0-only", identifier = "AGPL-3.0-only")
   ),
   // enums that only query parameters name, which the handlers' descriptions refer to without
-  // listing, and the headers of the binary analysis answers
+  // listing, the names of the built-in groups, and the headers of the binary analysis answers
   components(schemas(
     api_types::analysis::SpectrogramTile,
     api_types::analysis::WaveformTile,
@@ -58,6 +58,7 @@ use crate::app::AppState;
     api_types::transfers::TransferSort,
     api_types::transfers::TransferStateCategory,
     api_types::transfers::TransferStateFilter,
+    api_types::users::BuiltinGroup,
     api_types::users::UserSort
   )),
   tags(

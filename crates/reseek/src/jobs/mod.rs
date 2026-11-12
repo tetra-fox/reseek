@@ -23,6 +23,7 @@ use std::sync::{Arc, Mutex};
 use api_types::events::{Event, JobFinished};
 use api_types::jobs::{
   Job, JobCounts, JobDetail, JobEnding, JobKind, JobListQuery, JobStarter, JobState, JobsRemoved,
+  ScheduleName,
 };
 use api_types::live::LiveFrame;
 use chrono::{DateTime, Utc};
@@ -157,7 +158,7 @@ pub struct Jobs {
   /// woken when a schedule's last run or what it shows changed, for the schedules to be pushed
   pub schedules_changed: tokio::sync::Notify,
   /// the schedules with a run going on
-  pub running_schedules: Mutex<std::collections::HashSet<schedules::Schedule>>,
+  pub running_schedules: Mutex<std::collections::HashSet<ScheduleName>>,
   /// when the scheduler started, which a schedule that never ran counts from
   pub scheduler_started: DateTime<Utc>,
 }
@@ -576,10 +577,10 @@ impl Jobs {
   /// pushed again.
   pub async fn update_last_run(
     &self,
-    schedule: schedules::Schedule,
+    schedule: ScheduleName,
     change: impl FnOnce(&mut store::LastRun) + Send + 'static,
   ) {
-    let name = schedule.name();
+    let name = schedule.as_str();
     let written = self
       .db
       .write(move |conn| {

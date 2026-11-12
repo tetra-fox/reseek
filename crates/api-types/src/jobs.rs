@@ -270,13 +270,43 @@ pub struct JobStarted {
   pub id: Option<Uuid>,
 }
 
+/// The recurring work the schedules card shows, by the name the API, the jobs it starts and
+/// its kept last run know it by.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum ScheduleName {
+  /// rescans the shared folders
+  ShareRescan,
+  /// deletes old data as the retention options say
+  Cleanup,
+  /// vacuums every database
+  Vacuum,
+  /// checks for a new release
+  ReleaseCheck,
+  /// sends the next wishlist search
+  Wishlist,
+}
+
+impl ScheduleName {
+  /// The name as the API writes it.
+  pub fn as_str(self) -> &'static str {
+    match self {
+      Self::ShareRescan => "share-rescan",
+      Self::Cleanup => "cleanup",
+      Self::Vacuum => "vacuum",
+      Self::ReleaseCheck => "release-check",
+      Self::Wishlist => "wishlist",
+    }
+  }
+}
+
 /// A recurring piece of work, as the schedules card shows it.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct JobSchedule {
   /// the schedule's name, which its jobs' starter carries
   #[schema(example = "cleanup")]
-  pub name: String,
+  pub name: ScheduleName,
   /// what it is called
   #[schema(example = "Cleanup")]
   pub title: String,
@@ -321,4 +351,17 @@ pub struct JobsSummary {
   pub paused: u32,
   /// when a job last ended failed or finished with failures, null when none in the list did
   pub last_failed_at: Option<DateTime<Utc>>,
+}
+
+#[cfg(test)]
+mod tests {
+  use super::ScheduleName;
+
+  #[test]
+  fn a_schedule_name_is_written_as_the_api_writes_it() {
+    use ScheduleName::*;
+    for name in [ShareRescan, Cleanup, Vacuum, ReleaseCheck, Wishlist] {
+      assert_eq!(serde_json::to_value(name).unwrap(), name.as_str());
+    }
+  }
 }

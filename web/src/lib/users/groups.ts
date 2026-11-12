@@ -5,6 +5,7 @@ import { same } from "#lib/lists/keyed.svelte.js";
 
 export type GroupSummary = Schemas["GroupSummary"];
 export type UserGroup = Schemas["UserGroup"];
+type Builtin = Schemas["BuiltinGroup"];
 
 /** The option that holds the user-defined groups by name */
 export const USER_DEFINED = "transfers.groups.user_defined";
@@ -12,15 +13,23 @@ export const USER_DEFINED = "transfers.groups.user_defined";
 export const VISIBLE_TO = "shares.visible_to";
 /** The option that holds the groups in the order they go, all but the privileged */
 export const ORDER = "transfers.groups.order";
+/** The group of the users the server calls privileged, who go before everyone */
+export const PRIVILEGED: Builtin = "privileged";
 /** The group of our buddies, whose members only the buddy list changes */
-export const BUDDIES = "buddies";
+export const BUDDIES: Builtin = "buddies";
 /** The group of the users who share too little, which has share thresholds */
-export const LEECHERS = "leechers";
+export const LEECHERS: Builtin = "leechers";
 /** The group everyone is in, below every other, which holds what no group above sets */
-export const DEFAULT = "default";
+export const DEFAULT: Builtin = "default";
 
-/** The names a user-defined group cannot take */
-const BUILTIN = ["privileged", LEECHERS, BUDDIES, DEFAULT, "blacklisted"];
+/** The names a user-defined group cannot take; the type check fails unless it lists them all */
+const BUILTIN: string[] = Object.keys({
+  privileged: true,
+  leechers: true,
+  buddies: true,
+  default: true,
+  blacklisted: true
+} satisfies Record<Builtin, true>);
 
 /** Why `name` can't name a user-defined group, null when it can; `taken` are the names in use */
 export const nameProblem = (name: string, taken: string[]): string | null => {

@@ -42,6 +42,7 @@
     LEECHERS,
     movedIn,
     ORDER,
+    PRIVILEGED,
     type Upload,
     settingsText,
     USER_DEFINED,
@@ -53,7 +54,6 @@
 
   import GroupEditor from "./GroupEditor.svelte";
 
-  const PRIVILEGED = "privileged";
   /** how long after the last move the order is written, so several moves are one write */
   const REORDER_PAUSE = 600;
 

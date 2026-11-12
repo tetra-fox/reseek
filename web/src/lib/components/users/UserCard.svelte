@@ -19,7 +19,7 @@
   import { canManage, configBlocked, reach, setBuddy, USER_ACTIONS } from "#lib/users/actions.js";
   import { blockEnd } from "#lib/users/block.svelte.js";
   import { nameColor } from "#lib/users/colors.js";
-  import { BUDDIES, queueOf } from "#lib/users/groups.js";
+  import { BUDDIES, PRIVILEGED, queueOf } from "#lib/users/groups.js";
   import { firstLines, ownProfile, pictureOf, SHARES_UNKNOWN } from "#lib/users/profile.svelte.js";
   import { type UserSummary, users } from "#lib/users/users.svelte.js";
   import { BUDDY, CONFIG_BLOCKED } from "#lib/wording.js";
@@ -68,7 +68,7 @@
   /** the groups beside the queue's, but those the badges before them already say */
   const queue = $derived(user ? queueOf(user) : null);
   const others = $derived.by(() => {
-    const said = [user?.uploads.queue, "privileged", BUDDIES];
+    const said = [user?.uploads.queue, PRIVILEGED, BUDDIES];
     return user?.groups.filter((g) => !said.includes(g.name)) ?? [];
   });
   $effect(() => {

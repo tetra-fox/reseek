@@ -5,6 +5,7 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
+use api_types::users::BuiltinGroup;
 use cascade::Cascade;
 use serde::{Deserialize, Serialize};
 
@@ -246,20 +247,20 @@ pub struct Permissions {
 }
 
 /// The group of users the server calls privileged.
-pub const PRIVILEGED_GROUP: &str = "privileged";
+pub const PRIVILEGED_GROUP: &str = BuiltinGroup::Privileged.as_str();
 /// The group of users who share too little.
-pub const LEECHERS_GROUP: &str = "leechers";
+pub const LEECHERS_GROUP: &str = BuiltinGroup::Leechers.as_str();
 /// The group of our buddies.
-pub const BUDDIES_GROUP: &str = "buddies";
+pub const BUDDIES_GROUP: &str = BuiltinGroup::Buddies.as_str();
 /// The group of everyone in no group with upload settings of its own.
-pub const DEFAULT_GROUP: &str = "default";
+pub const DEFAULT_GROUP: &str = BuiltinGroup::Default.as_str();
 /// The names a user-defined group cannot have.
 pub const BUILTIN_GROUPS: [&str; 5] = [
   PRIVILEGED_GROUP,
   LEECHERS_GROUP,
   BUDDIES_GROUP,
   DEFAULT_GROUP,
-  "blacklisted",
+  BuiltinGroup::Blacklisted.as_str(),
 ];
 
 /// Whether `name` can name a group: 1 to 32 of `a-z`, `0-9`, `_` and `-`.

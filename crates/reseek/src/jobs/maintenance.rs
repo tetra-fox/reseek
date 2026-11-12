@@ -493,7 +493,7 @@ mod tests {
     );
     let app = app(&config, &[]).await;
     let state = &app.state;
-    let scheduled = || JobStarter::schedule(crate::jobs::schedules::Schedule::Cleanup.name());
+    let scheduled = || JobStarter::schedule(api_types::jobs::ScheduleName::Cleanup.as_str());
 
     let quiet = cleanup(state, scheduled(), false).await;
     assert_eq!(quiet.ending, JobEnding::Succeeded);

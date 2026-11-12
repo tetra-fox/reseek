@@ -21,6 +21,35 @@ pub enum GroupKind {
   Manual,
 }
 
+/// A name every instance gives a group of its own, which a user-defined group cannot take.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum BuiltinGroup {
+  /// the users the server calls privileged
+  Privileged,
+  /// the users who share too little
+  Leechers,
+  /// our buddies
+  Buddies,
+  /// everyone in no group with upload settings of its own
+  Default,
+  /// the users who are never served
+  Blacklisted,
+}
+
+impl BuiltinGroup {
+  /// The name as the configuration and the API write it.
+  pub const fn as_str(self) -> &'static str {
+    match self {
+      Self::Privileged => "privileged",
+      Self::Leechers => "leechers",
+      Self::Buddies => "buddies",
+      Self::Default => "default",
+      Self::Blacklisted => "blacklisted",
+    }
+  }
+}
+
 /// A group a user is in.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -503,4 +532,17 @@ pub struct DeleteUserQuery {
 pub struct UserRemoved {
   /// the user
   pub username: String,
+}
+
+#[cfg(test)]
+mod tests {
+  use super::BuiltinGroup;
+
+  #[test]
+  fn a_builtin_group_is_written_as_the_api_writes_it() {
+    use BuiltinGroup::*;
+    for group in [Privileged, Leechers, Buddies, Default, Blacklisted] {
+      assert_eq!(serde_json::to_value(group).unwrap(), group.as_str());
+    }
+  }
 }

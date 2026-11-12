@@ -5,14 +5,15 @@
 
 use std::sync::{Arc, Mutex};
 
-use api_types::jobs::{Job, JobCounts, JobEnding, JobKind, JobStarter, JobStarterKind, JobState};
+use api_types::jobs::{
+  Job, JobCounts, JobEnding, JobKind, JobStarter, JobStarterKind, JobState, ScheduleName,
+};
 use chrono::{DateTime, Utc};
 use reseek_shares::lock;
 use reseek_shares::{ScanEnded, ScanHook, ScanNotice, ScanOrigin, SharedCounts};
 use tracing::warn;
 use uuid::Uuid;
 
-use super::schedules::Schedule;
 use super::{Ended, Jobs, NewJob};
 
 /// The scan going on.
@@ -58,7 +59,7 @@ fn name(force: bool) -> &'static str {
 fn starter(origin: ScanOrigin) -> JobStarter {
   match origin {
     ScanOrigin::Asked => JobStarter::you(),
-    ScanOrigin::Scheduled => JobStarter::schedule(Schedule::ShareRescan.name()),
+    ScanOrigin::Scheduled => JobStarter::schedule(ScheduleName::ShareRescan.as_str()),
     ScanOrigin::Startup => JobStarter::of(JobStarterKind::Resumed),
   }
 }
@@ -89,7 +90,7 @@ async fn started(jobs: &Jobs, running: &Mutex<Option<Running>>, force: bool, ori
   // again at once
   if origin == ScanOrigin::Scheduled {
     jobs
-      .update_last_run(Schedule::ShareRescan, move |last| {
+      .update_last_run(ScheduleName::ShareRescan, move |last| {
         last.scheduled_at = Some(started_at);
       })
       .await;
@@ -158,7 +159,7 @@ async fn finished(jobs: &Jobs, scan: Running, ended: ScanEnded) {
   }
   let started_at = scan.started_at;
   jobs
-    .update_last_run(Schedule::ShareRescan, move |last| {
+    .update_last_run(ScheduleName::ShareRescan, move |last| {
       last.run_at = Some(started_at);
       last.ended_at = Some(now);
       last.ending = Some(ending);
@@ -192,7 +193,7 @@ mod tests {
     .await;
     // a stop now leaves the start written, so the rescan is not due again at once
     let last = jobs.last_runs().await.unwrap();
-    let rescan = &last[Schedule::ShareRescan.name()];
+    let rescan = &last[ScheduleName::ShareRescan.as_str()];
     assert!(rescan.scheduled_at.is_some());
     assert_eq!(rescan.ended_at, None);
   }
