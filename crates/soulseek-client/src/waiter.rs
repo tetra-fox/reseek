@@ -256,20 +256,11 @@ impl Waiter {
     self.register(key, None, None, cancel)
   }
 
-  /// [`Waiter::wait`] whose `timeout`, when `None`, means no timeout rather than the default
-  pub(crate) fn wait_within<T: Send + 'static>(
-    &self,
-    key: WaitKey,
-    timeout: Option<Duration>,
-    cancel: CancellationToken,
-  ) -> impl Future<Output = Result<T, ClientError>> + Send + 'static {
-    self.register(key, timeout, Some(Instant::now()), cancel)
-  }
-
-  /// [`Waiter::wait_within`] whose timeout counts from the future's first poll rather than from
-  /// now. Registered before the connection a request goes out on is made and awaited once the
-  /// request is written, it gives the peer the whole timeout to answer, however long the
-  /// connection took, and still catches an answer that comes before the request is.
+  /// [`Waiter::wait`] whose timeout counts from the future's first poll rather than from now,
+  /// and whose `timeout`, when `None`, means no timeout rather than the default. Registered
+  /// before the connection a request goes out on is made and awaited once the request is
+  /// written, it gives the peer the whole timeout to answer, however long the connection took,
+  /// and still catches an answer that comes before the request is.
   pub(crate) fn wait_from_first_poll<T: Send + 'static>(
     &self,
     key: WaitKey,
