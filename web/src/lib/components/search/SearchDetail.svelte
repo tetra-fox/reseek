@@ -98,7 +98,7 @@
   let filterText = $state("");
   let typed = $state("");
   let showBlocked = $state(false);
-  /** the users blocked now, read once and kept by the users' frames */
+  /** the users blocked now, read at mount and on every reload and kept by the users' frames */
   const blocked = new SvelteSet<string>();
   const dismissed = new SvelteSet<string>();
   /** the ticked files, kept across the layouts, each by its result's key and its path */
