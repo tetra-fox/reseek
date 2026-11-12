@@ -85,9 +85,9 @@ impl Messaging {
       .write(move |conn| {
         let tx = conn.transaction()?;
         if notice {
-          store::ensure(&tx, SERVER, now)?;
+          store::ensure(&tx, SERVER)?;
         } else {
-          store::activate(&tx, &inbound.username, now)?;
+          store::activate(&tx, &inbound.username)?;
         }
         let stored = store::receive(&tx, &inbound)?;
         tx.commit()?;
@@ -339,7 +339,7 @@ impl Messaging {
       .write(move |conn| {
         let now = Utc::now();
         let tx = conn.transaction()?;
-        store::activate(&tx, &name, now)?;
+        store::activate(&tx, &name)?;
         let sent = store::sent(&tx, &name, &message, auto_reply, now)?;
         tx.commit()?;
         lock(&active).insert(name);
@@ -432,7 +432,7 @@ impl Messaging {
     self
       .db
       .write(move |conn| {
-        store::close(conn, &name, purge, Utc::now())?;
+        store::close(conn, &name, purge)?;
         lock(&active).remove(&name);
         Ok(())
       })

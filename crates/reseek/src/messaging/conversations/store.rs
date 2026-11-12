@@ -126,22 +126,21 @@ fn message_at(conn: &Connection, local_id: i64) -> rusqlite::Result<PrivateMessa
 }
 
 /// Opens the conversation with `username`, making it when there is none.
-pub fn activate(conn: &Connection, username: &str, now: DateTime<Utc>) -> rusqlite::Result<()> {
+pub fn activate(conn: &Connection, username: &str) -> rusqlite::Result<()> {
   conn.execute(
-    "INSERT INTO conversations (username, is_active, created_at, updated_at) \
-     VALUES (?1, 1, ?2, ?2) \
-     ON CONFLICT (username) DO UPDATE SET is_active = 1, updated_at = excluded.updated_at",
-    params![username, timestamp(now)],
+    "INSERT INTO conversations (username, is_active) VALUES (?1, 1) \
+     ON CONFLICT (username) DO UPDATE SET is_active = 1",
+    [username],
   )?;
   Ok(())
 }
 
 /// Makes the conversation with `username` when there is none, leaving one that exists as it is.
-pub fn ensure(conn: &Connection, username: &str, now: DateTime<Utc>) -> rusqlite::Result<()> {
+pub fn ensure(conn: &Connection, username: &str) -> rusqlite::Result<()> {
   conn.execute(
-    "INSERT INTO conversations (username, is_active, created_at, updated_at) \
-     VALUES (?1, 1, ?2, ?2) ON CONFLICT (username) DO NOTHING",
-    params![username, timestamp(now)],
+    "INSERT INTO conversations (username, is_active) VALUES (?1, 1) \
+     ON CONFLICT (username) DO NOTHING",
+    [username],
   )?;
   Ok(())
 }
@@ -370,16 +369,11 @@ pub fn all(conn: &Connection, username: &str) -> rusqlite::Result<Vec<PrivateMes
 }
 
 /// Closes the conversation with `username`; with `purge` its messages are deleted too.
-pub fn close(
-  conn: &mut Connection,
-  username: &str,
-  purge: bool,
-  now: DateTime<Utc>,
-) -> rusqlite::Result<()> {
+pub fn close(conn: &mut Connection, username: &str, purge: bool) -> rusqlite::Result<()> {
   let tx = conn.transaction()?;
   tx.execute(
-    "UPDATE conversations SET is_active = 0, updated_at = ?2 WHERE username = ?1",
-    params![username, timestamp(now)],
+    "UPDATE conversations SET is_active = 0 WHERE username = ?1",
+    [username],
   )?;
   if purge {
     tx.execute(
@@ -485,7 +479,7 @@ mod tests {
     let now: DateTime<Utc> = "2026-10-26T10:00:00Z".parse().unwrap();
     db.write(move |conn| {
       for (id, username) in [(1, SERVER), (2, "alice")] {
-        activate(conn, username, now)?;
+        activate(conn, username)?;
         receive(
           conn,
           &Inbound {
@@ -542,7 +536,7 @@ mod tests {
     };
     let (live, again) = db
       .write(move |conn| {
-        activate(conn, "alice", now)?;
+        activate(conn, "alice")?;
         // left unread, so the server delivers it again at the next login
         let (live, _) = receive(conn, &delivery(false))?;
         Ok((live, receive(conn, &delivery(true))?.0))
@@ -558,8 +552,8 @@ mod tests {
     let db = Database::memory(&crate::messaging::SCHEMA).await;
     let at = |s: &str| s.parse::<DateTime<Utc>>().unwrap();
     db.write(move |conn| {
-      activate(conn, "alice", at("2026-10-26T10:00:00Z"))?;
-      activate(conn, "bob", at("2026-10-26T10:00:00Z"))?;
+      activate(conn, "alice")?;
+      activate(conn, "bob")?;
       receive(
         conn,
         &Inbound {
@@ -605,7 +599,7 @@ mod tests {
     let (ids, page) = db
       .write(|conn| {
         let now = Utc::now();
-        activate(conn, "alice", now)?;
+        activate(conn, "alice")?;
         let ids = (0..4)
           .map(|n| Ok(sent(conn, "alice", &format!("line {n}"), false, now)?.local_id))
           .collect::<rusqlite::Result<Vec<_>>>()?;

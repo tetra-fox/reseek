@@ -216,7 +216,7 @@ mod tests {
   async fn unacknowledged_private_messages_are_never_deleted() {
     let db = db().await;
     db.write(|conn| {
-      store::activate(conn, "alice", at("2026-01-01T00:00:00Z"))?;
+      store::activate(conn, "alice")?;
       for id in 1..=4 {
         store::receive(
           conn,
@@ -230,7 +230,7 @@ mod tests {
         )?;
       }
       store::acknowledged(conn, "alice", &[1, 2, 3])?;
-      store::close(conn, "alice", false, at("2026-01-05T00:00:00Z"))?;
+      store::close(conn, "alice", false)?;
       Ok(())
     })
     .await

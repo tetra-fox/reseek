@@ -50,7 +50,14 @@ use rooms::Rooms;
 
 /// `messaging.db`: conversations, private and room messages, room settings, the pinned chats and
 /// the sessions.
-pub static SCHEMA: Schema = db::schema!("messaging", ["0001_initial", "0002_sessions_after_loss"]);
+pub static SCHEMA: Schema = db::schema!(
+  "messaging",
+  [
+    "0001_initial",
+    "0002_sessions_after_loss",
+    "0003_conversation_times"
+  ]
+);
 
 /// How many client events may wait for the messaging task.
 const INTAKE: usize = 256;
