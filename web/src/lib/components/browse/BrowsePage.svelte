@@ -105,17 +105,20 @@
   };
 
   // the user's browse is what was left in this browser, what is shown, or asked for now; then
-  // the tree goes to the folder the address names
+  // the tree goes to the folder the address names, unless the address moved on meanwhile
   $effect(() => {
     const folder = path;
     const wanted = user;
+    let current = true;
     untrack(async () => {
       await browser.restore(wanted);
+      if (!current) return;
       if (browser.username !== wanted || browser.phase !== "complete") {
         await browser.browse(wanted);
       }
-      if (folder) browser.target = folder;
+      if (current && folder) browser.target = folder;
     });
+    return () => (current = false);
   });
   // a folder to go to waits until the tree is drawn
   $effect(() => {
