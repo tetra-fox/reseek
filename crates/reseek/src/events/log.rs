@@ -22,7 +22,7 @@ use crate::db::{self, Database, DbError, Location, Schema};
 use crate::services::EventService;
 
 /// `events.db`: one table of every event raised.
-pub static SCHEMA: Schema = db::schema!("events", ["0001_initial"]);
+pub static SCHEMA: Schema = db::schema!("events", ["0001_initial", "0002_sample_transfer_state"]);
 
 static NOT_WRITTEN: LogLimiter = LogLimiter::new();
 static NOT_READ: LogLimiter = LogLimiter::new();
@@ -403,6 +403,43 @@ mod tests {
       log.prune(now, Duration::ZERO, 0).await.unwrap(),
       (0, 0),
       "zero keeps everything"
+    );
+  }
+
+  #[tokio::test]
+  async fn a_sample_transfer_written_with_no_state_reads_back() {
+    static BEFORE_STATES: Schema = db::schema!("events", ["0001_initial"]);
+    let dir = tempfile::tempdir().unwrap();
+    let location = Location::on_disk(dir.path());
+    let sample = samples::sample(EventType::DownloadFileComplete, "", Utc::now()).unwrap();
+    let mut data = data_of(&sample);
+    data["transfer"]["state"] = "None".into();
+    let old = Database::open(&BEFORE_STATES, &location).await.unwrap();
+    old
+      .write(move |conn| {
+        conn.execute(
+          "INSERT INTO Events (Id, Timestamp, Type, Data) VALUES (?1, ?2, ?3, ?4)",
+          params![
+            uuid::Uuid::new_v4().to_string(),
+            db::timestamp(Utc::now()),
+            "DownloadFileComplete",
+            data.to_string()
+          ],
+        )
+      })
+      .await
+      .unwrap();
+    drop(old);
+    let bus = EventBus::new();
+    let log = EventLog::open(&location, &bus).await.unwrap();
+    let page = log.page(query()).await.unwrap();
+    assert_eq!((page.total, page.items.len()), (1, 1));
+    let Event::DownloadFileComplete(read) = &page.items[0].event else {
+      panic!("{:?}", page.items[0].event);
+    };
+    assert_eq!(
+      read.transfer.state,
+      api_types::transfers::TransferStates::QueuedLocally
     );
   }
 }
