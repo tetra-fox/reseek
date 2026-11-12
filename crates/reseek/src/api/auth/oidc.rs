@@ -174,6 +174,9 @@ async fn callback(
       return Err(unavailable(&name, &e));
     }
   };
+  // from before the provider hands out the tokens until the session is stored, so a back-channel
+  // logout of the provider session they name waits and then finds the session
+  let signing_in = app.auth.oidc.signing_in().await;
   let claims = match flow::exchange(&provider, metadata.clone(), callback, code, &login).await {
     Ok(claims) => claims,
     Err(reason) => {
@@ -219,6 +222,7 @@ async fn callback(
     },
   )
   .await?;
+  drop(signing_in);
   let mut response = found(&login.redirect);
   let set = response.headers_mut();
   set.append(header::SET_COOKIE, session_cookie(&app, &session, &scope));
@@ -293,6 +297,7 @@ async fn backchannel(
   };
   let origin = Origin::Oidc(name.clone());
   let subject = logged_out.sub.map(|sub| format!("oidc:{name}:{sub}"));
+  let _logging_out = app.auth.oidc.logging_out().await;
   let ids = sessions::of_provider_login(&app.auth.db, &origin, logged_out.sid, subject)
     .await
     .map_err(ApiError::internal)?;
@@ -928,5 +933,37 @@ mod tests {
         .await;
       assert_eq!(answer.status, 503, "{attempt}");
     }
+  }
+
+  #[tokio::test]
+  async fn a_back_channel_logout_during_the_login_of_its_session_ends_that_session() {
+    let (issuer, app) = setup("readonly").await;
+    let started = start(&app, "/").await;
+    let nonce = started.params["nonce"].clone();
+    grant(
+      &issuer,
+      &started,
+      "c1",
+      json!({ "sub": "u1", "nonce": nonce, "sid": "s1" }),
+    );
+    issuer.hold_tokens();
+    let login = back(&app, &started, "c1");
+    let logout = async {
+      // the provider has handed out the tokens and ends the session before the login stores it
+      issuer.token_asked().await;
+      let logout = app.send_from(
+        OUTSIDE,
+        logout_request(&issuer, &logout_claims(&issuer, "s1")),
+      );
+      tokio::pin!(logout);
+      let waited = tokio::time::timeout(std::time::Duration::from_millis(200), &mut logout).await;
+      assert!(waited.is_err(), "the logout waits for the login");
+      issuer.release_tokens();
+      logout.await
+    };
+    let (signed, logged_out) = tokio::join!(login, logout);
+    assert_eq!(logged_out.status, 200);
+    let cookie = set_cookie(&signed.headers, "reseek_session").expect("the login went through");
+    assert_eq!(me(&app, &cookie).await.status, 401);
   }
 }

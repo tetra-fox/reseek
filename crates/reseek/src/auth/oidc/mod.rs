@@ -98,6 +98,10 @@ pub const LEEWAY: chrono::Duration = chrono::Duration::minutes(5);
 #[derive(Default)]
 pub struct Providers {
   known: Mutex<HashMap<String, Arc<Provider>>>,
+  /// held shared by each login from before it asks for its tokens until its session is stored,
+  /// and alone by a back-channel logout while it finds and ends sessions, so a logout waits for
+  /// the session a login of the same provider session is making
+  sign_ins: tokio::sync::RwLock<()>,
 }
 
 /// One provider as configured, with what was read from it.
@@ -150,6 +154,17 @@ impl Providers {
     let provider = Arc::new(Provider::new(name, configured.clone())?);
     known.insert(name.to_string(), provider.clone());
     Ok(Some(provider))
+  }
+
+  /// Held by a login while it asks for its tokens and stores its session.
+  pub async fn signing_in(&self) -> tokio::sync::RwLockReadGuard<'_, ()> {
+    self.sign_ins.read().await
+  }
+
+  /// Held by a back-channel logout while it finds and ends sessions; waits for the logins under
+  /// way.
+  pub async fn logging_out(&self) -> tokio::sync::RwLockWriteGuard<'_, ()> {
+    self.sign_ins.write().await
   }
 }
 

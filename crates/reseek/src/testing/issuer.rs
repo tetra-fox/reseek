@@ -50,6 +50,12 @@ struct Shared {
   userinfo: Mutex<Value>,
   /// userinfo answers as a signed JWT rather than JSON
   signed_userinfo: Mutex<bool>,
+  /// the token endpoint holds its answers until released
+  tokens_held: Mutex<bool>,
+  /// a token request arrived while answers are held
+  token_asked: tokio::sync::Notify,
+  /// held token answers may go
+  tokens_released: tokio::sync::Notify,
 }
 
 impl Drop for Issuer {
@@ -76,6 +82,9 @@ impl Issuer {
       codes: Mutex::new(HashMap::new()),
       userinfo: Mutex::new(json!({})),
       signed_userinfo: Mutex::new(false),
+      tokens_held: Mutex::new(false),
+      token_asked: tokio::sync::Notify::new(),
+      tokens_released: tokio::sync::Notify::new(),
     });
     let router = Router::new()
       .route("/.well-known/openid-configuration", get(discovery))
@@ -113,6 +122,22 @@ impl Issuer {
   pub fn set_signed_userinfo(&self, claims: Value) {
     *self.shared.userinfo.lock().unwrap() = claims;
     *self.shared.signed_userinfo.lock().unwrap() = true;
+  }
+
+  /// Holds the token endpoint's next answer until [`Issuer::release_tokens`].
+  pub fn hold_tokens(&self) {
+    *self.shared.tokens_held.lock().unwrap() = true;
+  }
+
+  /// Waits for a token request that is being held.
+  pub async fn token_asked(&self) {
+    self.shared.token_asked.notified().await;
+  }
+
+  /// Lets the held token answer go, and answers later ones at once.
+  pub fn release_tokens(&self) {
+    *self.shared.tokens_held.lock().unwrap() = false;
+    self.shared.tokens_released.notify_one();
   }
 
   /// `claims` signed as a JWT with the provider's key.
@@ -184,6 +209,11 @@ async fn token(
   }
   if form.get("redirect_uri") != Some(&grant.redirect_uri) {
     return refuse("invalid_grant");
+  }
+  let held = *shared.tokens_held.lock().unwrap();
+  if held {
+    shared.token_asked.notify_one();
+    shared.tokens_released.notified().await;
   }
   let now = chrono::Utc::now().timestamp();
   let mut claims = json!({ "iss": shared.url, "aud": CLIENT_ID, "iat": now, "exp": now + 300 });
