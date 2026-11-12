@@ -5,9 +5,10 @@
 //! waits before reading its next frame, so a stuck resolver slows the peers sending to it and
 //! loses nothing. A handler counts against the shared bound until its answer is queued, not while
 //! the answer is written, so a peer slow to read holds up no one else; it counts against its own
-//! connection's bound until the write ends, so such a peer has no more answers pending than that. The frames whose order is the
-//! order of a queue, a peer's requests to queue files and the places it reports, are handled one
-//! after another in the order they came; the rest run side by side.
+//! connection's bound until the write ends, so such a peer has no more answers pending than
+//! that. The frames whose order is the order of a queue, a peer's requests to queue files and the
+//! places it reports, are handled one after another in the order they came; the rest run side by
+//! side.
 //!
 //! A frame is read in only when its code is one a message has and its length is within what
 //! that message may need; any other is skipped unread. Anyone can connect and send answers, so

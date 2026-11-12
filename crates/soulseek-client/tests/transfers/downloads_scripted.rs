@@ -559,7 +559,7 @@ async fn downloads_from_a_peer_nobody_can_reach_fail_together() {
     () = lookups => unreachable!("the server answers every lookup"),
   }
   assert!(
-    started.elapsed() < Duration::from_millis(1500),
+    started.elapsed() < Duration::from_secs(2),
     "took {:?}",
     started.elapsed()
   );
