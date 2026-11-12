@@ -7,9 +7,15 @@ import { press, ticked } from "#lib/testing/keys.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 import { box } from "#lib/testing/state.svelte.js";
 
-import Events from "./Events.svelte";
+import Events, { RAISED_SETTLE_MS } from "./Events.svelte";
 
 vi.mock("$app/navigation", () => ({ goto: vi.fn() }));
+
+/** Lets the page take the events raised so far, which it reads once they settle */
+const settled = async () => {
+  await new Promise((resolve) => setTimeout(resolve, RAISED_SETTLE_MS));
+  await flush();
+};
 
 const event = (id: string, minute: number) => ({
   id,
@@ -40,7 +46,7 @@ describe("the event log", () => {
     const first = document.querySelector('[data-line="b"]');
     log = [event("c", 3), ...log];
     net.frame("events.raised", event("c", 3) as never);
-    await flush();
+    await settled();
     expect(
       [...document.querySelectorAll("[data-line]")].map((l) => l.getAttribute("data-line"))
     ).toEqual(["c", "b", "a"]);
@@ -103,7 +109,7 @@ describe("the event log", () => {
     let release!: () => void;
     hold = new Promise((done) => (release = done));
     net.frame("events.raised", event("new", 3) as never);
-    await flush();
+    await settled();
     shown.value = 2;
     await flush();
     release();
@@ -111,5 +117,20 @@ describe("the event log", () => {
     expect(
       [...document.querySelectorAll("[data-line]")].map((l) => l.getAttribute("data-line"))
     ).toEqual(["old"]);
+  });
+
+  it("reads the first page once for a burst of raised events", async () => {
+    const net = fakeNetwork(() => [event("a", 1)]);
+    live.start();
+    component = mount(Events, {
+      target: document.body,
+      props: { place: { page: 1, size: 25 }, types: [] }
+    });
+    await flush();
+    const reads = () => net.requests.filter((r) => r.url.pathname.endsWith("/events")).length;
+    const before = reads();
+    for (let n = 0; n < 20; n++) net.frame("events.raised", event(`e${n}`, 2) as never);
+    await settled();
+    expect(reads()).toBe(before + 1);
   });
 });

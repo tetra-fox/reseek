@@ -5,6 +5,9 @@
   /** the page sizes the event log offers, and the one it starts at */
   export const EVENT_PAGES: PageSizes = { sizes: [10, 25, 50, 100], size: 25 };
 
+  /** how long the first page waits after a raised event, so a burst of them is read once */
+  export const RAISED_SETTLE_MS = 250;
+
   /** the event log's column widths, kept in this browser; the daemon orders it, newest first */
   const view = gridView("reseek.system.events", [], null);
 </script>
@@ -89,12 +92,21 @@
     void types;
     untrack(() => void listed.load());
   });
-  // the first page follows new events as they are raised
-  $effect(() =>
-    live.on("events.raised", () => {
-      if (page === 1) void listed.load();
-    })
-  );
+  // the first page follows new events as they are raised, read once for a burst of them
+  $effect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const stop = live.on("events.raised", () => {
+      if (page !== 1 || timer !== undefined) return;
+      timer = setTimeout(() => {
+        timer = undefined;
+        void listed.load();
+      }, RAISED_SETTLE_MS);
+    });
+    return () => {
+      stop();
+      clearTimeout(timer);
+    };
+  });
 
   const events = $derived((listed.data?.events ?? []).flatMap((e) => rows.get(e.id) ?? []));
   const grid = new Grid<Record>({
