@@ -964,12 +964,19 @@ async fn the_scan_after_the_load_covers_the_shares_as_configured_when_it_starts(
 #[tokio::test]
 async fn a_scan_stopped_before_it_ended_fails_and_frees_the_slot_unless_the_engine_stops() {
   let (files, engine) = shared_engine().await;
-  let stall = Arc::new(AtomicBool::new(false));
+  // the hook never returns from a scan's start with `stall`, from its end with `stall_end`
+  let (stall, stall_end) = (
+    Arc::new(AtomicBool::new(false)),
+    Arc::new(AtomicBool::new(false)),
+  );
   let notices = Arc::new(std::sync::Mutex::new(Vec::new()));
-  let (stalls, heard) = (stall.clone(), notices.clone());
+  let (stalls, stalls_end, heard) = (stall.clone(), stall_end.clone(), notices.clone());
   let (again, _) = engine
     .again_hooked(Box::new(move |notice| {
-      let stalled = stalls.load(Ordering::Acquire) && matches!(notice, ScanNotice::Started { .. });
+      let stalled = match notice {
+        ScanNotice::Started { .. } => stalls.load(Ordering::Acquire),
+        ScanNotice::Ended(_) => stalls_end.load(Ordering::Acquire),
+      };
       lock(&heard).push(notice);
       Box::pin(async move {
         if stalled {
@@ -1004,6 +1011,21 @@ async fn a_scan_stopped_before_it_ended_fails_and_frees_the_slot_unless_the_engi
   stall.store(false, Ordering::Release);
   assert_eq!(again.scan(false, ScanOrigin::Asked), Ok(()));
   eventually(async || idle(&again)).await;
+
+  // dropped while the hook hears of the end, the slot is freed and the end not told again
+  stall_end.store(true, Ordering::Release);
+  let told = lock(&notices).len();
+  let cancel = again.take_slot(Edge::Scan).unwrap();
+  let scan = tokio::spawn({
+    let again = again.clone();
+    async move { again.run_scan(false, ScanOrigin::Asked, cancel).await }
+  });
+  eventually(async || lock(&notices).len() == told + 2).await;
+  scan.abort();
+  assert!(scan.await.unwrap_err().is_cancelled());
+  assert!(idle(&again));
+  assert_eq!(lock(&notices).len(), told + 2, "one end told");
+  stall_end.store(false, Ordering::Release);
 
   // a stop drops a scan the same way, which is no failure and tells the hook nothing
   stall.store(true, Ordering::Release);
