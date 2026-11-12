@@ -394,7 +394,8 @@ async fn counted(shares: &Arc<Shares>) -> Result<(), DbError> {
     .count_shares(&shares.filled_from().shares)
     .await?
     .total();
-  // a load or scan under way counts the index itself when it ends
+  // refused only during a load, which counts the index itself; a scan under way serves these
+  // totals when it does not complete
   shares.transition(Edge::Counted(totals));
   shares.throttled(
     |s| &s.counts_throttle,

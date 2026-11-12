@@ -69,7 +69,8 @@ pub(crate) enum Edge {
   ScanEnded(ScanResult),
   /// the scan hook heard of the end, and the slot is free
   Release,
-  /// a watched change counted the index again, outside a load or a scan
+  /// a watched change counted the served index again; during a scan these are the totals
+  /// served again when it does not complete
   Counted(SharedCounts),
 }
 
@@ -143,11 +144,36 @@ impl Phase {
         served: *served,
         ended: Some(*ended),
       },
-      (Self::Idle { ended, .. }, Edge::Counted(totals)) => Self::Idle {
+      // a watched change recounts an index that is served, never one nothing filled
+      (
+        Self::Idle {
+          served: Some(_),
+          ended,
+        },
+        Edge::Counted(totals),
+      ) => Self::Idle {
         served: Some(*totals),
         ended: *ended,
       },
-      (Self::Ending { ended, .. }, Edge::Counted(totals)) => Self::Ending {
+      (
+        Self::Scanning {
+          cancel,
+          progress,
+          before: Some(_),
+        },
+        Edge::Counted(totals),
+      ) => Self::Scanning {
+        cancel: cancel.clone(),
+        progress: *progress,
+        before: Some(*totals),
+      },
+      (
+        Self::Ending {
+          served: Some(_),
+          ended,
+        },
+        Edge::Counted(totals),
+      ) => Self::Ending {
         served: Some(*totals),
         ended: *ended,
       },
@@ -263,27 +289,41 @@ mod tests {
   #[test]
   fn each_phase_takes_only_its_edges() {
     let cancel = CancellationToken::new();
+    let scanning = |before| Phase::Scanning {
+      cancel: cancel.clone(),
+      progress: Progress::default(),
+      before,
+    };
     let phases = [
       Phase::default(),
+      Phase::Idle {
+        served: Some(TOTALS),
+        ended: None,
+      },
       Phase::Loading {
         cancel: cancel.clone(),
         force: false,
         origin: ScanOrigin::Startup,
       },
-      Phase::Scanning {
-        cancel,
-        progress: Progress::default(),
-        before: None,
-      },
+      scanning(None),
+      scanning(Some(TOTALS)),
       Phase::Ending {
         served: None,
         ended: Ended::Failed,
       },
+      Phase::Ending {
+        served: Some(TOTALS),
+        ended: Ended::Failed,
+      },
     ];
+    // a recount is taken only while an index is served
     let allowed = [
+      vec!["Load", "Scan"],
       vec!["Load", "Scan", "Counted"],
       vec!["Join", "Loaded"],
       vec!["Progress", "ScanEnded"],
+      vec!["Progress", "ScanEnded", "Counted"],
+      vec!["Release"],
       vec!["Release", "Counted"],
     ];
     for (phase, allowed) in phases.iter().zip(allowed) {
@@ -341,5 +381,30 @@ mod tests {
     let shown = completed.to_api(false, Vec::new(), SharedCounts::default());
     assert!(shown.ready && !shown.faulted);
     assert_eq!((shown.files, shown.scan_progress), (6, 1.0));
+  }
+
+  #[test]
+  fn a_recount_during_a_scan_is_served_when_the_scan_does_not_complete() {
+    let recounted = SharedCounts {
+      directories: 2,
+      files: 7,
+    };
+    let canceled = Phase::Idle {
+      served: Some(TOTALS),
+      ended: None,
+    }
+    .after(&Edge::Scan(CancellationToken::new()))
+    .unwrap()
+    .after(&Edge::Counted(recounted))
+    .unwrap()
+    .after(&Edge::ScanEnded(ScanResult::Canceled))
+    .unwrap();
+    assert!(matches!(
+      canceled,
+      Phase::Ending {
+        served: Some(served),
+        ended: Ended::Canceled
+      } if served == recounted
+    ));
   }
 }
