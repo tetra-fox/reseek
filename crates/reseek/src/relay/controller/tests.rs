@@ -1,6 +1,6 @@
 //! An agent's socket served without a network, on a clock the test moves: an agent whose
 //! shares are being scanned is waited for past the two minutes, but not past its deferral, an
-//! agent whose configuration no longer admits it is disconnected, a login checked
+//! agent whose configuration or API key no longer admits it is disconnected, a login checked
 //! against a configuration that changed meanwhile is refused, a share upload cut off partway
 //! leaves no file behind, and a file in flight stops when its agent is kicked.
 
@@ -8,6 +8,7 @@ use std::collections::BTreeMap;
 use std::net::IpAddr;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::task::{Context, Poll};
 use std::time::Duration;
 
@@ -106,15 +107,29 @@ type Served = (
 );
 
 /// A socket of `controller`'s from `address`, served on a task of its own and logged in as
-/// `nas` with `secret`.
+/// `nas` with `secret`, opened with a credential that keeps letting it in.
 async fn log_in(controller: &Arc<Controller>, address: IpAddr, secret: &str) -> Served {
+  log_in_while(controller, address, secret, Arc::new(AtomicBool::new(true))).await
+}
+
+/// [`log_in`] with a credential that lets the agent in while `admitted` holds.
+async fn log_in_while(
+  controller: &Arc<Controller>,
+  address: IpAddr,
+  secret: &str,
+  admitted: Arc<AtomicBool>,
+) -> Served {
   let (to_socket, frames) = mpsc::channel(64);
   let (sent, mut from_socket) = mpsc::channel(1024);
-  let served = tokio::spawn(
-    controller
-      .clone()
-      .serve_socket(Fake { frames, sent }, address),
-  );
+  let recheck: crate::live::Revalidate = Arc::new(move || {
+    let admitted = admitted.load(Ordering::Relaxed);
+    Box::pin(async move { admitted })
+  });
+  let served = tokio::spawn(controller.clone().serve_socket(
+    Fake { frames, sent },
+    address,
+    recheck,
+  ));
   settle().await;
   let RelayMessage::Challenge { token, .. } = read(&written(&mut from_socket)[0]) else {
     panic!("no challenge");
@@ -301,6 +316,39 @@ async fn a_share_upload_cut_off_partway_leaves_no_file_behind() {
     }
   });
   removed.await.expect("the cut-off upload's file is removed");
+}
+
+#[tokio::test]
+async fn an_agent_whose_api_key_no_longer_lets_it_in_is_disconnected() {
+  let config = format!(
+    "[relay]\nenabled = true\nmode = \"controller\"\n\
+     [relay.agents.nas]\ninstance_name = \"nas\"\nsecret = \"{SECRET}\"\n"
+  );
+  let app = app(&config, &[]).await;
+  let controller = app.state.relay.controller.clone().unwrap();
+  tokio::time::pause();
+  let admitted = Arc::new(AtomicBool::new(true));
+  let (to_socket, mut from_socket, served) =
+    log_in_while(&controller, [127, 0, 0, 1].into(), SECRET, admitted.clone()).await;
+  tokio::time::advance(Duration::from_secs(15)).await;
+  settle().await;
+  assert_eq!(closed(&mut from_socket), None);
+  // a pong keeps the socket from going silent at the same time
+  to_socket
+    .send(Ok(Message::Pong(Default::default())))
+    .await
+    .unwrap();
+  settle().await;
+  admitted.store(false, Ordering::Relaxed);
+  // past the check at 30 seconds, which the timer may round up past
+  tokio::time::advance(Duration::from_secs(16)).await;
+  settle().await;
+  assert_eq!(
+    closed(&mut from_socket),
+    Some(Some(frames::close::UNAUTHORIZED))
+  );
+  served.await.unwrap();
+  assert!(controller.agents().is_empty());
 }
 
 #[tokio::test]

@@ -2,8 +2,10 @@
 //! challenge as it opens and must log in within the challenge's life; logged in, the agent is
 //! registered and has two minutes to start sending its shares; an agent whose shares are being
 //! scanned renews that by saying so, up to the configured deferral in all. Both sides ping every
-//! 15 seconds and the socket closes after 30 seconds without a frame. One task owns the socket:
-//! it reads the agent's frames, writes what the controller queues for it, and keeps the timers.
+//! 15 seconds and the socket closes after 30 seconds without a frame. The API key or token the
+//! socket was opened with is checked again every 30 seconds, and the socket closed once it no
+//! longer lets the agent in. One task owns the socket: it reads the agent's frames, writes what
+//! the controller queues for it, and keeps the timers.
 
 use std::net::IpAddr;
 use std::sync::Arc;
@@ -21,6 +23,7 @@ use tracing::{Instrument, debug, info, info_span, trace, warn};
 use super::login::{self, Challenge};
 use super::{Controller, OUTBOUND, Outbound, Registration};
 use crate::crypto::{base62, random_bytes};
+use crate::live::Revalidate;
 use reseek_relay_proto::credential::Key;
 use reseek_relay_proto::frames::{
   self, LOGIN_WITHIN, MAX_FRAME, PING_EVERY, SILENCE, SYNC_WITHIN, close, millis,
@@ -51,6 +54,9 @@ impl<T> AgentSocket for T where
 {
 }
 
+/// How often the credential a socket was opened with is checked again.
+const RECHECK: std::time::Duration = std::time::Duration::from_secs(30);
+
 /// When an agent that is deferring its share upload at `now` must have begun it: two minutes on,
 /// but no later than the deferral allows.
 fn deferred(now: Instant, until: Instant) -> Instant {
@@ -72,13 +78,21 @@ const LOST: Ended = Ended {
 };
 
 impl Controller {
-  /// Serves the agent socket `socket`, opened from `address`, until it closes.
-  pub(crate) async fn serve_socket(self: Arc<Self>, socket: impl AgentSocket, address: IpAddr) {
+  /// Serves the agent socket `socket`, opened from `address` with a credential `recheck` checks
+  /// again, until it closes.
+  pub(crate) async fn serve_socket(
+    self: Arc<Self>,
+    socket: impl AgentSocket,
+    address: IpAddr,
+    recheck: Revalidate,
+  ) {
     let sessions = self.sessions.clone();
-    sessions.track_future(self.serve(socket, address)).await;
+    sessions
+      .track_future(self.serve(socket, address, recheck))
+      .await;
   }
 
-  async fn serve(self: Arc<Self>, socket: impl AgentSocket, address: IpAddr) {
+  async fn serve(self: Arc<Self>, socket: impl AgentSocket, address: IpAddr, recheck: Revalidate) {
     let id = self.next_socket();
     let span = info_span!("relay_agent_socket", socket = id, address = %address);
     async move {
@@ -89,6 +103,7 @@ impl Controller {
         id,
         address,
         outbound,
+        recheck,
         phase: Phase::Challenged(None),
       };
       let ended = session.run(socket, queued).await;
@@ -112,6 +127,8 @@ struct Session {
   address: IpAddr,
   /// a sender of the socket's queue, handed to the registration
   outbound: mpsc::Sender<Outbound>,
+  /// whether the credential the socket was opened with still lets the agent in
+  recheck: Revalidate,
   phase: Phase,
 }
 
@@ -140,6 +157,7 @@ impl Session {
     }
     let mut heard = opened;
     let mut ping = tokio::time::interval_at(opened + PING_EVERY, PING_EVERY);
+    let mut recheck = tokio::time::interval_at(opened + RECHECK, RECHECK);
     loop {
       let (deadline, late) = self.deadline(opened, heard);
       tokio::select! {
@@ -162,6 +180,12 @@ impl Session {
         _ = ping.tick() => {
           if socket.send(Message::Ping(Default::default())).await.is_err() {
             return LOST;
+          }
+        }
+        _ = recheck.tick() => {
+          if !(self.recheck)().await {
+            warn!("the agent's API key no longer lets it in; disconnecting it");
+            return closing(&mut socket, close::UNAUTHORIZED, "credential_refused").await;
           }
         }
         frame = socket.next() => {

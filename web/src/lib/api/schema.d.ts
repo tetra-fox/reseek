@@ -1521,7 +1521,8 @@ export interface paths {
         };
         /**
          * The socket an agent keeps open to its controller, opened with a WebSocket upgrade and the
-         *     `reseek-relay-v1` sub-protocol.
+         *     `reseek-relay-v1` sub-protocol, by a key or token with the read-write role its uploads need.
+         *     The socket closes once that key or token no longer lets the agent in.
          */
         get: operations["socket"];
         put?: never;

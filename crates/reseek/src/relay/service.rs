@@ -13,6 +13,7 @@ use uuid::Uuid;
 use super::{Controller, Relay};
 use crate::api::error::ApiError;
 use crate::auth::Client;
+use crate::live::Revalidate;
 use crate::services::{AgentCredential, RelayService};
 use reseek_relay_proto::frames::MAX_FRAME;
 
@@ -71,7 +72,7 @@ impl RelayService for Relay {
       .await
   }
 
-  async fn socket(&self, request: Request) -> Result<Response, ApiError> {
+  async fn socket(&self, request: Request, recheck: Revalidate) -> Result<Response, ApiError> {
     let (mut parts, _) = request.into_parts();
     let offered = parts
       .headers
@@ -102,7 +103,7 @@ impl RelayService for Relay {
         .protocols([RELAY_SUBPROTOCOL])
         // larger frames than the socket reads are refused by its own check, with a close code
         .max_message_size(2 * MAX_FRAME)
-        .on_upgrade(move |socket| controller.serve_socket(socket, address)),
+        .on_upgrade(move |socket| controller.serve_socket(socket, address, recheck)),
     )
   }
 }

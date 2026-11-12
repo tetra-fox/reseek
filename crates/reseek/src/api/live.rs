@@ -108,7 +108,12 @@ async fn stream(
       "event stream opened"
     )
   });
-  let revalidate = recheck(&app, presented, caller.principal.subject.clone(), &topics);
+  let needed = topics
+    .iter()
+    .map(|topic| topic.role())
+    .max()
+    .unwrap_or(api_types::auth::Role::ReadOnly);
+  let revalidate = recheck(&app, presented, caller.principal.subject.clone(), needed);
   let body = span.in_scope(|| live::body(registered, first, revalidate));
   Ok(
     (
@@ -141,21 +146,16 @@ fn holder(principal: &api_types::auth::Principal, presented: &Presented) -> Stri
   }
 }
 
-/// Checks again that what the stream's request presented still names the same principal with
-/// a role that may follow every topic.
-fn recheck(
+/// Checks again that what a long-lived request presented, the event stream's or an agent's
+/// socket, still names the principal `subject` with at least the role `needed`.
+pub(super) fn recheck(
   app: &AppState,
   presented: Presented,
   subject: String,
-  topics: &[topics::Topic],
+  needed: api_types::auth::Role,
 ) -> Revalidate {
   let app = app.clone();
   let presented = Arc::new(presented);
-  let needed = topics
-    .iter()
-    .map(|topic| topic.role())
-    .max()
-    .unwrap_or(api_types::auth::Role::ReadOnly);
   Arc::new(move || {
     let app = app.clone();
     let presented = presented.clone();
@@ -165,10 +165,11 @@ fn recheck(
         Ok(identified) => identified
           .principal
           .is_some_and(|principal| principal.subject == subject && principal.role >= needed),
+        // logged under the span of the stream or the agent's socket that checks it
         Err(e) => {
           debug!(
             error = e.status().as_u16(),
-            "event stream credential refused"
+            "the credential checked again was refused"
           );
           false
         }
@@ -465,7 +466,12 @@ mod tests {
     let presented =
       crate::auth::Presented::read(&peer, &uri, &axum::http::HeaderMap::new(), &current.values);
     let subject = format!("token:{}", created["token"]["id"].as_str().unwrap());
-    let check = super::recheck(&app.state, presented, subject, &[crate::live::Topic::Users]);
+    let check = super::recheck(
+      &app.state,
+      presented,
+      subject,
+      crate::live::Topic::Users.role(),
+    );
     assert!(check().await);
     let id = created["token"]["id"].as_str().unwrap();
     app
@@ -601,7 +607,7 @@ mod tests {
       &app.state,
       presented,
       "local:reseek".to_string(),
-      &[crate::live::Topic::Application],
+      crate::live::Topic::Application.role(),
     );
     assert!(check().await);
     // a use would be recorded by a task of its own

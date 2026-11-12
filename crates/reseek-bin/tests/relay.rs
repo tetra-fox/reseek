@@ -2,7 +2,8 @@
 //! controller, uploads its shares, and a third user on soulfind downloads one of the agent's
 //! files from the controller with the bytes intact; a kicked agent's shares go with it and it
 //! comes back on its own, as it does after its controller restarts; an agent that stops takes
-//! its shares with it. The controller refuses a wrong secret and a replayed credential. A
+//! its shares with it. The controller refuses a wrong secret and a replayed credential, and an
+//! agent with a read-only key as it dials. A
 //! controller's finished download is copied to an agent that asks for them, a controller that
 //! stops closes its agents' sockets as shutting down, and an agent stopped by a signal closes
 //! its own.
@@ -422,4 +423,27 @@ async fn a_wrong_or_replayed_login_is_refused_and_a_right_one_listed() {
     assert!(started.elapsed() < PATIENCE, "the accepted login is listed");
     tokio::time::sleep(Duration::from_millis(50)).await;
   }
+}
+
+/// An agent whose API key has only the read-only role is refused as it dials, before it logs in
+/// or copies its index, and says so once.
+#[tokio::test]
+async fn an_agent_with_a_read_only_key_is_refused_as_it_dials() {
+  let (controller_dir, agent_dir) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+  std::fs::create_dir_all(agent_dir.path().join("share")).unwrap();
+  let read_only = CONTROLLER.replace("role = \"readwrite\"", "role = \"readonly\"");
+  std::fs::write(controller_dir.path().join("config.toml"), read_only).unwrap();
+  let port = free_port();
+  let controller = Daemon::start_on(port, controller_dir.path(), &[], &ACCOUNT);
+  let agent = agent(agent_dir.path(), port, "");
+  agent
+    .printed_line(&["the relay controller refused this agent", "403"])
+    .await;
+  let printed = agent.printed();
+  assert!(
+    !printed.contains("Login succeeded") && !printed.contains("Beginning upload of shares"),
+    "{printed}"
+  );
+  let admin = signed_in(&controller).await;
+  assert!(admin.relay_agents().await.unwrap().is_empty());
 }

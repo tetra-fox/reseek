@@ -71,8 +71,13 @@ pub trait RelayService: Send + Sync {
     Err(not_yet(DOMAIN))
   }
 
-  /// The agent socket, from the request that asks for it, as the whole response.
-  async fn socket(&self, request: axum::extract::Request) -> Result<Response, ApiError> {
+  /// The agent socket, from the request that asks for it, as the whole response; `recheck`
+  /// says whether the credential the request presented still lets the agent in.
+  async fn socket(
+    &self,
+    request: axum::extract::Request,
+    recheck: crate::live::Revalidate,
+  ) -> Result<Response, ApiError> {
     Err(not_yet(DOMAIN))
   }
 }

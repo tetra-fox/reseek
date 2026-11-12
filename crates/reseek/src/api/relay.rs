@@ -5,7 +5,7 @@
 //! Each route answers only when the daemon started with relay mode on, and 403
 //! `relay_disabled` otherwise. An agent's calls take an API key or token, never a session.
 
-use api_types::auth::{Principal, Via};
+use api_types::auth::{Principal, Role, Via};
 use api_types::relay::{RelayAgentState, RelayFileUploadResult, RelayState};
 use axum::Extension;
 use axum::extract::multipart::MultipartRejection;
@@ -22,7 +22,7 @@ use uuid::Uuid;
 use super::error::ApiError;
 use super::extract::{Json, Path};
 use crate::app::AppState;
-use crate::auth::{Administrator, AnyRole, Authorized, Client, ReadWrite};
+use crate::auth::{Administrator, AnyRole, Authorized, Client, Presented, ReadWrite};
 use crate::config::Options;
 use crate::services::AgentCredential;
 
@@ -288,7 +288,8 @@ fn download_filename(headers: &HeaderMap) -> Result<String, ApiError> {
 }
 
 /// The socket an agent keeps open to its controller, opened with a WebSocket upgrade and the
-/// `reseek-relay-v1` sub-protocol.
+/// `reseek-relay-v1` sub-protocol, by a key or token with the read-write role its uploads need.
+/// The socket closes once that key or token no longer lets the agent in.
 #[utoipa::path(
   get, path = "/relay/ws", tag = "relay",
   responses(
@@ -299,13 +300,21 @@ fn download_filename(headers: &HeaderMap) -> Result<String, ApiError> {
 )]
 async fn socket(
   State(app): State<AppState>,
-  caller: Authorized<AnyRole>,
+  caller: Authorized<ReadWrite>,
+  Extension(presented): Extension<Presented>,
   request: Request,
 ) -> Result<Response, ApiError> {
   let options = &app.startup.values;
   enabled(options)?;
   stored_credential(&caller.principal, options)?;
-  app.services.relay.socket(request).await
+  // the uploads an agent makes need this role, so a key without it is refused here, at once
+  let recheck = super::live::recheck(
+    &app,
+    presented,
+    caller.principal.subject.clone(),
+    Role::ReadWrite,
+  );
+  app.services.relay.socket(request, recheck).await
 }
 
 #[cfg(test)]
