@@ -22,7 +22,7 @@ use api_types::state::UserStatistics;
 use cascade::Watcher;
 use chrono::Utc;
 use reseek_shares::lock;
-use soulseek_client::{Client, ClientError, ClientState, Event};
+use soulseek_client::{Client, ClientError, Event};
 use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -276,16 +276,16 @@ impl Network {
     }
   }
 
-  /// Disconnects with `reason` and stops reconnecting until asked to connect again.
+  /// Disconnects with `reason` and stops reconnecting until asked to connect again. The client
+  /// is told even when it reads disconnected, so a connect the watchdog started a moment before
+  /// is canceled before it begins a session.
   pub async fn disconnect(&self, reason: Option<String>) {
     self.watchdog.hold();
-    if self.client.state() != ClientState::Disconnected {
-      let message = reason.unwrap_or_else(|| Intent::User.to_string());
-      self
-        .client
-        .disconnect(Some(&message), Some(Intent::User.error()))
-        .await;
-    }
+    let message = reason.unwrap_or_else(|| Intent::User.to_string());
+    self
+      .client
+      .disconnect(Some(&message), Some(Intent::User.error()))
+      .await;
   }
 
   /// Stops for good at shutdown: the watchdog is canceled, the port mapping removed, the
