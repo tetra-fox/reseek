@@ -28,6 +28,8 @@
       .filter((g) => g.bindings.length);
   });
 
+  // taken on the way down, before the focused element: a list would read `?` as the start of a
+  // row's name. A field, a menu or a dialog keeps it
   const keydown = (e: KeyboardEvent) => {
     if (!isPressed(APP.shortcuts, e) || keepsKey(e) || layerOpen()) return;
     e.preventDefault();
@@ -35,7 +37,7 @@
   };
 </script>
 
-<svelte:window onkeydown={keydown} />
+<svelte:window onkeydowncapture={keydown} />
 
 <Dialog
   bind:open={

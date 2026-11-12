@@ -4,6 +4,8 @@ import { afterEach, expect, it, vi } from "vitest";
 import Select from "#lib/components/ui/Select.svelte";
 import { shortcuts } from "#lib/shell/shortcuts.svelte.js";
 import { press } from "#lib/testing/keys.js";
+import List from "#lib/testing/List.svelte";
+import { box } from "#lib/testing/state.svelte.js";
 import { SHEET } from "#lib/ui/bindings.js";
 
 import ShortcutsSheet from "./ShortcutsSheet.svelte";
@@ -92,4 +94,25 @@ it("does not open over a select's open list", () => {
   expect(shortcuts.open).toBe(false);
   unmount(sheet);
   unmount(select);
+});
+
+it("opens on ? over a focused list, whatever its rows are named", async () => {
+  const lines = box([
+    { key: "alpha", group: "g" },
+    { key: "?odd", group: "g" }
+  ]);
+  const list = mount(List, { target: document.body, props: { source: lines, named: true } });
+  const sheet = mount(ShortcutsSheet, { target: document.body });
+  flushSync();
+  const grid = document.querySelector<HTMLElement>("[role=grid]")!;
+  grid.focus();
+  press(grid, "ArrowDown");
+  press(grid, "?", { shiftKey: true });
+  await vi.waitFor(() => expect(open()).not.toBeNull());
+  // the list's focus stays on the row it was on
+  expect(document.querySelector('[data-line="alpha"]')!.id).toBe(
+    grid.getAttribute("aria-activedescendant")
+  );
+  unmount(sheet);
+  unmount(list);
 });
