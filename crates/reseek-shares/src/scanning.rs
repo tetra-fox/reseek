@@ -67,13 +67,17 @@ impl Shares {
     origin: ScanOrigin,
     cancel: CancellationToken,
   ) -> bool {
+    let slot = HeldSlot {
+      shares: self.clone(),
+      released: false,
+    };
     (self.scans)(ScanNotice::Started { force, origin }).await;
     let settings = Arc::new(self.scan_settings());
     let ended = self.scan_now(force, cancel, settings).await;
     let completed = matches!(ended, ScanEnded::Completed(_));
     // the hook hears of the end while the slot is held, so no scan starts between the two
     (self.scans)(ScanNotice::Ended(ended)).await;
-    self.hold(Edge::Release);
+    slot.release();
     completed
   }
 
@@ -247,5 +251,54 @@ impl Shares {
     }
     let watching = watcher::start(self.clone(), settings).await;
     *lock(&self.watches) = watching;
+  }
+}
+
+/// The scan slot as a running scan holds it, freed by [`HeldSlot::release`] once the hook heard
+/// of the scan's end. Dropped before that, by a panic or a dropped future, it ends the scan as
+/// failed and tells the hook, then frees the slot, so later scans can still start.
+struct HeldSlot {
+  shares: Arc<Shares>,
+  released: bool,
+}
+
+impl HeldSlot {
+  fn release(mut self) {
+    self.released = true;
+    self.shares.hold(Edge::Release);
+  }
+}
+
+impl Drop for HeldSlot {
+  fn drop(&mut self) {
+    if self.released {
+      return;
+    }
+    let shares = self.shares.clone();
+    let ended = !matches!(lock(&shares.status).phase, Phase::Scanning { .. });
+    if ended {
+      warn!("the scan hook stopped before it heard all of the scan's end; the scan slot is freed");
+      shares.hold(Edge::Release);
+      return;
+    }
+    const STOPPED: &str = "the scan stopped before it ended";
+    shares.faulted(STOPPED);
+    match tokio::runtime::Handle::try_current() {
+      // the hook hears of the end before the slot is free, as after any scan; the task runs
+      // on its own
+      Ok(runtime) => drop(
+        runtime.spawn(
+          async move {
+            (shares.scans)(ScanNotice::Ended(ScanEnded::Failed(STOPPED.to_string()))).await;
+            shares.hold(Edge::Release);
+          }
+          .in_current_span(),
+        ),
+      ),
+      // with no runtime left the hook cannot be awaited, so only the slot is freed
+      Err(_) => {
+        shares.hold(Edge::Release);
+      }
+    }
   }
 }

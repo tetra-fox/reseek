@@ -961,6 +961,52 @@ async fn the_scan_after_the_load_covers_the_shares_as_configured_when_it_starts(
   );
 }
 
+#[tokio::test]
+async fn a_scan_stopped_before_it_ended_fails_and_frees_the_slot() {
+  let (files, engine) = shared_engine().await;
+  let stall = Arc::new(AtomicBool::new(false));
+  let notices = Arc::new(std::sync::Mutex::new(Vec::new()));
+  let (stalls, heard) = (stall.clone(), notices.clone());
+  let (again, _) = engine
+    .again_hooked(Box::new(move |notice| {
+      let stalled = stalls.load(Ordering::Acquire) && matches!(notice, ScanNotice::Started { .. });
+      lock(&heard).push(notice);
+      Box::pin(async move {
+        if stalled {
+          std::future::pending::<()>().await;
+        }
+      })
+    }))
+    .await;
+  again.initialized().await;
+  eventually(async || idle(&again)).await;
+  stall.store(true, Ordering::Release);
+  let cancel = again.take_slot(Edge::Scan).unwrap();
+  let scan = tokio::spawn({
+    let again = again.clone();
+    async move { again.run_scan(false, ScanOrigin::Asked, cancel).await }
+  });
+  // the scan after the load started and ended; this one started and never goes on
+  eventually(async || lock(&notices).len() == 3).await;
+  scan.abort();
+  eventually(async || idle(&again)).await;
+  assert!(matches!(
+    lock(&notices).last(),
+    Some(ScanNotice::Ended(ScanEnded::Failed(_)))
+  ));
+  assert!(matches!(
+    lock(&again.status).phase,
+    Phase::Idle {
+      served: Some(_),
+      ended: Some(phase::Ended::Failed)
+    }
+  ));
+  stall.store(false, Ordering::Release);
+  assert_eq!(again.scan(false, ScanOrigin::Asked), Ok(()));
+  eventually(async || idle(&again)).await;
+  drop(files);
+}
+
 /// The state of the scan `shares` records as started at `started_at`.
 async fn scan_state(shares: &Shares, started_at: i64) -> String {
   shares
