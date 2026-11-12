@@ -1,15 +1,17 @@
 //! The agent's connection to its controller, one for the life of the program: it dials, logs
 //! in, uploads its shares and serves the controller's requests; whenever the socket is lost, it
 //! dials again, backing off up to 30 seconds and starting over once it was ready. A refusal of
-//! its configuration, or another agent logging in under its instance name, backs off to the cap
-//! at once and is warned about once per reason. A change to the controller's settings closes the
-//! socket and dials again with the new ones.
+//! its configuration, its API key or its shares, or another agent logging in under its instance
+//! name, backs off to the cap at once and is warned about once per reason. A change to the
+//! controller's settings closes the socket and dials again with the new ones.
 
 pub(crate) mod dial;
 mod downloads;
 mod files;
 mod session;
 mod sync;
+#[cfg(test)]
+mod tests;
 
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;

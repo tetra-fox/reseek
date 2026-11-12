@@ -1,17 +1,27 @@
-//! Uploading the agent's shares: a copy of the local index and the share list go to the
-//! controller with a token it hands out on the socket. One upload runs at a time; one asked
-//! for meanwhile runs once after it. While the local shares are being scanned the upload
-//! waits, and the scan's end asks for it again, so the controller never gets half an index.
-//! Until the first upload on a socket, the controller is told every minute that the scan runs,
-//! so it waits for the shares. The first upload on a socket failing closes the socket to try
-//! again from the start; a later one failing leaves the last upload in place until the next
-//! change.
+//! Uploading the agent's shares: the share list and a copy of the local index go to the
+//! controller with a token it hands out on the socket. The token is asked for first, with the
+//! index's size, so an index the controller does not take is never copied. One upload runs at
+//! a time; one asked for meanwhile runs once after it.
+//!
+//! An index that neither the startup load nor a completed scan filled is not uploaded: until
+//! the first upload on a socket the controller is told every minute that the shares come after
+//! the scan, and the end of the load or the scan asks for the upload. During a scan over a
+//! filled index, a socket with no upload yet gets that index at once; one that has keeps it
+//! until the scan ends.
+//!
+//! An upload stops when its socket closes, or when the controller takes none of the index for
+//! thirty seconds. The first upload on a socket failing closes the socket to try again from
+//! the start, and one the controller refuses for good backs off as a refused login does. A
+//! later one failing is tried again after a wait that grows, until one succeeds.
 
+use std::path::Path;
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use api_types::relay::{RelayErrorCode, RelayMessage};
+use api_types::shares::Share;
+use futures_util::StreamExt;
 use reqwest::multipart::{Form, Part};
 use reseek_relay_proto::credential::Purpose;
 use reseek_relay_proto::frames;
@@ -32,27 +42,36 @@ const TOKEN_WAIT: Duration = Duration::from_secs(10);
 /// The longest wait between two asks.
 const TOKEN_BACKOFF: Duration = Duration::from_secs(5);
 
+/// How long an upload may go without the controller taking any of the index.
+const STALL: Duration = Duration::from_secs(30);
+
+/// The longest wait before a failed upload on a socket that had one is tried again.
+const RETRY_CAP: Duration = Duration::from_secs(300);
+
 /// Why an upload failed.
 #[derive(Debug, thiserror::Error)]
 enum SyncError {
-  /// the controller's share index has another schema
-  #[error("the controller's share index has another schema: {0}")]
-  SchemaMismatch(String),
-  /// anything else
+  /// the controller does not take this index: its schema is another, or it is too large
+  #[error("{0}")]
+  Refused(String),
+  /// the socket closed, which ends what was asked on it
+  #[error("the socket closed")]
+  Closed,
+  /// anything else, which may pass
   #[error("{0}")]
   Failed(String),
 }
 
 impl AgentClient {
-  /// Uploads the shares now, or once the upload running ends; nothing while not logged in or
-  /// while the local shares are being scanned.
+  /// Uploads the shares now, or once the upload running ends; nothing while not logged in, and
+  /// nothing yet while [`AgentClient::defers`] says so.
   pub(super) fn request_sync(&self) {
-    if !self.current().is_some_and(|link| link.logged_in()) {
+    let Some(link) = self.current().filter(|link| link.logged_in()) else {
       return debug!("not logged in to the controller; the shares are uploaded at the next login");
-    }
-    if self.shares.scanning() {
+    };
+    if self.defers(&link) {
       self.defer_while_scanning();
-      return debug!("the shares are being scanned; they are uploaded when the scan ends");
+      return debug!("the shares are being loaded or scanned; they are uploaded when that ends");
     }
     if self.syncing.swap(true, Ordering::AcqRel) {
       self.again.store(true, Ordering::Release);
@@ -62,13 +81,21 @@ impl AgentClient {
     tokio::spawn(async move { agent.sync_while_asked().await }.in_current_span());
   }
 
-  /// Tells the controller the shares come once the scan running ends, while none were sent on
-  /// this socket, so it waits for them.
+  /// Whether the upload waits for a load or a scan to end: always while nothing filled the
+  /// index, as during the load or a first scan, and during a scan over a filled one once `link`
+  /// had an upload.
+  fn defers(&self, link: &Link) -> bool {
+    !self.shares.index_filled() || (self.shares.loading_or_scanning() && link.ready())
+  }
+
+  /// Tells the controller the shares come once the load or scan running ends, while none were
+  /// sent on this socket and none is being sent, so it waits for them.
   pub(super) fn defer_while_scanning(&self) {
     let Some(link) = self.current() else {
       return;
     };
-    if link.logged_in() && !link.ready() && self.shares.scanning() {
+    let uploading = self.syncing.load(Ordering::Acquire);
+    if link.logged_in() && !link.ready() && !uploading && self.defers(&link) {
       debug!("telling the controller the shares come after the scan");
       link.send(
         None,
@@ -83,7 +110,10 @@ impl AgentClient {
   async fn sync_while_asked(self: Arc<Self>) {
     loop {
       self.again.store(false, Ordering::Release);
-      if let Some(link) = self.current().filter(|link| link.logged_in()) {
+      // a load or scan that began since it was asked for asks again when it ends
+      if let Some(link) = self.current().filter(|link| link.logged_in())
+        && !self.defers(&link)
+      {
         self.sync_once(&link).await;
       }
       if self.again.load(Ordering::Acquire) {
@@ -100,35 +130,71 @@ impl AgentClient {
   /// One upload on `link`, its outcome put into the state.
   async fn sync_once(&self, link: &Arc<Link>) {
     let first = !link.ready();
-    match self.upload_shares(link).await {
+    let uploaded = tokio::select! {
+      () = link.closed() => Err(SyncError::Closed),
+      uploaded = self.upload_shares(link) => uploaded,
+    };
+    let e = match uploaded {
       Ok(()) => {
-        link.set_ready();
-        info!("Shares uploaded. Ready to relay files.");
+        link.synced();
+        return info!("Shares uploaded. Ready to relay files.");
       }
-      Err(e) => {
-        warn!(error = %e, "Failed to upload shares to relay controller");
-        if let SyncError::SchemaMismatch(_) = e {
-          link.refused(e.to_string());
-        }
-        if first {
-          link.close(frames::close::NORMAL);
-        }
+      Err(SyncError::Closed) => return debug!("share upload stopped: the socket closed"),
+      Err(e) => e,
+    };
+    if first {
+      match e {
+        // warned about once as the socket ends, however often the agent dials again
+        SyncError::Refused(reason) => link.refused(format!("shares refused: {reason}")),
+        e => warn!(error = %e, "Failed to upload shares to relay controller"),
       }
+      return link.close(frames::close::NORMAL);
     }
+    self.warn_once(
+      &e.to_string(),
+      "Failed to upload shares to relay controller",
+    );
+    let failures = link.sync_failed();
+    let delay = backoff::wait(failures, backoff::AT_ONCE, RETRY_CAP);
+    debug!(failures, ?delay, "share upload tried again after a wait");
+    let (agent, link) = (self.this(), link.clone());
+    tokio::spawn(
+      async move {
+        tokio::select! {
+          () = link.closed() => {}
+          () = tokio::time::sleep(delay) => {
+            // an upload since, asked for by a change, succeeded or failed on its own
+            if link.sync_failures() == failures {
+              agent.request_sync();
+            }
+          }
+        }
+      }
+      .in_current_span(),
+    );
   }
 
-  /// Copies the local index to a file, uploads it and deletes it. One upload runs at a time,
-  /// so the copy has one name, and a copy an interrupted upload left is written over.
+  /// Asks for a token with the index's size, then copies the local index to a file, uploads it
+  /// and deletes it. One upload runs at a time, so the copy has one name, and a copy an
+  /// interrupted upload left is written over.
   async fn upload_shares(&self, link: &Link) -> Result<(), SyncError> {
+    let failed = |what: &str, e: reseek_shares::db::DbError| {
+      SyncError::Failed(format!("the share index was not {what}: {e}"))
+    };
+    let size = self
+      .shares
+      .index_bytes()
+      .await
+      .map_err(|e| failed("measured", e))?;
+    let shares = self.shares.local_shares();
+    let token = ask_token(link, &shares, size).await?;
     let dump = self.uploads.join("share_index.db");
     let uploaded = match self.shares.dump(&dump).await {
       Ok(bytes) => {
         info!(bytes, "Beginning upload of shares");
-        self.send_dump(link, &dump, bytes).await
+        post_dump(link, token, &shares, &dump, bytes).await
       }
-      Err(e) => Err(SyncError::Failed(format!(
-        "the share index was not copied: {e}"
-      ))),
+      Err(e) => Err(failed("copied", e)),
     };
     match tokio::fs::remove_file(&dump).await {
       Ok(()) => {}
@@ -137,78 +203,79 @@ impl AgentClient {
     }
     uploaded
   }
+}
 
-  /// Asks for a token and uploads the copy `dump` of `bytes` with the share list.
-  async fn send_dump(
-    &self,
-    link: &Link,
-    dump: &std::path::Path,
-    bytes: u64,
-  ) -> Result<(), SyncError> {
-    let shares = self.shares.local_shares();
-    let (files, directories) = shares.iter().fold((0u32, 0u32), |(f, d), share| {
-      (
-        f.saturating_add(share.files.unwrap_or(0)),
-        d.saturating_add(share.directories.unwrap_or(0)),
-      )
-    });
-    let mut token = None;
-    for attempt in 0..TOKEN_ATTEMPTS {
-      if attempt > 0 {
-        tokio::time::sleep(backoff::wait(attempt, backoff::AT_ONCE, TOKEN_BACKOFF)).await;
-      }
-      let asked = RelayMessage::SharesBegin {
-        schema_version: Shares::schema_version(),
-        shares: shares.clone(),
-        file_count: files,
-        directory_count: directories,
-        database_bytes: bytes,
-      };
-      match link.ask_shares(asked, TOKEN_WAIT).await {
-        Some(RelayMessage::SharesToken { token: given, .. }) => {
-          token = Some(given);
-          break;
-        }
-        Some(RelayMessage::Error {
-          code: RelayErrorCode::SchemaMismatch,
-          detail,
-          ..
-        }) => return Err(SyncError::SchemaMismatch(detail.unwrap_or_default())),
-        Some(RelayMessage::Error { code, detail, .. })
-          if code != RelayErrorCode::SyncInProgress =>
-        {
-          return Err(SyncError::Failed(format!(
-            "{code:?}: {}",
-            detail.unwrap_or_default()
-          )));
-        }
-        answer => debug!(attempt, ?answer, "no share upload token yet"),
-      }
+/// Asks the controller on `link` for a token to upload `shares` and an index of about `size`
+/// bytes with.
+async fn ask_token(link: &Link, shares: &[Share], size: u64) -> Result<Uuid, SyncError> {
+  let (files, directories) = shares.iter().fold((0u32, 0u32), |(f, d), share| {
+    (
+      f.saturating_add(share.files.unwrap_or(0)),
+      d.saturating_add(share.directories.unwrap_or(0)),
+    )
+  });
+  for attempt in 0..TOKEN_ATTEMPTS {
+    if attempt > 0 {
+      tokio::time::sleep(backoff::wait(attempt, backoff::AT_ONCE, TOKEN_BACKOFF)).await;
     }
-    let token = token.ok_or_else(|| SyncError::Failed("no share upload token".to_string()))?;
-    self.post_dump(link, token, &shares, dump, bytes).await
+    let asked = RelayMessage::SharesBegin {
+      schema_version: Shares::schema_version(),
+      shares: shares.to_vec(),
+      file_count: files,
+      directory_count: directories,
+      database_bytes: size,
+    };
+    match link.ask_shares(asked, TOKEN_WAIT).await {
+      Some(RelayMessage::SharesToken { token, .. }) => return Ok(token),
+      Some(RelayMessage::Error {
+        code: code @ (RelayErrorCode::SchemaMismatch | RelayErrorCode::TooLarge),
+        detail,
+        ..
+      }) => {
+        return Err(SyncError::Refused(format!(
+          "{code:?}: {}",
+          detail.unwrap_or_default()
+        )));
+      }
+      Some(RelayMessage::Error { code, detail, .. }) if code != RelayErrorCode::SyncInProgress => {
+        return Err(SyncError::Failed(format!(
+          "{code:?}: {}",
+          detail.unwrap_or_default()
+        )));
+      }
+      answer => debug!(attempt, ?answer, "no share upload token yet"),
+    }
   }
+  Err(SyncError::Failed("no share upload token".to_string()))
+}
 
-  /// Posts the share list and the copy `dump` with `token`.
-  async fn post_dump(
-    &self,
-    link: &Link,
-    token: Uuid,
-    shares: &[api_types::shares::Share],
-    dump: &std::path::Path,
-    bytes: u64,
-  ) -> Result<(), SyncError> {
-    let failed = |e: String| SyncError::Failed(e);
-    let file = tokio::fs::File::open(dump)
-      .await
-      .map_err(|e| failed(format!("{}: {e}", dump.display())))?;
-    let list = serde_json::to_string(shares).map_err(|e| failed(e.to_string()))?;
-    let database =
-      Part::stream_with_length(reqwest::Body::wrap_stream(ReaderStream::new(file)), bytes)
-        .file_name("shares");
-    let form = Form::new().text("shares", list).part("database", database);
-    let settings = &link.settings;
-    let started = Instant::now();
+/// Posts `shares` and the copy `dump` of `bytes` with `token`; fails when the controller takes
+/// none of the copy for [`STALL`].
+async fn post_dump(
+  link: &Link,
+  token: Uuid,
+  shares: &[Share],
+  dump: &Path,
+  bytes: u64,
+) -> Result<(), SyncError> {
+  let failed = |e: String| SyncError::Failed(e);
+  let file = tokio::fs::File::open(dump)
+    .await
+    .map_err(|e| failed(format!("{}: {e}", dump.display())))?;
+  let list = serde_json::to_string(shares).map_err(|e| failed(e.to_string()))?;
+  let taken = Arc::new(AtomicU64::new(0));
+  let counted = taken.clone();
+  let read = ReaderStream::new(file).inspect(move |chunk| {
+    if let Ok(chunk) = chunk {
+      counted.fetch_add(chunk.len() as u64, Ordering::Relaxed);
+    }
+  });
+  let database =
+    Part::stream_with_length(reqwest::Body::wrap_stream(read), bytes).file_name("shares");
+  let form = Form::new().text("shares", list).part("database", database);
+  let settings = &link.settings;
+  let started = Instant::now();
+  let post = async {
     let response = settings
       .http
       .post(settings.url(&format!("relay/controller/shares/{token}")))
@@ -223,18 +290,39 @@ impl AgentClient {
       .await
       .map_err(|e| failed(e.to_string()))?;
     let status = response.status();
-    if !status.is_success() {
-      // the status says what failed; a body that does not arrive only says less
-      let body = response.text().await.unwrap_or_default();
-      return Err(failed(format!(
-        "Failed to upload shares to relay controller: {status} {body}"
-      )));
+    if status.is_success() {
+      return Ok(());
     }
-    info!(
-      bytes,
-      ms = started.elapsed().as_millis() as u64,
-      "Upload of shares succeeded"
-    );
-    Ok(())
+    // the status says what failed; a body that does not arrive only says less
+    let body = response.text().await.unwrap_or_default();
+    Err(failed(format!(
+      "the controller answered the upload {status} {body}"
+    )))
+  };
+  tokio::select! {
+    posted = post => posted?,
+    () = stalled(&taken, bytes) => {
+      return Err(failed(format!("the controller took none of the share index for {STALL:?}")));
+    }
+  }
+  info!(
+    bytes,
+    ms = started.elapsed().as_millis() as u64,
+    "Upload of shares succeeded"
+  );
+  Ok(())
+}
+
+/// Returns once `taken`, the bytes of an upload of `total` read so far, stayed the same for
+/// [`STALL`] short of the end; never once all were read, while the controller loads them.
+async fn stalled(taken: &AtomicU64, total: u64) {
+  let mut seen = taken.load(Ordering::Relaxed);
+  loop {
+    tokio::time::sleep(STALL).await;
+    let now = taken.load(Ordering::Relaxed);
+    if now == seen && now < total {
+      return;
+    }
+    seen = now;
   }
 }

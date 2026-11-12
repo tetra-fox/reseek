@@ -5,7 +5,7 @@
 //! after 30 seconds without a frame.
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 use api_types::relay::{LoginFailure, RelayErrorCode, RelayMessage};
 use futures_util::{SinkExt, StreamExt};
@@ -41,6 +41,8 @@ pub(super) struct Link {
   logged_in: AtomicBool,
   /// its first share upload succeeded
   ready: AtomicBool,
+  /// the share uploads that failed in a row since the last that succeeded
+  sync_failures: AtomicU32,
   /// waits for the controller's answer to `shares_begin`
   share_answer: std::sync::Mutex<Option<oneshot::Sender<RelayMessage>>>,
   /// why the controller refused this agent, when it did
@@ -77,9 +79,25 @@ impl Link {
     self.ready.load(Ordering::Acquire)
   }
 
-  /// Marks the shares uploaded.
-  pub fn set_ready(&self) {
+  /// Marks the shares uploaded, the failures before it forgotten.
+  pub fn synced(&self) {
     self.ready.store(true, Ordering::Release);
+    self.sync_failures.store(0, Ordering::Release);
+  }
+
+  /// Counts a share upload that failed after one succeeded; how many failed in a row.
+  pub fn sync_failed(&self) -> u32 {
+    self.sync_failures.fetch_add(1, Ordering::AcqRel) + 1
+  }
+
+  /// How many share uploads failed in a row since the last that succeeded.
+  pub fn sync_failures(&self) -> u32 {
+    self.sync_failures.load(Ordering::Acquire)
+  }
+
+  /// Returns once the socket is closed or closing.
+  pub async fn closed(&self) {
+    self.closing.cancelled().await;
   }
 
   /// Records that the controller refused this agent for `reason`, which the reconnect backs
@@ -101,6 +119,40 @@ impl Link {
       return None;
     }
     tokio::time::timeout(wait, answered).await.ok()?.ok()
+  }
+}
+
+#[cfg(test)]
+impl Link {
+  /// A socket logged in with `settings`, its frames queued on the receiver, with a share upload
+  /// done on it when `ready`.
+  pub(super) fn opened(
+    settings: Arc<Settings>,
+    ready: bool,
+  ) -> (Arc<Self>, mpsc::Receiver<String>) {
+    let (outbound, queued) = mpsc::channel(OUTBOUND);
+    let link = Self {
+      outbound,
+      closing: CancellationToken::new(),
+      close_code: std::sync::atomic::AtomicU16::new(close::NORMAL),
+      settings,
+      logged_in: AtomicBool::new(true),
+      ready: AtomicBool::new(ready),
+      sync_failures: AtomicU32::new(0),
+      share_answer: std::sync::Mutex::new(None),
+      refusal: std::sync::Mutex::new(None),
+    };
+    (Arc::new(link), queued)
+  }
+
+  /// Why the controller refused this agent, when it did.
+  pub(super) fn refusal(&self) -> Option<String> {
+    lock(&self.refusal).clone()
+  }
+
+  /// Whether the socket was closed.
+  pub(super) fn is_closed(&self) -> bool {
+    self.closing.is_cancelled()
   }
 }
 
@@ -129,6 +181,7 @@ impl AgentClient {
       settings,
       logged_in: AtomicBool::new(false),
       ready: AtomicBool::new(false),
+      sync_failures: AtomicU32::new(0),
       share_answer: std::sync::Mutex::new(None),
       refusal: std::sync::Mutex::new(None),
     });
@@ -211,7 +264,7 @@ impl AgentClient {
   }
 
   /// Handles a text frame from the controller.
-  fn handle(self: &Arc<Self>, link: &Arc<Link>, text: &str) {
+  pub(super) fn handle(self: &Arc<Self>, link: &Arc<Link>, text: &str) {
     let envelope = match frames::decode(text) {
       Ok(envelope) => envelope,
       Err(unsupported) => {
