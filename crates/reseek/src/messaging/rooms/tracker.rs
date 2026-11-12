@@ -36,6 +36,43 @@ pub struct PrivateRoom {
   pub operators: BTreeSet<String>,
 }
 
+/// A change to a room's members the server told of.
+#[derive(Clone, Debug)]
+enum MemberChange {
+  Joined(RoomUser),
+  Left(String),
+  Status(String, UserPresence),
+}
+
+impl MemberChange {
+  /// Makes the change to `users`; a presence is taken only for a user there.
+  fn apply(self, users: &mut BTreeMap<String, RoomUser>) {
+    match self {
+      Self::Joined(user) => {
+        users.insert(user.username.clone(), user);
+      }
+      Self::Left(username) => {
+        users.remove(&username);
+      }
+      Self::Status(username, status) => {
+        if let Some(user) = users.get_mut(&username) {
+          user.status = status;
+        }
+      }
+    }
+  }
+}
+
+/// What the server said in a room while our join of it was under way, between its answer and
+/// the answer being taken in: it comes behind the answer but may be handled first.
+#[derive(Debug, Default)]
+struct Joining {
+  /// the member changes, in the order they came
+  members: Vec<MemberChange>,
+  /// the tickers, for a room not tracked yet
+  tickers: BTreeMap<String, String>,
+}
+
 /// Every room tracked.
 #[derive(Debug, Default)]
 pub struct Tracker {
@@ -43,6 +80,8 @@ pub struct Tracker {
   private: BTreeMap<String, PrivateRoom>,
   /// how many times each room was left in this run, so a join under way meanwhile is undone
   leaves: BTreeMap<String, u64>,
+  /// the rooms a join is under way for, with what the server said in them meanwhile
+  joining: BTreeMap<String, Joining>,
 }
 
 /// A member's country as the server gave it, none when it sent a blank, as it does for a user
@@ -93,14 +132,36 @@ impl Tracker {
       .collect()
   }
 
-  /// We joined `data`'s room: its members replace any we knew, its tickers stay until the
-  /// server sends them again, and for a private room its owner and operators are taken.
+  /// A join of `name` is under way: what the server says in the room from now on is held for
+  /// the room until the join's answer is taken in. Anything held from before is dropped.
+  pub fn joining(&mut self, name: &str) {
+    self.joining.insert(name.to_string(), Joining::default());
+  }
+
+  /// The join of `name` under way failed or was undone: nothing more is held for it.
+  pub fn not_joined(&mut self, name: &str) {
+    self.joining.remove(name);
+  }
+
+  /// Whether a message said in `name` is ours to keep: we are in the room, were before the
+  /// connection was lost, or are joining it.
+  pub fn hears(&self, name: &str) -> bool {
+    self.get(name).is_some() || self.joining.contains_key(name)
+  }
+
+  /// We joined `data`'s room: its members replace any we knew, then what the server said in the
+  /// room while the join was under way is taken in order. Its tickers stay until the server
+  /// sends them again, and for a private room its owner and operators are taken.
   pub fn joined(&mut self, data: &RoomData, us: &str) {
-    let users = data
+    let mut users: BTreeMap<String, RoomUser> = data
       .users
       .iter()
       .map(|user| (user.username.clone(), room_user(user, us)))
       .collect();
+    let early = self.joining.remove(&data.name).unwrap_or_default();
+    for change in early.members {
+      change.apply(&mut users);
+    }
     match self.get_mut(&data.name) {
       Some(room) => {
         room.joined = true;
@@ -110,7 +171,7 @@ impl Tracker {
         name: data.name.clone(),
         joined: true,
         users,
-        tickers: BTreeMap::new(),
+        tickers: early.tickers,
         hidden: BTreeSet::new(),
       }),
     }
@@ -147,6 +208,7 @@ impl Tracker {
   /// We left `name`; false when it was not tracked.
   pub fn left(&mut self, name: &str) -> bool {
     *self.leaves.entry(name.to_string()).or_default() += 1;
+    self.joining.remove(name);
     let before = self.rooms.len();
     self.rooms.retain(|room| room.name != name);
     self.rooms.len() != before
@@ -160,31 +222,40 @@ impl Tracker {
     }
   }
 
-  /// `user` joined `room`; false when the room is not tracked.
-  pub fn user_joined(&mut self, room: &str, user: RoomUser) -> bool {
-    match self.get_mut(room) {
-      Some(tracked) => {
-        tracked.users.insert(user.username.clone(), user);
+  /// Takes `change` to `room`'s members: at once in a room the server has us in, held for the
+  /// join's answer in a room being joined; false when we are in neither.
+  fn member_change(&mut self, room: &str, change: MemberChange) -> bool {
+    if let Some(tracked) = self.get_mut(room).filter(|tracked| tracked.joined) {
+      change.apply(&mut tracked.users);
+      return true;
+    }
+    match self.joining.get_mut(room) {
+      Some(joining) => {
+        joining.members.push(change);
         true
       }
       None => false,
     }
   }
 
-  /// `username` left `room`; false when the room is not tracked.
+  /// `user` joined `room`; false when we are not in the room nor joining it.
+  pub fn user_joined(&mut self, room: &str, user: RoomUser) -> bool {
+    self.member_change(room, MemberChange::Joined(user))
+  }
+
+  /// `username` left `room`; false when we are not in the room nor joining it.
   pub fn user_left(&mut self, room: &str, username: &str) -> bool {
-    match self.get_mut(room) {
-      Some(tracked) => {
-        tracked.users.remove(username);
-        true
-      }
-      None => false,
-    }
+    self.member_change(room, MemberChange::Left(username.to_string()))
   }
 
   /// `username` is `status` now; the rooms we are in where their presence changed, in the order
-  /// joined.
+  /// joined. The rooms being joined take it with their join's answer.
   pub fn status(&mut self, username: &str, status: UserPresence) -> Vec<String> {
+    for joining in self.joining.values_mut() {
+      joining
+        .members
+        .push(MemberChange::Status(username.to_string(), status));
+    }
     let mut changed = Vec::new();
     for room in self.rooms.iter_mut().filter(|room| room.joined) {
       if let Some(user) = room.users.get_mut(username)
@@ -197,15 +268,20 @@ impl Tracker {
     changed
   }
 
-  /// Changes `room`'s tickers with `change`; false when the room is not tracked.
+  /// Changes `room`'s tickers with `change`, those of a room being joined for the first time
+  /// held for its join's answer; false when the room is neither tracked nor being joined.
   pub fn tickers(
     &mut self,
     room: &str,
     change: impl FnOnce(&mut BTreeMap<String, String>),
   ) -> bool {
-    match self.get_mut(room) {
-      Some(tracked) => {
-        change(&mut tracked.tickers);
+    if let Some(tracked) = self.get_mut(room) {
+      change(&mut tracked.tickers);
+      return true;
+    }
+    match self.joining.get_mut(room) {
+      Some(joining) => {
+        change(&mut joining.tickers);
         true
       }
       None => false,
@@ -324,6 +400,45 @@ mod tests {
     );
     assert_eq!(room.tickers.len(), 1, "tickers stay until sent again");
     assert!(!tracker.user_joined("rock", room_user(&user("x"), "me")));
+  }
+
+  #[test]
+  fn what_a_room_says_while_its_join_is_under_way_is_taken_with_the_answer() {
+    let names = |tracker: &Tracker| -> Vec<String> {
+      let room = tracker.room("indie").unwrap();
+      room.users.into_iter().map(|u| u.username).collect()
+    };
+    let mut tracker = Tracker::default();
+    tracker.joining("indie");
+    assert!(tracker.hears("indie"));
+    assert!(tracker.tickers("indie", |t| {
+      t.insert("alice".into(), "away".into());
+    }));
+    assert!(tracker.user_joined("indie", room_user(&user("bob"), "me")));
+    assert!(tracker.user_left("indie", "alice"));
+    let mut data = RoomData {
+      name: "indie".into(),
+      users: vec![user("me"), user("alice")],
+      private: None,
+    };
+    tracker.joined(&data, "me");
+    assert_eq!(names(&tracker), ["bob", "me"]);
+    assert_eq!(tracker.room("indie").unwrap().tickers.len(), 1);
+
+    // the answer to the join after a lost connection is overtaken the same way
+    tracker.disconnected();
+    assert!(
+      !tracker.user_joined("indie", room_user(&user("carol"), "me")),
+      "not in the room until it is joined again"
+    );
+    tracker.joining("indie");
+    assert!(tracker.user_left("indie", "bob"));
+    data.users = vec![user("me"), user("bob")];
+    tracker.joined(&data, "me");
+    assert_eq!(names(&tracker), ["me"]);
+    tracker.joining("jazz");
+    tracker.not_joined("jazz");
+    assert!(!tracker.hears("jazz"));
   }
 
   #[test]

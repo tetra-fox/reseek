@@ -25,7 +25,7 @@ use chrono::Utc;
 use reseek_shares::lock;
 use soulseek_client::{ClientError, RoomErrorKind};
 use soulseek_proto::RoomType;
-use soulseek_proto::server::RoomList;
+use soulseek_proto::server::{RoomData, RoomList};
 use tracing::{Instrument, debug, info, info_span, warn};
 
 use super::Messaging;
@@ -33,6 +33,7 @@ use super::conversations::unsent;
 use crate::api::error::ApiError;
 use crate::db::DbError;
 use crate::services::Joined;
+use crate::turns::Turns;
 use tracker::{Tracker, country_of};
 
 /// How long the server's room list is served again before it is asked for anew.
@@ -46,6 +47,10 @@ const LATEST: u32 = 250;
 pub struct Rooms {
   tracker: Mutex<Tracker>,
   available: tokio::sync::Mutex<Option<(Instant, Arc<RoomList>)>>,
+  /// one join of a room at a time, by room name
+  joins: Turns,
+  /// held from reading the rooms we are in to pushing them, so the last push has the newest
+  pushing: tokio::sync::Mutex<()>,
 }
 
 impl Rooms {
@@ -95,9 +100,27 @@ impl Messaging {
     }
   }
 
-  /// `State.rooms` as the tracker has them.
+  /// Whether we can say something in the room `name`: the server has us in it, or we are not
+  /// logged in, which the client then says.
+  fn speaks_in(&self, name: &str) -> Result<(), ApiError> {
+    let joined = match self.rooms.tracker().get(name) {
+      Some(room) => room.joined,
+      None => return Err(not_in(name)),
+    };
+    if !joined && self.logged_in_now() {
+      return Err(ApiError::conflict(
+        format!("The room {name} has not been joined again since the connection was lost"),
+        None,
+      ));
+    }
+    Ok(())
+  }
+
+  /// `State.rooms` as the tracker has them; the tracker is held until the state has them, so
+  /// the last of two changes made at once is the one kept.
   fn rooms_changed(&self) {
-    let joined = self.rooms.tracker().joined_names();
+    let tracker = self.rooms.tracker();
+    let joined = tracker.joined_names();
     self.state.update(|state| state.rooms = joined);
   }
 
@@ -107,47 +130,60 @@ impl Messaging {
     self.rooms_changed();
   }
 
-  /// Joins `name`, as a private room when it is created and `private`. A server that has us in
-  /// the room already, which it says by not answering, is made to forget it by leaving, and the
-  /// room is joined again once. A join someone `asked` for through the UI or the API is
-  /// remembered, so the room is joined again after a start until it is left.
-  async fn join_now(&self, name: &str, private: bool, asked: bool) -> Result<Room, ClientError> {
+  /// Joins `name`, as a private room when it is created and `private`, unless the server has
+  /// us in it already in this session, which is `None`. A server that has us in the room
+  /// although we do not know it, which it says by not answering, is made to forget it by
+  /// leaving, and the room is joined again once. A join someone `asked` for through the UI or
+  /// the API is remembered, so the room is joined again after a start until it is left. Joins of
+  /// one room go one at a time.
+  async fn join_now(
+    &self,
+    name: &str,
+    private: bool,
+    asked: bool,
+  ) -> Result<Option<Room>, ClientError> {
     self
       .join_room(name, private, asked)
       .instrument(info_span!("room", room = name))
       .await
   }
 
-  async fn join_room(&self, name: &str, private: bool, asked: bool) -> Result<Room, ClientError> {
-    let room_type = if private {
-      RoomType::Private
-    } else {
-      RoomType::Public
-    };
+  async fn join_room(
+    &self,
+    name: &str,
+    private: bool,
+    asked: bool,
+  ) -> Result<Option<Room>, ClientError> {
+    let _turn = self.rooms.joins.take(name).await;
+    if self
+      .rooms
+      .tracker()
+      .get(name)
+      .is_some_and(|room| room.joined)
+    {
+      return Ok(None);
+    }
     let client = self.client();
     // the session's name marks us among the members; taken before the join is sent
     let us = client.own_username(&format!("join chat room {name}"))?;
     let leaves = self.rooms.tracker().leaves(name);
-    let data = match client.join_room(name, room_type).await {
-      Err(ClientError::NoResponse(_)) => {
-        debug!(
-          room = name,
-          "the server has us in the room already; left and joined again"
-        );
-        if let Err(e) = client.leave_room(name).await {
-          debug!(room = name, error = %e, "room not left before joining it again");
-        }
-        client.join_room(name, room_type).await?
+    let data = match self.ask_to_join(name, private).await {
+      Ok(data) => data,
+      Err(e) => {
+        self.rooms.tracker().not_joined(name);
+        return Err(e);
       }
-      joined => joined?,
     };
     let room = {
       let mut tracker = self.rooms.tracker();
       // a leave while the join was under way wins: the room stays left
-      (tracker.leaves(name) == leaves).then(|| {
+      if tracker.leaves(name) == leaves {
         tracker.joined(&data, &us);
-        tracker.room(name).expect("the room was just tracked")
-      })
+        Some(tracker.room(name).expect("the room was just tracked"))
+      } else {
+        tracker.not_joined(name);
+        None
+      }
     }
     .map(|room| self.marked(room));
     let Some(room) = room else {
@@ -184,11 +220,37 @@ impl Messaging {
     {
       warn!(room = name, error = %e, "room join not noted");
     }
-    self
-      .live
-      .publish(LiveFrame::RoomsUpdate(Box::new(room.clone())));
+    // the room as it is now, with what came in it since the join
+    self.push_room(name);
     self.push_rooms().await;
-    Ok(room)
+    Ok(Some(room))
+  }
+
+  /// Sends the join of `name` and waits for its answer. What the server says in the room from
+  /// the moment the join is sent is held for it.
+  async fn ask_to_join(&self, name: &str, private: bool) -> Result<RoomData, ClientError> {
+    let room_type = if private {
+      RoomType::Private
+    } else {
+      RoomType::Public
+    };
+    let client = self.client();
+    self.rooms.tracker().joining(name);
+    match client.join_room(name, room_type).await {
+      Err(ClientError::NoResponse(_)) => {
+        debug!(
+          room = name,
+          "the server has us in the room already; left and joined again"
+        );
+        if let Err(e) = client.leave_room(name).await {
+          debug!(room = name, error = %e, "room not left before joining it again");
+        }
+        // what the server said while it had us in the room belongs to no join of ours
+        self.rooms.tracker().joining(name);
+        client.join_room(name, room_type).await
+      }
+      joined => joined,
+    }
   }
 
   /// Forgets the server's room list after a change to our rooms it predates, so the next look
@@ -210,8 +272,10 @@ impl Messaging {
     *self.rooms.available.lock().await = Some((Instant::now(), list));
   }
 
-  /// Pushes the rooms we are in.
+  /// Pushes the rooms we are in. One push at a time, each reading the rooms after the one
+  /// before it was sent, so a push read before a change is never sent after it.
   async fn push_rooms(&self) {
+    let _pushing = self.rooms.pushing.lock().await;
     match self.joined_rooms().await {
       Ok(rooms) => self.live.publish(LiveFrame::RoomsList(rooms)),
       Err(e) => warn!(error = ?e, "rooms not read to push them"),
@@ -250,14 +314,16 @@ impl Messaging {
       }
       for room in configured {
         match this.join_now(&room, false, false).await {
-          Ok(_) => info!(room, "room joined"),
+          Ok(Some(_)) => info!(room, "room joined"),
+          Ok(None) => debug!(room, "room joined already"),
           Err(ClientError::Canceled) => debug!(room, "room left while it was being joined"),
           Err(e) => warn!(room, error = %e, "room not joined"),
         }
       }
       for room in ours {
         match this.join_now(&room, false, false).await {
-          Ok(_) => info!(room, "room joined"),
+          Ok(Some(_)) => info!(room, "room joined"),
+          Ok(None) => debug!(room, "room joined already"),
           Err(ClientError::Canceled) => debug!(room, "room left while it was being joined"),
           Err(e) if gone(&e) => {
             warn!(room, error = %e, "room we were in can no longer be joined; forgotten");
@@ -292,7 +358,8 @@ impl Messaging {
     self.tasks.spawn(async move {
       for room in added {
         match this.join_now(&room, false, false).await {
-          Ok(_) => info!(room, "room joined"),
+          Ok(Some(_)) => info!(room, "room joined"),
+          Ok(None) => debug!(room, "room joined already"),
           Err(ClientError::Canceled) => debug!(room, "room left while it was being joined"),
           Err(e) => warn!(room, error = %e, "room not joined"),
         }
@@ -300,20 +367,18 @@ impl Messaging {
     });
   }
 
+  /// Joins the room `request` names for the API. The join runs to its end on the engine's task
+  /// set, so a request dropped while the server is asked leaves no join half done.
   pub(super) async fn join(&self, request: JoinRoom) -> Result<Joined, ApiError> {
-    if self
-      .rooms
-      .tracker()
-      .get(&request.name)
-      .is_some_and(|room| room.joined)
-    {
-      return Ok(Joined::Already);
-    }
-    let room = self
-      .join_now(&request.name, request.private, true)
+    let this = self.this();
+    let joining = self.tasks.spawn(
+      async move { this.join_now(&request.name, request.private, true).await }.in_current_span(),
+    );
+    let room = joining
       .await
+      .map_err(ApiError::internal)?
       .map_err(refused)?;
-    Ok(Joined::New(room))
+    Ok(room.map_or(Joined::Already, Joined::New))
   }
 
   pub(super) async fn leave(&self, room: &str) -> Result<(), ApiError> {
@@ -330,7 +395,15 @@ impl Messaging {
     };
     // a room the lost connection took us out of is only forgotten
     if joined {
-      self.client().leave_room(room).await.map_err(unsent)?;
+      match self.client().leave_room(room).await {
+        Ok(()) => {}
+        // the server answers a leave of a room it does not have us in with nothing, so we are
+        // out of the room either way
+        Err(ClientError::NoResponse(detail)) => {
+          debug!(room, %detail, "the leave went unanswered; the room is taken for left");
+        }
+        Err(e) => return Err(unsent(e)),
+      }
     }
     self.forgotten(room).await;
     Ok(())
@@ -358,7 +431,7 @@ impl Messaging {
   }
 
   pub(super) async fn send_room(&self, room: &str, message: String) -> Result<(), ApiError> {
-    self.tracks(room)?;
+    self.speaks_in(room)?;
     self
       .client()
       .send_room_message(room, &message)
@@ -367,7 +440,7 @@ impl Messaging {
   }
 
   pub(super) async fn set_ticker(&self, room: &str, ticker: String) -> Result<(), ApiError> {
-    self.tracks(room)?;
+    self.speaks_in(room)?;
     self
       .client()
       .set_room_ticker(room, &ticker)
@@ -389,12 +462,17 @@ impl Messaging {
 
   /// `room` with the tickers of users whose room messages are hidden marked hidden, as it is
   /// handed out; the room keeps who was marked, so a block that changes nothing pushes nothing.
-  pub(super) fn marked(&self, mut room: Room) -> Room {
+  pub(super) fn marked(&self, room: Room) -> Room {
+    self.marked_in(&mut self.rooms.tracker(), room)
+  }
+
+  /// [`Messaging::marked`] with the tracker held already.
+  pub(super) fn marked_in(&self, tracker: &mut Tracker, mut room: Room) -> Room {
     let hidden = self.hidden_of(room.tickers.iter().map(|ticker| &ticker.username));
     for ticker in &mut room.tickers {
       ticker.hidden = hidden.contains(&ticker.username);
     }
-    self.rooms.tracker().handed_out_hidden(&room.name, hidden);
+    tracker.handed_out_hidden(&room.name, hidden);
     room
   }
 
@@ -534,7 +612,9 @@ mod tests {
   use std::sync::atomic::{AtomicBool, Ordering};
 
   use serde_json::{Value, json};
-  use soulseek_proto::server::{JoinRoomRequest, RoomData, RoomInfo as Listed, RoomList};
+  use soulseek_proto::server::{
+    CannotJoinRoom, JoinRoomRequest, RoomData, RoomInfo as Listed, RoomList,
+  };
   use soulseek_proto::{ServerRequest, ServerResponse};
 
   use crate::testing::soulseek::{self, Server, US, member};
@@ -619,6 +699,33 @@ mod tests {
     app.call("DELETE", "/api/v0/rooms/joined/lobby", None).await;
     assert_eq!(listed(&app).await, Vec::<String>::new());
     assert_eq!(app.state.state.current().rooms, Vec::<String>::new());
+  }
+
+  #[tokio::test]
+  async fn a_join_whose_request_is_dropped_holds_nothing_for_the_room_once_it_ends() {
+    let app = soulseek::app(TRUSTED).await;
+    let mut server = Server::start(|_| Vec::new()).await;
+    server.login(&app).await;
+    let request = Some(json!({ "name": "lobby" }));
+    tokio::select! {
+      (status, _) = app.call("POST", "/api/v0/rooms/joined", request) => {
+        panic!("answered {status} before the server did");
+      }
+      () = server.received(joins("lobby")) => {}
+    }
+    // the request is gone; the server refuses the join it sent
+    server.send(vec![ServerResponse::CannotJoinRoom(CannotJoinRoom {
+      room: "lobby".into(),
+    })]);
+    let messaging = &app.state.messaging;
+    let ended = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+      while messaging.rooms.tracker().hears("lobby") {
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+      }
+    })
+    .await;
+    assert!(ended.is_ok(), "the join left the room heard");
+    assert!(messaging.rooms.tracker().get("lobby").is_none());
   }
 
   #[tokio::test]

@@ -1,6 +1,6 @@
-//! One at a time per user: a caller takes the user's turn, and a second caller for the same
-//! user waits until the first lets go of it. A user's entry is kept only while someone holds or
-//! waits for their turn.
+//! One at a time per name, a user's or a room's: a caller takes the name's turn, and a second
+//! caller for the same name waits until the first lets go of it. A name's entry is kept only
+//! while someone holds or waits for its turn.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -10,47 +10,44 @@ use tokio::sync::OwnedMutexGuard;
 
 type Map = HashMap<String, Arc<tokio::sync::Mutex<()>>>;
 
-/// Every user's turn. Cloning gives another handle to the same turns.
+/// Every name's turn. Cloning gives another handle to the same turns.
 #[derive(Clone, Default)]
 pub struct Turns {
   map: Arc<Mutex<Map>>,
 }
 
 impl Turns {
-  /// Waits for `username`'s turn and holds it until the returned turn is dropped.
-  pub async fn take(&self, username: &str) -> Turn {
-    let mutex = lock(&self.map)
-      .entry(username.to_string())
-      .or_default()
-      .clone();
+  /// Waits for `name`'s turn and holds it until the returned turn is dropped.
+  pub async fn take(&self, name: &str) -> Turn {
+    let mutex = lock(&self.map).entry(name.to_string()).or_default().clone();
     let guard = mutex.lock_owned().await;
     Turn {
       map: self.map.clone(),
-      username: username.to_string(),
+      name: name.to_string(),
       guard: Some(guard),
     }
   }
 }
 
-/// One user's turn, held until dropped; the user's entry goes once nobody holds or waits for
+/// One name's turn, held until dropped; the name's entry goes once nobody holds or waits for
 /// it.
 pub struct Turn {
   map: Arc<Mutex<Map>>,
-  username: String,
+  name: String,
   guard: Option<OwnedMutexGuard<()>>,
 }
 
 impl Drop for Turn {
   fn drop(&mut self) {
     let mut map = lock(&self.map);
-    let Some(mutex) = map.get(&self.username) else {
+    let Some(mutex) = map.get(&self.name) else {
       return;
     };
     // the map's and the guard's references are the only ones when nobody waits
     let idle = Arc::strong_count(mutex) == 2;
     self.guard.take();
     if idle {
-      map.remove(&self.username);
+      map.remove(&self.name);
     }
   }
 }

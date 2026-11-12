@@ -1,7 +1,8 @@
 //! What the server tells us about rooms: who joins and leaves, what is said, the tickers, and
 //! the private rooms we belong to. A message is stored before anyone is told of it; one for a
-//! room we are not in is dropped, and one from a user blocked for rooms is stored hidden and
-//! told to no one. A change of a block pushes again the rooms whose tickers it hides or shows.
+//! room we are neither in nor joining is dropped, and one from a user blocked for rooms is
+//! stored hidden and told to no one. A change of a block pushes again the rooms whose tickers
+//! it hides or shows.
 
 use std::collections::BTreeMap;
 
@@ -184,11 +185,12 @@ impl Messaging {
     }
   }
 
-  /// Pushes the room `name` as it is now, when it is tracked.
-  fn push_room(&self, name: &str) {
-    let room = self.rooms.tracker().room(name);
-    if let Some(room) = room {
-      let room = self.marked(room);
+  /// Pushes the room `name` as it is now, when it is tracked. The tracker is held until the
+  /// room is pushed, so of two pushes made at once the later one has the newer room.
+  pub(super) fn push_room(&self, name: &str) {
+    let mut tracker = self.rooms.tracker();
+    if let Some(room) = tracker.room(name) {
+      let room = self.marked_in(&mut tracker, room);
       self.live.publish(LiveFrame::RoomsUpdate(Box::new(room)));
     }
   }
@@ -225,18 +227,18 @@ impl Messaging {
       return debug!(room, "a join to a room we are not in dropped");
     }
     trace!(room, username, "user joined a room");
-    if let Some(country) = country_of(user) {
-      self
-        .users
-        .countries_seen(vec![(username, country.to_string())])
-        .await;
-    }
     self
       .live
       .publish(LiveFrame::RoomsUserJoined(RoomUserJoined {
         room_name: room,
         user: member,
       }));
+    if let Some(country) = country_of(user) {
+      self
+        .users
+        .countries_seen(vec![(username, country.to_string())])
+        .await;
+    }
   }
 
   /// A member of the rooms we are in is `status` now: pushed for each room where that changes
@@ -279,7 +281,7 @@ impl Messaging {
   /// A message said in `room`, ours included: stored first, then raised and pushed; a message
   /// from a user blocked for rooms is stored hidden and goes no further.
   async fn room_message(&self, room: String, username: String, message: String) {
-    if self.rooms.tracker().get(&room).is_none() {
+    if !self.rooms.tracker().hears(&room) {
       return debug!(room, "message for a room we are not in dropped");
     }
     // room events follow their session's login, unless the login was among events missed
