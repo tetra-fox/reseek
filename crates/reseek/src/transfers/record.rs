@@ -164,8 +164,8 @@ impl Record {
     })
   }
 
-  /// The record as the API shows it, with what is left, how far along it is and how long it
-  /// took; times of a transfer still running are taken against now.
+  /// The record as the API shows it, with how far along it is, how long it took and how long
+  /// what is left takes; times of a transfer still running are taken against now.
   pub fn transfer(&self) -> Transfer {
     let bytes_remaining = self.size.saturating_sub(self.bytes_transferred);
     let elapsed_time = self.started_at.map(|start| {
@@ -198,7 +198,6 @@ impl Record {
       attempts: self.attempts,
       next_attempt_at: self.next_attempt_at(),
       removed: self.removed,
-      bytes_remaining,
       elapsed_time,
       percent_complete,
       remaining_time,
@@ -374,7 +373,6 @@ mod tests {
       TransferStates::Completed(TransferOutcome::Succeeded)
     );
     assert_eq!(read.elapsed_time, Some(32_800));
-    assert_eq!(read.bytes_remaining, 0, "never below zero");
     assert_eq!(read.percent_complete, 100.0, "never above a hundred");
     assert_eq!(read.remaining_time, None, "no speed, no estimate");
     assert_eq!(read.local_path, None);

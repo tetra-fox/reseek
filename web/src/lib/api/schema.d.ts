@@ -3055,8 +3055,8 @@ export interface paths {
         put?: never;
         post?: never;
         /**
-         * Forgets a user and their block; `purge` also removes their transfers from the listings and
-         *     deletes the conversation with them.
+         * Forgets a user and their block; `purge` also removes their finished transfers from the
+         *     listings and deletes the conversation with them.
          */
         delete: operations["remove"];
         options?: never;
@@ -6579,11 +6579,6 @@ export interface components {
                 averageSpeed: number;
                 /**
                  * Format: int64
-                 * @description bytes still to move
-                 */
-                bytesRemaining: number;
-                /**
-                 * Format: int64
                  * @description bytes moved so far, counting from offset 0 of a resumed file
                  */
                 bytesTransferred: number;
@@ -8244,11 +8239,6 @@ export interface components {
              * @description the average speed in bytes per second, 0 until the first sample
              */
             averageSpeed: number;
-            /**
-             * Format: int64
-             * @description bytes still to move
-             */
-            bytesRemaining: number;
             /**
              * Format: int64
              * @description bytes moved so far, counting from offset 0 of a resumed file
@@ -20185,7 +20175,7 @@ export interface operations {
             query?: {
                 /** @description the username, exactly */
                 username?: string;
-                /** @description also remove the user's transfers, close the conversation and delete its messages */
+                /** @description also remove the user's finished transfers, close the conversation and delete its messages */
                 purge?: boolean;
             };
             header?: never;

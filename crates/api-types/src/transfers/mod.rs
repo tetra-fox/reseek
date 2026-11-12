@@ -200,8 +200,6 @@ pub struct Transfer {
   pub next_attempt_at: Option<DateTime<Utc>>,
   /// hidden from the listings
   pub removed: bool,
-  /// bytes still to move
-  pub bytes_remaining: u64,
   /// milliseconds from `startedAt` to `endedAt`, or to now while running; null before the
   /// transfer starts
   pub elapsed_time: Option<u64>,

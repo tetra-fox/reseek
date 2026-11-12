@@ -14448,7 +14448,7 @@
         "tags": [
           "users"
         ],
-        "summary": "Forgets a user and their block; `purge` also removes their transfers from the listings and\ndeletes the conversation with them.",
+        "summary": "Forgets a user and their block; `purge` also removes their finished transfers from the\nlistings and deletes the conversation with them.",
         "operationId": "remove",
         "parameters": [
           {
@@ -14472,7 +14472,7 @@
           {
             "name": "purge",
             "in": "query",
-            "description": "also remove the user's transfers, close the conversation and delete its messages",
+            "description": "also remove the user's finished transfers, close the conversation and delete its messages",
             "required": false,
             "schema": {
               "type": "boolean"
@@ -23310,7 +23310,6 @@
                 "averageSpeed",
                 "attempts",
                 "removed",
-                "bytesRemaining",
                 "percentComplete",
                 "paused"
               ],
@@ -23325,12 +23324,6 @@
                   "type": "number",
                   "format": "double",
                   "description": "the average speed in bytes per second, 0 until the first sample"
-                },
-                "bytesRemaining": {
-                  "type": "integer",
-                  "format": "int64",
-                  "description": "bytes still to move",
-                  "minimum": 0
                 },
                 "bytesTransferred": {
                   "type": "integer",
@@ -26357,7 +26350,6 @@
           "averageSpeed",
           "attempts",
           "removed",
-          "bytesRemaining",
           "percentComplete",
           "paused"
         ],
@@ -26372,12 +26364,6 @@
             "type": "number",
             "format": "double",
             "description": "the average speed in bytes per second, 0 until the first sample"
-          },
-          "bytesRemaining": {
-            "type": "integer",
-            "format": "int64",
-            "description": "bytes still to move",
-            "minimum": 0
           },
           "bytesTransferred": {
             "type": "integer",

@@ -532,7 +532,6 @@ export const transfer = (
     state,
     requestedAt: "2026-10-26T10:00:00Z",
     bytesTransferred: state === "InProgress" ? size * 0.4 : size,
-    bytesRemaining: 0,
     averageSpeed: state === "InProgress" ? 100 : 0,
     percentComplete: state === "InProgress" ? 40 : 100,
     attempts: 1,

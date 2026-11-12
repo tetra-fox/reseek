@@ -31,7 +31,6 @@ export const transfer = (fields: Partial<Transfer> = {}): Transfer => ({
   state: "Queued, Remotely",
   requestedAt: "2026-10-26T10:00:00Z",
   bytesTransferred: 0,
-  bytesRemaining: 1000,
   averageSpeed: 0,
   percentComplete: 0,
   attempts: 1,

@@ -213,7 +213,6 @@ fn blank_transfer() -> Transfer {
     attempts: 0,
     next_attempt_at: None,
     removed: false,
-    bytes_remaining: 0,
     elapsed_time: None,
     percent_complete: 0.0,
     remaining_time: None,
