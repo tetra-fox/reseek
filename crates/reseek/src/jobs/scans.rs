@@ -168,3 +168,32 @@ async fn finished(jobs: &Jobs, scan: Running, ended: ScanEnded) {
     })
     .await;
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::db::Location;
+
+  #[tokio::test]
+  async fn a_scheduled_scan_counts_as_the_last_one_from_its_start() {
+    let dir = tempfile::tempdir().unwrap();
+    let location = Location {
+      data: dir.path().to_path_buf(),
+      backups: dir.path().join("backups"),
+      volatile: false,
+      log_sql: false,
+    };
+    let (jobs, _finished) = super::super::tests::engine(&location).await;
+    let told = hook(jobs.clone());
+    told(ScanNotice::Started {
+      force: false,
+      origin: ScanOrigin::Scheduled,
+    })
+    .await;
+    // a stop now leaves the start written, so the rescan is not due again at once
+    let last = jobs.last_runs().await.unwrap();
+    let rescan = &last[Schedule::ShareRescan.name()];
+    assert!(rescan.scheduled_at.is_some());
+    assert_eq!(rescan.ended_at, None);
+  }
+}

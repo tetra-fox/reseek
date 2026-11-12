@@ -14,7 +14,7 @@ use super::*;
 use crate::db::Location;
 
 /// A jobs engine over `location`, with the `JobFinished` events it raises.
-async fn engine(location: &Location) -> (Arc<Jobs>, mpsc::UnboundedReceiver<Event>) {
+pub(super) async fn engine(location: &Location) -> (Arc<Jobs>, mpsc::UnboundedReceiver<Event>) {
   let events = EventBus::new();
   let (told, finished) = mpsc::unbounded_channel();
   events.subscribe("test", Some(EventType::JobFinished), move |record| {
