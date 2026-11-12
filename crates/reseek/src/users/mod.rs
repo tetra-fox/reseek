@@ -64,6 +64,7 @@ use crate::events::EventBus;
 use crate::live::Live;
 use crate::shares::Shares;
 use crate::state::StateOwner;
+use crate::turns::Turns;
 use blocking::Blocks;
 use blocklist::Blocklist;
 use buddies::Buddies;
@@ -108,6 +109,8 @@ pub struct Directory {
   unknown_sender_groups: Mutex<BTreeSet<String>>,
   figures: FigureCache,
   summaries: Mutex<HashMap<String, CachedSummary>>,
+  /// one summary of a user built at a time, from reading the row to caching and pushing it
+  summary_turns: Turns,
   /// who has a row, with their country
   known: Known,
   /// our buddies
@@ -208,6 +211,7 @@ impl Directory {
       unknown_sender_groups: Mutex::new(BTreeSet::new()),
       figures: FigureCache::default(),
       summaries: Mutex::new(HashMap::new()),
+      summary_turns: Turns::default(),
       known,
       buddies,
       impersonations: Impersonations::default(),
@@ -395,8 +399,19 @@ impl Directory {
     Ok((row, block))
   }
 
-  /// `username`'s summary, built from what is stored now.
+  /// `username`'s summary, built from what is stored now and cached. Summaries of one user are
+  /// built one at a time, so each reads the row after the one before was cached, and one read
+  /// before a change is never cached after it.
   async fn summary_of(&self, username: &str) -> Result<UserSummary, crate::api::error::ApiError> {
+    let _turn = self.summary_turns.take(username).await;
+    self.build_summary(username).await
+  }
+
+  /// `username`'s summary from what is stored now, cached; for a caller holding their turn.
+  async fn build_summary(
+    &self,
+    username: &str,
+  ) -> Result<UserSummary, crate::api::error::ApiError> {
     let internal = crate::api::error::ApiError::internal;
     let (row, block) = self.stored(username).await.map_err(internal)?;
     let figures = self
@@ -436,9 +451,11 @@ impl Directory {
     self.push(username).await;
   }
 
-  /// Pushes `username`'s summary as it is now.
+  /// Pushes `username`'s summary as it is now. Built and pushed in the user's turn, so of two
+  /// pushes the later one carries the newer row.
   async fn push(&self, username: &str) {
-    match self.summary_of(username).await {
+    let _turn = self.summary_turns.take(username).await;
+    match self.build_summary(username).await {
       Ok(summary) => self
         .live
         .publish(LiveFrame::UsersUpdated(Box::new(summary))),
