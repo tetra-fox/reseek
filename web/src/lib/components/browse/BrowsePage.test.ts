@@ -10,6 +10,7 @@ import { sharedFile } from "#lib/testing/fixtures.js";
 import { flushFaked } from "#lib/testing/flush.js";
 import { connected } from "#lib/testing/live.js";
 import { fakeNetwork } from "#lib/testing/network.js";
+import { box } from "#lib/testing/state.svelte.js";
 
 import BrowsePage from "./BrowsePage.svelte";
 
@@ -115,5 +116,54 @@ describe("browse progress", () => {
     expect(document.querySelector("[aria-label='Selected files']")!.textContent).toContain(
       "3 files"
     );
+  });
+
+  it("leaves the next user's tree where it is when the one before answers late", async () => {
+    let answerAlice!: (listing: Schemas["BrowseResponse"]) => void;
+    const folders = (...names: string[]): Schemas["BrowseResponse"] => ({
+      directories: names.map((name) => ({ name, fileCount: 0, files: [] })),
+      directoryCount: names.length,
+      lockedDirectories: [],
+      lockedDirectoryCount: 0
+    });
+    fakeNetwork((url) => {
+      if (url.pathname.endsWith("/users/alice/browse")) {
+        return new Promise((resolve) => (answerAlice = resolve));
+      }
+      if (url.pathname.endsWith("/users/bob/browse")) {
+        return folders("Music", "Music\\Album", "Other", "Other\\Deep");
+      }
+      return undefined;
+    });
+    const address = box<{ user: string; path: string | null }>({
+      user: "alice",
+      path: "Other\\Deep"
+    });
+    component = mount(BrowsePage, {
+      target: document.body,
+      props: {
+        get user() {
+          return address.value.user;
+        },
+        get path() {
+          return address.value.path;
+        }
+      }
+    });
+    await flushFaked();
+    address.value = { user: "bob", path: null };
+    await flushFaked();
+    await flushFaked();
+    const lines = () =>
+      [...document.querySelectorAll("[role=treegrid] [role=rowgroup] [data-line]")].map((r) =>
+        r.getAttribute("data-line")
+      );
+    expect(lines()).toEqual(["folder:Music", "folder:Music\\Album", "folder:Other"]);
+
+    answerAlice(folders("Other", "Other\\Deep"));
+    await flushFaked();
+    await flushFaked();
+    expect(browser.username).toBe("bob");
+    expect(lines()).toEqual(["folder:Music", "folder:Music\\Album", "folder:Other"]);
   });
 });
