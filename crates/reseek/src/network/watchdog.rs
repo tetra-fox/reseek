@@ -8,7 +8,6 @@
 //! until a login succeeds or the watchdog is restarted, so a server that drops us during every
 //! login is not tried again at once each time.
 
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -60,12 +59,8 @@ struct Inner {
   mode: watch::Sender<Mode>,
   /// held by the loop that runs
   running: Arc<tokio::sync::Mutex<()>>,
-  /// cancels the running loop's wait or attempt
-  attempt: Mutex<Option<CancellationToken>>,
-  /// attempts that failed since the last login or restart
-  failures: AtomicU32,
-  /// logins in a row the server left unanswered
-  unanswered: AtomicU32,
+  /// the running turn and the counts its wait is read from
+  turns: Mutex<Turns>,
   /// whether a loop runs and when its next attempt starts
   status: Mutex<Status>,
 }
@@ -79,6 +74,52 @@ enum Mode {
   Off,
   /// off since a disconnect was asked for or the daemon began to stop; only a start turns it on
   Held,
+}
+
+/// The running turn's token and the failures counted so far, under one lock, so a restart's
+/// clear and cancel fall wholly before or after a turn's read of the counts and its count
+#[derive(Default)]
+struct Turns {
+  /// cancels the running turn's wait or attempt
+  token: Option<CancellationToken>,
+  /// attempts that failed since the last login or restart
+  failures: u32,
+  /// logins in a row the server left unanswered
+  unanswered: u32,
+}
+
+impl Turns {
+  /// Stores a new turn's token and returns it with the failures and unanswered logins its
+  /// wait is read from
+  fn begin(&mut self, token: CancellationToken) -> (CancellationToken, u32, u32) {
+    self.token = Some(token.clone());
+    (token, self.failures, self.unanswered)
+  }
+
+  /// Counts the failed attempt of the turn `token` belongs to, an unanswered login when
+  /// `unanswered`. A turn whose token was canceled counts nothing: a restart canceled it and
+  /// cleared the counts, which its failure must not bring back.
+  fn count(&mut self, token: &CancellationToken, unanswered: bool) -> bool {
+    if token.is_cancelled() {
+      return false;
+    }
+    self.failures += 1;
+    if unanswered {
+      self.unanswered += 1;
+    }
+    true
+  }
+
+  fn clear(&mut self) {
+    self.failures = 0;
+    self.unanswered = 0;
+  }
+
+  fn cancel(&self) {
+    if let Some(token) = &self.token {
+      token.cancel();
+    }
+  }
 }
 
 #[derive(Clone, Copy, Default)]
@@ -106,9 +147,7 @@ impl Watchdog {
         shutdown,
         mode: watch::Sender::new(Mode::Off),
         running: Arc::new(tokio::sync::Mutex::new(())),
-        attempt: Mutex::new(None),
-        failures: AtomicU32::new(0),
-        unanswered: AtomicU32::new(0),
+        turns: Mutex::new(Turns::default()),
         status: Mutex::new(Status::default()),
       }),
     };
@@ -181,9 +220,7 @@ impl Watchdog {
   }
 
   fn cancel_attempt(&self) {
-    if let Some(attempt) = lock(&self.inner.attempt).as_ref() {
-      attempt.cancel();
-    }
+    lock(&self.inner.turns).cancel();
   }
 
   /// Starts over at once: the running loop and its back-off are canceled, the waits after
@@ -194,23 +231,22 @@ impl Watchdog {
     if was {
       info!("(Re)connection process restarted");
     }
-    // cleared before the running turn is canceled, so a turn that begins in between reads the
-    // cleared counts and one that began before is canceled
-    self.forget_failures();
-    self.stop(true);
+    // cleared and canceled under the lock a turn reads and counts under: a turn that began
+    // before is canceled and counts nothing, one that begins after reads the cleared counts
+    {
+      let mut turns = lock(&self.inner.turns);
+      turns.clear();
+      turns.cancel();
+    }
+    self.stop(false);
     self.start();
     was
   }
 
   /// Forgets the failed attempts and the unanswered logins, once a login succeeded.
   pub fn logged_in(&self) {
-    self.forget_failures();
+    lock(&self.inner.turns).clear();
     self.publish();
-  }
-
-  fn forget_failures(&self) {
-    self.inner.failures.store(0, Ordering::Relaxed);
-    self.inner.unanswered.store(0, Ordering::Relaxed);
   }
 
   /// Starts a loop unless one runs.
@@ -223,7 +259,7 @@ impl Watchdog {
       async move {
         watchdog.run().await;
         *lock(&watchdog.inner.status) = Status::default();
-        *lock(&watchdog.inner.attempt) = None;
+        lock(&watchdog.inner.turns).token = None;
         watchdog.publish();
         drop(running);
       }
@@ -260,12 +296,9 @@ impl Watchdog {
         self.stop(false);
         return;
       }
-      let attempt = inner.shutdown.child_token();
-      *lock(&inner.attempt) = Some(attempt.clone());
-      // read once this turn's token is in place: a restart clears these before it cancels the
-      // stored token, so it either cancels this turn or has already cleared what it reads
-      let failed = inner.failures.load(Ordering::Relaxed);
-      let unanswered = inner.unanswered.load(Ordering::Relaxed);
+      // read with the token stored, under the lock a restart clears and cancels under: it
+      // either cancels this turn or has already cleared what this reads
+      let (attempt, failed, unanswered) = lock(&inner.turns).begin(inner.shutdown.child_token());
       let wait = match unanswered_wait(unanswered) {
         Some(wait) => {
           error!(
@@ -306,12 +339,11 @@ impl Watchdog {
           self.stop(false);
           return;
         }
-        Attempt::Unanswered => {
-          inner.unanswered.fetch_add(1, Ordering::Relaxed);
-          inner.failures.fetch_add(1, Ordering::Relaxed);
-        }
-        Attempt::Failed => {
-          inner.failures.fetch_add(1, Ordering::Relaxed);
+        ended @ (Attempt::Unanswered | Attempt::Failed) => {
+          let unanswered = matches!(ended, Attempt::Unanswered);
+          if !lock(&inner.turns).count(&attempt, unanswered) {
+            debug!("failed attempt of a canceled turn not counted");
+          }
         }
       }
     }
@@ -381,7 +413,7 @@ impl Watchdog {
           .attempting
           .then_some(status.next_attempt_at)
           .flatten(),
-        is_login_unanswered: inner.unanswered.load(Ordering::Relaxed) > 0,
+        is_login_unanswered: lock(&inner.turns).unanswered > 0,
       };
     });
   }
@@ -405,6 +437,21 @@ enum Attempt {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn a_turn_canceled_by_a_restart_counts_nothing() {
+    let mut turns = Turns::default();
+    let (first, _, _) = turns.begin(CancellationToken::new());
+    assert!(turns.count(&first, true));
+    let (second, failed, unanswered) = turns.begin(CancellationToken::new());
+    assert_eq!((failed, unanswered), (1, 1));
+    // a restart clears and cancels before the second turn's unanswered login is counted
+    turns.clear();
+    turns.cancel();
+    assert!(!turns.count(&second, true));
+    let (_, failed, unanswered) = turns.begin(CancellationToken::new());
+    assert_eq!((failed, unanswered), (0, 0), "the next turn starts at once");
+  }
 
   #[test]
   fn unanswered_logins_back_off_hard() {
