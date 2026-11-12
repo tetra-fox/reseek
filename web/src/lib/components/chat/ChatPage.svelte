@@ -109,9 +109,11 @@
   const backToResults = () => void goto(resultsHref(q, kind), { replace: true });
 
   // Alt+Up and Alt+Down move to the chat above or below; Escape goes back to the search results
-  // a chat was opened from, once nothing open takes it
+  // a chat was opened from, once nothing open takes it. A key the focused element handled, as a
+  // username takes Alt+Down for its card, is left to it
   const keydown = (e: KeyboardEvent) => {
-    if (isPressed(CHAT.backToResults, e) && fromResults && !e.defaultPrevented && !layerOpen()) {
+    if (e.defaultPrevented) return;
+    if (isPressed(CHAT.backToResults, e) && fromResults && !layerOpen()) {
       backToResults();
       return;
     }
