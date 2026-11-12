@@ -207,7 +207,14 @@ impl Client {
     };
     drop(waiting);
     self
-      .deliver(&conn, &mut Answering::default(), username, token, query, reply)
+      .deliver(
+        &conn,
+        &mut Answering::default(),
+        username,
+        token,
+        query,
+        reply,
+      )
       .await
   }
 

@@ -252,9 +252,12 @@ impl Client {
     let waiter = self.waiter();
     let search = WaitKey::SearchRequestMessage { connection: id };
     let code = frame.get(4).copied().map(u32::from);
-    let search_like = [DistributedCode::SearchRequest, DistributedCode::EmbeddedMessage]
-      .iter()
-      .any(|known| Some(known.code()) == code);
+    let search_like = [
+      DistributedCode::SearchRequest,
+      DistributedCode::EmbeddedMessage,
+    ]
+    .iter()
+    .any(|known| Some(known.code()) == code);
     if search_like && !waiter.has_wait(&search) {
       return tracing::trace!("search from a parent candidate not needed for the negotiation");
     }

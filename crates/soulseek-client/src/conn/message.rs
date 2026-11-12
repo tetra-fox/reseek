@@ -217,7 +217,10 @@ impl MessageConn {
   }
 
   /// [`MessageConn::send_with_receipt`] for a frame encoded ahead of time
-  pub(crate) fn send_encoded_with_receipt(&self, frame: EncodedFrame) -> Result<Receipt, ClientError> {
+  pub(crate) fn send_encoded_with_receipt(
+    &self,
+    frame: EncodedFrame,
+  ) -> Result<Receipt, ClientError> {
     let (written, done) = oneshot::channel();
     self.enqueue(Payload::Encoded(frame), Some(written))?;
     Ok(done)

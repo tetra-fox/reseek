@@ -118,8 +118,9 @@ impl Client {
         cancel,
       },
     )?;
-    let request_turn =
-      offered.is_some().then(|| self.transfers().request_turn(&username));
+    let request_turn = offered
+      .is_some()
+      .then(|| self.transfers().request_turn(&username));
     let state_changed = observer
       .into_iter()
       .chain(options.state_changed.clone())
@@ -332,7 +333,11 @@ impl Download {
 
   /// Asks with a download `TransferRequest`, leaving `turn` once it is written, and waits for the
   /// answer: `Some(size)` when the peer sends at once, `None` when it queued the request
-  async fn ask(&mut self, conn: &MessageConn, turn: RequestTurn) -> Result<Option<u64>, ClientError> {
+  async fn ask(
+    &mut self,
+    conn: &MessageConn,
+    turn: RequestTurn,
+  ) -> Result<Option<u64>, ClientError> {
     let answer = self.client.waiter().wait::<TransferResponse>(
       WaitKey::PeerToken {
         code: PeerCode::TransferResponse,

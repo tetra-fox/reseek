@@ -14,12 +14,12 @@ use soulseek_proto::{DecodeError, PeerCode, PeerMessage, RemoteFilename, Transfe
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
 
+use super::RemoteFailure;
 use crate::client::{Client, failed, non_blank};
 use crate::conn::MessageConn;
 use crate::error::{ClientError, MessageErrorKind};
 use crate::events::Event;
 use crate::peers::{Answering, write_peer};
-use super::RemoteFailure;
 use crate::waiter::WaitKey;
 
 impl Client {

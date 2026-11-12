@@ -250,15 +250,17 @@ impl Client {
     self.require_logged_in(&verb)?;
     let token = token.unwrap_or_else(|| self.next_token());
     let _asking = self.folder_requests().hold(username);
-    let answer = self.waiter().wait_from_first_poll::<FolderContentsResponse>(
-      WaitKey::PeerToken {
-        code: PeerCode::FolderContentsResponse,
-        username: username.to_owned(),
-        token,
-      },
-      Some(timeout.unwrap_or(FOLDER_CONTENTS_TIMEOUT)),
-      cancel.clone(),
-    );
+    let answer = self
+      .waiter()
+      .wait_from_first_poll::<FolderContentsResponse>(
+        WaitKey::PeerToken {
+          code: PeerCode::FolderContentsResponse,
+          username: username.to_owned(),
+          token,
+        },
+        Some(timeout.unwrap_or(FOLDER_CONTENTS_TIMEOUT)),
+        cancel.clone(),
+      );
     let ask = async {
       let endpoint = self.get_user_endpoint(username).await?;
       let conn = self
