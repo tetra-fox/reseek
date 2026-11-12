@@ -47,9 +47,17 @@ export const fakeConnected = async (page: Page) => {
     });
     const state = await read.json();
     const connected = { ...state, server: { ...state.server, isConnected: true } };
+    // the app shows once it has the options too, which the daemon's snapshot sends after the state
+    const options = await route.fetch({
+      url: url.href.replace(/live\?.*$/, "options"),
+      headers: { ...route.request().headers(), accept: "application/json" }
+    });
     return route.fulfill({
       headers: { "content-type": "text/event-stream" },
-      body: helloFrame(topics) + frame(2, "application.state", connected)
+      body:
+        helloFrame(topics) +
+        frame(2, "application.state", connected) +
+        frame(2, "application.options", await options.json())
     });
   });
 };
