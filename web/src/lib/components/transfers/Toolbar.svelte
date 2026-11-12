@@ -57,7 +57,7 @@
     text: string;
     /** a bulk action is running, or there is nothing to act on */
     disabled: boolean;
-    onbulk: (action: BulkAction, test: (state: TransferState) => boolean, scope: string) => void;
+    onbulk: (action: BulkAction, test: (state: TransferState) => boolean) => void;
     onadd: () => void;
     /** opens the message to every user in the list, on the uploads screen */
     onmessage: () => void;
@@ -108,7 +108,7 @@
 
   const scoped = (action: keyof typeof SCOPES, id: string) => {
     const scope = SCOPES[action].find((s) => s.id === id)!;
-    onbulk(action, scope.test, scope.id);
+    onbulk(action, scope.test);
   };
 </script>
 
@@ -229,7 +229,7 @@
           variant="outline"
           size="sm"
           disabled={disabled || !counts.completed}
-          onclick={() => onbulk("remove", isSucceeded, "succeeded")}>
+          onclick={() => onbulk("remove", isSucceeded)}>
           <BrushCleaningIcon />Clear succeeded
         </Button>
         {#if direction === "upload"}

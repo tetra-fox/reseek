@@ -1,6 +1,7 @@
 import { SvelteMap, SvelteSet } from "svelte/reactivity";
 
 import { api, byUser, type Schemas } from "#lib/api/client.js";
+import { fitsKeepalive } from "#lib/autosave.svelte.js";
 import { loadFailed, toast } from "#lib/feedback/toast.svelte.js";
 import { undoable } from "#lib/feedback/undo.js";
 import { plural } from "#lib/format.js";
@@ -144,16 +145,22 @@ export class Transfers {
     this.error = "";
   };
 
-  /** One call for `action` on `ids`, answered with a line saying what it did and how many failed */
+  /**
+   * One call for `action` on `ids`, answered with a line saying what it did and how many failed.
+   * With `keepalive` the request outlives the page, when its body fits what a browser sends so;
+   * a larger one goes as a plain request, which the page may not outlive
+   */
   bulk = async (
     action: BulkAction,
-    ids: string[]
+    ids: string[],
+    keepalive = false
   ): Promise<Outcome<{ text: string; failed: number }>> => {
     const body = { action, ids };
+    const init = { body, keepalive: keepalive && fitsKeepalive(body) };
     const outcome =
       this.direction === "download"
-        ? await call(() => api.POST("/api/v0/transfers/downloads/bulk", { body }))
-        : await call(() => api.POST("/api/v0/transfers/uploads/bulk", { body }));
+        ? await call(() => api.POST("/api/v0/transfers/downloads/bulk", init))
+        : await call(() => api.POST("/api/v0/transfers/uploads/bulk", init));
     if (!outcome.ok) return outcome;
     return {
       ok: true,
@@ -163,25 +170,18 @@ export class Transfers {
 
   /**
    * Removes transfers once their Undo has passed, canceling running ones then; until then they
-   * only leave the screen. `all` removes every completed one with one call instead
+   * only leave the screen. Only the transfers named go, whatever finished meanwhile
    */
-  removeLater = (ids: string[], { all = false } = {}) => {
+  removeLater = (ids: string[]) => {
     if (!ids.length) return;
     for (const id of ids) this.hidden.add(id);
     const text = `Removed ${plural(ids.length, "transfer", "transfers")}`;
     undoable(
       text,
-      async () => {
+      async (leaving) => {
         // removed rows stay hidden until their frames take them off the list; a failure shows
         // them again
-        if (all) {
-          const outcome = await this.removeCompleted();
-          if (outcome.ok) return;
-          for (const id of ids) this.hidden.delete(id);
-          toast(outcome.error, "error");
-          return;
-        }
-        const outcome = await this.bulk("remove", ids);
+        const outcome = await this.bulk("remove", ids, leaving);
         if (outcome.ok && !outcome.data.failed) return;
         for (const id of ids) this.hidden.delete(id);
         void this.load();
@@ -192,12 +192,6 @@ export class Transfers {
       }
     );
   };
-
-  /** Removes every completed transfer of this direction from the list */
-  removeCompleted = () =>
-    this.direction === "download"
-      ? call(() => api.DELETE("/api/v0/transfers/downloads/all/completed"))
-      : call(() => api.DELETE("/api/v0/transfers/uploads/all/completed"));
 
   /** Asks the peer for a queued download's place, and shows it on the row at once */
   placeInQueue = async (t: Transfer): Promise<Outcome<number>> => {

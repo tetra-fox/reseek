@@ -276,15 +276,10 @@
   };
 
   /** A header button: its scope over the filtered transfers */
-  const bulk = (action: BulkAction, test: (state: TransferState) => boolean, scope: string) => {
-    const targets = filtered.filter((t) => test(t.state));
+  const bulk = (action: BulkAction, test: (state: TransferState) => boolean) => {
+    const targets = filtered.filter((t) => present(t) && test(t.state));
     if (action === "cancel") return cancel(targets);
-    if (action === "remove") {
-      // nothing filtered out: the daemon removes every completed transfer in one call
-      const everything =
-        scope === "completed" && targets.length === all.filter((t) => test(t.state)).length;
-      return remove(targets, everything);
-    }
+    if (action === "remove") return remove(targets);
     void runBulk(action, targets);
   };
 
@@ -301,10 +296,10 @@
   };
 
   /** Removes transfers from the screen at once, and from the daemon once its Undo has passed */
-  const remove = (transfers: Transfer[], everything = false) => {
+  const remove = (transfers: Transfer[]) => {
     const ids = transfers.map((t) => t.id);
     for (const id of ids) selected.delete(id);
-    store.removeLater(ids, { all: everything });
+    store.removeLater(ids);
   };
 
   /** Opens the block dialog; Deny and block cancels the user's unfinished uploads first */
