@@ -189,13 +189,13 @@ impl Client {
         filename: filename.to_string(),
       });
     }
-    let answer = self.waiter().wait::<PlaceInQueueResponse>(
+    let answer = self.waiter().wait_from_first_poll::<PlaceInQueueResponse>(
       WaitKey::PeerFile {
         code: PeerCode::PlaceInQueueResponse,
         username: username.to_owned(),
         filename: filename.clone(),
       },
-      None,
+      Some(self.waiter().default_timeout()),
       cancel.clone(),
     );
     let ask = async {

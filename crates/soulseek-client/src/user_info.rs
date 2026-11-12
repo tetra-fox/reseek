@@ -20,9 +20,11 @@ impl Client {
     non_blank("username", username)?;
     let verb = format!("get the user info of {username}");
     self.require_logged_in(&verb)?;
-    let answer = self
-      .waiter()
-      .wait::<UserInfo>(info_key(username), None, cancel.clone());
+    let answer = self.waiter().wait_from_first_poll::<UserInfo>(
+      info_key(username),
+      Some(self.waiter().default_timeout()),
+      cancel.clone(),
+    );
     let ask = async {
       let endpoint = self.get_user_endpoint(username).await?;
       let conn = self

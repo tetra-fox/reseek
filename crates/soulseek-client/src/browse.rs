@@ -163,7 +163,8 @@ impl Client {
     options: &BrowseOptions,
     cancel: &CancellationToken,
   ) -> Result<BrowseResponse, ClientError> {
-    // both in place before the request, so a fast answer is not missed
+    // both in place before the request, so a fast answer is not missed; the wait for the first
+    // bytes counts from the request, not from the connection made for it
     let mut result = Box::pin(self.waiter().wait_indefinitely::<Arc<BrowseResponse>>(
       WaitKey::Peer {
         code: PeerCode::BrowseResponse,
@@ -171,7 +172,7 @@ impl Client {
       },
       cancel.clone(),
     ));
-    let first_bytes = self.waiter().wait::<IncomingBrowse>(
+    let first_bytes = self.waiter().wait_from_first_poll::<IncomingBrowse>(
       WaitKey::BrowseResponseConnection {
         username: username.to_owned(),
       },
@@ -249,7 +250,7 @@ impl Client {
     self.require_logged_in(&verb)?;
     let token = token.unwrap_or_else(|| self.next_token());
     let _asking = self.folder_requests().hold(username);
-    let answer = self.waiter().wait::<FolderContentsResponse>(
+    let answer = self.waiter().wait_from_first_poll::<FolderContentsResponse>(
       WaitKey::PeerToken {
         code: PeerCode::FolderContentsResponse,
         username: username.to_owned(),

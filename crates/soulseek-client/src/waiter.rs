@@ -242,6 +242,7 @@ impl Waiter {
     self.register(
       key,
       Some(timeout.unwrap_or(self.shared.default_timeout)),
+      Some(Instant::now()),
       cancel,
     )
   }
@@ -252,7 +253,7 @@ impl Waiter {
     key: WaitKey,
     cancel: CancellationToken,
   ) -> impl Future<Output = Result<T, ClientError>> + Send + 'static {
-    self.register(key, None, cancel)
+    self.register(key, None, None, cancel)
   }
 
   /// [`Waiter::wait`] whose `timeout`, when `None`, means no timeout rather than the default
@@ -262,13 +263,28 @@ impl Waiter {
     timeout: Option<Duration>,
     cancel: CancellationToken,
   ) -> impl Future<Output = Result<T, ClientError>> + Send + 'static {
-    self.register(key, timeout, cancel)
+    self.register(key, timeout, Some(Instant::now()), cancel)
   }
 
+  /// [`Waiter::wait_within`] whose timeout counts from the future's first poll rather than from
+  /// now. Registered before the connection a request goes out on is made and awaited once the
+  /// request is written, it gives the peer the whole timeout to answer, however long the
+  /// connection took, and still catches an answer that comes before the request is.
+  pub(crate) fn wait_from_first_poll<T: Send + 'static>(
+    &self,
+    key: WaitKey,
+    timeout: Option<Duration>,
+    cancel: CancellationToken,
+  ) -> impl Future<Output = Result<T, ClientError>> + Send + 'static {
+    self.register(key, timeout, None, cancel)
+  }
+
+  /// Registers the wait; its timeout counts from `start`, or from the first poll when `None`
   fn register<T: Send + 'static>(
     &self,
     key: WaitKey,
     timeout: Option<Duration>,
+    start: Option<Instant>,
     cancel: CancellationToken,
   ) -> impl Future<Output = Result<T, ClientError>> + Send + 'static {
     let id = self.shared.next_id.fetch_add(1, Ordering::Relaxed);
@@ -279,7 +295,6 @@ impl Waiter {
       .entry(key.clone())
       .or_default()
       .push_back(Pending { id, settle });
-    let deadline = timeout.map(|timeout| (Instant::now() + timeout, timeout));
     let withdraw = Withdraw {
       shared: self.shared.clone(),
       key,
@@ -287,6 +302,8 @@ impl Waiter {
     };
     async move {
       let mut settled = settled;
+      let start = start.unwrap_or_else(Instant::now);
+      let deadline = timeout.map(|timeout| (start + timeout, timeout));
       let expired = async {
         match deadline {
           Some((deadline, _)) => sleep_until(deadline).await,
@@ -538,6 +555,29 @@ mod tests {
     let wait = waiter.wait::<u32>(key("a"), Some(Duration::ZERO), CancellationToken::new());
     assert!(waiter.complete(&key("a"), 7u32));
     assert_eq!(wait.await.unwrap(), 7);
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn a_wait_from_its_first_poll_counts_nothing_before_it() {
+    let waiter = waiter();
+    let late = waiter.wait_from_first_poll::<u32>(
+      key("a"),
+      Some(Duration::from_secs(1)),
+      CancellationToken::new(),
+    );
+    // the connection the request goes out on takes longer than the timeout
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    let late = tokio::spawn(late);
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert!(waiter.complete(&key("a"), 7u32));
+    assert_eq!(late.await.unwrap().unwrap(), 7);
+
+    let silent = waiter.wait_from_first_poll::<u32>(
+      key("a"),
+      Some(Duration::from_secs(1)),
+      CancellationToken::new(),
+    );
+    assert!(matches!(silent.await, Err(ClientError::Timeout(_))));
   }
 
   #[tokio::test]
