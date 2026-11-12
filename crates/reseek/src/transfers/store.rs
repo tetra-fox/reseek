@@ -174,8 +174,8 @@ pub fn save_state(conn: &Connection, record: &Record) -> rusqlite::Result<Saved>
 }
 
 /// Ends the transfer `id` in the completed `state` at `at` with `exception`, unless it ended
-/// already; the retry time and the queue place go with the wait they belonged to. Returns
-/// whether it was ended here.
+/// already; the retry time and the queue place go with the wait they belonged to, and a pause
+/// with the download it held. Returns whether it was ended here.
 pub fn end_unless_ended(
   conn: &Connection,
   id: Uuid,
@@ -186,7 +186,7 @@ pub fn end_unless_ended(
   let changed = conn.execute(
     &format!(
       "UPDATE Transfers SET State = ?2, StateDescription = ?3, EndedAt = ?4, Exception = ?5, \
-       NextAttemptAt = NULL, PlaceInQueue = NULL WHERE Id = ?1 AND {}",
+       NextAttemptAt = NULL, PlaceInQueue = NULL, Paused = 0 WHERE Id = ?1 AND {}",
       in_states(entered_from(state))
     ),
     params![

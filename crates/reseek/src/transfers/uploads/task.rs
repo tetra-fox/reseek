@@ -399,10 +399,12 @@ impl Uploads {
       debug!("upload taken out of the queue at its end");
     }
     let entry = lock(&self.in_flight).remove(&id);
-    if entry.is_some_and(|entry| entry.remove)
-      && let Err(e) = removal::remove(&self.db, &self.live, TransferDirection::Upload, id).await
-    {
-      warn!(%id, error = %e, "ended upload not removed");
+    if entry.is_some_and(|entry| entry.remove) {
+      match removal::remove(&self.db, TransferDirection::Upload, id).await {
+        Ok(Some(taken)) => removal::push(&self.live, TransferDirection::Upload, &[taken]),
+        Ok(None) => debug!(%id, "upload to remove not removed; it has not completed"),
+        Err(e) => warn!(%id, error = %e, "ended upload not removed"),
+      }
     }
   }
 }

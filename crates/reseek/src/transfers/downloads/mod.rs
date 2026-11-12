@@ -79,8 +79,8 @@ struct InFlight {
   remove: bool,
   /// why it was canceled, when not by a plain cancel
   reason: Option<&'static str>,
-  /// canceled to be paused: it waits here again, keeping what arrived
-  pause: bool,
+  /// whether it was canceled to be paused, to wait here again keeping what arrived
+  pause: Pause,
   /// its file arrived and is handed to its move, which a pause or cancel no longer stops
   arrived: bool,
   /// for a file its user sends unasked, what counts it against the files they may send at once
@@ -98,12 +98,23 @@ impl InFlight {
       cancel,
       remove: false,
       reason: None,
-      pause: false,
+      pause: Pause::No,
       arrived: false,
       _sending: None,
       ended: watch::Sender::new(()),
     }
   }
+}
+
+/// Where a download's pause is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Pause {
+  /// none was asked for
+  No,
+  /// its task was stopped to be paused and has not taken the pause yet; a cancel takes it back
+  Asked,
+  /// its task took the pause and writes it paused; a cancel ends the row itself after
+  Writing,
 }
 
 /// What a cancel found of a download's task.
@@ -365,14 +376,26 @@ impl Downloads {
     }
   }
 
+  /// Tells of the downloads `removed` taken out of the listings: each is pushed as removed and
+  /// each job one was in is brought in step, so a job whose last listed download went ends
+  /// there. Every removal of downloads the engine makes is told here.
+  pub async fn taken_out(&self, removed: &[removal::Removed]) {
+    removal::push(&self.live, TransferDirection::Download, removed);
+    let jobs: std::collections::BTreeSet<Uuid> = removed.iter().filter_map(|r| r.job).collect();
+    for job in jobs {
+      self.sync_job(job).await;
+    }
+  }
+
   /// Pushes `record` to the event stream: as removed when it is, else as updated.
   fn push(&self, record: &Record) {
     if record.removed {
-      removal::push(
-        &self.live,
-        TransferDirection::Download,
-        &[(record.id, record.username.clone())],
-      );
+      let taken = removal::Removed {
+        id: record.id,
+        username: record.username.clone(),
+        job: record.job_id,
+      };
+      removal::push(&self.live, TransferDirection::Download, &[taken]);
     } else {
       self
         .live
@@ -401,13 +424,14 @@ impl Downloads {
       Ok(None) => return Err(not_found(username, id)),
       Err(DbError::Sqlite(e)) if remove && super::unreadable(&e) => {
         let direction = TransferDirection::Download;
-        let removed = removal::remove_unreadable(&self.db, &self.live, direction, username, id)
+        let removed = removal::remove_unreadable(&self.db, direction, username, id)
           .await
           .map_err(internal)?;
-        if !removed {
+        if removed.is_empty() {
           return Err(not_found(username, id));
         }
         info!(%id, username, error = %e, "download that cannot be read removed");
+        self.taken_out(&removed).await;
         return Ok(true);
       }
       Err(e) => return Err(internal(e)),
@@ -470,23 +494,33 @@ impl Downloads {
       info!(%id, username = record.username, "download without a running task ended as canceled");
       self.push(&record);
     }
-    if let Some(peer) = removed {
-      removal::push(&self.live, TransferDirection::Download, &[(id, peer)]);
-    }
     self.tell(finished);
-    if let Some(job) = record.job_id {
-      self.sync_job(job).await;
+    match removed {
+      Some(taken) => self.taken_out(&[taken]).await,
+      None => {
+        if let Some(job) = record.job_id {
+          self.sync_job(job).await;
+        }
+      }
     }
     Ok(ended || remove)
   }
 
   /// Stops the running download `id`, marking it for removal with `remove` and noting
-  /// `reason`. One whose file arrived is not stopped, only marked for removal.
+  /// `reason`; a pause its task has not taken yet is taken back, so the task ends it canceled.
+  /// One whose file arrived is not stopped, only marked for removal. One whose task took a
+  /// pause and is writing it paused is left to it, and answers as one no task runs, for the
+  /// cancel to end the row after.
   fn cancel_running(&self, id: Uuid, remove: bool, reason: Option<&'static str>) -> Running {
     let mut in_flight = lock(&self.in_flight);
     let Some(entry) = in_flight.get_mut(&id) else {
       return Running::No;
     };
+    if entry.pause == Pause::Writing {
+      debug!(%id, remove, "cancel of a download writing itself paused");
+      return Running::No;
+    }
+    entry.pause = Pause::No;
     entry.remove |= remove;
     if entry.arrived {
       debug!(%id, remove, "cancel of a download moving its file");
@@ -565,8 +599,8 @@ impl Downloads {
 
   /// Cancels every unfinished download from `username`, each leaving the listings once it has
   /// ended as a cancel with removal does, then takes out the finished ones; for a user forgotten
-  /// with their transfers.
-  pub async fn purge(&self, username: &str) -> Result<(), ApiError> {
+  /// with their transfers. Returns how many it canceled or took out.
+  pub async fn purge(&self, username: &str) -> Result<usize, ApiError> {
     let direction = TransferDirection::Download;
     let ids = super::listing::unfinished(&self.db, direction, username)
       .await
@@ -581,14 +615,17 @@ impl Downloads {
         }
       }
     }
-    let removed = removal::remove_finished_of(&self.db, &self.live, direction, username)
+    let removed = removal::remove_finished_of(&self.db, direction, username)
       .await
       .map_err(internal)?;
+    self.taken_out(&removed).await;
     info!(
       username,
-      canceled, removed, "downloads of a forgotten user purged"
+      canceled,
+      removed = removed.len(),
+      "downloads of a forgotten user purged"
     );
-    Ok(())
+    Ok(canceled + removed.len())
   }
 
   /// Waits, at shutdown and once the client is stopped, for the download tasks the shutdown

@@ -288,10 +288,11 @@ impl TransferService for Downloads {
   }
 
   async fn remove_completed_downloads(&self) -> Result<(), ApiError> {
-    removal::remove_completed(&self.db, &self.live, TransferDirection::Download)
+    let removed = removal::remove_completed(&self.db, TransferDirection::Download)
       .await
-      .map(drop)
-      .map_err(internal)
+      .map_err(internal)?;
+    self.taken_out(&removed).await;
+    Ok(())
   }
 
   async fn bulk_downloads(&self, request: BulkRequest) -> Result<BulkResult, ApiError> {

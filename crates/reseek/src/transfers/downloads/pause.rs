@@ -12,17 +12,23 @@ use tracing::{Instrument, debug, info, warn};
 use uuid::Uuid;
 
 use super::enqueue::gate_for;
-use super::{COMPLETED, Downloads, InFlight, Running};
+use super::{COMPLETED, Downloads, InFlight, Pause, Running};
 use crate::transfers::state::State;
 use crate::transfers::store::Saved;
 use crate::transfers::{Record, store};
 
 impl Downloads {
-  /// Whether the running download `id` was canceled to be paused.
-  pub(super) fn pausing(&self, id: Uuid) -> bool {
-    lock(&self.in_flight)
-      .get(&id)
-      .is_some_and(|entry| entry.pause)
+  /// Takes the pause the running download `id` was canceled for, if a cancel did not take it
+  /// back first; from here a cancel leaves the task to write it paused and ends the row after.
+  pub(super) fn take_pause(&self, id: Uuid) -> bool {
+    let mut in_flight = lock(&self.in_flight);
+    match in_flight.get_mut(&id) {
+      Some(entry) if entry.pause == Pause::Asked => {
+        entry.pause = Pause::Writing;
+        true
+      }
+      _ => false,
+    }
   }
 
   /// The download records `ids`, each or why it cannot be had.
@@ -75,7 +81,10 @@ impl Downloads {
         match in_flight.get_mut(&record.id) {
           Some(entry) if entry.arrived => Running::Arrived,
           Some(entry) => {
-            entry.pause = true;
+            // a task already writing itself paused keeps on
+            if entry.pause == Pause::No {
+              entry.pause = Pause::Asked;
+            }
             entry.cancel.cancel();
             Running::Stopped
           }
@@ -204,7 +213,7 @@ impl Downloads {
   async fn pause_done(&self, id: Uuid) {
     let ended = lock(&self.in_flight)
       .get(&id)
-      .filter(|entry| entry.pause)
+      .filter(|entry| entry.pause != Pause::No)
       .map(|entry| entry.ended.subscribe());
     if let Some(mut ended) = ended {
       debug!(%id, "resume waits for the download to stop");

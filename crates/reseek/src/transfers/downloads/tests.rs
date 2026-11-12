@@ -1228,15 +1228,20 @@ async fn a_download_whose_row_cannot_be_read_is_taken_out_by_a_cancel_that_remov
   assert!(removed);
 }
 
-/// Writes an interrupted download of alice's in a listed job, as a stop leaves it; returns the
-/// job and the download.
-async fn interrupted_in_a_job(app: &TestApp, filename: &str) -> (Uuid, Uuid) {
+/// Writes an interrupted download from `username` in a listed job, as a stop leaves it;
+/// returns the job and the download.
+async fn interrupted_from(app: &TestApp, username: &str, filename: &str) -> (Uuid, Uuid) {
   let job = Uuid::new_v4();
-  listed_job(app, job, "Album from alice").await;
-  let mut interrupted = Record::download("alice", filename, 10);
+  listed_job(app, job, &format!("Album from {username}")).await;
+  let mut interrupted = Record::download(username, filename, 10);
   interrupted.job_id = Some(job);
   insert(app, &interrupted).await;
   (job, interrupted.id)
+}
+
+/// [`interrupted_from`] alice.
+async fn interrupted_in_a_job(app: &TestApp, filename: &str) -> (Uuid, Uuid) {
+  interrupted_from(app, "alice", filename).await
 }
 
 /// The job `job` as the jobs list has it: its state and how it ended.
@@ -1393,4 +1398,209 @@ async fn a_purge_stops_and_removes_every_transfer_of_the_user_and_leaves_the_oth
     assert!(read(&app, id).await.is_completed(), "{id} was ended");
   }
   assert_eq!(listed("bob").await.unwrap(), 1, "bob's download stays");
+}
+
+/// Starts a download of alice's that waits to try her again, then pauses it through the engine,
+/// which stops its task; returns it before the task has written it paused, or after.
+async fn paused_while_running(app: &TestApp) -> Uuid {
+  app
+    .state
+    .users
+    .set_buddy("alice", Default::default())
+    .await
+    .unwrap();
+  let mut held = Record::download("alice", "@@a\\Album\\1.flac", 10);
+  held.paused = true;
+  insert(app, &held).await;
+  let resume = json!({ "ids": [held.id], "action": "resume" });
+  app
+    .call("POST", "/api/v0/transfers/downloads/bulk", Some(resume))
+    .await;
+  read_until(app, held.id, |r| r.next_attempt_at().is_some()).await;
+  let paused = app.state.downloads.pause(vec![held.id]).await;
+  assert!(matches!(paused[..], [Ok(_)]), "{paused:?}");
+  held.id
+}
+
+/// Waits for the download `id` to let go of its task, then says it ended canceled, out of the
+/// listings and not paused.
+async fn ended_canceled_and_removed(app: &TestApp, id: Uuid) {
+  let stopped = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+    while reseek_shares::lock(&app.state.downloads.in_flight).contains_key(&id) {
+      tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+    }
+  })
+  .await;
+  assert!(stopped.is_ok(), "the download's task never ended");
+  let ended = read(app, id).await;
+  assert_eq!(
+    (ended.state.kind(), ended.removed, ended.paused),
+    (
+      TransferStates::Completed(TransferOutcome::Cancelled),
+      true,
+      false
+    )
+  );
+}
+
+#[tokio::test]
+async fn a_purge_ends_and_removes_a_download_being_paused() {
+  let config = format!("[transfers.download.retry]\ndelay = \"1h\"\nmax_delay = \"1h\"\n{TRUSTED}");
+  let app = app(&config, &[]).await;
+  let id = paused_while_running(&app).await;
+  let (status, _) = app
+    .call("DELETE", "/api/v0/users/alice?purge=true", None)
+    .await;
+  assert_eq!(status, 204);
+  ended_canceled_and_removed(&app, id).await;
+}
+
+#[tokio::test]
+async fn a_cancel_with_removal_ends_and_removes_a_download_being_paused() {
+  let config = format!("[transfers.download.retry]\ndelay = \"1h\"\nmax_delay = \"1h\"\n{TRUSTED}");
+  let app = app(&config, &[]).await;
+  let id = paused_while_running(&app).await;
+  let uri = format!("/api/v0/transfers/downloads/alice/{id}?remove=true");
+  let (status, _) = app.call("DELETE", &uri, None).await;
+  assert_eq!(status, 204);
+  ended_canceled_and_removed(&app, id).await;
+}
+
+/// Writes an interrupted download from `username` in a job and resumes it while logged out,
+/// so it waits for a login; returns the job and the download.
+async fn waiting_for_a_login(app: &TestApp, username: &str, filename: &str) -> (Uuid, Uuid) {
+  let waiting = interrupted_from(app, username, filename).await;
+  crate::transfers::cleanup::end_unfinished(&app.state.transfers)
+    .await
+    .unwrap();
+  app.state.downloads.resume().await;
+  assert_eq!(
+    job_now(app, waiting.0).await,
+    (api_types::jobs::JobState::Running, None)
+  );
+  waiting
+}
+
+/// What the jobs list says of a job whose every download was taken out.
+const REMOVED_ALL: (
+  api_types::jobs::JobState,
+  Option<api_types::jobs::JobEnding>,
+) = (
+  api_types::jobs::JobState::Ended,
+  Some(api_types::jobs::JobEnding::Canceled),
+);
+
+#[tokio::test]
+async fn clearing_the_completed_downloads_ends_a_job_waiting_for_a_login_canceled() {
+  let app = app(TRUSTED, &[]).await;
+  let (job, _) = waiting_for_a_login(&app, "alice", "@@a\\Album\\1.flac").await;
+  let (status, _) = app
+    .call("DELETE", "/api/v0/transfers/downloads/all/completed", None)
+    .await;
+  assert_eq!(status, 204);
+  assert_eq!(job_now(&app, job).await, REMOVED_ALL);
+}
+
+#[tokio::test]
+async fn a_purge_ends_the_users_waiting_job_canceled_and_leaves_another_users_waiting() {
+  let app = app(TRUSTED, &[]).await;
+  let (bobs, _) = interrupted_from(&app, "bob", "@@b\\Album\\1.flac").await;
+  let (alices, _) = waiting_for_a_login(&app, "alice", "@@a\\Album\\1.flac").await;
+  app
+    .state
+    .users
+    .set_buddy("alice", Default::default())
+    .await
+    .unwrap();
+  let (status, _) = app
+    .call("DELETE", "/api/v0/users/alice?purge=true", None)
+    .await;
+  assert_eq!(status, 204);
+  assert_eq!(job_now(&app, alices).await, REMOVED_ALL);
+  assert_eq!(
+    job_now(&app, bobs).await,
+    (api_types::jobs::JobState::Running, None)
+  );
+}
+
+#[tokio::test]
+async fn the_retention_sweep_ends_a_job_waiting_for_a_login_canceled() {
+  let config = format!("[retention.transfers.download]\nerrored = \"5m\"\n{TRUSTED}");
+  let app = app(&config, &[]).await;
+  let (job, id) = waiting_for_a_login(&app, "alice", "@@a\\Album\\1.flac").await;
+  let row = id.to_string();
+  app
+    .state
+    .transfers
+    .write(move |conn| {
+      let long_ago = crate::db::timestamp(chrono::Utc::now() - chrono::Duration::minutes(10));
+      conn.execute(
+        "UPDATE Transfers SET EndedAt = ?2 WHERE Id = ?1",
+        rusqlite::params![row, long_ago],
+      )
+    })
+    .await
+    .unwrap();
+  crate::jobs::maintenance::cleanup(&app.state, api_types::jobs::JobStarter::you(), false).await;
+  assert!(read(&app, id).await.removed, "past its retention");
+  assert_eq!(job_now(&app, job).await, REMOVED_ALL);
+}
+
+#[tokio::test]
+async fn a_file_enqueued_again_in_another_job_ends_the_job_it_waited_in_canceled() {
+  let app = app(TRUSTED, &[]).await;
+  let filename = "@@a\\Album\\1.flac";
+  let (waited_in, _) = waiting_for_a_login(&app, "alice", filename).await;
+  // whole here now, so the new job needs nothing of alice, who cannot be reached
+  let downloads = &app.state.downloads;
+  let (incomplete, _) = super::incomplete_path(
+    &downloads.incomplete,
+    "alice",
+    filename,
+    crate::safety::Os::CURRENT,
+  )
+  .unwrap();
+  std::fs::create_dir_all(incomplete.parent().unwrap()).unwrap();
+  std::fs::write(&incomplete, [0; 10]).unwrap();
+  let again = super::Group {
+    username: "alice".into(),
+    files: vec![super::FileRequest {
+      filename: filename.into(),
+      size: 10,
+      position: None,
+    }],
+    destination: None,
+    search_id: None,
+  };
+  let results = downloads.enqueue(Uuid::new_v4(), vec![again], false).await;
+  assert_eq!(results[0].as_ref().unwrap().enqueued.len(), 1);
+  assert_eq!(job_now(&app, waited_in).await, REMOVED_ALL);
+}
+
+#[tokio::test]
+async fn a_purge_of_a_user_forgotten_earlier_removes_their_transfers_and_answers_done() {
+  let app = app(TRUSTED, &[]).await;
+  app
+    .state
+    .users
+    .set_buddy("alice", Default::default())
+    .await
+    .unwrap();
+  let finished = done("alice", "@@a\\1.flac");
+  insert(&app, &finished).await;
+  let (status, _) = app.call("DELETE", "/api/v0/users/alice", None).await;
+  assert_eq!(status, 204);
+  assert!(
+    !read(&app, finished.id).await.removed,
+    "kept by a forget without purge"
+  );
+  let (status, _) = app
+    .call("DELETE", "/api/v0/users/alice?purge=true", None)
+    .await;
+  assert_eq!(status, 204);
+  assert!(read(&app, finished.id).await.removed);
+  let (status, _) = app
+    .call("DELETE", "/api/v0/users/alice?purge=true", None)
+    .await;
+  assert_eq!(status, 404, "nothing of alice is left");
 }

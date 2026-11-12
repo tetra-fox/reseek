@@ -340,7 +340,7 @@ impl Downloads {
         in_flight.remove(id);
       }
     }
-    removal::push(&self.live, TransferDirection::Download, &written.superseded);
+    self.taken_out(&written.superseded).await;
     if !written.inserted.is_empty() {
       self.users.touch(username, Touch::Transfer).await;
     }

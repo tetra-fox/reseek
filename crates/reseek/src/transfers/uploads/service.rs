@@ -73,10 +73,11 @@ impl TransferService for Uploads {
   }
 
   async fn remove_completed_uploads(&self) -> Result<(), ApiError> {
-    removal::remove_completed(&self.db, &self.live, UPLOAD)
+    let removed = removal::remove_completed(&self.db, UPLOAD)
       .await
-      .map(drop)
-      .map_err(internal)
+      .map_err(internal)?;
+    removal::push(&self.live, UPLOAD, &removed);
+    Ok(())
   }
 
   async fn bulk_uploads(&self, request: BulkRequest) -> Result<BulkResult, ApiError> {

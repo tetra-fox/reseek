@@ -32,16 +32,23 @@ fn outcomes(
   ]
 }
 
-/// Removes what `retention` no longer keeps and deletes what was removed long enough ago,
-/// pushing each removal; returns how many transfers were removed or deleted. A failure does not
-/// stop the rest of the sweep, and the first one is returned at its end.
-pub async fn prune(
-  db: &Database,
-  live: &Live,
-  retention: &TransfersRetention,
-) -> Result<usize, DbError> {
+/// What a sweep did.
+pub struct Pruned {
+  /// how many transfers were removed or deleted
+  pub count: usize,
+  /// the downloads removed, which the download engine is told of, since their jobs follow them
+  pub downloads: Vec<Removed>,
+  /// the first failure, which did not stop the rest of the sweep
+  pub error: Option<DbError>,
+}
+
+/// Removes what `retention` no longer keeps and deletes what was removed long enough ago. The
+/// uploads removed are pushed here; the downloads removed are returned for the download engine
+/// to tell of.
+pub async fn prune(db: &Database, live: &Live, retention: &TransfersRetention) -> Pruned {
   let mut first_error = None;
   let mut count = 0;
+  let mut downloads = Vec::new();
   for (direction, kept) in [
     (TransferDirection::Upload, &retention.upload),
     (TransferDirection::Download, &retention.download),
@@ -59,7 +66,10 @@ pub async fn prune(
             );
           }
           count += removed.len();
-          removal::push(live, direction, &removed);
+          match direction {
+            TransferDirection::Upload => removal::push(live, direction, &removed),
+            TransferDirection::Download => downloads.extend(removed),
+          }
         }
         Err(e) => {
           debug!(?direction, outcome, error = %e, "transfers past retention not removed");
@@ -81,9 +91,10 @@ pub async fn prune(
       }
     }
   }
-  match first_error {
-    Some(e) => Err(e),
-    None => Ok(count),
+  Pruned {
+    count,
+    downloads,
+    error: first_error,
   }
 }
 
@@ -204,7 +215,7 @@ mod tests {
       },
       ..TransfersRetention::default()
     };
-    prune(&db, &live, &retention).await.unwrap();
+    assert!(prune(&db, &live, &retention).await.error.is_none());
     assert_eq!(removed(&db).await, ["old-rejected", "old-success"]);
   }
 
@@ -249,7 +260,7 @@ mod tests {
       purge_removed_after: Some(HOUR),
       ..TransfersRetention::default()
     };
-    prune(&db, &live, &retention).await.unwrap();
+    assert!(prune(&db, &live, &retention).await.error.is_none());
     let left: Vec<String> = db
       .read(|conn| {
         conn

@@ -304,16 +304,16 @@ impl Uploads {
         .live
         .publish(LiveFrame::TransfersUpdated(Box::new(record.transfer())));
     }
-    if let Some(peer) = removed {
-      removal::push(&self.live, TransferDirection::Upload, &[(id, peer)]);
+    if let Some(taken) = removed {
+      removal::push(&self.live, TransferDirection::Upload, &[taken]);
     }
     Ok(())
   }
 
   /// Cancels every unfinished upload to `username`, each leaving the listings once it has ended
   /// as a cancel with removal does, then takes out the finished ones; for a user forgotten with
-  /// their transfers.
-  pub async fn purge(&self, username: &str) -> Result<(), ApiError> {
+  /// their transfers. Returns how many it canceled or took out.
+  pub async fn purge(&self, username: &str) -> Result<usize, ApiError> {
     let direction = TransferDirection::Upload;
     let ids = super::listing::unfinished(&self.db, direction, username)
       .await
@@ -328,14 +328,17 @@ impl Uploads {
         }
       }
     }
-    let removed = removal::remove_finished_of(&self.db, &self.live, direction, username)
+    let removed = removal::remove_finished_of(&self.db, direction, username)
       .await
       .map_err(ApiError::internal)?;
+    removal::push(&self.live, direction, &removed);
     info!(
       username,
-      canceled, removed, "uploads of a forgotten user purged"
+      canceled,
+      removed = removed.len(),
+      "uploads of a forgotten user purged"
     );
-    Ok(())
+    Ok(canceled + removed.len())
   }
 
   /// Stops the running upload `id`, marking it for removal with `remove` and noting `reason`;

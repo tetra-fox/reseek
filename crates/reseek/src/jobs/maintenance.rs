@@ -278,10 +278,13 @@ pub async fn cleanup(app: &AppState, starter: JobStarter, listed: bool) -> RunOu
   let wide = |n: usize| u64::try_from(n).unwrap_or(u64::MAX);
   run
     .step(CLEANUP[0], of, async {
-      prune::prune(&app.transfers, &app.live, &retention.transfers)
-        .await
-        .map(wide)
-        .map_err(failed)
+      let pruned = prune::prune(&app.transfers, &app.live, &retention.transfers).await;
+      // the jobs of the downloads removed follow them
+      app.downloads.taken_out(&pruned.downloads).await;
+      match pruned.error {
+        Some(e) => Err(failed(e)),
+        None => Ok(wide(pruned.count)),
+      }
     })
     .await;
   run

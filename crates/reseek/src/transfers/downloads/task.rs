@@ -320,7 +320,7 @@ impl Downloads {
       return warn!(reason = failure.message, "download without a record failed");
     };
     let canceled = failure.outcome == TransferOutcome::Cancelled;
-    if canceled && self.pausing(record.id) {
+    if canceled && self.take_pause(record.id) {
       if let Err(refused) = record.enter(State::WAITING) {
         return debug!(%refused, "download ended already");
       }
@@ -374,8 +374,10 @@ impl Downloads {
     let entry = lock(&self.in_flight).remove(&id);
     if entry.is_some_and(|entry| entry.remove) {
       let download = api_types::transfers::TransferDirection::Download;
-      if let Err(e) = removal::remove(&self.db, &self.live, download, id).await {
-        warn!(%id, error = %e, "ended download not removed");
+      match removal::remove(&self.db, download, id).await {
+        Ok(Some(taken)) => self.taken_out(&[taken]).await,
+        Ok(None) => debug!(%id, "download to remove not removed; it has not completed"),
+        Err(e) => warn!(%id, error = %e, "ended download not removed"),
       }
     }
   }
