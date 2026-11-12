@@ -85,16 +85,10 @@ impl Agent {
     self.agent.handle(&self.link, &frames::encode(None, answer));
   }
 
-  /// What the agent sends once asked to upload: an ask for a token, a deferral, or nothing
-  /// within half a second.
-  async fn asked_to_upload(&mut self) -> Option<RelayMessage> {
+  /// What the agent sends first once asked to upload: an ask for a token or a deferral.
+  async fn asked_to_upload(&mut self) -> RelayMessage {
     self.agent.request_sync();
-    let sent = tokio::time::timeout(Duration::from_millis(500), self.frames.recv()).await;
-    sent.ok().map(|text| {
-      frames::decode(&text.expect("the socket is open"))
-        .unwrap()
-        .message
-    })
+    self.next().await
   }
 
   fn copied(&self) -> bool {
@@ -298,8 +292,8 @@ async fn agent_from(start: Start, answers: Vec<Answer>, ready: bool) -> Agent {
 }
 
 /// Whether `sent` asks for a share upload token.
-fn asks(sent: &Option<RelayMessage>) -> bool {
-  matches!(sent, Some(RelayMessage::SharesBegin { .. }))
+fn asks(sent: &RelayMessage) -> bool {
+  matches!(sent, RelayMessage::SharesBegin { .. })
 }
 
 #[tokio::test]
@@ -308,11 +302,11 @@ async fn the_upload_waits_only_while_a_load_or_scan_fills_the_index_or_follows_a
   let mut client = agent_from(Start::ScanHeld, Vec::new(), false).await;
   let sent = client.asked_to_upload().await;
   assert!(
-    matches!(sent, Some(RelayMessage::SyncDeferred { .. })),
+    matches!(sent, RelayMessage::SyncDeferred { .. }),
     "{sent:?}"
   );
   client.scans.add_permits(1);
-  let sent = Some(client.next().await);
+  let sent = client.next().await;
   assert!(asks(&sent), "the scan's end uploads: {sent:?}");
   drop(client);
 
@@ -331,10 +325,12 @@ async fn the_upload_waits_only_while_a_load_or_scan_fills_the_index_or_follows_a
   // the same on a socket that had an upload: it keeps that one until the scan's end
   let mut client = agent(Vec::new(), true).await;
   client.agent.shares.scan(false, ScanOrigin::Asked).unwrap();
-  let sent = client.asked_to_upload().await;
-  assert!(sent.is_none(), "{sent:?}");
+  // an upload would have been begun before the ask returns, and a deferral queued
+  client.agent.request_sync();
+  assert!(!client.agent.syncing.load(Ordering::SeqCst));
+  assert!(client.frames.try_recv().is_err(), "nothing is sent");
   client.scans.add_permits(1);
-  let sent = Some(client.next().await);
+  let sent = client.next().await;
   assert!(asks(&sent), "the scan's end uploads: {sent:?}");
   drop(client);
 

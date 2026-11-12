@@ -334,3 +334,37 @@ async fn stalled(taken: &AtomicU64, total: u64) {
     seen = now;
   }
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  // the clock is paused and moves on whenever every task waits
+  #[tokio::test(start_paused = true)]
+  async fn an_upload_stalls_only_after_a_whole_wait_short_of_its_end_without_progress() {
+    let started = tokio::time::Instant::now();
+    stalled(&AtomicU64::new(0), 10).await;
+    assert_eq!(started.elapsed().as_secs(), STALL.as_secs());
+
+    let taken = Arc::new(AtomicU64::new(0));
+    let progress = tokio::spawn({
+      let taken = taken.clone();
+      async move {
+        tokio::time::sleep(STALL / 2).await;
+        taken.fetch_add(1, Ordering::Relaxed);
+      }
+    });
+    let started = tokio::time::Instant::now();
+    stalled(&taken, 10).await;
+    progress.await.unwrap();
+    assert_eq!(
+      started.elapsed().as_secs(),
+      2 * STALL.as_secs(),
+      "a byte taken in the first wait holds off the second"
+    );
+
+    let all = AtomicU64::new(10);
+    let waited = tokio::time::timeout(STALL * 10, stalled(&all, 10)).await;
+    assert!(waited.is_err(), "an upload read whole waits for its answer");
+  }
+}
