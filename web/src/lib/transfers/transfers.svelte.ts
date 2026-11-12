@@ -195,15 +195,20 @@ export class Transfers {
 
   /** Asks the peer for a queued download's place, and shows it on the row at once */
   placeInQueue = async (t: Transfer): Promise<Outcome<number>> => {
+    // a frame for the row while the peer is asked is newer than the answer
+    const turn = this.list.readingRow();
     const outcome = await call(() =>
       api.GET("/api/v0/transfers/downloads/{username}/{id}/position", {
         params: { path: { ...byUser(t.username).path, id: t.id }, query: byUser(t.username).query }
       })
     );
-    const row = this.list.get(t.id);
-    if (outcome.ok && row) row.placeInQueue = outcome.data;
-    if (outcome.ok) this.queueErrors.delete(t.id);
-    else this.queueErrors.set(t.id, outcome.error);
+    if (outcome.ok) {
+      this.list.assignRow(t.id, { placeInQueue: outcome.data }, turn);
+      this.queueErrors.delete(t.id);
+    } else {
+      this.list.dropRow();
+      this.queueErrors.set(t.id, outcome.error);
+    }
     return outcome;
   };
 
