@@ -2,6 +2,8 @@
 //! listing's filters and sorts, groups, the blocking conflicts, the expiry sweep, imports and
 //! forgetting a user.
 
+use std::sync::Arc;
+
 use super::store::Change;
 use super::touch;
 use super::*;
@@ -1169,18 +1171,53 @@ async fn a_buddy_forgotten_while_the_login_watches_the_buddies_is_not_watched_or
   assert!(!users.is_watched("alice"));
 }
 
+/// A daemon whose touches sent so far are all written: the writer takes them in order, so a
+/// touch that makes a row of a new name, sent after them and seen in the directory, was written
+/// after them.
+async fn touches_written(app: &crate::testing::TestApp) {
+  static MARKERS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+  let marker = format!(
+    "marker{}",
+    MARKERS.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+  );
+  app.state.users.touch(&marker, Touch::Transfer).await;
+  let path = format!("/api/v0/users/{marker}/profile");
+  tokio::time::timeout(touch::WINDOW * 5, async {
+    while app.call("GET", &path, None).await.1["known"] != true {
+      tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+  })
+  .await
+  .expect("the touch writer never wrote the marker");
+}
+
 /// A logged-in daemon whose conversation with alice is open, she watched and known, then
-/// forgotten; the server gives her address as `port` on this host.
+/// forgotten; the server gives her address as `port` on this host, and her presence as away
+/// once the returned flag is set.
 async fn alice_messaged_then_forgotten(
   port: u16,
-) -> (crate::testing::TestApp, crate::testing::soulseek::Server) {
+) -> (
+  crate::testing::TestApp,
+  crate::testing::soulseek::Server,
+  Arc<std::sync::atomic::AtomicBool>,
+) {
   use soulseek_proto::ServerRequest;
 
   let app = crate::testing::soulseek::app(CONFIG).await;
-  let online = || alice_is(soulseek_proto::UserPresence::Online);
+  let away = Arc::new(std::sync::atomic::AtomicBool::new(false));
+  let presence = {
+    let away = away.clone();
+    move || {
+      alice_is(if away.load(std::sync::atomic::Ordering::SeqCst) {
+        soulseek_proto::UserPresence::Away
+      } else {
+        soulseek_proto::UserPresence::Online
+      })
+    }
+  };
   let server = crate::testing::soulseek::Server::start(move |request| match request {
-    ServerRequest::WatchUser(_) => vec![online().1],
-    ServerRequest::GetStatus(_) => vec![online().0],
+    ServerRequest::WatchUser(_) => vec![presence().1],
+    ServerRequest::GetStatus(_) => vec![presence().0],
     ServerRequest::GetPeerAddress(asked) => vec![soulseek_proto::ServerResponse::GetPeerAddress(
       soulseek_proto::server::GetPeerAddressResponse {
         username: asked.username.clone(),
@@ -1202,13 +1239,13 @@ async fn alice_messaged_then_forgotten(
   })
   .await
   .expect("the peer was never watched and known");
-  // the watch's own status and statistics settle
-  tokio::time::sleep(touch::WINDOW * 2).await;
+  // the watch's own status and statistics are in the row
+  assert!(alice_filled_in(&app, UserPresence::Online).await);
   let (status, _) = app.call("DELETE", "/api/v0/users/alice", None).await;
   assert_eq!(status, 204);
   assert_eq!(alice(&app).await["known"], false);
   assert!(!users.is_watched("alice"));
-  (app, server)
+  (app, server, away)
 }
 
 /// A new private message from alice, `id`.
@@ -1223,14 +1260,13 @@ fn message_from_alice(id: u32) -> soulseek_proto::ServerResponse {
   })
 }
 
-/// Waits until alice is in the directory with the presence the scripted server gives her and
-/// statistics.
-async fn alice_filled_in(app: &crate::testing::TestApp) -> bool {
+/// Waits until alice is in the directory with `presence` and statistics.
+async fn alice_filled_in(app: &crate::testing::TestApp, presence: UserPresence) -> bool {
   tokio::time::timeout(std::time::Duration::from_secs(5), async {
     loop {
       let profile = alice(app).await;
       if profile["known"] == true
-        && profile["presence"] == json!(UserPresence::Online)
+        && profile["presence"] == json!(presence)
         && profile["statistics"] != Value::Null
       {
         return;
@@ -1244,7 +1280,7 @@ async fn alice_filled_in(app: &crate::testing::TestApp) -> bool {
 
 #[tokio::test]
 async fn a_conversation_peer_forgotten_is_not_known_again_after_the_next_login() {
-  let (app, server) = alice_messaged_then_forgotten(1).await;
+  let (app, server, _) = alice_messaged_then_forgotten(1).await;
   assert!(!alice_comes_back(&app).await, "back before the reconnect");
   server.drop_session(&app).await;
   server.login(&app).await;
@@ -1256,17 +1292,17 @@ async fn a_conversation_peer_forgotten_is_not_known_again_after_the_next_login()
 
 #[tokio::test]
 async fn a_forgotten_user_who_writes_again_is_known_again_with_their_presence() {
-  let (app, server) = alice_messaged_then_forgotten(1).await;
+  let (app, server, _) = alice_messaged_then_forgotten(1).await;
   server.send(vec![message_from_alice(8)]);
-  assert!(alice_filled_in(&app).await);
+  assert!(alice_filled_in(&app, UserPresence::Online).await);
 }
 
 #[tokio::test]
 async fn a_forgotten_user_made_a_buddy_again_is_known_again_with_their_presence() {
-  let (app, _server) = alice_messaged_then_forgotten(1).await;
+  let (app, _server, _) = alice_messaged_then_forgotten(1).await;
   let users = &app.state.users;
   users.set_buddy("alice", Default::default()).await.unwrap();
-  assert!(alice_filled_in(&app).await);
+  assert!(alice_filled_in(&app, UserPresence::Online).await);
 }
 
 #[tokio::test]
@@ -1282,7 +1318,7 @@ async fn a_forgotten_user_a_download_is_asked_of_is_known_again() {
       held.push(stream);
     }
   });
-  let (app, _server) = alice_messaged_then_forgotten(port).await;
+  let (app, _server, _) = alice_messaged_then_forgotten(port).await;
   let group = Group {
     username: "alice".into(),
     files: vec![FileRequest {
@@ -1306,22 +1342,30 @@ async fn a_forgotten_user_a_download_is_asked_of_is_known_again() {
 }
 
 /// The daemon of [`alice_messaged_then_forgotten`] after a lost session and a new login, which
-/// watches alice again for her open conversation.
+/// watches alice again for her open conversation; she is away now, and the watch's statistics
+/// and status are written, to no row, before this returns.
 async fn alice_forgotten_then_watched_again()
 -> (crate::testing::TestApp, crate::testing::soulseek::Server) {
-  let (app, server) = alice_messaged_then_forgotten(1).await;
+  let (app, server, away) = alice_messaged_then_forgotten(1).await;
+  away.store(true, std::sync::atomic::Ordering::SeqCst);
   server.drop_session(&app).await;
   server.login(&app).await;
   let users = &app.state.users;
+  // the status the watch asks for is kept here, and its touch sent, in one step of the
+  // follower, after the watch answer's statistics were sent
   tokio::time::timeout(std::time::Duration::from_secs(5), async {
-    while !users.is_watched("alice") {
+    let away_now = || {
+      let facts = users.groups.facts("alice");
+      facts.and_then(|facts| facts.presence) == Some(UserPresence::Away)
+    };
+    while !users.is_watched("alice") || !away_now() {
       tokio::time::sleep(std::time::Duration::from_millis(10)).await;
     }
   })
   .await
-  .expect("the open conversation's peer was not watched at the login");
-  // the watch's statistics and status are written, to no row, before she comes back
-  tokio::time::sleep(touch::WINDOW * 2).await;
+  .expect("the open conversation's peer was not watched again at the login");
+  touches_written(&app).await;
+  assert_eq!(alice(&app).await["known"], false);
   (app, server)
 }
 
@@ -1329,7 +1373,11 @@ async fn alice_forgotten_then_watched_again()
 async fn a_forgotten_peer_watched_again_at_login_who_writes_again_is_filled_in() {
   let (app, server) = alice_forgotten_then_watched_again().await;
   server.send(vec![message_from_alice(8)]);
-  assert!(alice_filled_in(&app).await, "{}", alice(&app).await);
+  assert!(
+    alice_filled_in(&app, UserPresence::Away).await,
+    "{}",
+    alice(&app).await
+  );
 }
 
 #[tokio::test]
@@ -1337,29 +1385,34 @@ async fn a_forgotten_peer_watched_again_at_login_made_a_buddy_is_filled_in() {
   let (app, _server) = alice_forgotten_then_watched_again().await;
   let users = &app.state.users;
   users.set_buddy("alice", Default::default()).await.unwrap();
-  assert!(alice_filled_in(&app).await, "{}", alice(&app).await);
+  assert!(
+    alice_filled_in(&app, UserPresence::Away).await,
+    "{}",
+    alice(&app).await
+  );
 }
 
-/// Watches the unknown alice through the API while the touch writer's window may close between
-/// the watch's answer and its end: `busy` has another user touched just before, so the window
-/// is most of the way through; the status the watch asks for is answered after `held`.
-async fn alice_watched_through_the_api(busy: bool, held: std::time::Duration) -> Value {
+#[tokio::test]
+async fn a_user_watched_through_the_api_whose_statistics_came_before_the_row_has_them() {
   use soulseek_proto::ServerRequest;
 
   let app = crate::testing::soulseek::app(CONFIG).await;
   let online = || alice_is(soulseek_proto::UserPresence::Online);
-  let server = crate::testing::soulseek::Server::start(move |request| match request {
+  // the status the watch asks for is answered only when the test says
+  let mut server = crate::testing::soulseek::Server::start(move |request| match request {
     ServerRequest::WatchUser(_) => vec![online().1],
     _ => Vec::new(),
   })
   .await;
   server.login(&app).await;
-  if busy {
-    app.state.users.touch("bob", Touch::Transfer).await;
-    tokio::time::sleep(touch::WINDOW * 9 / 10).await;
-  }
   let answer_later = async {
-    tokio::time::sleep(held).await;
+    // the watch answer's statistics are sent before the status is asked for; once they are
+    // written, to no row, the status comes, and the watch's reason for the row after it
+    server
+      .received(|request| matches!(request, ServerRequest::GetStatus(_)).then_some(()))
+      .await;
+    touches_written(&app).await;
+    assert_eq!(alice(&app).await["known"], false);
     server.send(vec![online().0]);
   };
   let ((status, _), ()) = tokio::join!(
@@ -1367,22 +1420,56 @@ async fn alice_watched_through_the_api(busy: bool, held: std::time::Duration) ->
     answer_later
   );
   assert_eq!(status, 204);
-  tokio::time::sleep(touch::WINDOW * 2).await;
-  alice(&app).await
+  assert!(
+    alice_comes_back(&app).await,
+    "no row for a watch asked by hand"
+  );
+  assert_ne!(alice(&app).await["statistics"], Value::Null);
 }
 
 #[tokio::test]
-async fn a_user_watched_through_the_api_while_their_status_is_held_has_their_statistics() {
-  let profile = alice_watched_through_the_api(false, touch::WINDOW * 2).await;
+async fn a_row_made_for_a_user_nobody_watches_has_no_presence() {
+  let app = app(CONFIG, &[]).await;
+  let users = &app.state.users;
+  // what the server said of her once, as an answer to a question about her
+  users.status_fetched("alice", UserPresence::Online, false);
+  users
+    .change("alice", Change::Notes("met in #indie".into()))
+    .await
+    .unwrap();
+  let profile = alice(&app).await;
   assert_eq!(profile["known"], true);
-  assert_ne!(profile["statistics"], Value::Null, "{profile}");
+  assert_eq!(profile["presence"], Value::Null, "{profile}");
 }
 
 #[tokio::test]
-async fn a_user_watched_through_the_api_as_the_writer_is_busy_has_their_statistics() {
-  let profile = alice_watched_through_the_api(true, std::time::Duration::from_millis(200)).await;
+async fn a_buddy_forgotten_online_and_noted_in_a_later_session_has_no_presence() {
+  use soulseek_proto::ServerRequest;
+
+  let app = crate::testing::soulseek::app(CONFIG).await;
+  let users = &app.state.users;
+  users.set_buddy("alice", Default::default()).await.unwrap();
+  let online = || alice_is(soulseek_proto::UserPresence::Online);
+  let server = crate::testing::soulseek::Server::start(move |request| match request {
+    ServerRequest::WatchUser(_) => vec![online().1],
+    ServerRequest::GetStatus(_) => vec![online().0],
+    _ => Vec::new(),
+  })
+  .await;
+  server.login(&app).await;
+  assert!(alice_filled_in(&app, UserPresence::Online).await);
+  let (status, _) = app.call("DELETE", "/api/v0/users/alice", None).await;
+  assert_eq!(status, 204);
+  server.drop_session(&app).await;
+  server.login(&app).await;
+  assert!(!users.is_watched("alice"));
+  users
+    .change("alice", Change::Notes("was online once".into()))
+    .await
+    .unwrap();
+  let profile = alice(&app).await;
   assert_eq!(profile["known"], true);
-  assert_ne!(profile["statistics"], Value::Null, "{profile}");
+  assert_eq!(profile["presence"], Value::Null, "{profile}");
 }
 
 /// A daemon where alice has a row, and nothing else.

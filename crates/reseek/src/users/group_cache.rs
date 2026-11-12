@@ -35,10 +35,15 @@ const STALE: Duration = Duration::from_secs(4 * 3600);
 
 static REFETCH_FAILED: LogLimiter = LogLimiter::new();
 
-/// What the server last said of each user known, with the groups we put them in, by user. It
-/// is shared with the database writes that make a user's row, which start the row with it.
+/// What the server last said of each user known, with the groups we put them in, by user, and
+/// the users it watches for us. It is shared with the database writes that make a user's row,
+/// which start the row with it.
 #[derive(Clone, Default)]
-pub struct Reported(Arc<RwLock<HashMap<String, Facts>>>);
+pub struct Reported {
+  facts: Arc<RwLock<HashMap<String, Facts>>>,
+  /// the users the server watches for us in this session, whose presence it keeps current
+  watched: Arc<Mutex<HashSet<String>>>,
+}
 
 impl Reported {
   /// What is known of `username`, when anything is.
@@ -46,11 +51,23 @@ impl Reported {
     self.read().get(username).cloned()
   }
 
+  /// What a row made now for `username` starts with: their statistics, which carry the time
+  /// they were given, and their presence and privileges only while the server watches them,
+  /// as only then does it keep them current. Decided with the watched users held.
+  pub fn for_new_row(&self, username: &str) -> Option<Facts> {
+    let watched = lock(&self.watched);
+    let mut facts = self.of(username)?;
+    if !watched.contains(username) {
+      facts.presence = None;
+    }
+    Some(facts)
+  }
+
   /// Changes what is known of `username` with `change`, making their entry when `create` or
   /// when it exists; returns whether there was one to change.
   pub fn update(&self, username: &str, create: bool, change: impl FnOnce(&mut Facts)) -> bool {
     // every change is made whole before the lock is let go
-    let mut facts = self.0.write().unwrap_or_else(PoisonError::into_inner);
+    let mut facts = self.facts.write().unwrap_or_else(PoisonError::into_inner);
     match facts.get_mut(username) {
       Some(known) => change(known),
       None if create => change(facts.entry(username.to_string()).or_default()),
@@ -60,15 +77,15 @@ impl Reported {
   }
 
   fn read(&self) -> RwLockReadGuard<'_, HashMap<String, Facts>> {
-    self.0.read().unwrap_or_else(PoisonError::into_inner)
+    self.facts.read().unwrap_or_else(PoisonError::into_inner)
   }
 }
 
 /// What the server last said of every user known, and the users the server watches for us.
 #[derive(Default)]
 pub struct GroupCache {
+  /// what the server said, and the users it watches for us
   facts: Reported,
-  watched: Mutex<HashSet<String>>,
   /// when each user forgotten by hand in this run was forgotten, so a watch asked for before
   /// does not watch them; taken with `watched` held
   forgotten: Mutex<HashMap<String, Instant>>,
@@ -96,7 +113,10 @@ impl GroupCache {
       facts.entry(username).or_default().memberships.push(group);
     }
     Self {
-      facts: Reported(Arc::new(RwLock::new(facts))),
+      facts: Reported {
+        facts: Arc::new(RwLock::new(facts)),
+        ..Reported::default()
+      },
       ..Self::default()
     }
   }
@@ -118,7 +138,7 @@ impl GroupCache {
   }
 
   fn watched(&self) -> MutexGuard<'_, HashSet<String>> {
-    lock(&self.watched)
+    lock(&self.facts.watched)
   }
 
   /// Waits until no other change to the groups we put users in runs, and holds off the next one

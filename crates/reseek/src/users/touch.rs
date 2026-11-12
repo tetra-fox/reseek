@@ -20,7 +20,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
 use super::group_cache::Reported;
-use super::store::{ensure, presence_text};
+use super::store::{ensure, presence_text, write_statistics};
 use crate::db::timestamp;
 
 /// How many touches may wait for the writer.
@@ -220,7 +220,7 @@ pub async fn gather(
 
 /// Writes a gathered batch in one transaction and returns the users whose row it changed. A
 /// presence or statistics only fills in a row that is there; a row made here starts with what
-/// the server last said of the user, as `reported` holds it.
+/// `reported` holds for a new row of the user.
 pub fn write(
   conn: &mut Connection,
   batch: &BTreeMap<String, Pending>,
@@ -269,19 +269,7 @@ pub fn write(
       )?;
     }
     if let Some((statistics, at)) = &pending.statistics {
-      tx.execute(
-        "UPDATE users SET average_speed = ?2, upload_count = ?3, file_count = ?4, \
-         directory_count = ?5, statistics_at = ?6 WHERE username = ?1",
-        params![
-          username,
-          statistics.average_speed,
-          // SQLite integers are signed; a count past them is kept at the largest
-          i64::try_from(statistics.upload_count).unwrap_or(i64::MAX),
-          statistics.file_count,
-          statistics.directory_count,
-          timestamp(*at)
-        ],
-      )?;
+      write_statistics(&tx, username, statistics, *at)?;
     }
     changed.push(username.clone());
   }
@@ -378,7 +366,7 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn a_row_made_starts_with_what_the_server_last_said() {
+  async fn a_row_made_for_a_user_nobody_watches_starts_with_their_statistics_alone() {
     let db = users_db().await;
     let reported = Reported::default();
     reported.update("alice", true, |facts| {
@@ -405,9 +393,10 @@ mod tests {
       .await
       .unwrap()
       .unwrap();
-    assert_eq!(alice.presence.map(|(p, _)| p), Some(UserPresence::Away));
-    assert!(alice.is_privileged);
+    // the statistics carry when they were given; a presence nobody keeps current is not shown
     assert_eq!(alice.statistics.map(|(s, _)| s.average_speed), Some(7));
+    assert_eq!(alice.presence, None);
+    assert!(!alice.is_privileged);
   }
 
   #[tokio::test]

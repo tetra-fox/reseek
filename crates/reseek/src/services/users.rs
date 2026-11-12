@@ -155,8 +155,9 @@ pub trait UserService: Send + Sync {
     Err(not_yet(DOMAIN))
   }
 
-  /// Forgets a user and their block; with `purge` also removes their transfers from the
-  /// listings and deletes the conversation with them.
+  /// Forgets a user and their block; with `purge` also removes their finished transfers from
+  /// the listings, the API route having stopped the unfinished ones first, and deletes the
+  /// conversation with them.
   async fn remove(&self, username: &str, purge: bool) -> Result<(), ApiError> {
     Err(not_yet(DOMAIN))
   }

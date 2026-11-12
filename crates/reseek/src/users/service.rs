@@ -318,9 +318,10 @@ impl Directory {
       .map_err(internal)
   }
 
-  /// Forgets `username` and their block; with `purge` their transfers leave the listings. The
-  /// server stops telling us their presence, and their touches not written yet are dropped, so
-  /// neither makes their row again.
+  /// Forgets `username` and their block; with `purge` their finished transfers leave the
+  /// listings, the API route having stopped the unfinished ones first. The server stops
+  /// telling us their presence, and their touches not written yet are dropped, so neither makes
+  /// their row again.
   pub(crate) async fn remove(&self, username: &str, purge: bool) -> Result<(), ApiError> {
     // a buddy change made meanwhile would leave the map holding a buddy without a row
     let _changing = self.buddies.changing().await;

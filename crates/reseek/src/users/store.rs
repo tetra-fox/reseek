@@ -198,8 +198,8 @@ pub fn get(conn: &Connection, username: &str) -> rusqlite::Result<Option<Stored>
 
 /// Makes sure `username` has a row, seen at `now` unless they were seen later. Writes do not
 /// come in the order of what they record, as touches wait up to a second and info does not. A
-/// row made here starts with what the server last said of the user, as `reported` holds it,
-/// since a report that came before the row had no row to fill in.
+/// row made here starts with what `reported` holds for a new row of the user, since a report
+/// that came before the row had no row to fill in.
 pub fn ensure(
   conn: &Connection,
   username: &str,
@@ -219,7 +219,7 @@ pub fn ensure(
     )?;
     return Ok(());
   }
-  let Some(facts) = reported.of(username) else {
+  let Some(facts) = reported.for_new_row(username) else {
     return Ok(());
   };
   if let Some(presence) = facts.presence {
@@ -230,21 +230,31 @@ pub fn ensure(
     )?;
   }
   if let Some(known) = facts.statistics {
-    let statistics = known.statistics;
-    conn.execute(
-      "UPDATE users SET average_speed = ?2, upload_count = ?3, file_count = ?4, \
-       directory_count = ?5, statistics_at = ?6 WHERE username = ?1",
-      params![
-        username,
-        statistics.average_speed,
-        // SQLite integers are signed; a count past them is kept at the largest
-        i64::try_from(statistics.upload_count).unwrap_or(i64::MAX),
-        statistics.file_count,
-        statistics.directory_count,
-        timestamp(known.updated_at)
-      ],
-    )?;
+    write_statistics(conn, username, &known.statistics, known.updated_at)?;
   }
+  Ok(())
+}
+
+/// Writes `statistics`, given at `at`, to `username`'s row when there is one.
+pub fn write_statistics(
+  conn: &Connection,
+  username: &str,
+  statistics: &UserStatistics,
+  at: DateTime<Utc>,
+) -> rusqlite::Result<()> {
+  conn.execute(
+    "UPDATE users SET average_speed = ?2, upload_count = ?3, file_count = ?4, \
+     directory_count = ?5, statistics_at = ?6 WHERE username = ?1",
+    params![
+      username,
+      statistics.average_speed,
+      // SQLite integers are signed; a count past them is kept at the largest
+      i64::try_from(statistics.upload_count).unwrap_or(i64::MAX),
+      statistics.file_count,
+      statistics.directory_count,
+      timestamp(at)
+    ],
+  )?;
   Ok(())
 }
 

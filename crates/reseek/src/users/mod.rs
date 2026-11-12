@@ -525,30 +525,35 @@ impl Directory {
       let count = batch.len();
       let forgotten = forget.as_ref().map(|forget| forget.username.clone());
       let reported = self.groups.reported();
+      // the forget is answered from its own delete, which commits alone, so a batch that fails
+      // after it does not undo a forget that happened
       let written = self.db.write(move |conn| {
-        let deleted = match &forgotten {
-          Some(username) => {
-            let deleted = store::delete(conn, username)?;
-            if deleted {
-              batch.remove(username);
-            }
-            Some(deleted)
+        let deleted = forgotten.as_ref().map(|username| {
+          let deleted = store::delete(conn, username).map_err(|e| e.to_string())?;
+          if deleted {
+            batch.remove(username);
           }
-          None => None,
-        };
-        Ok((touch::write(conn, &batch, &reported)?, deleted))
+          Ok(deleted)
+        });
+        let written = touch::write(conn, &batch, &reported).map_err(|e| e.to_string());
+        Ok((deleted, written))
       });
-      let (changed, answer) = match written.await {
-        Ok((changed, deleted)) => (changed, deleted.map(Ok)),
+      let (deleted, written) = match written.await {
+        Ok(done) => done,
         Err(e) => {
-          warn!(users = count, error = %e, "user touches not written");
-          (Vec::new(), forget.is_some().then(|| Err(e.to_string())))
+          // nothing ran: the forget changed nothing and the batch is not written
+          let message = e.to_string();
+          (forget.is_some().then(|| Err(message.clone())), Err(message))
         }
       };
-      if let (Some(forget), Some(answer)) = (forget, answer) {
+      if let (Some(forget), Some(deleted)) = (forget, deleted) {
         // a forget whose caller went away is done all the same
-        let _ = forget.done.send(answer);
+        let _ = forget.done.send(deleted);
       }
+      let changed = written.unwrap_or_else(|e| {
+        warn!(users = count, error = %e, "user touches not written");
+        Vec::new()
+      });
       for username in changed {
         self.changed(&username).await;
       }
