@@ -399,20 +399,12 @@ impl Uploads {
   }
 
   /// Lets go of the upload `id` once its task has written how it ended: it leaves the queue if
-  /// it has not, its states are logged, and it is removed from the listings when that was
-  /// asked for meanwhile.
+  /// it has not, and it is removed from the listings when that was asked for meanwhile.
   async fn forget(&self, id: Uuid) {
     if self.queue.complete(id) {
       debug!("upload taken out of the queue at its end");
     }
     let entry = lock(&self.in_flight).remove(&id);
-    match self.db.read(move |conn| store::history(conn, id)).await {
-      Ok(history) => {
-        let states: Vec<String> = history.iter().map(|c| c.state.to_string()).collect();
-        debug!(?states, "upload states");
-      }
-      Err(e) => debug!(error = %e, "upload states not read"),
-    }
     if entry.is_some_and(|entry| entry.remove)
       && let Err(e) = removal::remove(&self.db, &self.live, TransferDirection::Upload, id).await
     {
