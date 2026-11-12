@@ -10,6 +10,7 @@ mod message;
 mod solicit;
 mod transfer;
 
+pub(crate) use answer::Answering;
 pub use dispatch::IncomingBrowse;
 pub(crate) use message::request_endpoint;
 pub(crate) use solicit::{Answer, Solicitation, Solicitations, Via, both_failed, race};

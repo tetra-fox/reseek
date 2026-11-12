@@ -15,6 +15,7 @@ use crate::cache::BoundedCache;
 use crate::client::Client;
 use crate::conn::MessageConn;
 use crate::events::{Event, SearchDelivery};
+use crate::peers::Answering;
 use crate::resolvers::SearchReply;
 
 /// how long an undelivered answer waits for its searcher to connect
@@ -147,7 +148,9 @@ impl Client {
         return false;
       }
     };
-    self.deliver(&conn, username, token, query, reply).await
+    self
+      .deliver(&conn, &mut Answering::default(), username, token, query, reply)
+      .await
   }
 
   /// Our answer to a search we sent ourselves on purpose goes straight to that search: a
@@ -192,13 +195,14 @@ impl Client {
   pub(crate) async fn respond_on(
     &self,
     conn: &MessageConn,
+    answering: &mut Answering,
     username: &str,
     token: u32,
     query: &str,
   ) {
     if let Some(reply) = self.resolve_search(username, token, query).await {
       self
-        .deliver(conn, username, token, query, Arc::new(reply))
+        .deliver(conn, answering, username, token, query, Arc::new(reply))
         .await;
     }
   }
@@ -300,6 +304,7 @@ impl Client {
   async fn deliver(
     &self,
     conn: &MessageConn,
+    answering: &mut Answering,
     username: &str,
     token: u32,
     query: &str,
@@ -321,7 +326,7 @@ impl Client {
       }));
       return false;
     }
-    match conn.write(reply.frame()).await {
+    match answering.send_frame(conn, reply.frame()).await {
       Ok(()) => {
         tracing::debug!(query, "search response delivered");
         self.emit(Event::SearchResponseDelivered(SearchDelivery {

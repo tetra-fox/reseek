@@ -18,7 +18,7 @@ use crate::client::{Client, failed, non_blank};
 use crate::conn::MessageConn;
 use crate::error::{ClientError, MessageErrorKind};
 use crate::events::Event;
-use crate::peers::write_peer;
+use crate::peers::{Answering, write_peer};
 use super::RemoteFailure;
 use crate::waiter::WaitKey;
 
@@ -30,6 +30,7 @@ impl Client {
   pub(crate) async fn upload_offered(
     &self,
     conn: &MessageConn,
+    answering: &mut Answering,
     username: &str,
     endpoint: SocketAddr,
     request: TransferRequest,
@@ -47,7 +48,7 @@ impl Client {
       self.expire_offer(conn.clone(), username, filename, token);
       return Ok(());
     }
-    refuse_offer(conn, token).await
+    refuse_offer(conn, answering, token).await
   }
 
   /// Asks the application whether to take a file `username` offers unasked, holding the offer
@@ -111,7 +112,7 @@ impl Client {
           return;
         }
         tracing::debug!(username, %filename, token, "file offered unasked not taken in time, refused");
-        if let Err(error) = refuse_offer(&conn, token).await {
+        if let Err(error) = refuse_offer(&conn, &mut Answering::default(), token).await {
           tracing::debug!(%error, "refusal of an offer not taken in time not sent");
         }
       }
@@ -250,15 +251,16 @@ impl Client {
 }
 
 /// tells the sender of a file we do not take to drop it
-async fn refuse_offer(conn: &MessageConn, token: u32) -> Result<(), ClientError> {
-  write_peer(
-    conn,
-    PeerMessage::TransferResponse(TransferResponse::Denied {
-      token,
-      message: "Cancelled".into(),
-    }),
-  )
-  .await
+async fn refuse_offer(
+  conn: &MessageConn,
+  answering: &mut Answering,
+  token: u32,
+) -> Result<(), ClientError> {
+  let refused = PeerMessage::TransferResponse(TransferResponse::Denied {
+    token,
+    message: "Cancelled".into(),
+  });
+  answering.send(conn, &[refused]).await
 }
 
 /// the wait a download holds for its uploader's offer

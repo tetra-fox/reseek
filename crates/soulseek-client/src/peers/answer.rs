@@ -2,7 +2,7 @@
 //! and folder contents come from the application's resolvers, and a download the peer wants is
 //! queued through the application, or refused when the application shares nothing. A resolver
 //! that fails yields an empty answer, no answer or a generic refusal; its error never reaches the
-//! peer.
+//! peer. An answer is worked out in full, then queued in one write.
 
 use std::net::SocketAddr;
 
@@ -12,11 +12,72 @@ use soulseek_proto::peer::{
 };
 use soulseek_proto::{PeerCode, PeerMessage, RemoteFilename};
 
-use super::write_peer;
+use super::dispatch::Turn;
 use crate::client::Client;
-use crate::conn::MessageConn;
+use crate::conn::{EncodedFrame, HandlerPermit, MessageConn, written};
 use crate::error::ClientError;
 use crate::resolvers::BrowseReply;
+
+/// What the handler of a peer frame holds while it works out its answer: its place against the
+/// bound on frames handled at once and, for a frame handled in order, its turn. Both are let go
+/// once the answer is queued on the connection, before it is written. An answer sent from
+/// outside a handler holds nothing.
+#[derive(Default)]
+pub(crate) struct Answering {
+  permit: Option<HandlerPermit>,
+  turn: Option<Turn>,
+}
+
+impl Answering {
+  pub(super) fn new(permit: Option<HandlerPermit>, turn: Option<Turn>) -> Self {
+    Self { permit, turn }
+  }
+
+  /// Queues `messages` on `conn` in one write, lets go of what the handler holds, and waits
+  /// until they are on the socket
+  pub(crate) async fn send(
+    &mut self,
+    conn: &MessageConn,
+    messages: &[PeerMessage],
+  ) -> Result<(), ClientError> {
+    let bytes = messages.iter().flat_map(PeerMessage::encode).collect();
+    let receipt = conn.send_with_receipt(bytes);
+    self.let_go();
+    written(receipt?).await?;
+    for message in messages {
+      let code = message.code();
+      tracing::debug!(code = code.code(), name = code.name(), "peer message sent");
+    }
+    Ok(())
+  }
+
+  /// [`Answering::send`] for a message already encoded into `frame`
+  pub(crate) async fn send_frame(
+    &mut self,
+    conn: &MessageConn,
+    frame: Vec<u8>,
+  ) -> Result<(), ClientError> {
+    let receipt = conn.send_with_receipt(frame);
+    self.let_go();
+    written(receipt?).await
+  }
+
+  /// [`Answering::send`] for a frame read from a stream as it is written
+  pub(crate) async fn send_encoded(
+    &mut self,
+    conn: &MessageConn,
+    frame: EncodedFrame,
+  ) -> Result<(), ClientError> {
+    let receipt = conn.send_encoded_with_receipt(frame);
+    self.let_go();
+    written(receipt?).await
+  }
+
+  fn let_go(&mut self) {
+    self.permit = None;
+    self.turn = None;
+  }
+}
 
 impl Client {
   /// A peer asks to queue a download of `filename`; it is told its place in the queue, or why
@@ -24,6 +85,7 @@ impl Client {
   pub(super) async fn queue_requested(
     &self,
     conn: &MessageConn,
+    answering: &mut Answering,
     username: &str,
     endpoint: SocketAddr,
     filename: RemoteFilename,
@@ -34,18 +96,15 @@ impl Client {
     {
       Ok(()) => {
         self
-          .try_send_place_in_queue(conn, username, endpoint, &filename)
+          .try_send_place_in_queue(conn, answering, username, endpoint, &filename)
           .await;
+        Ok(())
       }
       Err(reason) => {
-        write_peer(
-          conn,
-          PeerMessage::UploadDenied(UploadDenied { filename, reason }),
-        )
-        .await?;
+        let denied = PeerMessage::UploadDenied(UploadDenied { filename, reason });
+        answering.send(conn, &[denied]).await
       }
     }
-    Ok(())
   }
 
   /// A peer asks for a file with the legacy transfer request. It is queued, never started at
@@ -53,47 +112,37 @@ impl Client {
   pub(super) async fn download_requested(
     &self,
     conn: &MessageConn,
+    answering: &mut Answering,
     username: &str,
     endpoint: SocketAddr,
     request: TransferRequest,
   ) -> Result<(), ClientError> {
-    match self
+    let answer = match self
       .try_enqueue_download(username, endpoint, &request.filename)
       .await
     {
       Ok(()) => {
-        write_peer(
-          conn,
-          PeerMessage::TransferResponse(TransferResponse::Denied {
-            token: request.token,
-            message: "Queued".into(),
-          }),
-        )
-        .await?;
-        self
-          .try_send_place_in_queue(conn, username, endpoint, &request.filename)
+        let queued = PeerMessage::TransferResponse(TransferResponse::Denied {
+          token: request.token,
+          message: "Queued".into(),
+        });
+        let place = self
+          .resolve_place_in_queue(username, endpoint, &request.filename)
           .await;
+        std::iter::once(queued).chain(place).collect::<Vec<_>>()
       }
-      Err(reason) => {
-        write_peer(
-          conn,
-          PeerMessage::TransferResponse(TransferResponse::Denied {
-            token: request.token,
-            message: reason.clone(),
-          }),
-        )
-        .await?;
-        write_peer(
-          conn,
-          PeerMessage::UploadDenied(UploadDenied {
-            filename: request.filename,
-            reason,
-          }),
-        )
-        .await?;
-      }
-    }
-    Ok(())
+      Err(reason) => vec![
+        PeerMessage::TransferResponse(TransferResponse::Denied {
+          token: request.token,
+          message: reason.clone(),
+        }),
+        PeerMessage::UploadDenied(UploadDenied {
+          filename: request.filename,
+          reason,
+        }),
+      ],
+    };
+    answering.send(conn, &answer).await
   }
 
   /// Asks the application to queue an upload; the refusal reason the peer sees, which never
@@ -126,32 +175,48 @@ impl Client {
   pub(super) async fn try_send_place_in_queue(
     &self,
     conn: &MessageConn,
+    answering: &mut Answering,
     username: &str,
     endpoint: SocketAddr,
     filename: &RemoteFilename,
   ) {
-    let Some(resolve) = self.options().resolvers.place_in_queue_resolver.clone() else {
+    let Some(response) = self
+      .resolve_place_in_queue(username, endpoint, filename)
+      .await
+    else {
       return;
     };
-    let place = match resolve(username.to_owned(), endpoint, filename.clone()).await {
-      Ok(Some(place)) => place,
-      Ok(None) => return,
-      Err(error) => {
-        return tracing::warn!(%filename, %error, "Failed to resolve place in queue");
-      }
-    };
-    let response = PeerMessage::PlaceInQueueResponse(PlaceInQueueResponse {
-      filename: filename.clone(),
-      place,
-    });
-    if let Err(error) = write_peer(conn, response).await {
+    if let Err(error) = answering.send(conn, &[response]).await {
       tracing::debug!(%filename, %error, "place in queue not sent");
     }
+  }
+
+  /// the message telling the peer its place in our queue for `filename`, when the application
+  /// knows it
+  async fn resolve_place_in_queue(
+    &self,
+    username: &str,
+    endpoint: SocketAddr,
+    filename: &RemoteFilename,
+  ) -> Option<PeerMessage> {
+    let resolve = self.options().resolvers.place_in_queue_resolver.clone()?;
+    let place = match resolve(username.to_owned(), endpoint, filename.clone()).await {
+      Ok(place) => place?,
+      Err(error) => {
+        tracing::warn!(%filename, %error, "Failed to resolve place in queue");
+        return None;
+      }
+    };
+    Some(PeerMessage::PlaceInQueueResponse(PlaceInQueueResponse {
+      filename: filename.clone(),
+      place,
+    }))
   }
 
   pub(super) async fn send_browse_response(
     &self,
     conn: &MessageConn,
+    answering: &mut Answering,
     username: &str,
     endpoint: SocketAddr,
   ) -> Result<(), ClientError> {
@@ -172,10 +237,12 @@ impl Client {
     };
     match reply {
       BrowseReply::Response(response) => {
-        write_peer(conn, PeerMessage::BrowseResponse(response)).await?;
+        answering
+          .send(conn, &[PeerMessage::BrowseResponse(response)])
+          .await?;
       }
       BrowseReply::Encoded(frame) => {
-        conn.write_encoded(frame).await?;
+        answering.send_encoded(conn, frame).await?;
         tracing::debug!(code = PeerCode::BrowseResponse.code(), "peer message sent");
       }
     }
@@ -186,6 +253,7 @@ impl Client {
   pub(super) async fn send_user_info(
     &self,
     conn: &MessageConn,
+    answering: &mut Answering,
     username: &str,
     endpoint: SocketAddr,
   ) -> Result<(), ClientError> {
@@ -208,7 +276,9 @@ impl Client {
     };
     // everyone may upload to us unless the application says otherwise
     info.upload_permitted.get_or_insert(1);
-    write_peer(conn, PeerMessage::InfoResponse(info)).await?;
+    answering
+      .send(conn, &[PeerMessage::InfoResponse(info)])
+      .await?;
     tracing::debug!("User info sent");
     Ok(())
   }
@@ -216,6 +286,7 @@ impl Client {
   pub(super) async fn send_folder_contents(
     &self,
     conn: &MessageConn,
+    answering: &mut Answering,
     username: &str,
     endpoint: SocketAddr,
     request: FolderContentsRequest,
@@ -238,15 +309,12 @@ impl Client {
         return Ok(());
       }
     };
-    write_peer(
-      conn,
-      PeerMessage::FolderContentsResponse(FolderContentsResponse {
-        token: request.token,
-        directory_name: request.directory_name,
-        directories,
-      }),
-    )
-    .await?;
+    let folder = PeerMessage::FolderContentsResponse(FolderContentsResponse {
+      token: request.token,
+      directory_name: request.directory_name,
+      directories,
+    });
+    answering.send(conn, &[folder]).await?;
     tracing::debug!(token = request.token, "Folder contents sent");
     Ok(())
   }

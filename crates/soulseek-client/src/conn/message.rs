@@ -198,16 +198,14 @@ impl MessageConn {
 
   /// queues `bytes` and waits until they are written
   pub async fn write(&self, bytes: Vec<u8>) -> Result<(), ClientError> {
-    settled(self.send_with_receipt(bytes)?).await
+    written(self.send_with_receipt(bytes)?).await
   }
 
   /// Queues `frame` and waits until all of it is written. A reader that fails or ends early
   /// after part of the frame went out closes the connection, whose stream can no longer be
   /// framed.
   pub async fn write_encoded(&self, frame: EncodedFrame) -> Result<(), ClientError> {
-    let (written, done) = oneshot::channel();
-    self.enqueue(Payload::Encoded(frame), Some(written))?;
-    settled(done).await
+    written(self.send_encoded_with_receipt(frame)?).await
   }
 
   /// queues `bytes` and returns what resolves once they are written, so several writes can be
@@ -215,6 +213,13 @@ impl MessageConn {
   pub(crate) fn send_with_receipt(&self, bytes: Vec<u8>) -> Result<Receipt, ClientError> {
     let (written, done) = oneshot::channel();
     self.enqueue(Payload::Bytes(bytes), Some(written))?;
+    Ok(done)
+  }
+
+  /// [`MessageConn::send_with_receipt`] for a frame encoded ahead of time
+  pub(crate) fn send_encoded_with_receipt(&self, frame: EncodedFrame) -> Result<Receipt, ClientError> {
+    let (written, done) = oneshot::channel();
+    self.enqueue(Payload::Encoded(frame), Some(written))?;
     Ok(done)
   }
 
@@ -314,7 +319,7 @@ async fn write_loop(mut half: ConnWriteHalf, mut queue: mpsc::Receiver<Outgoing>
 }
 
 /// what a write that was queued comes to; a writer that went away took the connection with it
-async fn settled(done: Receipt) -> Result<(), ClientError> {
+pub(crate) async fn written(done: Receipt) -> Result<(), ClientError> {
   done.await.unwrap_or_else(|_| {
     Err(ClientError::connection(
       ConnectionErrorKind::Write,

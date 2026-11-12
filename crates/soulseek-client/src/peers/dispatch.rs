@@ -3,7 +3,10 @@
 //! it carries. Every frame is handled on a task of its own, with a bound on how many run at once
 //! across all connections and a smaller one per connection; at a bound a connection's reader
 //! waits before reading its next frame, so a stuck resolver slows the peers sending to it and
-//! loses nothing.
+//! loses nothing. A handler counts against the bounds until its answer is queued, not while the
+//! answer is written, so a peer slow to read holds up no one else. The frames whose order is the
+//! order of a queue, a peer's requests to queue files and the places it reports, are handled one
+//! after another in the order they came; the rest run side by side.
 //!
 //! A frame is read in only when its code is one a message has and its length is within what
 //! that message may need; any other is skipped unread. Anyone can connect and send answers, so
@@ -22,7 +25,7 @@ use soulseek_proto::{
   DecodeError, Limits, PeerCode, PeerMessage, TransferDirection, peek_folder_contents_token,
   peek_search_response,
 };
-use tokio::sync::{Semaphore, watch};
+use tokio::sync::{Semaphore, oneshot, watch};
 use tracing::Instrument;
 
 use crate::client::Client;
@@ -30,6 +33,8 @@ use crate::conn::{FrameBody, HandlerPermit, MessageConn, ReadEvent};
 use crate::error::{ClientError, MessageErrorKind};
 use crate::log::LogLimiter;
 use crate::waiter::WaitKey;
+
+use super::Answering;
 
 static OVERSIZE: LogLimiter = LogLimiter::new();
 static UNASKED: LogLimiter = LogLimiter::new();
@@ -50,10 +55,55 @@ pub struct IncomingBrowse {
 /// What a frame's handler is given by the connection it came on
 struct Arrival {
   frame: Vec<u8>,
-  /// held until the frame is handled, against the bound on frames handled at once
+  /// held until the frame's answer is queued, against the bound on frames handled at once
   permit: Option<HandlerPermit>,
+  /// the frame's place among those of its connection handled in order, for one of them
+  turn: Option<Turn>,
   /// the connection's turn to inflate, one compressed message at a time
   inflating: Arc<Semaphore>,
+}
+
+/// A frame's place among the frames of its connection that are handled one after another
+pub(super) struct Turn {
+  /// closes once the frame before this one has been handled
+  previous: Option<oneshot::Receiver<()>>,
+  /// closes once this frame has been handled, which lets the next one go
+  _handled: oneshot::Sender<()>,
+}
+
+impl Turn {
+  /// The next frame's place, after the one `last` belongs to; `last` becomes this frame's.
+  fn next(last: &mut Option<oneshot::Receiver<()>>) -> Self {
+    let (handled, closed) = oneshot::channel();
+    Self {
+      previous: last.replace(closed),
+      _handled: handled,
+    }
+  }
+
+  /// resolves once the frame before this one has been handled
+  async fn reached(&mut self) {
+    if let Some(previous) = self.previous.take() {
+      // nothing is ever sent: the sender is dropped once its frame is handled, which is all
+      // this waits for
+      let _ = previous.await;
+    }
+  }
+}
+
+/// Whether `frame`, a whole peer frame, is one its connection hands over in order: a request to
+/// queue a file, by either message, or a place in the peer's queue
+fn handled_in_order(frame: &[u8]) -> bool {
+  let word = |at: usize| {
+    frame
+      .get(at..at + 4)
+      .map(|bytes| u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+  };
+  match word(4).and_then(PeerCode::from_code) {
+    Some(PeerCode::QueueDownload | PeerCode::PlaceInQueueResponse) => true,
+    Some(PeerCode::TransferRequest) => word(8) == Some(TransferDirection::Download as u32),
+    _ => false,
+  }
 }
 
 impl Client {
@@ -64,6 +114,7 @@ impl Client {
     let client = self.downgrade();
     let reader = conn.clone();
     let mut browse: Option<watch::Sender<usize>> = None;
+    let mut last_in_order: Option<oneshot::Receiver<()>> = None;
     let inflating = Arc::new(Semaphore::new(1));
     let gate = self.peers().handlers.clone();
     conn.start_reading_gated(gate, move |event, permit| match event {
@@ -91,9 +142,11 @@ impl Client {
       }
       ReadEvent::Frame(frame) => {
         if let Some(client) = client.upgrade() {
+          let turn = handled_in_order(&frame).then(|| Turn::next(&mut last_in_order));
           let arrival = Arrival {
             frame,
             permit,
+            turn,
             inflating: inflating.clone(),
           };
           client.dispatch_peer_frame(&reader, arrival);
@@ -221,7 +274,8 @@ impl Client {
     followed
   }
 
-  /// Hands the frame to a task of its own, which keeps its permit until the frame is handled
+  /// Hands the frame to a task of its own, which keeps its permit until the frame's answer is
+  /// queued
   fn dispatch_peer_frame(&self, conn: &MessageConn, arrival: Arrival) {
     let client = self.clone();
     let conn = conn.clone();
@@ -304,9 +358,14 @@ impl Client {
   async fn handle_peer_frame(&self, conn: &MessageConn, arrival: Arrival) {
     let Arrival {
       frame,
-      permit: _permit,
+      permit,
+      mut turn,
       inflating,
     } = arrival;
+    if let Some(turn) = &mut turn {
+      turn.reached().await;
+    }
+    let mut answering = Answering::new(permit, turn);
     let limits = self.options().limits.frame_limits();
     // the read loop hands over whole frames, whose header it has checked
     let code = frame::header(FrameKind::Peer, &frame, &limits)
@@ -352,7 +411,10 @@ impl Client {
       },
     };
     let code = message.code();
-    if let Err(error) = self.handle_peer_message(conn, &username, message).await {
+    if let Err(error) = self
+      .handle_peer_message(conn, &mut answering, &username, message)
+      .await
+    {
       tracing::warn!(code = code.code(), name = code.name(), %error, "Error handling peer message");
     }
   }
@@ -360,6 +422,7 @@ impl Client {
   async fn handle_peer_message(
     &self,
     conn: &MessageConn,
+    answering: &mut Answering,
     username: &str,
     message: PeerMessage,
   ) -> Result<(), ClientError> {
@@ -370,7 +433,11 @@ impl Client {
     };
     let endpoint = conn.handle().remote();
     match message {
-      M::BrowseRequest => self.send_browse_response(conn, username, endpoint).await?,
+      M::BrowseRequest => {
+        self
+          .send_browse_response(conn, answering, username, endpoint)
+          .await?;
+      }
       M::BrowseResponse(response) => {
         // every browse of this user takes the same response
         let key = peer(PeerCode::BrowseResponse);
@@ -380,16 +447,20 @@ impl Client {
       }
       M::SearchRequest(request) => {
         self
-          .respond_on(conn, username, request.token, &request.query)
+          .respond_on(conn, answering, username, request.token, &request.query)
           .await;
       }
       // routed by its token before decoding
       M::SearchResponse(_) => {}
-      M::InfoRequest => self.send_user_info(conn, username, endpoint).await?,
+      M::InfoRequest => {
+        self
+          .send_user_info(conn, answering, username, endpoint)
+          .await?;
+      }
       M::InfoResponse(info) => self.user_info_received(username, info),
       M::FolderContentsRequest(request) => {
         self
-          .send_folder_contents(conn, username, endpoint, request)
+          .send_folder_contents(conn, answering, username, endpoint, request)
           .await?;
       }
       M::FolderContentsResponse(response) => self.complete_peer(
@@ -403,12 +474,12 @@ impl Client {
       M::TransferRequest(request) => match request.direction {
         TransferDirection::Upload => {
           self
-            .upload_offered(conn, username, endpoint, request)
+            .upload_offered(conn, answering, username, endpoint, request)
             .await?;
         }
         TransferDirection::Download => {
           self
-            .download_requested(conn, username, endpoint, request)
+            .download_requested(conn, answering, username, endpoint, request)
             .await?;
         }
       },
@@ -423,7 +494,7 @@ impl Client {
       M::UploadPlacehold(_) => tracing::debug!("obsolete peer message UploadPlacehold ignored"),
       M::QueueDownload(request) => {
         self
-          .queue_requested(conn, username, endpoint, request.filename)
+          .queue_requested(conn, answering, username, endpoint, request.filename)
           .await?;
       }
       M::PlaceInQueueResponse(response) => self.place_in_queue_received(username, response),
@@ -431,7 +502,7 @@ impl Client {
       M::UploadDenied(denied) => self.download_denied(username, denied),
       M::PlaceInQueueRequest(request) => {
         self
-          .try_send_place_in_queue(conn, username, endpoint, &request.filename)
+          .try_send_place_in_queue(conn, answering, username, endpoint, &request.filename)
           .await;
       }
       M::UploadQueueNotification => tracing::trace!("upload queue notification ignored"),
