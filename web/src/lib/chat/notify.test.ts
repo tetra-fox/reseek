@@ -98,6 +98,7 @@ describe("what a mode delivers", () => {
           return Response.json({ name: "admin", role: "Administrator", session: null });
         }
         if (path.endsWith("/api/v0/application")) return Response.json({ user: {} });
+        if (path.endsWith("/api/v0/options")) return Response.json({ values: {}, revision: "1" });
         return Response.json({ error: "Too many streams" }, { status: 429 });
       })
     );

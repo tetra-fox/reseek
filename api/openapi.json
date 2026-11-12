@@ -10833,6 +10833,35 @@
         }
       }
     },
+    "/api/v0/telemetry/transfers": {
+      "get": {
+        "tags": [
+          "telemetry"
+        ],
+        "summary": "Both directions' transfer figures now: what is queued and in progress and how fast, as the\n`metrics` topic pushes them, for a client that cannot follow the stream.",
+        "operationId": "transfer_figures",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransferMetrics"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v0/tokens": {
       "get": {
         "tags": [

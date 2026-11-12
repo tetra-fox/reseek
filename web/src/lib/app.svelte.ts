@@ -30,6 +30,9 @@ export type Options = Schemas["OptionsDocument"]["values"];
  */
 export type Phase = "initializing" | "login" | "app" | "lost";
 
+/** Why the app could not start when reseek did not answer */
+const LOST = "Lost connection to reseek";
+
 /**
  * The application as the shell shows it: the daemon's state document, the options in effect
  * and the transfer figures, each replaced whole by its frame, and the bootstrap that gets there
@@ -93,28 +96,42 @@ class App {
       this.phase = "login";
       return;
     }
-    if (found === "unreachable") return this.#lost("Lost connection to reseek");
+    if (found === "unreachable") return this.#lost(LOST);
     // the stream opens once the tabs have had their answers, so its first frame finds one leading
     const settling = browserTabs()?.settling() ?? 0;
     if (settling) await new Promise((done) => setTimeout(done, settling));
     if (boot !== this.#boot) return;
     this.#follow();
-    const first = await this.#firstState();
+    const missing = await this.#firstState();
     if (boot !== this.#boot) return;
-    if (!first) return this.#lost("Lost connection to reseek");
+    if (missing) return this.#lost(missing);
     this.phase = "app";
   };
 
-  /** Fetches the state document and the options in effect, for when frames don't arrive */
-  refresh = async () => {
-    const [state, options] = await Promise.all([
+  /**
+   * Fetches the state document, the options in effect and the transfer figures, for when frames
+   * don't arrive. Gives back what could not be had of the state and the options, which the app
+   * needs to show, or null
+   */
+  refresh = async (): Promise<string | null> => {
+    const [state, options, metrics] = await Promise.all([
       call(() => api.GET("/api/v0/application")),
-      call(() => api.GET("/api/v0/options"))
+      call(() => api.GET("/api/v0/options")),
+      call(() => api.GET("/api/v0/telemetry/transfers"))
     ]);
     if (state.ok) this.state = state.data;
     if (options.ok) this.#tookOptions(options.data);
-    return state.ok;
+    // figures that can't be read leave the last ones shown until the next poll
+    if (metrics.ok) this.metrics = metrics.data;
+    return this.#missing();
   };
+
+  /** What of the state and the options is not here yet, null once both are */
+  #missing(): string | null {
+    if (!this.state) return LOST;
+    if (!this.options) return "Could not load the settings";
+    return null;
+  }
 
   #tookOptions(document: Schemas["OptionsDocument"]) {
     this.options = document.values;
@@ -193,9 +210,12 @@ class App {
     live.start();
   }
 
-  /** Resolves true once a state document is here: from the stream, or fetched when it can't come */
-  async #firstState(): Promise<boolean> {
-    if (this.state) return true;
+  /**
+   * Resolves once the state document and the options are here, from the stream or fetched when
+   * they can't come, with null; else with what could not be had
+   */
+  async #firstState(): Promise<string | null> {
+    if (!this.#missing()) return null;
     if (live.status === "connecting") {
       await new Promise<void>((resolve) => {
         const stops: (() => void)[] = [];
@@ -203,7 +223,11 @@ class App {
           for (const stop of stops.splice(0)) stop();
           resolve();
         };
-        stops.push(live.on("application.state", done));
+        const both = () => {
+          if (!this.#missing()) done();
+        };
+        // the stream's snapshots bring the state, then the options
+        stops.push(live.on("application.state", both), live.on("application.options", both));
         // the stream ended before its first state: polling takes over
         stops.push(
           $effect.root(() => {
@@ -214,7 +238,7 @@ class App {
         );
       });
     }
-    return !!this.state || (await this.refresh());
+    return this.#missing() && (await this.refresh());
   }
 
   #lost(reason: string) {

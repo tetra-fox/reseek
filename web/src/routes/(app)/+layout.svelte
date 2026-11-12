@@ -139,12 +139,16 @@
     return untrack(() => live.retain("transfers"));
   });
 
-  // polls the state document while frames don't keep it current
+  // polls the state document, the transfer figures and the chats while frames don't keep them
+  // current
   $effect(() => {
     if (app.phase !== "app") return;
     const ms = live.pollMs;
     if (ms === null) return;
-    const timer = setInterval(() => void app.refresh(), ms);
+    const timer = setInterval(() => {
+      void app.refresh();
+      void chat.load();
+    }, ms);
     return () => clearInterval(timer);
   });
 </script>

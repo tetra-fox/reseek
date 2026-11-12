@@ -12,7 +12,7 @@ use api_types::reports::{
   HistogramQuery, LeaderboardEntry, LeaderboardQuery, ParetoQuery, SummaryQuery, SummaryReport,
   TransferExceptionDetail, UserReport, UserReportQuery,
 };
-use api_types::telemetry::PrometheusMetric;
+use api_types::telemetry::{PrometheusMetric, TransferMetrics};
 use api_types::users::UsernameQuery;
 use axum::extract::State;
 use axum::http::{HeaderMap, header};
@@ -40,6 +40,7 @@ pub fn routes() -> OpenApiRouter<AppState> {
   OpenApiRouter::new()
     .routes(routes!(metrics))
     .routes(routes!(kpis))
+    .routes(routes!(transfers))
     .routes(routes!(summary))
     .routes(routes!(histogram))
     .routes(routes!(leaderboard))
@@ -144,6 +145,20 @@ async fn kpis(
   _caller: Authorized<AnyRole>,
 ) -> Result<Json<BTreeMap<String, PrometheusMetric>>, ApiError> {
   app.services.reports.kpis().await.map(Json)
+}
+
+/// Both directions' transfer figures now: what is queued and in progress and how fast, as the
+/// `metrics` topic pushes them, for a client that cannot follow the stream.
+#[utoipa::path(
+  operation_id = "transfer_figures",
+  get, path = "/telemetry/transfers", tag = "telemetry",
+  responses((status = 200, body = TransferMetrics), (status = 401, body = api_types::ErrorBody))
+)]
+async fn transfers(
+  State(app): State<AppState>,
+  _caller: Authorized<AnyRole>,
+) -> Json<TransferMetrics> {
+  Json(app.telemetry.metrics().transfers().figures())
 }
 
 /// Completed transfers by direction and outcome. The window is the last 7 days unless given.

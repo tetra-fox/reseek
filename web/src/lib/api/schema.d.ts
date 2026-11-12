@@ -2396,6 +2396,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v0/telemetry/transfers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Both directions' transfer figures now: what is queued and in progress and how fast, as the
+         *     `metrics` topic pushes them, for a client that cannot follow the stream.
+         */
+        get: operations["transfer_figures"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v0/tokens": {
         parameters: {
             query?: never;
@@ -17543,6 +17563,33 @@ export interface operations {
                 };
             };
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    transfer_figures: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransferMetrics"];
+                };
+            };
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
