@@ -12,19 +12,23 @@ use tracing::{Instrument, debug, info, warn};
 use uuid::Uuid;
 
 use super::enqueue::gate_for;
-use super::{COMPLETED, Downloads, InFlight, Pause, Running};
+use super::{Ask, COMPLETED, Downloads, InFlight, Running};
 use crate::transfers::state::State;
 use crate::transfers::store::Saved;
 use crate::transfers::{Record, store};
 
+/// Why a pause of a download a cancel has stopped is refused.
+const CANCELING: &str = "the download is being canceled";
+
 impl Downloads {
-  /// Takes the pause the running download `id` was canceled for, if a cancel did not take it
-  /// back first; from here a cancel leaves the task to write it paused and ends the row after.
+  /// Takes the pause the running download `id` was stopped for, when a cancel did not ask for
+  /// it to end canceled; from here a cancel leaves the task to write it paused and ends the row
+  /// itself.
   pub(super) fn take_pause(&self, id: Uuid) -> bool {
     let mut in_flight = lock(&self.in_flight);
     match in_flight.get_mut(&id) {
-      Some(entry) if entry.pause == Pause::Asked => {
-        entry.pause = Pause::Writing;
+      Some(entry) if entry.ask == Ask::Pause => {
+        entry.pause_taken = true;
         true
       }
       _ => false,
@@ -57,7 +61,8 @@ impl Downloads {
 
   /// Pauses the downloads `ids`: a running one stops wherever it is and is written paused by
   /// its task, one without a task is written paused here. A download that finished, whose file
-  /// arrived and is being moved, or that is paused already is refused.
+  /// arrived and is being moved, that a cancel has stopped, or that is paused already is
+  /// refused.
   pub async fn pause(&self, ids: Vec<Uuid>) -> Vec<Result<Uuid, BulkFailure>> {
     let mut outcomes = Vec::new();
     for record in self.records(ids).await {
@@ -79,22 +84,26 @@ impl Downloads {
       let running = {
         let mut in_flight = lock(&self.in_flight);
         match in_flight.get_mut(&record.id) {
-          Some(entry) if entry.arrived => Running::Arrived,
-          Some(entry) => {
-            // a task already writing itself paused keeps on
-            if entry.pause == Pause::No {
-              entry.pause = Pause::Asked;
+          Some(entry) if entry.arrived => Err(COMPLETED),
+          Some(entry) => match entry.ask {
+            Ask::Cancel { .. } => Err(CANCELING),
+            Ask::Pause => Ok(Running::Stopped),
+            Ask::Nothing => {
+              entry.ask = Ask::Pause;
+              entry.cancel.cancel();
+              Ok(Running::Stopped)
             }
-            entry.cancel.cancel();
-            Running::Stopped
-          }
-          None => Running::No,
+          },
+          None => Ok(Running::No),
         }
       };
-      if running == Running::Arrived {
-        outcomes.push(Err(failure(record.id, COMPLETED)));
-        continue;
-      }
+      let running = match running {
+        Ok(running) => running,
+        Err(why) => {
+          outcomes.push(Err(failure(record.id, why)));
+          continue;
+        }
+      };
       if running == Running::Stopped {
         debug!(id = %record.id, "running download stopped to be paused");
       } else {
@@ -213,7 +222,7 @@ impl Downloads {
   async fn pause_done(&self, id: Uuid) {
     let ended = lock(&self.in_flight)
       .get(&id)
-      .filter(|entry| entry.pause != Pause::No)
+      .filter(|entry| entry.ask == Ask::Pause)
       .map(|entry| entry.ended.subscribe());
     if let Some(mut ended) = ended {
       debug!(%id, "resume waits for the download to stop");

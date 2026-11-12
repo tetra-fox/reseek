@@ -18,10 +18,10 @@ use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, info, info_span, warn};
 use uuid::Uuid;
 
-use super::Downloads;
 use super::attempt::{Attempted, Failure};
 use super::destination::incomplete_path;
 use super::starts::{Grant, Turn};
+use super::{Downloads, InFlight};
 use crate::files::WriteGuard;
 use crate::safety::Os;
 use crate::transfers::state::State;
@@ -305,7 +305,7 @@ impl Downloads {
   pub(super) fn removal_pending(&self, id: Uuid) -> bool {
     lock(&self.in_flight)
       .get(&id)
-      .is_some_and(|entry| entry.remove)
+      .is_some_and(InFlight::removing)
   }
 
   /// Writes a download that failed for good as completed with its outcome, unless it has ended
@@ -372,11 +372,12 @@ impl Downloads {
     lock(&self.asked).remove(&id);
     self.starts.forget(id);
     let entry = lock(&self.in_flight).remove(&id);
-    if entry.is_some_and(|entry| entry.remove) {
+    if entry.is_some_and(|entry| entry.removing()) {
       let download = api_types::transfers::TransferDirection::Download;
       match removal::remove(&self.db, download, id).await {
         Ok(Some(taken)) => self.taken_out(&[taken]).await,
-        Ok(None) => debug!(%id, "download to remove not removed; it has not completed"),
+        // its end was written removed already
+        Ok(None) => {}
         Err(e) => warn!(%id, error = %e, "ended download not removed"),
       }
     }

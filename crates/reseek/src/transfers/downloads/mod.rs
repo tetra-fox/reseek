@@ -75,12 +75,13 @@ const COMPLETED: &str = "the download has completed";
 struct InFlight {
   /// stops the download wherever it is
   cancel: CancellationToken,
-  /// remove the record from the listings once it has ended
-  remove: bool,
+  /// what the task was asked to end as
+  ask: Ask,
+  /// the task took the pause asked for and writes the download paused, so a cancel that comes
+  /// now ends the row itself
+  pause_taken: bool,
   /// why it was canceled, when not by a plain cancel
   reason: Option<&'static str>,
-  /// whether it was canceled to be paused, to wait here again keeping what arrived
-  pause: Pause,
   /// its file arrived and is handed to its move, which a pause or cancel no longer stops
   arrived: bool,
   /// for a file its user sends unasked, what counts it against the files they may send at once
@@ -96,9 +97,9 @@ impl InFlight {
   fn new(cancel: CancellationToken) -> Self {
     Self {
       cancel,
-      remove: false,
+      ask: Ask::Nothing,
+      pause_taken: false,
       reason: None,
-      pause: Pause::No,
       arrived: false,
       _sending: None,
       ended: watch::Sender::new(()),
@@ -106,15 +107,23 @@ impl InFlight {
   }
 }
 
-/// Where a download's pause is.
+impl InFlight {
+  /// Whether a cancel asked for the download to leave the listings once it has ended.
+  fn removing(&self) -> bool {
+    matches!(self.ask, Ask::Cancel { remove: true })
+  }
+}
+
+/// What a download's task was asked to end as. A cancel beats a pause whichever came first;
+/// a second ask of the same kind changes nothing but adds a removal a cancel asked for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Pause {
-  /// none was asked for
-  No,
-  /// its task was stopped to be paused and has not taken the pause yet; a cancel takes it back
-  Asked,
-  /// its task took the pause and writes it paused; a cancel ends the row itself after
-  Writing,
+enum Ask {
+  /// nothing: it runs on
+  Nothing,
+  /// paused: it waits here again, keeping what arrived
+  Pause,
+  /// canceled, and taken out of the listings once ended with `remove`
+  Cancel { remove: bool },
 }
 
 /// What a cancel found of a download's task.
@@ -506,22 +515,21 @@ impl Downloads {
     Ok(ended || remove)
   }
 
-  /// Stops the running download `id`, marking it for removal with `remove` and noting
-  /// `reason`; a pause its task has not taken yet is taken back, so the task ends it canceled.
-  /// One whose file arrived is not stopped, only marked for removal. One whose task took a
-  /// pause and is writing it paused is left to it, and answers as one no task runs, for the
-  /// cancel to end the row after.
+  /// Asks the running download `id` to end canceled, marking it for removal with `remove` and
+  /// noting `reason`, over a pause asked for before. One whose file arrived is not stopped,
+  /// only marked for removal. One whose task took a pause and is writing it paused answers as
+  /// one no task runs, for the cancel to end the row itself.
   fn cancel_running(&self, id: Uuid, remove: bool, reason: Option<&'static str>) -> Running {
     let mut in_flight = lock(&self.in_flight);
     let Some(entry) = in_flight.get_mut(&id) else {
       return Running::No;
     };
-    if entry.pause == Pause::Writing {
+    let removing = entry.removing() || remove;
+    entry.ask = Ask::Cancel { remove: removing };
+    if entry.pause_taken {
       debug!(%id, remove, "cancel of a download writing itself paused");
       return Running::No;
     }
-    entry.pause = Pause::No;
-    entry.remove |= remove;
     if entry.arrived {
       debug!(%id, remove, "cancel of a download moving its file");
       return Running::Arrived;

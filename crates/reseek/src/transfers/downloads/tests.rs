@@ -1400,9 +1400,8 @@ async fn a_purge_stops_and_removes_every_transfer_of_the_user_and_leaves_the_oth
   assert_eq!(listed("bob").await.unwrap(), 1, "bob's download stays");
 }
 
-/// Starts a download of alice's that waits to try her again, then pauses it through the engine,
-/// which stops its task; returns it before the task has written it paused, or after.
-async fn paused_while_running(app: &TestApp) -> Uuid {
+/// Starts a download of alice's whose task waits to try her again; returns it.
+async fn waiting_to_retry(app: &TestApp) -> Uuid {
   app
     .state
     .users
@@ -1417,14 +1416,21 @@ async fn paused_while_running(app: &TestApp) -> Uuid {
     .call("POST", "/api/v0/transfers/downloads/bulk", Some(resume))
     .await;
   read_until(app, held.id, |r| r.next_attempt_at().is_some()).await;
-  let paused = app.state.downloads.pause(vec![held.id]).await;
-  assert!(matches!(paused[..], [Ok(_)]), "{paused:?}");
   held.id
 }
 
+/// [`waiting_to_retry`], then paused through the engine, which stops its task; returns it
+/// before the task has written it paused, or after.
+async fn paused_while_running(app: &TestApp) -> Uuid {
+  let id = waiting_to_retry(app).await;
+  let paused = app.state.downloads.pause(vec![id]).await;
+  assert!(matches!(paused[..], [Ok(_)]), "{paused:?}");
+  id
+}
+
 /// Waits for the download `id` to let go of its task, then says it ended canceled, out of the
-/// listings and not paused.
-async fn ended_canceled_and_removed(app: &TestApp, id: Uuid) {
+/// listings when `removed`, and not paused.
+async fn ended_canceled(app: &TestApp, id: Uuid, removed: bool) {
   let stopped = tokio::time::timeout(std::time::Duration::from_secs(5), async {
     while reseek_shares::lock(&app.state.downloads.in_flight).contains_key(&id) {
       tokio::time::sleep(std::time::Duration::from_millis(5)).await;
@@ -1437,10 +1443,15 @@ async fn ended_canceled_and_removed(app: &TestApp, id: Uuid) {
     (ended.state.kind(), ended.removed, ended.paused),
     (
       TransferStates::Completed(TransferOutcome::Cancelled),
-      true,
+      removed,
       false
     )
   );
+}
+
+/// [`ended_canceled`], taken out of the listings.
+async fn ended_canceled_and_removed(app: &TestApp, id: Uuid) {
+  ended_canceled(app, id, true).await;
 }
 
 #[tokio::test]
@@ -1603,4 +1614,42 @@ async fn a_purge_of_a_user_forgotten_earlier_removes_their_transfers_and_answers
     .call("DELETE", "/api/v0/users/alice?purge=true", None)
     .await;
   assert_eq!(status, 404, "nothing of alice is left");
+}
+
+/// Cancels a download whose task waits to try again, with `remove`, then pauses it before the
+/// task has ended: the pause is refused and the download ends canceled.
+async fn cancel_then_pause(remove: bool) {
+  let config = format!("[transfers.download.retry]\ndelay = \"1h\"\nmax_delay = \"1h\"\n{TRUSTED}");
+  let app = app(&config, &[]).await;
+  let id = waiting_to_retry(&app).await;
+  let downloads = &app.state.downloads;
+  assert!(downloads.cancel("alice", id, remove).await.unwrap());
+  let paused = downloads.pause(vec![id]).await;
+  assert!(matches!(paused[..], [Err(_)]), "{paused:?}");
+  ended_canceled(&app, id, remove).await;
+}
+
+#[tokio::test]
+async fn a_pause_after_a_cancel_with_removal_is_refused_and_the_download_ends_removed() {
+  cancel_then_pause(true).await;
+}
+
+#[tokio::test]
+async fn a_pause_after_a_cancel_is_refused_and_the_download_ends_canceled() {
+  cancel_then_pause(false).await;
+}
+
+#[tokio::test]
+async fn a_bulk_pause_during_a_purge_leaves_the_download_ended_and_removed() {
+  let config = format!("[transfers.download.retry]\ndelay = \"1h\"\nmax_delay = \"1h\"\n{TRUSTED}");
+  let app = app(&config, &[]).await;
+  let id = waiting_to_retry(&app).await;
+  app.state.downloads.purge("alice").await.unwrap();
+  let pause = json!({ "ids": [id], "action": "pause" });
+  let (status, answer) = app
+    .call("POST", "/api/v0/transfers/downloads/bulk", Some(pause))
+    .await;
+  assert_eq!(status, 200);
+  assert_eq!(answer["ok"], json!([]), "{answer}");
+  ended_canceled_and_removed(&app, id).await;
 }
