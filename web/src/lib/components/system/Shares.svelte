@@ -79,7 +79,6 @@
   // a scan that starts or ends changes the counts; they are written just after the state flips
   $effect(() => {
     void hosts;
-    void scanning;
     if (pending === undefined) return;
     untrack(() => void shares.load());
     if (scanning) return;
