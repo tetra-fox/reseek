@@ -18,6 +18,8 @@ pub mod state;
 pub mod store;
 pub mod uploads;
 
+use std::time::Duration;
+
 use api_types::transfers::TransferDirection;
 use rusqlite::Row;
 use rusqlite::types::Type;
@@ -28,6 +30,19 @@ pub use record::{ASKED_ORDER, COLUMNS, NEWEST_FIRST, Record, transfer};
 /// `transfers.db`: the `Transfers` table, each transfer's state history, and which speed limits
 /// are in force.
 pub static SCHEMA: Schema = db::schema!("transfers", ["0001_initial", "0002_queue_position"]);
+
+/// How long the tasks of running transfers get to end at shutdown; what they leave unfinished
+/// is ended after.
+const STOPPING: Duration = Duration::from_secs(5);
+
+/// Why a transfer canceled because its user was blocked ended.
+const BLOCKED: &str = "Blocked";
+
+/// More states than one try of a transfer reports.
+const STATES: usize = 16;
+
+/// How often a transfer's progress is written and pushed at most.
+const PROGRESS_EVERY: Duration = Duration::from_millis(250);
 
 /// Opens `transfers.db` in `location`.
 pub async fn open(location: &Location) -> Result<Database, DbError> {

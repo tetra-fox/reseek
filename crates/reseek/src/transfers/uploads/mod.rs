@@ -21,7 +21,6 @@ mod tests;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, Weak};
-use std::time::Duration;
 
 use api_types::live::LiveFrame;
 use api_types::transfers::{TransferDirection, TransferOutcome, TransferStates};
@@ -34,7 +33,7 @@ use tokio_util::task::TaskTracker;
 use tracing::{Instrument, debug, info, info_span, warn};
 use uuid::Uuid;
 
-use super::{Record, removal, store};
+use super::{BLOCKED, Record, STOPPING, removal, store};
 use crate::api::error::ApiError;
 use crate::config::Options;
 use crate::db::Database;
@@ -50,12 +49,6 @@ use intake::Intake;
 pub use intake::{NOT_SHARED, OVERWHELMED};
 pub use queue::Forecast;
 use queue::UploadQueue;
-
-/// How long the tasks of running uploads get to end at shutdown.
-const STOPPING: Duration = Duration::from_secs(5);
-
-/// Why an upload canceled at block time ended.
-const BLOCKED: &str = "Blocked";
 
 /// What is kept for an upload whose task runs.
 struct InFlight {

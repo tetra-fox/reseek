@@ -26,7 +26,6 @@ mod tests;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, Weak};
-use std::time::Duration;
 
 use api_types::live::LiveFrame;
 use api_types::transfers::{TransferDirection, TransferOutcome, TransferStates};
@@ -43,7 +42,7 @@ use uuid::Uuid;
 
 use super::categories::UNFINISHED;
 use super::store::Saved;
-use super::{Record, direction_text, removal, store};
+use super::{BLOCKED, Record, STOPPING, direction_text, removal, store};
 use crate::analysis::Analysis;
 use crate::api::error::ApiError;
 use crate::config::Options;
@@ -62,18 +61,11 @@ use crate::users::Directory;
 pub use destination::incomplete_path;
 pub use enqueue::{Enqueued, FileRequest, Group};
 
-/// How long the tasks of downloads still downloading get to end at shutdown before their
-/// records are ended anyway. A task moving its arrived file is waited for however long it takes.
-const STOPPING: Duration = Duration::from_secs(5);
-
 /// How many enqueue calls of the API run at once.
 const ENQUEUE_CALLS: usize = 2;
 
 /// How many places in queue peers sent on their own wait to be written.
 const PLACES_WAITING: usize = 64;
-
-/// Why a download canceled at block time ended.
-const BLOCKED: &str = "Blocked";
 
 /// Why a download canceled without a running task ended.
 const CANCELED: &str = "The operation was canceled.";

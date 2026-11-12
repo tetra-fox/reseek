@@ -28,13 +28,7 @@ use super::intake::Located;
 use crate::relay::Controller;
 use crate::shares::LOCAL_HOST;
 use crate::transfers::state::{self, State};
-use crate::transfers::{Record, removal, store};
-
-/// More states than one upload reports.
-const STATES: usize = 16;
-
-/// How often an upload's progress is written and pushed at most.
-const PROGRESS_EVERY: Duration = Duration::from_millis(250);
+use crate::transfers::{PROGRESS_EVERY, Record, STATES, removal, store};
 
 /// Why an upload whose file is gone when it starts ended.
 const FILE_GONE: &str = "File could not be found";

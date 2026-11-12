@@ -29,13 +29,7 @@ use crate::files::{WriteGuard, create_file};
 use crate::network::options::request_style;
 use crate::safety::Os;
 use crate::transfers::state::{self, State};
-use crate::transfers::{Record, store};
-
-/// More states than one try reports.
-const STATES: usize = 16;
-
-/// How often a download's progress is written and pushed at most.
-const PROGRESS_EVERY: Duration = Duration::from_millis(250);
+use crate::transfers::{PROGRESS_EVERY, Record, STATES, store};
 
 /// The smallest size an old 32-bit client reports as 0, one byte short of 2 GiB.
 const OVERFLOWED_SIZE: u64 = i32::MAX as u64;
