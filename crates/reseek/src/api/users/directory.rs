@@ -278,8 +278,8 @@ async fn transfers(
     .map(Json)
 }
 
-/// Forgets a user and their block; `purge` also removes their transfers from the listings and
-/// deletes the conversation with them.
+/// Forgets a user and their block; `purge` also removes their finished transfers from the
+/// listings and deletes the conversation with them.
 #[utoipa::path(
   delete, path = "/users/{username}", tag = "users",
   params(("username" = String, Path, description = "the user"), UsernameQuery, DeleteUserQuery),

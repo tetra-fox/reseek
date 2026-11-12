@@ -12,7 +12,7 @@ use rusqlite::params_from_iter;
 use rusqlite::types::Value;
 
 use crate::db::{Database, DbError, read_timestamp};
-use crate::transfers::categories::{FAILED, IN_PROGRESS, QUEUED, SUCCESSFUL, condition};
+use crate::transfers::categories::{COMPLETED, FAILED, IN_PROGRESS, QUEUED, SUCCESSFUL, condition};
 use crate::transfers::{COLUMNS, NEWEST_FIRST, direction_text, transfer};
 
 /// How long a user's figures are reused.
@@ -163,13 +163,17 @@ pub async fn page(
     .await
 }
 
-/// Takes every transfer with `username` out of the listings, keeping them for the reports.
+/// Takes every finished transfer with `username` out of the listings, keeping them for the
+/// reports. One still running or queued stays listed, as its task writes it until it ends.
 pub async fn remove_all(transfers: &Database, username: &str) -> Result<usize, DbError> {
   let username = username.to_string();
   transfers
     .write(move |conn| {
       conn.execute(
-        "UPDATE Transfers SET Removed = 1, RemovedAt = ?2 WHERE Username = ?1 AND Removed = 0",
+        &format!(
+          "UPDATE Transfers SET Removed = 1, RemovedAt = ?2 WHERE Username = ?1 AND Removed = 0 \
+           AND {COMPLETED}"
+        ),
         rusqlite::params![username, crate::db::timestamp(chrono::Utc::now())],
       )
     })
@@ -251,8 +255,8 @@ mod tests {
     assert_eq!(failed.transfers.len(), 1);
     assert_eq!(
       remove_all(&db, "alice").await.unwrap(),
-      6,
-      "the removed ones stay as they are"
+      4,
+      "the removed ones stay as they are, and the unfinished ones listed"
     );
   }
 }
