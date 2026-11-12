@@ -86,12 +86,16 @@ class Activity {
     return this.#release;
   }
 
-  /** Reads the whole log, which the frames then keep */
+  /** Reads the whole log, which the frames then keep; an entry a frame brought meanwhile stays */
   load = async () => {
+    const turn = this.entries.reading();
     const outcome = await call(() => api.GET("/api/v0/activity"));
-    if (!outcome.ok) return void (this.error = outcome.error);
+    if (!outcome.ok) {
+      if (this.entries.abandon(turn)) this.error = outcome.error;
+      return;
+    }
+    if (!this.entries.reconcile(outcome.data, turn)) return;
     this.error = "";
-    for (const entry of outcome.data) this.entries.upsert(entry);
     this.#trim();
   };
 

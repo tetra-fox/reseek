@@ -22,6 +22,10 @@ class Jobs {
   #timer: ReturnType<typeof setTimeout> | undefined;
   #reading = false;
   #stops: (() => void)[] = [];
+  /** counts the reads begun, so only the last one's answer is taken */
+  #turn = 0;
+  /** the files queued by frames while the last read was on its way, which it may have missed */
+  #queuedDuring: Job[] = [];
 
   /** Keeps the queue current while the returned function has not been called */
   retain(): () => void {
@@ -33,6 +37,7 @@ class Jobs {
           void this.refresh();
         }),
         live.on("files.analysis_queued", (job) => {
+          if (this.#reading) this.#queuedDuring.push(job);
           if (!this.list.some((j) => j.id === job.id)) this.list = [...this.list, job];
           // a batch queues many at once: one read after a while covers them all
           this.#timer ??= setTimeout(() => void this.refresh(), BUSY_MS);
@@ -62,17 +67,25 @@ class Jobs {
     };
   }
 
-  /** Reads the queue now, and again after a while */
+  /**
+   * Reads the queue now, and again after a while. A read overtaken by a later one is dropped,
+   * and a file a frame queued while it was on its way stays
+   */
   async refresh() {
     clearTimeout(this.#timer);
     this.#timer = undefined;
+    const turn = ++this.#turn;
     this.#reading = true;
+    this.#queuedDuring = [];
     const outcome = await call(() => api.GET("/api/v0/analysis/jobs"));
+    if (turn !== this.#turn) return;
     this.#reading = false;
     if (outcome.ok) {
-      this.list = outcome.data.jobs;
+      const listed = new Set(outcome.data.jobs.map((j) => j.id));
+      this.list = [...outcome.data.jobs, ...this.#queuedDuring.filter((j) => !listed.has(j.id))];
       this.backlog = outcome.data.backlog;
     }
+    this.#queuedDuring = [];
     // a queued frame that arrived during the read set a timer, which this one replaces
     clearTimeout(this.#timer);
     this.#timer = undefined;

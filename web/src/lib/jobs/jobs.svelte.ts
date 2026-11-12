@@ -23,6 +23,8 @@ class Jobs {
   error = $state<string | null>(null);
   /** why the last read of the schedules failed; the card says it while it has none to show */
   schedulesError = $state<string | null>(null);
+  /** counts the schedules taken from frames, which are newer than a read already on its way */
+  #scheduleFrames = 0;
 
   constructor() {
     live.on("jobs.updated", (job) => void this.rows.upsert(job));
@@ -30,6 +32,7 @@ class Jobs {
       for (const id of ids) this.rows.remove(id);
     });
     live.on("jobs.schedules", (schedules) => {
+      this.#scheduleFrames += 1;
       this.schedules = schedules;
       this.schedulesError = null;
     });
@@ -43,10 +46,13 @@ class Jobs {
   /** Reads the jobs and the schedules again */
   async load() {
     const turn = this.rows.reading();
+    const frames = this.#scheduleFrames;
     const [jobs, schedules] = await Promise.all([
       call(() => api.GET("/api/v0/jobs")),
       call(() => api.GET("/api/v0/jobs/schedules"))
     ]);
+    // a later read, or the end of the session, came meanwhile
+    if (!this.rows.latest(turn)) return;
     if (jobs.ok) {
       this.rows.reconcile(jobs.data.jobs, turn);
       this.error = null;
@@ -54,12 +60,15 @@ class Jobs {
       this.rows.abandon(turn);
       this.error = jobs.error;
     }
-    if (schedules.ok) {
-      this.schedules = schedules.data;
-      this.schedulesError = null;
-    } else {
-      // the schedules shown before stay, kept current by the frames
-      this.schedulesError = schedules.error;
+    // schedules a frame brought while they were read are newer than the read's
+    if (frames === this.#scheduleFrames) {
+      if (schedules.ok) {
+        this.schedules = schedules.data;
+        this.schedulesError = null;
+      } else {
+        // the schedules shown before stay, kept current by the frames
+        this.schedulesError = schedules.error;
+      }
     }
     this.loaded = true;
   }
