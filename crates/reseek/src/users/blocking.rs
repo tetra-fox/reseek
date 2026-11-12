@@ -299,6 +299,22 @@ impl Decision {
   }
 }
 
+/// The remembered answers, and how many times answers were forgotten, so an answer worked out
+/// while a change forgot the answers is not remembered after it.
+#[derive(Default)]
+struct Remembered {
+  answers: HashMap<DecisionKey, Decision>,
+  forgets: u64,
+}
+
+impl Remembered {
+  /// Forgets the answers `forgotten` picks.
+  fn forget(&mut self, forgotten: impl Fn(&DecisionKey) -> bool) {
+    self.forgets += 1;
+    self.answers.retain(|key, _| !forgotten(key));
+  }
+}
+
 /// Who is blocked: our blocks and the configuration's blacklist, with the remembered answers.
 #[derive(Default)]
 pub struct Blocks {
@@ -307,7 +323,7 @@ pub struct Blocks {
   active: RwLock<HashMap<String, Active>>,
   rules: RwLock<Arc<Rules>>,
   blocklist: RwLock<Option<LoadedBlocklist>>,
-  decisions: Mutex<HashMap<DecisionKey, Decision>>,
+  decisions: Mutex<Remembered>,
 }
 
 impl Blocks {
@@ -328,7 +344,7 @@ impl Blocks {
   pub fn configure(&self, options: &Options) {
     let rules = Rules::of(options, self.case_sensitive);
     *self.rules.write().unwrap_or_else(PoisonError::into_inner) = Arc::new(rules);
-    lock(&self.decisions).clear();
+    lock(&self.decisions).forget(|_| true);
   }
 
   /// Takes the blocklist file loaded from `path`, `None` for none.
@@ -340,7 +356,7 @@ impl Blocks {
       path,
       list: Arc::new(list),
     });
-    lock(&self.decisions).clear();
+    lock(&self.decisions).forget(|_| true);
   }
 
   /// Takes our block of a user, new or replaced.
@@ -386,7 +402,7 @@ impl Blocks {
   /// answer for other users too, else the user's own.
   fn forget_for(&self, username: &str, before: Option<Active>, addressed: bool) {
     if addressed || before.is_some_and(|b| !b.ranges.is_empty()) {
-      lock(&self.decisions).clear();
+      lock(&self.decisions).forget(|_| true);
     } else {
       self.forget(username);
     }
@@ -394,11 +410,13 @@ impl Blocks {
 
   /// Drops the remembered answers older than they are kept for.
   pub fn forget_stale(&self) {
-    lock(&self.decisions).retain(|_, decision| decision.fresh());
+    lock(&self.decisions)
+      .answers
+      .retain(|_, decision| decision.fresh());
   }
 
   fn forget(&self, username: &str) {
-    lock(&self.decisions).retain(|(name, _, _), _| name != username);
+    lock(&self.decisions).forget(|(name, _, _)| name == username);
   }
 
   /// Whether the configuration blocks `username` by name or pattern.
@@ -440,6 +458,7 @@ impl Blocks {
   /// blocked. For a check that must stay cheap and is followed by the full one.
   pub fn remembers_blocked(&self, username: &str, scope: BlockScope) -> bool {
     lock(&self.decisions)
+      .answers
       .iter()
       .any(|((name, _, remembered), decision)| {
         name == username && *remembered == scope && decision.blocked && decision.fresh()
@@ -463,10 +482,11 @@ impl Blocks {
   /// address is blocked from every address.
   pub fn is_blocked(&self, username: &str, ip: Option<IpAddr>, scope: BlockScope) -> bool {
     let key = (username.to_string(), ip, scope);
-    {
+    let forgets = {
       let mut decisions = lock(&self.decisions);
+      let forgets = decisions.forgets;
       let mut remembered = |key: &DecisionKey| {
-        let decision = decisions.get_mut(key).filter(|d| d.fresh())?;
+        let decision = decisions.answers.get_mut(key).filter(|d| d.fresh())?;
         decision.used = Instant::now();
         Some(decision.blocked)
       };
@@ -476,7 +496,8 @@ impl Blocks {
       if ip.is_some() && remembered(&(username.to_string(), None, scope)) == Some(true) {
         return true;
       }
-    }
+      forgets
+    };
     let now = Utc::now();
     let ours = {
       let active = self.active.read().unwrap_or_else(PoisonError::into_inner);
@@ -499,7 +520,12 @@ impl Blocks {
         .unwrap_or_else(PoisonError::into_inner);
       rules.blocks(username, ip, blocklist.as_ref().map(|loaded| &*loaded.list))
     };
-    let mut decisions = lock(&self.decisions);
+    let mut remembered = lock(&self.decisions);
+    // a block changed while this was worked out, so the answer may be the one from before
+    if remembered.forgets != forgets {
+      return blocked;
+    }
+    let decisions = &mut remembered.answers;
     if decisions.len() >= DECISIONS {
       decisions.retain(|_, decision| decision.fresh());
     }
@@ -625,7 +651,8 @@ mod tests {
     }
     blocks.is_blocked("user0", None, BlockScope::Uploads);
     blocks.is_blocked("newcomer", None, BlockScope::Uploads);
-    let decisions = blocks.decisions.lock().unwrap();
+    let remembered = blocks.decisions.lock().unwrap();
+    let decisions = &remembered.answers;
     let held = |name: &str| decisions.contains_key(&(name.to_string(), None, BlockScope::Uploads));
     assert_eq!(decisions.len(), DECISIONS);
     assert!(held("user0"), "asked again, so kept");
