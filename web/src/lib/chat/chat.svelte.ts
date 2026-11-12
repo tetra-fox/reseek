@@ -78,13 +78,17 @@ class Chat {
     live.on("rooms.list", (list) => this.rooms.reconcile(list));
     live.on("rooms.message", ({ roomName, message }) => {
       const room = this.rooms.get(roomName);
-      // a hidden message is shown collapsed, so the row goes on showing the one before it
-      this.rooms.assign(
-        roomName,
-        message.hidden
-          ? { lastMessageAt: message.timestamp }
-          : { lastMessageAt: message.timestamp, lastMessage: message }
-      );
+      if (room) {
+        // a frame older than what the row shows moves nothing; a hidden message is shown
+        // collapsed, so the row goes on showing the one before it
+        const later =
+          !room.lastMessageAt || Date.parse(room.lastMessageAt) <= Date.parse(message.timestamp);
+        const newest = !message.hidden && (room.lastMessage?.localId ?? 0) <= message.localId;
+        this.rooms.assign(roomName, {
+          ...(later ? { lastMessageAt: message.timestamp } : {}),
+          ...(newest ? { lastMessage: message } : {})
+        });
+      }
       void notifier.roomMessage(roomName, message, room?.notify ?? "mentions", this.openPane);
     });
     live.on("chat.unread", (counts) => (this.unread = counts));

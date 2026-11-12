@@ -197,6 +197,15 @@ describe("the chat store", () => {
     expect(chat.roomUnread("indie")).toEqual({ unread: 0, mentions: 0 });
   });
 
+  it("leaves a joined room's row on its newest message when an older one comes", async () => {
+    const net = connected(() => undefined, "Administrator");
+    chat.rooms.upsert(joinedRoom("indie"));
+    net.frame("rooms.message", { roomName: "indie", message: roomMessage(901, false) });
+    net.frame("rooms.message", { roomName: "indie", message: roomMessage(900, false) });
+    await flush();
+    expect(chat.rooms.get("indie")?.lastMessage?.localId).toBe(901);
+  });
+
   it("says why each read failed when both did", async () => {
     fakeNetwork((url) => ({
       status: 500,

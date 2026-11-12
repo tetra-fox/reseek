@@ -68,8 +68,10 @@ export class RoomMembers {
     $effect(() =>
       live.on("rooms.user_left", ({ roomName, username }) => {
         if (roomName !== this.name) return;
+        // one not in the list held is not noted as leaving
+        const known = this.users.get(username) && !this.users.removed.has(username);
         this.users.remove(username);
-        this.#note("left", username);
+        if (known) this.#note("left", username);
       })
     );
     $effect(() =>
