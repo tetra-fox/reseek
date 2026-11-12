@@ -677,6 +677,9 @@ async fn host(
   debug!(options = %redact::values(&current), "effective options");
 
   let cancel = CancellationToken::new();
+  // every way out of here stops the daemon's work first, so what the runtime then drops with
+  // it, such as a scan, is taken for a stop and not a failure
+  let _stopping = cancel.clone().drop_guard();
   let watch = if options.flags.no_config_watch {
     warn!(
       "Configuration watch DISABLED; all configuration changes will require a restart to take effect"
@@ -713,7 +716,6 @@ async fn host(
   };
   if options.flags.no_start {
     info!("Quitting because 'no-start' option is enabled");
-    cancel.cancel();
     return 0;
   }
   let state = match AppState::new(
