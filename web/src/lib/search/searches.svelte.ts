@@ -142,17 +142,18 @@ class Searches {
 
   stop = (id: string) => call(() => api.PUT("/api/v0/searches/{id}", { params: { path: { id } } }));
 
-  remove = async (id: string): Promise<Outcome<unknown>> => {
+  /** Deletes a search; with `keepalive` the request outlives the page */
+  remove = async (id: string, keepalive = false): Promise<Outcome<unknown>> => {
     const outcome = await call(() =>
-      api.DELETE("/api/v0/searches/{id}", { params: { path: { id } } })
+      api.DELETE("/api/v0/searches/{id}", { params: { path: { id } }, keepalive })
     );
     if (outcome.ok) this.list.remove(id);
     return outcome;
   };
 
   /**
-   * Deletes searches once their Undo has passed; until then they only leave the screen. One
-   * that can't be deleted comes back and says why
+   * Deletes searches once their Undo has passed, all at once; until then they only leave the
+   * screen. One that can't be deleted comes back and says why
    */
   removeLater = (ids: string[]) => {
     if (!ids.length) return;
@@ -162,11 +163,12 @@ class Searches {
       ids.length === 1 && one ? `Deleted '${one.searchText}'` : `Deleted ${ids.length} searches`;
     undoable(
       text,
-      async () => {
+      (leaving) => {
         for (const id of ids) {
-          const outcome = await this.remove(id);
-          this.hidden.delete(id);
-          if (!outcome.ok) toast(outcome.error, "error");
+          void this.remove(id, leaving).then((outcome) => {
+            this.hidden.delete(id);
+            if (!outcome.ok) toast(outcome.error, "error");
+          });
         }
       },
       () => {

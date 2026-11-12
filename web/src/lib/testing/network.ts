@@ -15,7 +15,7 @@ export const fakeNetwork = (
 ) => {
   let send: (text: string) => void = () => {};
   let id = 0;
-  const requests: { method: string; url: URL; body: unknown }[] = [];
+  const requests: { method: string; url: URL; body: unknown; keepalive: boolean }[] = [];
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -33,7 +33,7 @@ export const fakeNetwork = (
       const text = await request.text();
       const json = request.headers.get("content-type")?.includes("json") ?? false;
       const body = !text ? undefined : json ? JSON.parse(text) : text;
-      requests.push({ method: request.method, url, body });
+      requests.push({ method: request.method, url, body, keepalive: request.keepalive });
       const reply = await answer(url, request.method, body);
       if (reply === undefined) return new Response(null, { status: 404 });
       const shaped =
