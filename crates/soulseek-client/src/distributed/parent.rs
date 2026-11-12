@@ -11,7 +11,9 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use soulseek_proto::frame::FrameKind;
-use soulseek_proto::{DecodeError, DistributedMessage, FieldError, PeerConnectionType};
+use soulseek_proto::{
+  DecodeError, DistributedCode, DistributedMessage, FieldError, PeerConnectionType,
+};
 use tokio::task::JoinSet;
 use tracing::Instrument;
 use uuid::Uuid;
@@ -39,12 +41,13 @@ pub(super) struct Link {
   role: AtomicU8,
   /// a search with a bad identifier from this connection has been logged
   pub(super) bad_search_logged: AtomicBool,
-  /// the parent's branch as it last sent it, waiting for the tree task
+  /// the branch as the connection last sent it, waiting for the tree task
   pub(super) branch: Mutex<BranchNews>,
 }
 
-/// The parent's latest branch level and root that the tree task has not taken yet. At most one
-/// command for them is queued at a time, however often the parent sends them.
+/// The latest branch level and root an upstream connection sent that the tree task has not
+/// taken yet: our parent's, or a candidate's since it answered, which its adoption takes. At most
+/// one command for a parent's is queued at a time, however often the parent sends them.
 #[derive(Default)]
 pub(super) struct BranchNews {
   pub(super) level: Option<u32>,
@@ -234,33 +237,46 @@ impl Client {
         && let Some(client) = client.upgrade()
       {
         match link.role() {
-          Role::Candidate => client.candidate_frame(&reader, &frame),
+          Role::Candidate => client.candidate_frame(&reader, &link, &frame),
           Role::Parent => client.parent_frame(&reader, &link, frame),
         }
       }
     });
   }
 
-  /// A frame from a candidate completes the negotiation's waits; a negative level or an
-  /// impossible root drops the candidate
-  fn candidate_frame(&self, conn: &MessageConn, frame: &[u8]) {
+  /// A frame from a candidate completes the negotiation's waits; a level or root sent after its
+  /// wait was answered is kept for the adoption. A negative level or an impossible root drops
+  /// the candidate. A search once the negotiation has one proves nothing more and is not decoded.
+  fn candidate_frame(&self, conn: &MessageConn, link: &Link, frame: &[u8]) {
     let id = conn.handle().id();
     let waiter = self.waiter();
+    let search = WaitKey::SearchRequestMessage { connection: id };
+    let code = frame.get(4).copied().map(u32::from);
+    let search_like = [DistributedCode::SearchRequest, DistributedCode::EmbeddedMessage]
+      .iter()
+      .any(|known| Some(known.code()) == code);
+    if search_like && !waiter.has_wait(&search) {
+      return tracing::trace!("search from a parent candidate not needed for the negotiation");
+    }
     let completed = match DistributedMessage::decode(frame) {
       Ok(DistributedMessage::BranchLevel(level)) => {
-        waiter.complete(&WaitKey::BranchLevelMessage { connection: id }, level.level)
+        let level = level.level;
+        if !waiter.complete(&WaitKey::BranchLevelMessage { connection: id }, level) {
+          self.branch_news(conn, link, |news| news.level = Some(level));
+        }
+        true
       }
-      Ok(DistributedMessage::BranchRoot(root)) => waiter.complete(
-        &WaitKey::BranchRootMessage { connection: id },
-        root.username,
-      ),
-      Ok(DistributedMessage::SearchRequest(_)) => {
-        waiter.complete(&WaitKey::SearchRequestMessage { connection: id }, ())
+      Ok(DistributedMessage::BranchRoot(root)) => {
+        let key = WaitKey::BranchRootMessage { connection: id };
+        if let Err(root) = waiter.offer(&key, root.username) {
+          self.branch_news(conn, link, |news| news.root = Some(root));
+        }
+        true
       }
+      Ok(DistributedMessage::SearchRequest(_)) => waiter.complete(&search, ()),
       Ok(DistributedMessage::EmbeddedMessage(embedded)) => {
         let inner = DistributedMessage::decode(&embedded.embedded.inner_frame());
-        matches!(inner, Ok(DistributedMessage::SearchRequest(_)))
-          && waiter.complete(&WaitKey::SearchRequestMessage { connection: id }, ())
+        matches!(inner, Ok(DistributedMessage::SearchRequest(_))) && waiter.complete(&search, ())
       }
       Ok(DistributedMessage::Ping(_) | DistributedMessage::ChildDepth(_))
       | Err(DecodeError::UnknownCode { .. }) => false,
@@ -366,11 +382,22 @@ impl Tree {
     self.update_status(false).await;
   }
 
-  pub(super) async fn adopt(&mut self, chosen: Candidate) {
+  pub(super) async fn adopt(&mut self, mut chosen: Candidate) {
     let Some(client) = self.client() else {
       return;
     };
-    chosen.link.set_role(Role::Parent);
+    // the branch it sent since it answered; what it sends from now on goes to the tree task
+    let news = {
+      let mut news = crate::lock(&chosen.link.branch);
+      chosen.link.set_role(Role::Parent);
+      std::mem::take(&mut *news)
+    };
+    if let Some(level) = news.level {
+      chosen.branch_level = level;
+    }
+    if let Some(root) = news.root {
+      chosen.branch_root = root;
+    }
     watch_closing(&client, &chosen.conn, {
       let connection = chosen.conn.handle().id();
       move |reason| Command::ParentLost { connection, reason }

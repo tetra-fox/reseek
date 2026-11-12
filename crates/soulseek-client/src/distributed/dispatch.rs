@@ -10,7 +10,7 @@ use soulseek_proto::{DecodeError, DistributedCode, DistributedMessage, SEARCH_ID
 use tokio::time::Instant;
 use tracing::Instrument;
 
-use super::parent::{BranchNews, Link};
+use super::parent::{BranchNews, Link, Role};
 use super::tree::Command;
 use crate::client::Client;
 use crate::conn::{MessageConn, ReadEvent};
@@ -51,10 +51,10 @@ impl Client {
         tracing::trace!(token = ping.token, "ping from the parent ignored");
       }
       Ok(DistributedMessage::BranchLevel(level)) => {
-        self.parent_branch(conn, link, |news| news.level = Some(level.level));
+        self.branch_news(conn, link, |news| news.level = Some(level.level));
       }
       Ok(DistributedMessage::BranchRoot(root)) => {
-        self.parent_branch(conn, link, |news| news.root = Some(root.username));
+        self.branch_news(conn, link, |news| news.root = Some(root.username));
       }
       // a child tells its parent its depth; from our parent it means nothing
       Ok(DistributedMessage::ChildDepth(depth)) => {
@@ -68,13 +68,21 @@ impl Client {
     }
   }
 
-  /// Keeps the parent's branch level or root on its link and tells the tree task, unless a
-  /// command telling it is queued already; a parent repeating its branch at line rate holds one
-  /// entry in the queue, and the tree task acts on the latest values
-  fn parent_branch(&self, conn: &MessageConn, link: &Link, record: impl FnOnce(&mut BranchNews)) {
+  /// Keeps the branch level or root an upstream connection sent on its link. For our parent the
+  /// tree task is told, unless a command telling it is queued already; a parent repeating its
+  /// branch at line rate holds one entry in the queue, and the tree task acts on the latest
+  /// values. A candidate's news waits on its link for its adoption, which takes it. The role is
+  /// read under the link's lock, which the adoption holds while it changes the role, so no news
+  /// falls between the two.
+  pub(super) fn branch_news(
+    &self,
+    conn: &MessageConn,
+    link: &Link,
+    record: impl FnOnce(&mut BranchNews),
+  ) {
     let mut news = crate::lock(&link.branch);
     record(&mut news);
-    if !news.queued {
+    if link.role() == Role::Parent && !news.queued {
       // a dropped command leaves the flag clear, so the next news is queued again
       news.queued = self.distributed_command(Command::ParentBranchChanged {
         connection: conn.handle().id(),
