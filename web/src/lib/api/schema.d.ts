@@ -3058,7 +3058,9 @@ export interface paths {
          * Forgets a user and their block; `purge` also cancels their transfers that have not finished,
          *     removes their transfers from the listings and deletes the conversation with them. The 204
          *     comes once every unfinished transfer was told to stop: one no task runs is ended and removed
-         *     by then, a running one leaves the listings when it has written its end.
+         *     by then, a running one leaves the listings when it has written its end. A purge of a user
+         *     no longer in the directory, forgotten earlier without one, answers 204 when it found
+         *     transfers of theirs to cancel or remove, and 404 when it found none.
          */
         delete: operations["remove"];
         options?: never;

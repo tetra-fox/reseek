@@ -14448,7 +14448,7 @@
         "tags": [
           "users"
         ],
-        "summary": "Forgets a user and their block; `purge` also cancels their transfers that have not finished,\nremoves their transfers from the listings and deletes the conversation with them. The 204\ncomes once every unfinished transfer was told to stop: one no task runs is ended and removed\nby then, a running one leaves the listings when it has written its end.",
+        "summary": "Forgets a user and their block; `purge` also cancels their transfers that have not finished,\nremoves their transfers from the listings and deletes the conversation with them. The 204\ncomes once every unfinished transfer was told to stop: one no task runs is ended and removed\nby then, a running one leaves the listings when it has written its end. A purge of a user\nno longer in the directory, forgotten earlier without one, answers 204 when it found\ntransfers of theirs to cancel or remove, and 404 when it found none.",
         "operationId": "remove",
         "parameters": [
           {
