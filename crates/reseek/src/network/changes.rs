@@ -8,6 +8,7 @@
 use std::sync::Arc;
 
 use cascade::Loaded;
+use soulseek_client::ClientError;
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{debug, info, warn};
 
@@ -20,7 +21,7 @@ use crate::config::Options;
 /// was missed, is applied with the next.
 pub async fn follow_changes(app: AppState) {
   let mut changes = app.config.changes();
-  let mut applied = app.config.current();
+  let mut applied = app.config.current().values.clone();
   loop {
     let current = tokio::select! {
       () = app.shutdown.cancelled() => return,
@@ -33,17 +34,23 @@ pub async fn follow_changes(app: AppState) {
         Err(RecvError::Closed) => return,
       },
     };
-    if apply(&app, &applied.values, &current).await {
-      applied = current;
+    if let Some(now) = apply(&app, &applied, &current).await {
+      applied = now;
     }
   }
 }
 
-/// Applies `current` to the client, which runs with `applied`; false when the client could
-/// not be patched.
-async fn apply(app: &AppState, applied: &Options, current: &Arc<Loaded<Options>>) -> bool {
+/// Applies `current` to the client, which runs with `applied`. Returns the options now in
+/// effect: `current`, with the listener's address and port left as in `applied` when the
+/// listener could not move, so the next change tries them again. `None` when the client could
+/// not be patched at all.
+async fn apply(
+  app: &AppState,
+  applied: &Options,
+  current: &Arc<Loaded<Options>>,
+) -> Option<Options> {
   let network = &app.network;
-  let values = &current.values;
+  let mut values = current.values.clone();
   if applied.filters.search.request != values.filters.search.request {
     network
       .edges
@@ -58,18 +65,24 @@ async fn apply(app: &AppState, applied: &Options, current: &Arc<Loaded<Options>>
   {
     let _reconfiguring = network.reconfiguring().lock().await;
     let alternative = app.state.current().alternative_speed_limits;
-    let patch = match options::patch(applied, values, alternative) {
+    let patch = match options::patch(applied, &values, alternative) {
       Ok(patch) => patch,
       Err(e) => {
         warn!(error = e, "Failed to apply option update");
-        return false;
+        return None;
       }
     };
     match network.client().reconfigure_options(patch).await {
       Ok(required) => reconnect_required = required,
+      // the client took the rest of the patch and kept its listener where it was
+      Err(e @ ClientError::Listen { .. }) => {
+        warn!(error = %e, "Failed to move the listener; the other option updates are applied");
+        values.soulseek.listen_ip_address = applied.soulseek.listen_ip_address.clone();
+        values.soulseek.listen_port = applied.soulseek.listen_port;
+      }
       Err(e) => {
         warn!(error = %e, "Failed to apply option update");
-        return false;
+        return None;
       }
     }
   }
@@ -95,7 +108,7 @@ async fn apply(app: &AppState, applied: &Options, current: &Arc<Loaded<Options>>
   {
     network.listening_changed(now.port_mapping);
   }
-  if network.watchdog().is_enabled() && reaches_differently(applied, values) {
+  if network.watchdog().is_enabled() && reaches_differently(applied, &values) {
     info!("Options changed, restarting (re)connection process...");
     network.watchdog().restart();
   }
@@ -104,7 +117,7 @@ async fn apply(app: &AppState, applied: &Options, current: &Arc<Loaded<Options>>
       .messaging
       .configured_rooms_changed(&applied.rooms, &values.rooms);
   }
-  true
+  Some(values)
 }
 
 /// Whether the server's address, our credentials or the connection options differ.
