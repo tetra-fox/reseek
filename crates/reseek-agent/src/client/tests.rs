@@ -4,13 +4,14 @@
 //! re-upload that fails is tried again with no change to ask for it, a first upload refused as
 //! too large copies nothing and is a refusal, and an upload stops when its socket closes. A
 //! run of upload failures is warned about once per run, and a refusal or another agent taking
-//! the socket once however many uploads succeed between.
+//! the socket once however many uploads succeed between. A file sent or a download fetched
+//! whose call fails says what failed without the call's URL.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
-use api_types::relay::{RelayErrorCode, RelayMessage};
+use api_types::relay::{DownloadOutcome, RelayErrorCode, RelayMessage};
 use cascade::{Layers, Watcher};
 use reseek_relay_proto::frames;
 use reseek_shares::{ScanNotice, ScanOrigin, Setup, Shares, lock};
@@ -25,12 +26,12 @@ use super::dial::Settings;
 use super::session::{Ended, Link};
 use crate::options::Options;
 
-/// How the test's controller answers a share upload.
+/// How the test's controller answers a call.
 #[derive(Clone, Copy)]
 enum Answer {
   /// reads the upload and answers with this status
   Status(u16),
-  /// reads the upload and closes the connection without an answer
+  /// reads the request and closes the connection without an answer
   Dropped,
   /// takes the connection and never answers
   Silent,
@@ -53,8 +54,8 @@ struct Agent {
   agent: Arc<AgentClient>,
   link: Arc<Link>,
   frames: mpsc::Receiver<String>,
-  /// the share uploads the test's controller took
-  posts: Arc<AtomicUsize>,
+  /// the calls the test's controller took
+  calls: Arc<AtomicUsize>,
   /// each scan waits at its start for one permit
   scans: Arc<Semaphore>,
   shutdown: CancellationToken,
@@ -161,17 +162,17 @@ async fn eventually(check: impl Fn() -> bool) {
   panic!("never held");
 }
 
-/// A controller's HTTP side that answers its share uploads with `answers` in turn, counting
-/// them in `posts`; its address.
-async fn controller(answers: Vec<Answer>, posts: Arc<AtomicUsize>) -> String {
+/// A controller's HTTP side that answers the agent's calls with `answers` in turn, counting
+/// them in `calls`; its address.
+async fn controller(answers: Vec<Answer>, calls: Arc<AtomicUsize>) -> String {
   let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
   let address = listener.local_addr().unwrap();
   tokio::spawn(async move {
     let mut answers = answers.into_iter();
     loop {
       let (mut connection, _) = listener.accept().await.unwrap();
-      posts.fetch_add(1, Ordering::SeqCst);
-      let answer = answers.next().expect("no more uploads than answers");
+      calls.fetch_add(1, Ordering::SeqCst);
+      let answer = answers.next().expect("no more calls than answers");
       tokio::spawn(async move {
         let status = match answer {
           Answer::Status(status) => status,
@@ -189,7 +190,7 @@ async fn controller(answers: Vec<Answer>, posts: Arc<AtomicUsize>) -> String {
   format!("http://{address}/")
 }
 
-/// Reads one request with a `content-length` from `connection`.
+/// Reads one request from `connection`, its body as long as its `content-length`.
 async fn read_request(connection: &mut tokio::net::TcpStream) {
   let mut read = Vec::new();
   let mut buffer = [0u8; 8192];
@@ -202,8 +203,7 @@ async fn read_request(connection: &mut tokio::net::TcpStream) {
       let length = head
         .lines()
         .find_map(|line| line.strip_prefix("content-length:"))
-        .map(|value| value.trim().parse::<usize>().unwrap())
-        .expect("the upload has a length");
+        .map_or(0, |value| value.trim().parse::<usize>().unwrap());
       break (end + 4, length);
     }
   };
@@ -214,7 +214,7 @@ async fn read_request(connection: &mut tokio::net::TcpStream) {
   }
 }
 
-/// An agent sharing one file in `dir/share`, with its controller's uploads answered by
+/// An agent sharing one file in `dir/share`, with its controller's calls answered by
 /// `answers`, logged in on a socket that had an upload when `ready`, once its startup scan
 /// filled the index.
 async fn agent(answers: Vec<Answer>, ready: bool) -> Agent {
@@ -224,15 +224,15 @@ async fn agent(answers: Vec<Answer>, ready: bool) -> Agent {
 /// [`agent`] with its share engine started as `start`.
 async fn agent_from(start: Start, answers: Vec<Answer>, ready: bool) -> Agent {
   let dir = tempfile::tempdir().unwrap();
-  let posts = Arc::new(AtomicUsize::new(0));
-  let address = controller(answers, posts.clone()).await;
+  let calls = Arc::new(AtomicUsize::new(0));
+  let address = controller(answers, calls.clone()).await;
   let share = dir.path().join("share");
   std::fs::create_dir_all(&share).unwrap();
   std::fs::write(share.join("one.flac"), "one").unwrap();
   let config = format!(
     "instance_name = \"nas\"\n\
      [relay.controller]\naddress = \"{address}\"\napi_key = \"agents-key-0123456789\"\n\
-     secret = \"nas-secret-0123456789\"\n[shares]\ndirectories = [\"{}\"]\n",
+     secret = \"nas-secret-0123456789\"\ndownloads = true\n[shares]\ndirectories = [\"{}\"]\n",
     share.display()
   );
   std::fs::write(dir.path().join("config.toml"), config).unwrap();
@@ -290,7 +290,7 @@ async fn agent_from(start: Start, answers: Vec<Answer>, ready: bool) -> Agent {
     agent,
     link,
     frames,
-    posts,
+    calls,
     scans,
     shutdown,
   }
@@ -353,7 +353,7 @@ async fn a_failed_upload_after_one_succeeded_is_tried_again_without_another_chan
   // nothing changed locally; the wait after the failure asks again
   agent.answer_ask(token()).await;
   eventually(|| {
-    agent.posts.load(Ordering::SeqCst) == 2
+    agent.calls.load(Ordering::SeqCst) == 2
       && agent.link.sync_failures() == 0
       && !agent.agent.syncing.load(Ordering::SeqCst)
   })
@@ -386,7 +386,7 @@ async fn a_first_upload_refused_as_too_large_copies_nothing_and_is_a_refusal() {
   let refusal = agent.link.refusal().expect("the refusal is kept");
   assert!(refusal.contains("TooLarge"), "{refusal}");
   assert!(!agent.copied());
-  assert_eq!(agent.posts.load(Ordering::SeqCst), 0);
+  assert_eq!(agent.calls.load(Ordering::SeqCst), 0);
 }
 
 #[tokio::test]
@@ -394,7 +394,7 @@ async fn an_upload_stops_when_its_socket_closes() {
   let mut agent = agent(vec![Answer::Silent], true).await;
   agent.agent.request_sync();
   agent.answer_ask(token()).await;
-  eventually(|| agent.posts.load(Ordering::SeqCst) == 1).await;
+  eventually(|| agent.calls.load(Ordering::SeqCst) == 1).await;
   assert!(agent.agent.syncing.load(Ordering::SeqCst));
   agent.link.close(frames::close::NORMAL);
   eventually(|| !agent.agent.syncing.load(Ordering::SeqCst)).await;
@@ -424,7 +424,7 @@ async fn a_run_of_upload_failures_after_one_succeeded_is_warned_about_again() {
   agent.agent.request_sync();
   agent.answer_ask(token()).await;
   upload_once(&mut agent).await;
-  assert_eq!(agent.posts.load(Ordering::SeqCst), 4);
+  assert_eq!(agent.calls.load(Ordering::SeqCst), 4);
   assert_eq!(
     warnings.count("Failed to upload shares to relay controller"),
     2
@@ -442,7 +442,7 @@ async fn a_run_of_uploads_whose_connection_drops_is_warned_about_once() {
   agent.answer_ask(token()).await;
   upload_once(&mut agent).await;
   assert_eq!(agent.link.sync_failures(), 0);
-  assert_eq!(agent.posts.load(Ordering::SeqCst), 3);
+  assert_eq!(agent.calls.load(Ordering::SeqCst), 3);
   assert_eq!(
     warnings.count("Failed to upload shares to relay controller"),
     1
@@ -472,4 +472,65 @@ async fn another_agent_taking_the_socket_is_warned_about_once_across_uploads() {
     warnings.count("the relay controller dropped this agent for another"),
     1
   );
+}
+
+/// Whether `text` names the call to the controller made with `token`.
+fn names_call(text: &str, token: Uuid) -> bool {
+  text.contains("relay/controller/") || text.contains(&token.to_string())
+}
+
+#[tokio::test]
+async fn a_file_whose_call_drops_fails_without_the_call_url() {
+  let warnings = Warnings::new();
+  let mut agent = agent(vec![Answer::Dropped], true).await;
+  let shared = &agent.agent.shares.browse().await.unwrap()[0];
+  let filename = format!("{}\\{}", shared.name, shared.files[0].filename);
+  let token = Uuid::new_v4();
+  let request = RelayMessage::FileRequest {
+    filename,
+    start_offset: 0,
+    transfer_id: Uuid::new_v4(),
+    token,
+  };
+  agent
+    .agent
+    .handle(&agent.link, &frames::encode(Some(token), request));
+  let acked = agent.next().await;
+  assert!(matches!(acked, RelayMessage::FileAck {}), "{acked:?}");
+  let RelayMessage::FileFailed { detail, .. } = agent.next().await else {
+    panic!("the file fails");
+  };
+  let detail = detail.expect("the failure says what failed");
+  assert!(detail.contains("connection closed"), "{detail}");
+  assert!(!names_call(&detail, token), "{detail}");
+  assert_eq!(warnings.count("Upload of file failed"), 1);
+  assert_eq!(warnings.count("relay/controller/files"), 0);
+}
+
+#[tokio::test]
+async fn a_download_whose_calls_drop_fails_without_the_call_url() {
+  let warnings = Warnings::new();
+  let mut agent = agent(vec![Answer::Dropped; 3], true).await;
+  let token = Uuid::new_v4();
+  let offer = RelayMessage::DownloadAvailable {
+    filename: "alice/Album/01.flac".to_string(),
+    token,
+    size: 3,
+    expires_in: 300_000,
+  };
+  agent
+    .agent
+    .handle(&agent.link, &frames::encode(Some(token), offer));
+  let RelayMessage::DownloadDone { outcome, detail } = agent.next().await else {
+    panic!("the download ends");
+  };
+  assert_eq!(outcome, DownloadOutcome::Failed);
+  let detail = detail.expect("the failure says what failed");
+  assert!(detail.contains("connection closed"), "{detail}");
+  assert!(!names_call(&detail, token), "{detail}");
+  assert_eq!(
+    warnings.count("Failed to handle file download notification"),
+    3
+  );
+  assert_eq!(warnings.count("relay/controller/downloads"), 0);
 }

@@ -18,6 +18,7 @@ use reseek_relay_proto::credential::Purpose;
 use reseek_shares::traverses;
 
 use super::AgentClient;
+use super::dial::call_error;
 use super::session::Link;
 
 /// Why a file cannot be sent, as the controller is told.
@@ -189,7 +190,7 @@ impl AgentClient {
       .multipart(Form::new().part("file", part))
       .send()
       .await
-      .map_err(|e| Refusal::new(FileFailure::Error, e.to_string()))?;
+      .map_err(|e| Refusal::new(FileFailure::Error, call_error(e)))?;
     let status = response.status();
     if !status.is_success() {
       return Err(Refusal {
@@ -201,7 +202,7 @@ impl AgentClient {
     let body = response.bytes().await.map_err(|e| {
       Refusal::new(
         FileFailure::Error,
-        format!("the controller's answer did not arrive: {e}"),
+        format!("the controller's answer did not arrive: {}", call_error(e)),
       )
     })?;
     serde_json::from_slice(&body).map_err(|e| {

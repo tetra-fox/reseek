@@ -18,6 +18,7 @@ use reseek_relay_proto::credential::Purpose;
 use reseek_shares::{backoff, traverses};
 
 use super::AgentClient;
+use super::dial::call_error;
 
 /// How many times a download is fetched before it is given up.
 const ATTEMPTS: u32 = 3;
@@ -156,7 +157,7 @@ impl AgentClient {
       )
       .send()
       .await
-      .map_err(|e| e.to_string())?;
+      .map_err(call_error)?;
     let status = response.status();
     if !status.is_success() {
       return Err(format!("the controller answered {status}"));
@@ -199,7 +200,7 @@ async fn write(response: reqwest::Response, path: &Path) -> Result<(), String> {
   let mut file = tokio::fs::File::create(path).await.map_err(failed)?;
   let mut body = response.bytes_stream();
   while let Some(chunk) = body.next().await {
-    let chunk = chunk.map_err(|e| e.to_string())?;
+    let chunk = chunk.map_err(call_error)?;
     file.write_all(&chunk).await.map_err(failed)?;
   }
   file.sync_all().await.map_err(failed)

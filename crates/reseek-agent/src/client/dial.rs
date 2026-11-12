@@ -102,6 +102,20 @@ impl Settings {
   }
 }
 
+/// What failed in an HTTP call to the controller, with its causes, and without the call's URL,
+/// which holds the token of a file, download or share call.
+pub(super) fn call_error(e: reqwest::Error) -> String {
+  let e = e.without_url();
+  let mut text = e.to_string();
+  let mut cause = std::error::Error::source(&e);
+  while let Some(inner) = cause {
+    text.push_str(": ");
+    text.push_str(&inner.to_string());
+    cause = inner.source();
+  }
+  text
+}
+
 /// Why the relay socket did not open.
 #[derive(Debug, thiserror::Error)]
 pub enum DialError {
