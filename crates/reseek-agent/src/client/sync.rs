@@ -25,7 +25,7 @@ use futures_util::StreamExt;
 use reqwest::multipart::{Form, Part};
 use reseek_relay_proto::credential::Purpose;
 use reseek_relay_proto::frames;
-use reseek_shares::{Shares, backoff};
+use reseek_shares::{Shares, backoff, lock};
 use tokio_util::io::ReaderStream;
 use tracing::{Instrument, debug, info, warn};
 use uuid::Uuid;
@@ -130,13 +130,11 @@ impl AgentClient {
   /// One upload on `link`, its outcome put into the state.
   async fn sync_once(&self, link: &Arc<Link>) {
     let first = !link.ready();
-    let uploaded = tokio::select! {
-      () = link.closed() => Err(SyncError::Closed),
-      uploaded = self.upload_shares(link) => uploaded,
-    };
-    let e = match uploaded {
+    let e = match self.upload_shares(link).await {
       Ok(()) => {
         link.synced();
+        // a later run of failures is warned about again
+        *lock(&self.warned) = None;
         return info!("Shares uploaded. Ready to relay files.");
       }
       Err(SyncError::Closed) => return debug!("share upload stopped: the socket closed"),
@@ -175,8 +173,8 @@ impl AgentClient {
   }
 
   /// Asks for a token with the index's size, then copies the local index to a file, uploads it
-  /// and deletes it. One upload runs at a time, so the copy has one name, and a copy an
-  /// interrupted upload left is written over.
+  /// and deletes it; the ask and the upload stop when `link` closes. One upload runs at a time,
+  /// so the copy has one name, and a copy a stopped program left is written over.
   async fn upload_shares(&self, link: &Link) -> Result<(), SyncError> {
     let failed = |what: &str, e: reseek_shares::db::DbError| {
       SyncError::Failed(format!("the share index was not {what}: {e}"))
@@ -187,12 +185,20 @@ impl AgentClient {
       .await
       .map_err(|e| failed("measured", e))?;
     let shares = self.shares.local_shares();
-    let token = ask_token(link, &shares, size).await?;
+    let token = tokio::select! {
+      () = link.closed() => Err(SyncError::Closed),
+      token = ask_token(link, &shares, size) => token,
+    }?;
     let dump = self.uploads.join("share_index.db");
+    // the copy runs to its end even when the socket closes meanwhile, so it is deleted below
+    // and not written after
     let uploaded = match self.shares.dump(&dump).await {
       Ok(bytes) => {
         info!(bytes, "Beginning upload of shares");
-        post_dump(link, token, &shares, &dump, bytes).await
+        tokio::select! {
+          () = link.closed() => Err(SyncError::Closed),
+          posted = post_dump(link, token, &shares, &dump, bytes) => posted,
+        }
       }
       Err(e) => Err(failed("copied", e)),
     };
