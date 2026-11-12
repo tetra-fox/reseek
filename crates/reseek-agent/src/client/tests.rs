@@ -30,6 +30,8 @@ use crate::options::Options;
 enum Answer {
   /// reads the upload and answers with this status
   Status(u16),
+  /// reads the upload and closes the connection without an answer
+  Dropped,
   /// takes the connection and never answers
   Silent,
 }
@@ -171,9 +173,11 @@ async fn controller(answers: Vec<Answer>, posts: Arc<AtomicUsize>) -> String {
       posts.fetch_add(1, Ordering::SeqCst);
       let answer = answers.next().expect("no more uploads than answers");
       tokio::spawn(async move {
-        let Answer::Status(status) = answer else {
+        let status = match answer {
+          Answer::Status(status) => status,
           // held open, never answered
-          return std::future::pending::<()>().await;
+          Answer::Silent => return std::future::pending::<()>().await,
+          Answer::Dropped => return read_request(&mut connection).await,
         };
         read_request(&mut connection).await;
         let head =
@@ -423,6 +427,29 @@ async fn a_run_of_upload_failures_after_one_succeeded_is_warned_about_again() {
   assert_eq!(
     warnings.count("Failed to upload shares to relay controller"),
     2
+  );
+}
+
+#[tokio::test]
+async fn a_run_of_uploads_whose_connection_drops_is_warned_about_once() {
+  let warnings = Warnings::new();
+  let answers = vec![Answer::Dropped, Answer::Dropped, Answer::Status(200)];
+  let mut agent = agent(answers, true).await;
+  agent.agent.request_sync();
+  agent.answer_ask(token()).await;
+  // each drop's retry asks again, the second with a token of its own
+  agent.answer_ask(token()).await;
+  upload_once(&mut agent).await;
+  assert_eq!(agent.link.sync_failures(), 0);
+  assert_eq!(agent.posts.load(Ordering::SeqCst), 3);
+  assert_eq!(
+    warnings.count("Failed to upload shares to relay controller"),
+    1
+  );
+  assert_eq!(
+    warnings.count("relay/controller/shares"),
+    0,
+    "no token is logged"
   );
 }
 

@@ -296,7 +296,7 @@ async fn post_dump(
       .multipart(form)
       .send()
       .await
-      .map_err(|e| failed(e.to_string()))?;
+      .map_err(|e| failed(unsent(e)))?;
     let status = response.status();
     if status.is_success() {
       return Ok(());
@@ -319,6 +319,20 @@ async fn post_dump(
     "Upload of shares succeeded"
   );
   Ok(())
+}
+
+/// What failed in a POST that got no answer, with its causes, and without its URL, which holds
+/// the token it was made with: a new one at each ask, never to be logged.
+fn unsent(e: reqwest::Error) -> String {
+  let e = e.without_url();
+  let mut text = e.to_string();
+  let mut cause = std::error::Error::source(&e);
+  while let Some(inner) = cause {
+    text.push_str(": ");
+    text.push_str(&inner.to_string());
+    cause = inner.source();
+  }
+  text
 }
 
 /// Returns once `taken`, the bytes of an upload of `total` read so far, stayed the same for
