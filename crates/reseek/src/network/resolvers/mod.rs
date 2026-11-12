@@ -209,7 +209,7 @@ pub async fn enqueue_download(
     return Err(ClientError::DownloadEnqueue(refusal));
   }
   let sees = edges.users.sees_from(username, endpoint.ip()).await;
-  uploads.request(username, filename.as_str(), &sees).await?;
+  uploads.request(username, filename.as_str(), sees).await?;
   edges.activity.queued(username, filename.as_str());
   Ok(())
 }

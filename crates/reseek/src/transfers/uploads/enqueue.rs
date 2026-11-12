@@ -75,7 +75,8 @@ fn write(
 
 impl Uploads {
   /// Records the upload of `filename` to `username` from `located`, queues it and starts its
-  /// task; an upload of the file to the user queued or running already stands for it.
+  /// task; an upload of the file to the user queued or running already stands for it. Runs
+  /// under the user's turn, on the task of the request or send that holds it.
   pub(super) async fn enqueue(
     &self,
     username: &str,

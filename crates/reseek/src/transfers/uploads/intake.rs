@@ -11,11 +11,12 @@ use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
+use api_types::transfers::{EnqueueFailure, SendFilesResponse};
 use chrono::Utc;
 use reseek_shares::lock;
 use soulseek_client::{ClientError, LogLimiter};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore, SemaphorePermit};
-use tracing::{debug, info, trace, warn};
+use tracing::{Instrument, debug, info, trace, warn};
 
 use super::{Uploads, limits};
 use crate::shares::{LOCAL_HOST, Resolved};
@@ -188,6 +189,30 @@ impl Uploads {
     &self,
     username: &str,
     filename: &str,
+    sees: BTreeSet<String>,
+  ) -> Result<(), ClientError> {
+    // decided on a task of its own that holds the user's turn to the end, so a caller that
+    // stops waiting leaves no upload half queued and the user's next request waits for this one
+    let this = self.this();
+    let (username, filename) = (username.to_owned(), filename.to_owned());
+    let ran = self.tasks.spawn(
+      async move { this.decide_request(&username, &filename, &sees).await }.in_current_span(),
+    );
+    match ran.await {
+      Ok(result) => result,
+      Err(e) if e.is_panic() => std::panic::resume_unwind(e.into_panic()),
+      Err(e) => Err(ClientError::client(
+        format!("the upload request was not decided: {e}"),
+        None,
+      )),
+    }
+  }
+
+  /// The request of [`Uploads::request`], on the task it runs on.
+  async fn decide_request(
+    &self,
+    username: &str,
+    filename: &str,
     sees: &BTreeSet<String>,
   ) -> Result<(), ClientError> {
     let (_turn, waiting) = self.intake.turn(username).await;
@@ -234,13 +259,36 @@ impl Uploads {
   /// Queues `files` to be offered to `username`, who did not ask for them, each decided as a
   /// request of theirs would be, with the shares they see as a buddy when they are one. These
   /// are our own sends, so the figures of the requests peers send are left alone.
-  pub async fn send(
-    &self,
-    username: &str,
-    files: Vec<String>,
-  ) -> api_types::transfers::SendFilesResponse {
+  pub async fn send(&self, username: &str, files: Vec<String>) -> SendFilesResponse {
+    // sent on a task of its own that holds the user's turn to the end, so a caller that stops
+    // waiting leaves no file half queued and no file of the list left out
+    let this = self.this();
+    let username = username.to_owned();
+    // kept to name the files as not sent when the runtime shuts down under the send
+    let asked = files.clone();
+    let ran = self
+      .tasks
+      .spawn(async move { this.send_each(&username, files).await }.in_current_span());
+    match ran.await {
+      Ok(sent) => sent,
+      Err(e) if e.is_panic() => std::panic::resume_unwind(e.into_panic()),
+      Err(e) => SendFilesResponse {
+        queued: Vec::new(),
+        failed: asked
+          .into_iter()
+          .map(|filename| EnqueueFailure {
+            filename,
+            message: format!("the file was not queued: {e}"),
+          })
+          .collect(),
+      },
+    }
+  }
+
+  /// The send of [`Uploads::send`], on the task it runs on.
+  async fn send_each(&self, username: &str, files: Vec<String>) -> SendFilesResponse {
     let (sees, _) = self.users.search_sees(username, None).await;
-    let mut sent = api_types::transfers::SendFilesResponse {
+    let mut sent = SendFilesResponse {
       queued: Vec::new(),
       failed: Vec::new(),
     };
@@ -258,7 +306,7 @@ impl Uploads {
         }
         Err(e) => {
           debug!(username, filename, error = %e, "file not sent");
-          sent.failed.push(api_types::transfers::EnqueueFailure {
+          sent.failed.push(EnqueueFailure {
             filename,
             message: match e {
               ClientError::DownloadEnqueue(reason) => reason,
