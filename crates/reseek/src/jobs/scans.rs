@@ -78,14 +78,21 @@ async fn started(jobs: &Jobs, running: &Mutex<Option<Running>>, force: bool, ori
       }
     }
   };
+  let started_at = super::now();
   *lock(running) = Some(Running {
     job,
     name,
     origin,
-    started_at: super::now(),
+    started_at,
   });
+  // a scheduled scan counts as the last one from its start, so one a stop cuts off is not due
+  // again at once
   if origin == ScanOrigin::Scheduled {
-    jobs.schedules_changed.notify_one();
+    jobs
+      .update_last_run(Schedule::ShareRescan, move |last| {
+        last.scheduled_at = Some(started_at);
+      })
+      .await;
   }
 }
 
@@ -149,13 +156,9 @@ async fn finished(jobs: &Jobs, scan: Running, ended: ScanEnded) {
     }
     None => {}
   }
-  let scheduled = scan.origin == ScanOrigin::Scheduled;
   let started_at = scan.started_at;
   jobs
     .update_last_run(Schedule::ShareRescan, move |last| {
-      if scheduled {
-        last.scheduled_at = Some(started_at);
-      }
       last.run_at = Some(started_at);
       last.ended_at = Some(now);
       last.ending = Some(ending);
