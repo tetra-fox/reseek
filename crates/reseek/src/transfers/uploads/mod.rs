@@ -24,7 +24,7 @@ use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 
 use api_types::live::LiveFrame;
-use api_types::transfers::TransferDirection;
+use api_types::transfers::{TransferDirection, TransferOutcome, TransferStates};
 use cascade::Watcher;
 use reseek_shares::lock;
 use soulseek_client::{Client, ClientError};
@@ -261,17 +261,58 @@ impl Uploads {
       .ok_or_else(|| ApiError::not_found(format!("No upload {id} to {username}")))
   }
 
-  /// Cancels the upload `id` to `username` if it runs; with `remove` it leaves the listings,
-  /// once it has ended when it still runs. 404 when there is no such upload.
+  /// Cancels the upload `id` to `username`: a running one stops wherever it is and ends
+  /// canceled; one that has not ended though no task runs it is ended canceled here. With
+  /// `remove` it leaves the listings, once it has ended when it still runs. 404 when there is
+  /// no such upload.
   pub async fn cancel(&self, username: &str, id: Uuid, remove: bool) -> Result<(), ApiError> {
-    self.record_of(username, id).await?;
+    let record = self.record_of(username, id).await?;
     if self.cancel_running(id, remove, None) {
       return Ok(());
     }
-    if remove {
-      removal::remove(&self.db, &self.live, TransferDirection::Upload, id)
-        .await
-        .map_err(ApiError::internal)?;
+    self.cancel_unrun(record, remove).await
+  }
+
+  /// Ends canceled the upload of `record`, which no task runs, unless it has ended, and with
+  /// `remove` takes it out of the listings in the same write. A task keeps its upload's entry
+  /// until it has written how it ended, so none can be writing this one.
+  async fn cancel_unrun(&self, mut record: Record, remove: bool) -> Result<(), ApiError> {
+    let id = record.id;
+    let canceled = TransferStates::Completed(TransferOutcome::Cancelled);
+    let exception = ClientError::Canceled.to_string();
+    let unfinished = record
+      .complete(TransferOutcome::Cancelled, Some(exception.clone()))
+      .is_ok();
+    if !unfinished && !remove {
+      return Ok(());
+    }
+    let at = record.ended_at.unwrap_or_else(chrono::Utc::now);
+    let (ended, removed) = self
+      .db
+      .write(move |conn| {
+        let tx = conn.transaction()?;
+        let ended = unfinished && store::end_unless_ended(&tx, id, canceled, at, &exception)?;
+        if ended {
+          store::entered(&tx, id, canceled, at)?;
+        }
+        let removed = if remove {
+          removal::remove_one(&tx, TransferDirection::Upload, id)?
+        } else {
+          None
+        };
+        tx.commit()?;
+        Ok((ended, removed))
+      })
+      .await
+      .map_err(ApiError::internal)?;
+    if ended {
+      info!(%id, username = record.username, "upload without a running task ended as canceled");
+      self
+        .live
+        .publish(LiveFrame::TransfersUpdated(Box::new(record.transfer())));
+    }
+    if let Some(peer) = removed {
+      removal::push(&self.live, TransferDirection::Upload, &[(id, peer)]);
     }
     Ok(())
   }
