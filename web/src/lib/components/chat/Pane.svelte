@@ -35,7 +35,6 @@
   import { formatCount, plural } from "#lib/format.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { session } from "#lib/session.svelte.js";
-  import { fields } from "#lib/stored.svelte.js";
   import { viewport } from "#lib/ui/viewport.svelte.js";
   import { users } from "#lib/users/users.svelte.js";
 
@@ -94,8 +93,7 @@
   });
   /** the words marked in messages: our name and the watched words from the options */
   const watch = $derived.by(() => {
-    const words = fields(app.options).chat;
-    const watched = fields(words).highlight_words;
+    const watched = app.option("chat.highlight_words");
     const us = app.state?.user.username;
     return [
       ...(us ? [us] : []),

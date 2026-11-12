@@ -1,11 +1,10 @@
 <script lang="ts" module>
   import { app } from "#lib/app.svelte.js";
   import { formatCount } from "#lib/format.js";
-  import { fields } from "#lib/stored.svelte.js";
 
   /** The most characters the daemon sends in one message, its `chat.max_message_length` */
   export const maxLength = (): number => {
-    const configured = fields(fields(app.options).chat).max_message_length;
+    const configured = app.option("chat.max_message_length");
     return typeof configured === "number" && configured > 0 ? configured : 2000;
   };
 

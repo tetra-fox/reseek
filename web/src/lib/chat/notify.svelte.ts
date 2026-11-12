@@ -2,9 +2,9 @@ import { goto } from "$app/navigation";
 
 import type { Schemas } from "#lib/api/client.js";
 import { app } from "#lib/app.svelte.js";
+import type { OptionKey } from "#lib/config/keys.js";
 import { toast } from "#lib/feedback/toast.svelte.js";
 import { chatHref, roomHref } from "#lib/nav.js";
-import { fields } from "#lib/stored.svelte.js";
 import { browserTabs } from "#lib/ui/tabs.js";
 import { users } from "#lib/users/users.svelte.js";
 
@@ -28,25 +28,23 @@ export type NotifyOptions = {
 
 /** The notification options in effect, their defaults where the options don't say */
 export const notifyOptions = (): NotifyOptions => {
-  const chat = fields(fields(fields(app.options).chat).notifications);
-  const others = fields(fields(app.options).notifications);
-  const transfers = fields(others.transfers);
-  const buddies = fields(others.buddies);
-  const jobs = fields(others.jobs);
-  const search = fields(others.search);
-  const mode = (value: unknown, otherwise: NotifyMode) => (isNotifyMode(value) ? value : otherwise);
+  const hidden = app.option("chat.notifications.only_when_hidden");
+  const mode = (key: OptionKey, otherwise: NotifyMode) => {
+    const value = app.option(key);
+    return isNotifyMode(value) ? value : otherwise;
+  };
   return {
-    onlyWhenHidden: typeof chat.only_when_hidden === "boolean" ? chat.only_when_hidden : true,
-    privateMessages: mode(chat.private_messages, "both"),
-    mentions: mode(chat.mentions, "both"),
-    roomMessages: mode(chat.room_messages, "off"),
-    jobFinished: mode(transfers.job_finished, "both"),
-    uploadQueued: mode(transfers.upload_queued, "off"),
-    buddyPresence: mode(buddies.presence, "both"),
-    scansFinished: mode(jobs.scans, "off"),
-    analysisFinished: mode(jobs.analysis, "off"),
-    maintenanceFinished: mode(jobs.maintenance, "off"),
-    wishlistFound: mode(search.wishlist, "both")
+    onlyWhenHidden: typeof hidden === "boolean" ? hidden : true,
+    privateMessages: mode("chat.notifications.private_messages", "both"),
+    mentions: mode("chat.notifications.mentions", "both"),
+    roomMessages: mode("chat.notifications.room_messages", "off"),
+    jobFinished: mode("notifications.transfers.job_finished", "both"),
+    uploadQueued: mode("notifications.transfers.upload_queued", "off"),
+    buddyPresence: mode("notifications.buddies.presence", "both"),
+    scansFinished: mode("notifications.jobs.scans", "off"),
+    analysisFinished: mode("notifications.jobs.analysis", "off"),
+    maintenanceFinished: mode("notifications.jobs.maintenance", "off"),
+    wishlistFound: mode("notifications.search.wishlist", "both")
   };
 };
 

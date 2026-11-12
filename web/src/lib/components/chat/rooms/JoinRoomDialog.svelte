@@ -35,7 +35,6 @@
   import { Loader } from "#lib/loader.svelte.js";
   import { href, roomHref } from "#lib/nav.js";
   import { call } from "#lib/request.js";
-  import { fields } from "#lib/stored.svelte.js";
   import { CHAT } from "#lib/ui/bindings.js";
   import { isPressed } from "#lib/ui/keys.js";
   import { rem } from "#lib/ui/viewport.svelte.js";
@@ -44,9 +43,7 @@
   let { open = $bindable(), name: start = "" }: { open: boolean; name?: string } = $props();
 
   /** whether we take invitations to private rooms, the daemon's `chat` option; on unless set off */
-  const invitations = $derived(
-    fields(fields(app.options).chat).accept_private_room_invitations !== false
-  );
+  const invitations = $derived(app.option("chat.accept_private_room_invitations") !== false);
 
   const available = new Loader(() => call(() => api.GET("/api/v0/rooms/available")));
   let filter = $state("");
