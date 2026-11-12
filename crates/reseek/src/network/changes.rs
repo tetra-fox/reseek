@@ -26,8 +26,11 @@ pub async fn follow_changes(app: AppState) {
   let mut applied = app.startup.values.clone();
   let mut current = app.config.current();
   loop {
+    // stored in the poll that saw the client take the options, so before a session that began
+    // with them is connected
     if let Some(now) = apply(&app, &applied, &current).await {
       applied = now;
+      app.network.set_applied(current);
     }
     current = tokio::select! {
       () = app.shutdown.cancelled() => return,

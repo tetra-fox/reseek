@@ -210,7 +210,7 @@ fn reason_for(error: &Error, key: &str) -> String {
 }
 
 /// The keys of class `apply` whose value in `tree` differs from `base`.
-fn pending(schema: &Schema, base: &Value, tree: &Value, apply: Apply) -> Vec<Key> {
+pub(super) fn pending(schema: &Schema, base: &Value, tree: &Value, apply: Apply) -> Vec<Key> {
   schema
     .fields()
     .iter()

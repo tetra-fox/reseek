@@ -508,7 +508,7 @@ mod tests {
       current.files[0].revision.as_deref(),
       Some(written.revision.as_str())
     );
-    watcher.reconnected().await.unwrap();
+    watcher.reconnected(&current).await.unwrap();
     assert!(watcher.current().pending_reconnect.is_empty());
     assert_eq!(watcher.current().pending_restart, ["debug"]);
 

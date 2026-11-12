@@ -488,8 +488,8 @@ fn connection_state(state: ClientState) -> ServerConnectionState {
 }
 
 /// The TCP connection to the server is up, before the login: the watchdog stops without
-/// canceling the login, what waited for a reconnect is in effect now, and the users the last
-/// session watched are watched no more.
+/// canceling the login, the options the client had when the session began are in effect now,
+/// and the users the last session watched are watched no more.
 async fn connected(app: &AppState) {
   app.network.watchdog().stop(false);
   app.users.session_ended();
@@ -497,7 +497,8 @@ async fn connected(app: &AppState) {
   app
     .events
     .raise(BusEvent::SoulseekClientConnected(NoFields { version: 0 }));
-  if let Err(e) = app.config.reconnected().await {
+  // an option change the client waits to take while the session begins is not in effect
+  if let Err(e) = app.config.reconnected(&app.network.applied()).await {
     warn!(error = %e, "the options in effect were not marked as reconnected");
   }
   app.network.forget_reconnect();

@@ -21,9 +21,9 @@ use crate::layers::{Checked, Failure, Layers};
 use crate::loaded::{Loaded, NotApplied};
 use crate::overrides::Lasts;
 use crate::schema::keep_secrets;
-use crate::{Error, Key, Root, lock, tree};
+use crate::{Apply, Error, Key, Root, lock, tree};
 use events::{DEBOUNCE, FileEvents, quiet};
-use reload::Read;
+use reload::{Read, pending};
 
 /// How long to wait before reading the files again after a reload failed, since an editor that
 /// truncates and then writes leaves a broken file for a moment.
@@ -356,16 +356,25 @@ impl<T: Root> Watcher<T> {
       .await?
   }
 
-  /// Marks the values in effect as the ones the application reconnected with, which clears
-  /// `pending_reconnect`.
-  pub async fn reconnected(&self) -> Result<(), Error> {
+  /// Marks `with`, a configuration this watcher gave out, as the one the application
+  /// reconnected with: `pending_reconnect` then lists the keys changed since.
+  pub async fn reconnected(&self, with: &Loaded<T>) -> Result<(), Error> {
+    let tree = with.tree.clone();
     self
-      .blocking(|state, shared| {
+      .blocking(move |state, shared| {
+        state.reconnected = tree;
         let current = shared.current.borrow().clone();
-        state.reconnected = current.tree.clone();
-        let mut loaded = (*current).clone();
-        loaded.pending_reconnect.clear();
-        shared.current.send_replace(Arc::new(loaded));
+        let waiting = pending(
+          &current.schema,
+          &state.reconnected,
+          &current.tree,
+          Apply::Reconnect,
+        );
+        if waiting != current.pending_reconnect {
+          let mut loaded = (*current).clone();
+          loaded.pending_reconnect = waiting;
+          shared.current.send_replace(Arc::new(loaded));
+        }
       })
       .await
   }

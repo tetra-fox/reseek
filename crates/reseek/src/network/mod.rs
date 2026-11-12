@@ -19,7 +19,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use api_types::state::UserStatistics;
-use cascade::Watcher;
+use cascade::{Loaded, Watcher};
 use chrono::Utc;
 use reseek_shares::lock;
 use soulseek_client::{Client, ClientError, Event};
@@ -121,6 +121,9 @@ pub struct Network {
   /// held while the client's options are patched, so an option change and a switch of the
   /// speed limits each read the other's outcome
   reconfiguring: tokio::sync::Mutex<()>,
+  /// the configuration the client's options were last patched from, which a session that
+  /// begins runs with
+  applied: Mutex<Arc<Loaded<Options>>>,
 }
 
 impl Network {
@@ -180,6 +183,7 @@ impl Network {
         excluded: Mutex::new(Arc::from(Vec::new())),
         statistics: tokio::sync::Mutex::new(None),
         reconfiguring: tokio::sync::Mutex::new(()),
+        applied: Mutex::new(startup.clone()),
         events: Mutex::new(Some(events)),
         following: Mutex::new(None),
         drained: CancellationToken::new(),
@@ -346,6 +350,16 @@ impl Network {
   /// Takes the phrases the server asks our search responses to leave out.
   fn exclude(&self, phrases: Vec<String>) {
     *lock(&self.excluded) = phrases.into();
+  }
+
+  /// The configuration the client's options were last patched from.
+  fn applied(&self) -> Arc<Loaded<Options>> {
+    lock(&self.applied).clone()
+  }
+
+  /// Records that the client's options were patched from `options`.
+  fn set_applied(&self, options: Arc<Loaded<Options>>) {
+    *lock(&self.applied) = options;
   }
 
   /// Clears `State.pendingReconnect`: the session an option change waited for has ended, and
