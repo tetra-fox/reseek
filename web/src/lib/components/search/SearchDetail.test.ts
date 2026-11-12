@@ -72,16 +72,24 @@ describe("search results", () => {
 
   /**
    * Mounts the page on a running search and opens the stream. `stored` is what the search stores
-   * once it completes, `taken` what it took while it runs, `blocked` the users blocked; the last
-   * two are read at every request, so a test can change them. Gives the fake network
+   * once it completes, `taken` what it took while it runs, `blocked` the users blocked, or a
+   * function that answers each read of them when the test lets it; `taken` and `blocked` are read
+   * at every request, so a test can change them. Gives the fake network
    */
   const open = async (
     stored: Schemas["SearchResponse"][],
-    { taken = [], blocked = [] }: { taken?: Schemas["SearchResponse"][]; blocked?: string[] } = {}
+    {
+      taken = [],
+      blocked = []
+    }: {
+      taken?: Schemas["SearchResponse"][];
+      blocked?: string[] | (() => Promise<string[]>);
+    } = {}
   ) => {
-    const net = connected((url) => {
+    const net = connected(async (url) => {
       if (url.pathname.endsWith("/api/v0/users")) {
-        return { users: blocked.map((username) => userSummary(username)), total: blocked.length };
+        const names = typeof blocked === "function" ? await blocked() : blocked;
+        return { users: names.map((username) => userSummary(username)), total: names.length };
       }
       if (url.pathname.endsWith(`/searches/${ID}/responses`)) {
         const state = searches.list.get(ID)?.state;
@@ -247,6 +255,49 @@ describe("search results", () => {
     await flushFaked();
     await flushFaked();
     expect(cards()).toEqual(["folder:user:0:bob", "folder:user:0:carol"]);
+  });
+
+  it("keep a block or an unblock told while a read is under way over that read", async () => {
+    const stored = [response("alice", 300), response("bob", 200), response("carol", 100)];
+    // each read of the blocked users waits until the test answers it
+    const reads: ((names: string[]) => void)[] = [];
+    const net = await open(stored, { blocked: () => new Promise((answer) => reads.push(answer)) });
+    reads[0](["carol"]);
+    for (const r of stored) net.frame("search.response", { searchId: ID, response: r });
+    await streamed();
+    const cards = () =>
+      [
+        ...document.querySelectorAll('[role=treegrid] [role=rowgroup] [data-line^="folder:user:"]')
+      ].map((c) => c.getAttribute("data-line"));
+    expect(cards()).toEqual(["folder:user:0:alice", "folder:user:0:bob"]);
+    const reread = async () => {
+      net.frame("lagged", {});
+      await flushFaked();
+    };
+    const answer = async (read: number, names: string[]) => {
+      reads[read](names);
+      await flushFaked();
+      await flushFaked();
+    };
+
+    // bob is blocked while a read is under way, which answers without him
+    await reread();
+    net.frame("users.updated", userSummary("bob", { block: { username: "bob" } as never }));
+    await answer(1, ["carol"]);
+    expect(cards()).toEqual(["folder:user:0:alice"]);
+
+    // carol is unblocked while a read is under way, which still lists her
+    await reread();
+    net.frame("users.updated", userSummary("carol", { block: null }));
+    await answer(2, ["bob", "carol"]);
+    expect(cards()).toEqual(["folder:user:0:alice", "folder:user:0:carol"]);
+
+    // two reads under way, the later answered first with alice blocked: the earlier is dropped
+    await reread();
+    await reread();
+    await answer(4, ["alice", "bob"]);
+    await answer(3, ["bob"]);
+    expect(cards()).toEqual(["folder:user:0:carol"]);
   });
 
   it("show what a running search took before the page opened, also on coming back", async () => {
