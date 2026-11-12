@@ -95,4 +95,16 @@ describe("the live log", () => {
     await flush();
     expect(messages()).toEqual(["five", "four"]);
   });
+
+  it("shows once a record that a read brought and a resumed stream replays", async () => {
+    const net = fakeNetwork(() => [record("one", 1), record("two", 2)]);
+    live.start();
+    component = mount(LiveLogs, { target: document.body });
+    await flush();
+    expect(messages()).toEqual(["two", "one"]);
+    net.frame("logs.record", record("two", 2));
+    net.frame("logs.record", record("three", 3));
+    await flush();
+    expect(messages()).toEqual(["three", "two", "one"]);
+  });
 });
