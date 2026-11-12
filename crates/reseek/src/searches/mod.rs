@@ -436,13 +436,19 @@ impl SearchService for Searches {
   }
 
   async fn responses(&self, id: Uuid) -> Result<Vec<SearchResponse>, ApiError> {
+    // a search in the map has its responses in memory until its end is written with them
+    let running = self.running().get(&id).map(|running| running.responses());
+    if let Some(responses) = running {
+      return Ok(Arc::unwrap_or_clone(responses));
+    }
     self
       .db
       .read(move |conn| {
         let Some(stored) = store::responses(conn, id)? else {
           return Ok(None);
         };
-        // a search still running, or one whose responses were lost, has none stored
+        // a search whose end could not be written, or one whose responses were lost, has none
+        // stored
         let responses = match stored {
           Some(blob) => store::decompress(&blob).map_err(unreadable)?,
           None => Vec::new(),

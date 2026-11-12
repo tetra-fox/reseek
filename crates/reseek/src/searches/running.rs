@@ -129,6 +129,11 @@ impl Running {
     lock(&self.progress).record.clone()
   }
 
+  /// Every response taken so far.
+  pub fn responses(&self) -> Arc<Vec<SearchResponse>> {
+    lock(&self.progress).responses.clone()
+  }
+
   /// The client moved the search to `next`. The first report says the client took it; the
   /// end is not taken here, but written with the responses once the client returns.
   pub fn state_changed(&self, next: ClientState) {
@@ -156,23 +161,29 @@ impl Running {
       files = taken.file_count,
       "search response kept"
     );
-    let id = lock(&self.progress).record.id;
+    let (id, index) = {
+      let mut progress = lock(&self.progress);
+      let record = &mut progress.record;
+      record.response_count = record.response_count.saturating_add(1);
+      record.file_count = record.file_count.saturating_add(taken.file_count);
+      record.locked_file_count = record
+        .locked_file_count
+        .saturating_add(taken.locked_file_count);
+      let id = record.id;
+      let responses = Arc::make_mut(&mut progress.responses);
+      responses.push(taken);
+      (id, responses.len() - 1)
+    };
+    self.changed.notify_one();
+    // kept before the check, so a stream that starts following after it finds the response
+    // among those a page reads once the stream greets it
     if live.followed(Topic::SearchResponses(id)) {
+      let response = lock(&self.progress).responses[index].clone();
       live.publish(LiveFrame::SearchResponse(SearchResponseReceived {
         search_id: id,
-        response: taken.clone(),
+        response,
       }));
     }
-    let mut progress = lock(&self.progress);
-    let record = &mut progress.record;
-    record.response_count = record.response_count.saturating_add(1);
-    record.file_count = record.file_count.saturating_add(taken.file_count);
-    record.locked_file_count = record
-      .locked_file_count
-      .saturating_add(taken.locked_file_count);
-    Arc::make_mut(&mut progress.responses).push(taken);
-    drop(progress);
-    self.changed.notify_one();
   }
 
   /// The client refused the search before taking it; false when it had taken it, and the
@@ -460,7 +471,7 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn a_cancel_after_the_client_ended_a_search_another_way_changes_nothing() {
+  async fn a_running_search_serves_its_responses_and_a_cancel_after_its_end_changes_nothing() {
     let app = app(TRUSTED, &[]).await;
     let searches = app.state.searches.clone();
     let record = record();
@@ -474,6 +485,18 @@ mod tests {
     let running = Arc::new(Running::new(record, accepted));
     running.state_changed(ClientState::InProgress);
     searches.running().insert(id, running.clone());
+    let taken = peer::SearchResponse {
+      username: "alice".into(),
+      token: 7,
+      files: Vec::new(),
+      has_free_upload_slot: true,
+      upload_speed: 0,
+      queue_length: 0,
+      locked_files: Vec::new(),
+    };
+    running.response_taken(taken, &app.state.live, &app.state.users);
+    let served = searches.responses(id).await.unwrap();
+    assert_eq!(served.len(), 1, "nothing is stored while it runs");
 
     // the client ended it on a limit before the cancel came
     let limit = SearchState::Completed(SearchOutcome::ResponseLimitReached);

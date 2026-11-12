@@ -251,12 +251,16 @@ impl Searches {
         return failed(e.message().to_string());
       }
     };
-    let running = self.running().get(&search.id).cloned();
-    if let Some(running) = running {
-      let mut done = running.done.subscribe();
-      if done.wait_for(|done| *done).await.is_err() {
-        warn!(id = %search.id, "a wishlist search ended without saying");
-      }
+    // the client's end is enough, as a search's responses are read from memory until its end
+    // is written; only the receiver is kept, so a search dropped without ending says so
+    let ended = self
+      .running()
+      .get(&search.id)
+      .map(|running| running.ended.subscribe());
+    if let Some(mut ended) = ended
+      && ended.wait_for(Option::is_some).await.is_err()
+    {
+      warn!(id = %search.id, "a wishlist search ended without saying");
     }
     let responses = match self.responses(search.id).await {
       Ok(responses) => responses,
