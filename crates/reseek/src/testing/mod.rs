@@ -1,9 +1,10 @@
 //! An in-memory daemon for handler tests: a configuration in a temporary directory, the whole
 //! request pipeline, and requests sent to it without a socket; a reader for its event stream;
-//! and a stand-in OpenID Connect provider.
+//! a stand-in OpenID Connect provider; and a scripted Soulseek server.
 
 pub mod issuer;
 pub mod routes;
+pub mod soulseek;
 
 use std::ffi::OsString;
 use std::net::SocketAddr;
@@ -124,6 +125,26 @@ impl TestApp {
     self.state.stop().await;
     self.state.databases.close().await;
     start(self.dir, env).await
+  }
+
+  /// Writes `config` as the daemon's `config.toml` and loads it, which must change `key`, an
+  /// option declared to take a restart; the change is then listed as waiting for one.
+  pub async fn configure_for_restart(&self, config: &str, key: &str) {
+    let schema = cascade::Schema::of::<crate::config::Options>();
+    assert_eq!(schema.field(key).unwrap().apply, cascade::Apply::Restart);
+    std::fs::write(self.dir.path().join("config.toml"), config).unwrap();
+    let change = self.state.config.reload().await.unwrap().unwrap();
+    assert_eq!(change.by_apply.restart, [key]);
+    assert_eq!(change.current.pending_restart, [key]);
+  }
+
+  /// Writes `config` as the daemon's `config.toml` and loads it, which must change `key`, an
+  /// option that takes effect at once; nothing is then listed as waiting for a restart.
+  pub async fn configure_live(&self, config: &str, key: &str) {
+    std::fs::write(self.dir.path().join("config.toml"), config).unwrap();
+    let change = self.state.config.reload().await.unwrap().unwrap();
+    assert_eq!(change.by_apply.live, [key]);
+    assert!(change.current.pending_restart.is_empty());
   }
 
   /// The same daemon serving a web UI whose page is `<html>app</html>`.

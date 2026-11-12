@@ -530,9 +530,96 @@ impl Messaging {
 
 #[cfg(test)]
 mod tests {
-  use soulseek_proto::server::{RoomInfo as Listed, RoomList};
+  use std::sync::Arc;
+  use std::sync::atomic::{AtomicBool, Ordering};
 
-  use crate::testing::app;
+  use serde_json::{Value, json};
+  use soulseek_proto::server::{JoinRoomRequest, RoomData, RoomInfo as Listed, RoomList};
+  use soulseek_proto::{ServerRequest, ServerResponse};
+
+  use crate::testing::soulseek::{self, Server, US, member};
+  use crate::testing::{TRUSTED, TestApp, app};
+
+  /// The server's answer that lets us into the room `join` asks for, where alice is.
+  fn let_in(join: &JoinRoomRequest) -> ServerResponse {
+    ServerResponse::JoinRoom(RoomData {
+      name: join.room.clone(),
+      users: vec![member(US), member("alice")],
+      private: None,
+    })
+  }
+
+  fn joins(room: &'static str) -> impl Fn(&ServerRequest) -> Option<()> {
+    move |request| {
+      matches!(request, ServerRequest::JoinRoom(join) if join.room == room).then_some(())
+    }
+  }
+
+  /// Joins `room` through the API once the server took the request.
+  async fn join(app: &TestApp, server: &mut Server, room: &'static str) -> Value {
+    let request = Some(json!({ "name": room }));
+    let (status, joined) = app.call("POST", "/api/v0/rooms/joined", request).await;
+    assert_eq!(status, 201, "{joined}");
+    server.received(joins(room)).await;
+    joined
+  }
+
+  /// The names `GET /rooms/joined` lists.
+  async fn listed(app: &TestApp) -> Vec<String> {
+    let (status, rooms) = app.call("GET", "/api/v0/rooms/joined", None).await;
+    assert_eq!(status, 200);
+    let rooms = rooms.as_array().unwrap().iter();
+    rooms
+      .map(|room| room["name"].as_str().unwrap().to_string())
+      .collect()
+  }
+
+  /// A daemon in the room `lobby` whose session was lost and that logged in again to a server
+  /// that does not answer its join of the room, which is on its way.
+  async fn back_without_the_room() -> (TestApp, Server) {
+    let app = soulseek::app(TRUSTED).await;
+    let answering = Arc::new(AtomicBool::new(true));
+    let answers = answering.clone();
+    let mut server = Server::start(move |request| match request {
+      ServerRequest::JoinRoom(join) if answers.load(Ordering::SeqCst) => vec![let_in(join)],
+      ServerRequest::LeaveRoom(leave) => vec![ServerResponse::LeaveRoom(leave.clone())],
+      _ => Vec::new(),
+    })
+    .await;
+    server.login(&app).await;
+    join(&app, &mut server, "lobby").await;
+    answering.store(false, Ordering::SeqCst);
+    server.drop_session(&app).await;
+    server.login(&app).await;
+    server.received(joins("lobby")).await;
+    (app, server)
+  }
+
+  #[tokio::test]
+  async fn a_message_to_a_room_not_joined_again_since_the_reconnect_is_refused() {
+    let (app, _server) = back_without_the_room().await;
+    let said = Some(json!("hello"));
+    let (status, _) = app
+      .call("POST", "/api/v0/rooms/joined/lobby/messages", said)
+      .await;
+    assert!(app.state.network.client().state().is_logged_in());
+    assert_ne!(status, 201, "the server has us in no room to say it in");
+  }
+
+  #[tokio::test]
+  async fn a_room_whose_leave_the_server_never_answers_is_listed_no_more() {
+    let app = soulseek::app(TRUSTED).await;
+    let mut server = Server::start(|request| match request {
+      ServerRequest::JoinRoom(join) => vec![let_in(join)],
+      _ => Vec::new(),
+    })
+    .await;
+    server.login(&app).await;
+    join(&app, &mut server, "lobby").await;
+    app.call("DELETE", "/api/v0/rooms/joined/lobby", None).await;
+    assert_eq!(listed(&app).await, Vec::<String>::new());
+    assert_eq!(app.state.state.current().rooms, Vec::<String>::new());
+  }
 
   #[tokio::test]
   async fn a_room_list_the_server_sends_on_its_own_is_served_without_asking() {

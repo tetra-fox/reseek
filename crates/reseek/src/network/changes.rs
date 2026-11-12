@@ -123,7 +123,9 @@ mod tests {
 
   use api_types::state::Reachable;
   use serde_json::json;
+  use soulseek_proto::ServerRequest;
 
+  use crate::testing::soulseek::Server;
   use crate::testing::{app, request};
 
   #[tokio::test]
@@ -186,5 +188,41 @@ mod tests {
     }) {
       tokio::time::sleep(Duration::from_millis(20)).await;
     }
+  }
+
+  #[tokio::test]
+  async fn a_listener_that_cannot_move_does_not_keep_a_room_added_later_from_being_joined() {
+    let free = std::net::TcpListener::bind("0.0.0.0:0").unwrap();
+    let listen = free.local_addr().unwrap().port();
+    drop(free);
+    let app = app(
+      &format!(
+        "remote_configuration = true\n[web.authentication]\n\
+         trusted_networks = [\"127.0.0.0/8\"]\n\
+         [soulseek]\nlisten_port = {listen}\nport_mapping = false\n"
+      ),
+      &[],
+    )
+    .await;
+    let mut server = Server::silent().await;
+    server.login(&app).await;
+    let taken = std::net::TcpListener::bind("0.0.0.0:0").unwrap();
+    let changes = [
+      json!({ "set": { "soulseek.listen_port": taken.local_addr().unwrap().port() } }),
+      json!({ "set": { "rooms": ["lobby"] } }),
+    ];
+    for change in changes {
+      let answer = app
+        .send(request("PATCH", "/api/v0/options", Some(change)))
+        .await;
+      assert_eq!(answer.status, 200, "{:?}", answer.body);
+    }
+    let joined = server
+      .receives(
+        Duration::from_secs(5),
+        |request| matches!(request, ServerRequest::JoinRoom(join) if join.room == "lobby"),
+      )
+      .await;
+    assert!(joined, "the room was not joined");
   }
 }

@@ -12,6 +12,7 @@ pub mod tree;
 use std::io::Write;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::{Arc, Mutex, PoisonError};
+use std::task::Poll;
 use std::time::Duration;
 
 use soulseek_client::{Client, ClientError, ClientOptions, ClientState, Event, WaitKey};
@@ -442,6 +443,11 @@ pub fn disconnected(events: &[Event]) -> (String, Option<ClientError>) {
   let disconnect = disconnects.next().expect("Disconnected is raised");
   assert!(disconnects.next().is_none(), "Disconnected is raised once");
   disconnect
+}
+
+/// polls `future` once, without letting any other task run first
+pub async fn poll_once<F: Future + Unpin>(future: &mut F) -> Poll<F::Output> {
+  std::future::poll_fn(|cx| Poll::Ready(std::pin::Pin::new(&mut *future).poll(cx))).await
 }
 
 /// every event received so far

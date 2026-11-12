@@ -756,4 +756,13 @@ mod tests {
       .await;
     assert_eq!(refused.status, 403);
   }
+
+  #[tokio::test]
+  async fn headless_set_in_the_file_refuses_no_login_until_the_restart_it_takes() {
+    let app = app("", &[]).await;
+    app
+      .configure_for_restart("headless = true\n", "headless")
+      .await;
+    signed_in(&app).await;
+  }
 }

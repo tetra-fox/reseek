@@ -778,3 +778,156 @@ async fn two_buddy_changes_made_at_once_both_hold() {
   let (_, summary) = app.call("GET", "/api/v0/users/alice/summary", None).await;
   assert_eq!(summary["buddy"], json!({ "notifyPresence": true }));
 }
+
+#[tokio::test]
+async fn the_blocklist_turned_on_in_the_file_blocks_at_once_and_waits_for_no_restart() {
+  let files = tempfile::tempdir().unwrap();
+  let list = files.path().join("blocklist");
+  std::fs::write(&list, "203.0.113.0/24\n").unwrap();
+  let config = |enabled: bool| {
+    format!(
+      "[blacklist]\nenabled = {enabled}\nfile = {:?}\n",
+      list.to_str().unwrap()
+    )
+  };
+  let app = app(&config(false), &[]).await;
+  let ip = "203.0.113.7".parse().unwrap();
+  let blocked = || {
+    let users = &app.state.users;
+    users.is_blocked("alice", Some(ip), BlockScope::Uploads)
+  };
+  assert!(!blocked());
+  app.configure_live(&config(true), "blacklist.enabled").await;
+  let loaded = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+    while !blocked() {
+      tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+  })
+  .await;
+  assert!(loaded.is_ok(), "the blocklist was not loaded");
+}
+
+/// The scripted server's word that alice is `presence`, as a status and as the answer to a watch.
+fn alice_is(
+  presence: soulseek_proto::UserPresence,
+) -> (
+  soulseek_proto::ServerResponse,
+  soulseek_proto::ServerResponse,
+) {
+  use soulseek_proto::ServerResponse;
+  use soulseek_proto::server::{UserStats, UserStatus, WatchUserResponse, WatchedUser};
+
+  let status = ServerResponse::GetStatus(UserStatus {
+    username: "alice".into(),
+    presence,
+    is_privileged: false,
+  });
+  let watched = ServerResponse::WatchUser(WatchUserResponse {
+    username: "alice".into(),
+    user: Some(WatchedUser {
+      status: presence,
+      stats: UserStats::default(),
+      country_code: Some(String::new()),
+    }),
+  });
+  (status, watched)
+}
+
+/// What `GET /users/alice/profile` answers.
+async fn alice(app: &crate::testing::TestApp) -> Value {
+  let (status, profile) = app.call("GET", "/api/v0/users/alice/profile", None).await;
+  assert_eq!(status, 200);
+  profile
+}
+
+// on several threads, as the daemon runs, where the status can be handled before the watch ends
+#[tokio::test(flavor = "multi_thread")]
+async fn a_buddy_watched_at_login_is_shown_with_the_presence_the_server_gives_then() {
+  use soulseek_proto::ServerRequest;
+
+  // the status comes behind the answer to the watch, as our own request's answer, or ahead of
+  // it; behind, two tasks race for it, so that order is tried several times
+  for ahead in std::iter::repeat_n(false, 7).chain([true]) {
+    let app = crate::testing::soulseek::app(CONFIG).await;
+    let users = &app.state.users;
+    users.set_buddy("alice", Default::default()).await.unwrap();
+    let online = || alice_is(soulseek_proto::UserPresence::Online);
+    let server = crate::testing::soulseek::Server::start(move |request| match request {
+      ServerRequest::WatchUser(_) if ahead => vec![online().0, online().1],
+      ServerRequest::WatchUser(_) => vec![online().1],
+      ServerRequest::GetStatus(_) => vec![online().0],
+      _ => Vec::new(),
+    })
+    .await;
+    server.login(&app).await;
+    let shown = tokio::time::timeout(std::time::Duration::from_secs(4), async {
+      while alice(&app).await["presence"] != json!(UserPresence::Online) {
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+      }
+    })
+    .await;
+    assert!(
+      shown.is_ok(),
+      "shown {} with the status {} the watch's answer",
+      alice(&app).await["presence"],
+      if ahead { "ahead of" } else { "behind" }
+    );
+  }
+}
+
+#[tokio::test]
+async fn forgetting_a_watched_user_unwatches_them_and_a_later_status_makes_no_row() {
+  use soulseek_proto::ServerRequest;
+
+  let app = crate::testing::soulseek::app(CONFIG).await;
+  let users = &app.state.users;
+  users.set_buddy("alice", Default::default()).await.unwrap();
+  let online = || alice_is(soulseek_proto::UserPresence::Online);
+  let server = crate::testing::soulseek::Server::start(move |request| match request {
+    ServerRequest::WatchUser(_) => vec![online().1],
+    ServerRequest::GetStatus(_) => vec![online().0],
+    _ => Vec::new(),
+  })
+  .await;
+  server.login(&app).await;
+  let watched = || async { app.call("GET", "/api/v0/users/watched", None).await.1 };
+  tokio::time::timeout(std::time::Duration::from_secs(5), async {
+    while watched().await != json!(["alice"]) {
+      tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+  })
+  .await
+  .expect("the buddy was never watched");
+
+  let (status, _) = app.call("DELETE", "/api/v0/users/alice", None).await;
+  assert_eq!(status, 204);
+  server.send(vec![alice_is(soulseek_proto::UserPresence::Away).0]);
+  // longer than the writer gathers what it writes together
+  let back = tokio::time::timeout(touch::WINDOW * 2, async {
+    while alice(&app).await["known"] != true {
+      tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+  })
+  .await;
+  assert!(
+    back.is_err(),
+    "the forgotten user is in the directory again"
+  );
+  assert_eq!(watched().await, json!([]));
+}
+
+#[tokio::test]
+async fn while_a_new_username_waits_for_the_reconnect_we_are_the_name_logged_in_as() {
+  let config = CONFIG.replace("username = \"me\"", "username = \"renamed\"");
+  let app = crate::testing::soulseek::app(&config).await;
+  let server = crate::testing::soulseek::Server::silent().await;
+  server.login(&app).await;
+  assert_eq!(
+    app.state.network.client().username().as_deref(),
+    Some(crate::testing::soulseek::US)
+  );
+  let (ours, _) = app
+    .call("PUT", "/api/v0/users/me/block", Some(json!({})))
+    .await;
+  assert_eq!(ours, 409, "ourselves");
+}

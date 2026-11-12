@@ -925,4 +925,101 @@ mod tests {
     );
     assert_eq!(session.advance(3, Phase::Ended), Some(Phase::LoggedIn));
   }
+
+  /// a download as the client reports it while its peer has it queued
+  fn queued_download() -> Transfer {
+    Transfer {
+      direction: soulseek_proto::TransferDirection::Download,
+      username: "bob".into(),
+      filename: "a.flac".into(),
+      token: 1,
+      remote_token: None,
+      state: TransferState::QueuedRemotely,
+      size: 100,
+      start_offset: 0,
+      bytes_transferred: 0,
+      bytes_remaining: 100,
+      percent_complete: 0.0,
+      average_speed: 0.0,
+      start_time: None,
+      end_time: None,
+      elapsed_time: None,
+      remaining_time: None,
+      ip_end_point: None,
+      error: None,
+    }
+  }
+
+  #[tokio::test]
+  async fn a_download_changing_state_leaves_the_queued_gauge_counting_the_downloads_waiting_here() {
+    use api_types::transfers::{TransferDirection, TransferStates};
+
+    use crate::transfers::fixtures::{Row, insert};
+
+    let app = crate::testing::app(crate::testing::TRUSTED, &[]).await;
+    let waiting = || {
+      Row::new(
+        "alice",
+        TransferDirection::Download,
+        TransferStates::QueuedLocally,
+      )
+    };
+    insert(&app.state.transfers, vec![waiting(), waiting()]).await;
+    let queued = || {
+      let family = app.state.telemetry.metrics().transfers();
+      family.downloads.figures().queued.files
+    };
+    observe_transfers(&app.state).await;
+    assert_eq!(queued(), 2);
+    // the client holds none of the downloads waiting here
+    transfer_state(&app.state, None, &queued_download());
+    assert_eq!(queued(), 2);
+  }
+
+  #[tokio::test]
+  async fn a_disconnect_asked_for_is_not_undone_by_a_lost_connection_handled_after_it() {
+    let app = crate::testing::app(crate::testing::TRUSTED, &[]).await;
+    app.state.network.disconnect(None).await;
+    // the end of the session the disconnect found gone already, handled after it
+    let lost = ClientError::Connection {
+      kind: soulseek_client::ConnectionErrorKind::Read,
+      message: "Read error".into(),
+      source: None,
+    };
+    disconnected(&app.state, "Read error", Some(&lost), true);
+    assert!(!app.state.network.watchdog().is_enabled());
+  }
+
+  #[tokio::test]
+  async fn a_stream_is_told_the_options_once_a_reconnect_put_the_waiting_ones_in_effect() {
+    use crate::testing::request;
+
+    let config = format!("remote_configuration = true\n{}", crate::testing::TRUSTED);
+    let app = crate::testing::app(&config, &[]).await;
+    let live = request("GET", "/api/v0/live?topics=application", None);
+    let mut stream = app.stream_from("127.0.0.1:1", live).await;
+    stream.until("application.options").await;
+    let change = serde_json::json!({ "set": { "soulseek.port": 2243 } });
+    let (status, _) = app.call("PATCH", "/api/v0/options", Some(change)).await;
+    assert_eq!(status, 200);
+    stream.until("application.options").await;
+    let waiting = || async {
+      let (_, view) = app.call("GET", "/api/v0/options/view", None).await;
+      view["pendingReconnect"].clone()
+    };
+    assert_eq!(waiting().await, serde_json::json!(["soulseek.port"]));
+
+    connected(&app.state).await;
+    assert_eq!(waiting().await, serde_json::json!([]));
+    assert!(!app.state.state.current().pending_reconnect);
+    let told = tokio::time::timeout(
+      std::time::Duration::from_secs(2),
+      stream.until("application.options"),
+    )
+    .await;
+    assert!(
+      told.is_ok(),
+      "no application.options frame after the reconnect"
+    );
+  }
 }

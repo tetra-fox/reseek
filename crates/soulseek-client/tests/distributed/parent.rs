@@ -100,6 +100,33 @@ async fn the_candidate_nearest_the_top_is_adopted_and_the_others_let_go() {
 }
 
 #[tokio::test]
+async fn branch_news_a_candidate_sends_before_its_adoption_is_not_lost() {
+  let mut session = session().await;
+  let (quick, slow) = (FakePeer::start().await, FakePeer::start().await);
+  session
+    .server
+    .send(&net_info(&[("quick", &quick), ("slow", &slow)]))
+    .await;
+  let (mut quick, _slow) = tokio::join!(answers(&quick, 1, "top"), approached(&slow));
+  // quick moves in its branch while the round still waits for slow, which never answers
+  let mut news = branch_level(4);
+  news.extend(branch_root("higher"));
+  quick.send(&news).await;
+  assert_eq!(adopted(&mut session).await.username, "quick");
+  let branch = || {
+    let info = session.client.distributed_network();
+    (info.branch_level, info.branch_root)
+  };
+  let caught_up = tokio::time::timeout(Duration::from_secs(2), async {
+    while branch() != (5, "higher".into()) {
+      tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+  })
+  .await;
+  assert!(caught_up.is_ok(), "our branch stayed {:?}", branch());
+}
+
+#[tokio::test]
 async fn candidates_that_break_the_rules_are_dropped() {
   let logs = Logs::capture();
   let mut session = session().await;

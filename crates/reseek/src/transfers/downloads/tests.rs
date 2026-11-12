@@ -3,6 +3,8 @@
 //! finished download's file served from where it was moved, the removals and updates
 //! pushed on the `transfers` topic, and a job told of once its last download ended.
 
+use std::task::Poll;
+
 use api_types::transfers::{TransferOutcome, TransferStates, UserResponse};
 use serde_json::{Value, json};
 use uuid::Uuid;
@@ -780,5 +782,266 @@ async fn an_interrupted_download_whole_here_is_moved_though_its_user_cannot_be_r
     listed(&app, "@@a\\Album\\2.flac").await,
     partial.id,
     "the partial one waits for its user"
+  );
+}
+
+/// A resume reads a paused download, a cancel ends it, and then the resume writes: the
+/// download stays canceled, so the resume answers that it failed and starts no task.
+#[tokio::test]
+async fn a_resume_that_loses_the_race_to_a_cancel_fails_and_starts_no_task() {
+  let app = app(TRUSTED, &[]).await;
+  let mut paused = Record::download("alice", "a.flac", 10);
+  paused.paused = true;
+  insert(&app, &paused).await;
+  let id = paused.id;
+  // the database is held while the resume's read and then the cancel queue for it, so they
+  // run in that order, and the resume's save after both
+  let (release, released) = std::sync::mpsc::channel::<()>();
+  let (holding, held) = tokio::sync::oneshot::channel();
+  let transfers = app.state.transfers.clone();
+  let hold = tokio::spawn(async move {
+    transfers
+      .write(move |_| {
+        holding.send(()).unwrap();
+        released.recv().unwrap();
+        Ok(())
+      })
+      .await
+  });
+  held.await.unwrap();
+  let mut resuming = Box::pin(app.state.downloads.resume_paused(vec![id]));
+  // polled a second time in case the first ran out of the task's budget before it queued
+  for _ in 0..2 {
+    tokio::task::yield_now().await;
+    let polled = std::future::poll_fn(|cx| Poll::Ready(resuming.as_mut().poll(cx))).await;
+    assert!(polled.is_pending());
+  }
+  let transfers = app.state.transfers.clone();
+  let canceling = tokio::spawn(async move {
+    transfers
+      .write(move |conn| {
+        let state = TransferStates::Completed(TransferOutcome::Cancelled);
+        store::end_unless_ended(conn, id, state, chrono::Utc::now(), super::CANCELED)
+      })
+      .await
+  });
+  tokio::task::yield_now().await;
+  release.send(()).unwrap();
+  let outcomes = resuming.await;
+  hold.await.unwrap().unwrap();
+  assert!(canceling.await.unwrap().unwrap());
+  assert!(
+    matches!(outcomes[..], [Err(ref failed)] if failed.id == id),
+    "{outcomes:?}"
+  );
+  assert!(!reseek_shares::lock(&app.state.downloads.in_flight).contains_key(&id));
+  assert_eq!(
+    read(&app, id).await.state.kind(),
+    TransferStates::Completed(TransferOutcome::Cancelled)
+  );
+}
+
+#[tokio::test]
+async fn a_resume_while_logged_out_leaves_the_interrupted_downloads_for_the_next_login() {
+  let app = app(TRUSTED, &[]).await;
+  let job = Uuid::new_v4();
+  listed_job(&app, job, "Album from alice").await;
+  let mut interrupted = Record::download("alice", "@@a\\Album\\1.flac", 10);
+  interrupted.job_id = Some(job);
+  insert(&app, &interrupted).await;
+  crate::transfers::cleanup::end_unfinished(&app.state.transfers)
+    .await
+    .unwrap();
+
+  // the daemon is not connected, so nothing can be enqueued
+  app.state.downloads.resume().await;
+  let left = crate::transfers::cleanup::take_resumable(&app.state.transfers)
+    .await
+    .unwrap();
+  let files: Vec<&str> = left
+    .get(&job)
+    .into_iter()
+    .flatten()
+    .flat_map(|group| &group.files)
+    .map(|file| file.filename.as_str())
+    .collect();
+  assert_eq!(files, ["@@a\\Album\\1.flac"]);
+}
+
+#[tokio::test]
+async fn the_listings_answer_with_the_other_downloads_when_one_row_holds_an_unknown_state() {
+  let app = app(TRUSTED, &[]).await;
+  let known = Record::download("alice", "@@a\\Album\\1.flac", 10);
+  let odd = Record::download("alice", "@@a\\Album\\2.flac", 10);
+  insert(&app, &known).await;
+  insert(&app, &odd).await;
+  let id = odd.id.to_string();
+  app
+    .state
+    .transfers
+    .write(move |conn| conn.execute("UPDATE Transfers SET State = 2 WHERE Id = ?1", [id]))
+    .await
+    .unwrap();
+  let named = |files: &[Value]| {
+    files
+      .iter()
+      .any(|file| file["filename"] == "@@a\\Album\\1.flac")
+  };
+
+  let (status, grouped) = app.call("GET", "/api/v0/transfers/downloads", None).await;
+  assert_eq!(status, 200, "{grouped}");
+  assert!(
+    named(grouped[0]["directories"][0]["files"].as_array().unwrap()),
+    "{grouped}"
+  );
+  let (status, page) = app
+    .call("GET", "/api/v0/transfers/downloads/list", None)
+    .await;
+  assert_eq!(status, 200, "{page}");
+  assert!(named(page["items"].as_array().unwrap()), "{page}");
+}
+
+#[tokio::test]
+async fn a_resume_dropped_once_its_record_is_written_leaves_a_download_a_cancel_ends() {
+  let app = app(TRUSTED, &[]).await;
+  let downloads = &app.state.downloads;
+  let mut paused = Record::download("alice", "a.flac", 10);
+  paused.paused = true;
+  insert(&app, &paused).await;
+  let id = paused.id;
+  let mut resuming = Box::pin(downloads.resume_paused(vec![id]));
+  // polled until it holds the download's cancel handle, which is when its record is being
+  // written
+  while !reseek_shares::lock(&downloads.in_flight).contains_key(&id) {
+    let polled = std::future::poll_fn(|cx| Poll::Ready(resuming.as_mut().poll(cx))).await;
+    assert!(polled.is_pending());
+    tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+  }
+  // queued behind the record's write, so the record is written once this returns
+  app.state.transfers.write(|_| Ok(())).await.unwrap();
+  drop(resuming);
+  assert!(!read(&app, id).await.paused);
+
+  let request = json!({ "ids": [id], "action": "cancel" });
+  let (status, result) = app
+    .call("POST", "/api/v0/transfers/downloads/bulk", Some(request))
+    .await;
+  assert_eq!(status, 200);
+  assert_eq!(result["ok"], json!([id]));
+  let ended = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+    while !read(&app, id).await.is_completed() {
+      tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+  })
+  .await;
+  assert!(ended.is_ok(), "the canceled download never ended");
+}
+
+/// Whether a download of `filename` from alice has not ended.
+async fn unfinished(app: &TestApp, filename: &'static str) -> bool {
+  app
+    .state
+    .transfers
+    .read(move |conn| {
+      let mut ids =
+        conn.prepare("SELECT Id FROM Transfers WHERE Username = 'alice' AND Filename = ?1")?;
+      let ids = ids
+        .query_map([filename], |row| row.get::<_, String>(0))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+      for id in ids {
+        if !store::get(conn, id.parse().unwrap())?
+          .unwrap()
+          .is_completed()
+        {
+          return Ok(true);
+        }
+      }
+      Ok(false)
+    })
+    .await
+    .unwrap()
+}
+
+#[tokio::test]
+async fn a_download_interrupted_is_enqueued_at_the_login_after_a_resume_while_logged_out() {
+  use soulseek_proto::server::GetPeerAddressResponse;
+  use soulseek_proto::{ServerRequest, ServerResponse};
+
+  let app = crate::testing::soulseek::app(TRUSTED).await;
+  // alice's address, where connections are accepted and held open
+  let peer = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+  let port = peer.local_addr().unwrap().port();
+  tokio::spawn(async move {
+    let mut held = Vec::new();
+    while let Ok((stream, _)) = peer.accept().await {
+      held.push(stream);
+    }
+  });
+  let server = crate::testing::soulseek::Server::start(move |request| match request {
+    ServerRequest::GetPeerAddress(asked) => {
+      vec![ServerResponse::GetPeerAddress(GetPeerAddressResponse {
+        username: asked.username.clone(),
+        ip: std::net::Ipv4Addr::LOCALHOST,
+        port: port.into(),
+        obfuscation: None,
+      })]
+    }
+    _ => Vec::new(),
+  })
+  .await;
+  let job = Uuid::new_v4();
+  listed_job(&app, job, "Album from alice").await;
+  let mut interrupted = Record::download("alice", "@@a\\Album\\1.flac", 10);
+  interrupted.job_id = Some(job);
+  insert(&app, &interrupted).await;
+  crate::transfers::cleanup::end_unfinished(&app.state.transfers)
+    .await
+    .unwrap();
+  assert!(!unfinished(&app, "@@a\\Album\\1.flac").await);
+
+  // the daemon is not connected, so nothing can be enqueued
+  app.state.downloads.resume().await;
+  server.login(&app).await;
+  let enqueued = tokio::time::timeout(std::time::Duration::from_secs(10), async {
+    while !unfinished(&app, "@@a\\Album\\1.flac").await {
+      tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+  })
+  .await;
+  assert!(enqueued.is_ok(), "not enqueued again after the login");
+}
+
+#[tokio::test]
+async fn a_purge_of_a_users_transfers_leaves_no_download_running_out_of_the_listings() {
+  let config = format!("[transfers.download.retry]\ndelay = \"1h\"\nmax_delay = \"1h\"\n{TRUSTED}");
+  let app = app(&config, &[]).await;
+  let users = &app.state.users;
+  users.set_buddy("alice", Default::default()).await.unwrap();
+  let mut held = Record::download("alice", "@@a\\Album\\1.flac", 10);
+  held.paused = true;
+  insert(&app, &held).await;
+  let id = held.id;
+  // resumed, its task tries the peer, which cannot be reached, and waits to try again
+  let resume = json!({ "ids": [id], "action": "resume" });
+  app
+    .call("POST", "/api/v0/transfers/downloads/bulk", Some(resume))
+    .await;
+  read_until(&app, id, |r| r.next_attempt_at().is_some()).await;
+
+  let (status, _) = app
+    .call("DELETE", "/api/v0/users/alice?purge=true", None)
+    .await;
+  assert_eq!(status, 204);
+  let running = || reseek_shares::lock(&app.state.downloads.in_flight).contains_key(&id);
+  let stopped = tokio::time::timeout(std::time::Duration::from_secs(2), async {
+    while running() {
+      tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+  })
+  .await;
+  let (_, listed) = app.call("GET", "/api/v0/transfers/downloads", None).await;
+  assert!(
+    stopped.is_ok() || listed != json!([]),
+    "the download still runs and no listing has it"
   );
 }

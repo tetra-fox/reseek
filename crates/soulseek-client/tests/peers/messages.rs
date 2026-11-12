@@ -8,15 +8,17 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use crate::support::peer::{FakePeer, PeerSide};
-use crate::support::{Logs, PATIENCE, Session, listening_options};
+use crate::support::{Logs, PATIENCE, Session, listening_options, poll_once};
 use soulseek_client::{
-  ClientError, ClientOptions, Event, IncomingBrowse, MessageErrorKind, Resolvers, SearchOptions,
-  SearchOutcome, SearchScope, SearchState, WaitKey,
+  BrowseReply, ClientError, ClientOptions, EncodedFrame, Event, IncomingBrowse, MessageErrorKind,
+  Resolvers, SearchOptions, SearchOutcome, SearchScope, SearchState, WaitKey,
 };
+use soulseek_proto::init::PeerInit;
 use soulseek_proto::peer::*;
 use soulseek_proto::{
-  InitMessage, Limits, PeerCode, PeerMessage, RemoteFilename, TransferDirection,
+  InitMessage, Limits, PeerCode, PeerConnectionType, PeerMessage, RemoteFilename, TransferDirection,
 };
+use tokio::io::AsyncReadExt;
 use tokio_util::sync::CancellationToken;
 
 fn resolvers() -> Resolvers {
@@ -364,6 +366,80 @@ async fn a_replaced_connection_closing_never_takes_its_replacement_with_it() {
 }
 
 #[tokio::test]
+async fn a_wait_fails_when_its_connection_closes_though_another_request_finds_it_closed_first() {
+  let session = session().await;
+  let _bob = bob(&session).await;
+  let client = &session.client;
+  let cancel = CancellationToken::new();
+  let conn = client
+    .get_or_add_message_connection("bob", None, &cancel)
+    .await
+    .unwrap();
+  let wait = client.waiter().wait::<UserInfo>(
+    WaitKey::Peer {
+      code: PeerCode::InfoResponse,
+      username: "bob".into(),
+    },
+    Some(PATIENCE * 6),
+    CancellationToken::new(),
+  );
+  assert!(conn.handle().disconnect("Remote connection closed", None));
+  // another request looks for the connection before anything else has seen it close
+  let mut another = Box::pin(client.get_or_add_message_connection("bob", None, &cancel));
+  assert!(poll_once(&mut another).await.is_pending());
+  let failed = tokio::time::timeout(Duration::from_secs(2), wait).await;
+  let error = failed
+    .expect("the wait ends when the connection closes")
+    .unwrap_err();
+  assert_eq!(
+    error.to_string(),
+    "The message connection to bob closed: Remote connection closed"
+  );
+}
+
+/// A connection is whoever its first message says it is: one that names a user we already hold
+/// a connection to takes that user's place, whatever address it comes from. Whether the address
+/// should be checked is not settled; this holds today's behavior still until it is.
+#[tokio::test]
+async fn a_connection_naming_a_user_we_are_connected_to_replaces_it_from_any_address() {
+  let session = session().await;
+  let known = FakePeer::start().await;
+  let cancel = CancellationToken::new();
+  let dialed = session
+    .client
+    .get_or_add_message_connection("bob", Some(known.address()), &cancel);
+  let (dialed, _bob) = tokio::join!(dialed, known.accept());
+  assert_eq!(dialed.unwrap().handle().remote(), known.address());
+  // someone at another address says it is bob
+  let socket = tokio::net::TcpSocket::new_v4().unwrap();
+  socket
+    .bind(SocketAddr::from((Ipv4Addr::new(127, 0, 0, 2), 0)))
+    .unwrap();
+  let mut other = PeerSide::new(socket.connect(session.listen_address()).await.unwrap());
+  let introduce = InitMessage::PeerInit(PeerInit {
+    username: "bob".into(),
+    connection_type: PeerConnectionType::Peer,
+    token: 0,
+  });
+  other.send(&introduce.encode()).await;
+  other.send(&PeerMessage::InfoRequest.encode()).await;
+  assert!(matches!(
+    other.read_peer().await,
+    PeerMessage::InfoResponse(_)
+  ));
+  let from = other.stream.local_addr().unwrap();
+  assert_eq!(from.ip(), Ipv4Addr::new(127, 0, 0, 2));
+  assert_eq!(session.client.message_connection_address("bob"), Some(from));
+  // what we write to bob from now on goes to the newcomer
+  let current = session
+    .client
+    .get_or_add_message_connection("bob", None, &cancel)
+    .await
+    .unwrap();
+  assert_eq!(current.handle().remote(), from);
+}
+
+#[tokio::test]
 async fn a_peer_reconnecting_over_and_over_keeps_two_replaced_connections() {
   let session = session().await;
   let mut sides = Vec::new();
@@ -483,6 +559,110 @@ async fn messages_past_the_handler_bound_wait_instead_of_being_dropped() {
       PeerMessage::InfoResponse(_)
     ));
   }
+}
+
+#[tokio::test]
+async fn peers_reading_their_replies_at_a_trickle_leave_other_peers_requests_handled() {
+  let asked = Arc::new(AtomicUsize::new(0));
+  let mut options = listening_options();
+  // a listing far longer than the sockets hold, so its write waits for the peer to read
+  options.resolvers.browse_response_resolver = Some(Arc::new({
+    let asked = asked.clone();
+    move |_, _| {
+      asked.fetch_add(1, Ordering::SeqCst);
+      Box::pin(async {
+        let len = 1 << 30;
+        Ok(BrowseReply::Encoded(EncodedFrame {
+          len,
+          reader: Box::pin(tokio::io::repeat(0).take(len)),
+        }))
+      })
+    }
+  }));
+  let session = Session::with_options(options).await;
+  // 16 peers with 16 requests each have 256 messages handled at once, which is the bound
+  let cancel = CancellationToken::new();
+  for n in 0..16 {
+    let peer = FakePeer::start().await;
+    let name = format!("slow{n}");
+    let dialed = session
+      .client
+      .get_or_add_message_connection(&name, Some(peer.address()), &cancel);
+    let accepted = async {
+      let mut side = peer.accept().await;
+      side.read_init().await;
+      side
+    };
+    let (dialed, mut side) = tokio::join!(dialed, accepted);
+    dialed.unwrap();
+    side
+      .send(&PeerMessage::BrowseRequest.encode().repeat(16))
+      .await;
+    tokio::spawn(async move {
+      // a byte now and then keeps the connection from counting as idle
+      while side.stream.read_exact(&mut [0]).await.is_ok() {
+        tokio::time::sleep(Duration::from_millis(50)).await;
+      }
+    });
+  }
+  tokio::time::timeout(PATIENCE, async {
+    while asked.load(Ordering::SeqCst) < 256 {
+      tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+  })
+  .await
+  .expect("every request of the slow peers is being answered");
+  let mut carol = session.peer("carol").await;
+  carol.send(&PeerMessage::InfoRequest.encode()).await;
+  let answered = tokio::time::timeout(Duration::from_secs(2), carol.read_peer()).await;
+  assert!(
+    answered.is_ok(),
+    "carol's request waits behind the slow readers"
+  );
+}
+
+#[tokio::test]
+async fn queue_requests_on_one_connection_reach_the_resolver_in_the_order_sent() {
+  let (queued, mut order) = tokio::sync::mpsc::unbounded_channel();
+  let mut options = listening_options();
+  options.resolvers.enqueue_download = Some(Arc::new(move |_, _, filename: RemoteFilename| {
+    let queued = queued.clone();
+    Box::pin(async move {
+      // what the application looks up before it queues takes longer for the first file
+      let lookup = if filename.as_str().ends_with("01.flac") {
+        50
+      } else {
+        1
+      };
+      tokio::time::sleep(Duration::from_millis(lookup)).await;
+      // the test may have stopped listening
+      let _ = queued.send(filename);
+      Ok(())
+    })
+  }));
+  let session = Session::with_options(options).await;
+  let mut bob = session.peer("bob").await;
+  let album: Vec<RemoteFilename> = (1..=20)
+    .map(|track| format!("@@music\\album\\{track:02}.flac").into())
+    .collect();
+  let frames: Vec<u8> = album
+    .iter()
+    .flat_map(|filename| {
+      PeerMessage::QueueDownload(QueueDownload {
+        filename: filename.clone(),
+      })
+      .encode()
+    })
+    .collect();
+  bob.send(&frames).await;
+  let mut reached = Vec::new();
+  for _ in &album {
+    let filename = tokio::time::timeout(PATIENCE, order.recv())
+      .await
+      .expect("every request reaches the resolver");
+    reached.extend(filename);
+  }
+  assert_eq!(reached, album);
 }
 
 #[tokio::test]

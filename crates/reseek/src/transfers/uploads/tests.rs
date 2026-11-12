@@ -5,6 +5,7 @@
 
 use std::path::Path;
 use std::sync::atomic::Ordering;
+use std::task::Poll;
 
 use api_types::transfers::{TransferDirection, TransferOutcome, TransferStates, UserResponse};
 use reseek_shares::lock;
@@ -360,4 +361,91 @@ async fn a_file_sent_to_a_user_unasked_is_refused_unless_it_is_shared() {
     answer["failed"],
     json!([{ "filename": "@@nope\\a.flac", "message": "File not shared." }])
   );
+}
+
+/// The uploads of `SHARED` to alice, removed ones included, oldest first.
+async fn uploads_of_shared(app: &TestApp) -> Vec<Record> {
+  app
+    .state
+    .transfers
+    .read(|conn| {
+      let mut ids = conn.prepare(
+        "SELECT Id FROM Transfers WHERE Username = 'alice' AND Filename = ?1 ORDER BY rowid",
+      )?;
+      let ids = ids
+        .query_map([SHARED], |row| row.get::<_, String>(0))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+      ids
+        .into_iter()
+        .map(|id| store::get(conn, id.parse().unwrap()).map(Option::unwrap))
+        .collect()
+    })
+    .await
+    .unwrap()
+}
+
+#[tokio::test]
+async fn a_send_dropped_once_its_record_is_written_leaves_an_upload_a_cancel_ends() {
+  let (_files, app) = shared_app("").await;
+  let uploads = &app.state.uploads;
+  let mut sending = Box::pin(uploads.send("alice", vec![SHARED.to_string()]));
+  // polled until it holds the upload's cancel handle, which is when its record is being written
+  while lock(&uploads.in_flight).is_empty() {
+    let polled = std::future::poll_fn(|cx| Poll::Ready(sending.as_mut().poll(cx))).await;
+    assert!(polled.is_pending());
+    tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+  }
+  // queued behind the record's write, so the record is written once this returns
+  app.state.transfers.write(|_| Ok(())).await.unwrap();
+  drop(sending);
+  let written = uploads_of_shared(&app).await;
+  assert_eq!(written.len(), 1);
+  let id = written[0].id;
+
+  let uri = format!("/api/v0/transfers/uploads/alice/{id}");
+  let (status, _) = app.call("DELETE", &uri, None).await;
+  assert_eq!(status, 204);
+  let ended = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+    while !uploads_of_shared(&app).await[0].is_completed() {
+      tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+  })
+  .await;
+  assert!(ended.is_ok(), "the canceled upload never ended");
+
+  let sent = uploads.send("alice", vec![SHARED.to_string()]).await;
+  assert_eq!(sent.queued, [SHARED]);
+  let now = uploads_of_shared(&app).await;
+  assert_eq!(
+    now.len(),
+    2,
+    "a new upload, not the dropped one standing for it"
+  );
+}
+
+#[tokio::test]
+async fn canceling_an_upload_no_task_runs_ends_it() {
+  let (_files, app) = shared_app("").await;
+  let waiting = Row::new(
+    "alice",
+    TransferDirection::Upload,
+    TransferStates::QueuedLocally,
+  );
+  let id = waiting.id;
+  insert(&app.state.transfers, vec![waiting]).await;
+  let uri = format!("/api/v0/transfers/uploads/alice/{id}");
+  let (status, _) = app.call("DELETE", &uri, None).await;
+  assert_eq!(status, 204);
+  let ended = app
+    .state
+    .transfers
+    .read(move |conn| store::get(conn, id))
+    .await
+    .unwrap()
+    .unwrap();
+  assert_eq!(
+    ended.state.kind(),
+    TransferStates::Completed(TransferOutcome::Cancelled)
+  );
+  assert!(ended.ended_at.is_some());
 }

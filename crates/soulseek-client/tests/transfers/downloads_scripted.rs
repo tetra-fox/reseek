@@ -14,7 +14,8 @@ use soulseek_client::{
   ClientError, DownloadOutput, DownloadRequest, Event, RequestStyle, TransferOutcome, TransferState,
 };
 use soulseek_proto::peer::{TransferRequest, TransferResponse, UploadDenied, UploadFailed};
-use soulseek_proto::{PeerMessage, TransferDirection};
+use soulseek_proto::server::GetPeerAddressResponse;
+use soulseek_proto::{PeerMessage, ServerRequest, ServerResponse, TransferDirection};
 use tokio_util::sync::CancellationToken;
 
 fn rejected(reason: &str) -> impl Fn(&ClientError) -> bool + '_ {
@@ -386,4 +387,102 @@ async fn one_download_per_file_and_one_transfer_per_token() {
       .await,
     Err(ClientError::DuplicateToken(taken)) if taken == token
   ));
+}
+
+#[tokio::test]
+async fn an_offer_that_comes_while_the_download_still_looks_up_its_peer_is_allowed() {
+  let mut scripted = Scripted::start().await;
+  let filename = "@@share\\early.mp3";
+  let _running = scripted.download(filename, |_| {});
+  // the download is registered and waits for bob's address
+  let server = &mut scripted.session.server;
+  server
+    .request_matching(|request| matches!(request, ServerRequest::GetPeerAddress(_)).then_some(()))
+    .await;
+  // bob still has the file queued from before, and offers it now
+  let mut bob = scripted.session.peer(BOB).await;
+  let offered = PeerMessage::TransferRequest(TransferRequest {
+    direction: TransferDirection::Upload,
+    token: 77,
+    filename: filename.into(),
+    file_size: Some(SIZE),
+  });
+  bob.send(&offered.encode()).await;
+  // the client has handled the offer by the time it answers a request sent after it
+  bob.send(&PeerMessage::InfoRequest.encode()).await;
+  let allowed = PeerMessage::TransferResponse(TransferResponse::Allowed {
+    token: 77,
+    file_size: None,
+  });
+  let mut answered = false;
+  loop {
+    match bob.read_peer().await {
+      PeerMessage::InfoResponse(_) => break,
+      answer => {
+        assert_eq!(answer, allowed);
+        answered = true;
+      }
+    }
+  }
+  scripted
+    .session
+    .server
+    .send(&ServerResponse::GetPeerAddress(GetPeerAddressResponse {
+      username: BOB.into(),
+      ip: std::net::Ipv4Addr::LOCALHOST,
+      port: scripted.bob.port(),
+      obfuscation: None,
+    }))
+    .await;
+  let in_time = tokio::time::timeout(Duration::from_secs(2), async {
+    while !answered {
+      answered = bob.read_peer().await == allowed;
+    }
+  })
+  .await;
+  assert!(in_time.is_ok(), "the offer was not answered");
+}
+
+#[tokio::test]
+async fn downloads_started_in_order_are_asked_of_the_peer_in_that_order() {
+  let mut scripted = Scripted::start().await;
+  let album: Vec<String> = (1..=20)
+    .map(|track| format!("@@share\\album\\{track:02}.flac"))
+    .collect();
+  let _running: Vec<_> = album
+    .iter()
+    .map(|filename| scripted.download(filename, |_| {}))
+    .collect();
+  let mut bob = scripted.connected().await;
+  let mut asked = Vec::new();
+  for _ in &album {
+    let PeerMessage::QueueDownload(request) = bob.read_peer().await else {
+      panic!("a queue request");
+    };
+    asked.push(request.filename.to_string());
+  }
+  assert_eq!(asked, album);
+}
+
+/// `UploadFailed` names only the file, so one bob sends about an attempt that already ended here
+/// cannot be told from one about the attempt queued after it. Today it fails the newer attempt;
+/// this holds that still.
+#[tokio::test]
+async fn a_failure_reported_for_an_attempt_that_ended_fails_the_attempt_queued_after_it() {
+  let mut scripted = Scripted::start().await;
+  let filename = "@@share\\again.mp3";
+  let (first, mut bob) = scripted.queued_download(filename).await;
+  offer(&mut bob, filename, 21, Some(SIZE)).await;
+  let mut transfer = scripted.connect_for_transfer(21).await;
+  send_file(&mut transfer, 0, 1000).await;
+  drop(transfer);
+  assert!(first.result().await.is_err());
+  let second = scripted.download(filename, |_| {});
+  queued(&mut bob, filename).await;
+  // bob reports the first attempt's broken transfer only now
+  let failed = PeerMessage::UploadFailed(UploadFailed {
+    filename: filename.into(),
+  });
+  bob.send(&failed.encode()).await;
+  assert!(reported_failed(&second.result().await.unwrap_err()));
 }

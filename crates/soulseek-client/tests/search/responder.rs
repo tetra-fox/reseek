@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::support::peer::PeerSide;
-use crate::support::{Logs, Session, free_port, listening_options};
+use crate::support::{Logs, PATIENCE, Session, free_port, listening_options};
 use soulseek_client::{ClientOptions, Event, SearchReply};
 use soulseek_proto::init::PierceFirewall;
 use soulseek_proto::peer::{File, SearchResponse};
@@ -44,9 +44,8 @@ async fn responder(connect_timeout: Duration) -> Session {
   Session::with_options(ClientOptions { ..options }).await
 }
 
-/// Carol searches; the scripted server gives the responder an address nobody listens on and
-/// returns the token of the connection request the responder has the server relay to her
-async fn carol_searches(session: &mut Session, token: u32) -> u32 {
+/// Carol searches with `token`
+async fn carol_asks(session: &mut Session, token: u32) {
   session
     .server
     .send(&ServerResponse::FileSearch(FileSearchResponse {
@@ -55,6 +54,10 @@ async fn carol_searches(session: &mut Session, token: u32) -> u32 {
       query: "hit".into(),
     }))
     .await;
+}
+
+/// the scripted server answers the responder's lookup of carol with an address nobody listens on
+async fn carol_is_looked_up(session: &mut Session) {
   session
     .server
     .request_matching(|request| match request {
@@ -73,6 +76,13 @@ async fn carol_searches(session: &mut Session, token: u32) -> u32 {
       obfuscation: None,
     }))
     .await;
+}
+
+/// Carol searches; the scripted server gives the responder an address nobody listens on and
+/// returns the token of the connection request the responder has the server relay to her
+async fn carol_searches(session: &mut Session, token: u32) -> u32 {
+  carol_asks(session, token).await;
+  carol_is_looked_up(session).await;
   session
     .server
     .request_matching(|request| match request {
@@ -167,4 +177,37 @@ async fn a_searcher_refusing_while_we_still_try_gets_nothing_kept() {
   assert!(started.elapsed() < Duration::from_secs(4));
   let mut carol = carol_pierces(&session, request).await;
   carol.closed().await;
+}
+
+#[tokio::test]
+async fn two_answers_kept_for_one_searcher_both_go_out_when_she_connects_late() {
+  let logs = Logs::capture();
+  let mut session = responder(Duration::from_millis(500)).await;
+  let request = carol_searches(&mut session, 8).await;
+  // her second search finds the first one's connection attempt under way and shares it, so
+  // the one request the server relayed is all she can answer
+  carol_asks(&mut session, 9).await;
+  carol_is_looked_up(&mut session).await;
+  let kept = "cached response for potential delayed delivery";
+  tokio::time::timeout(PATIENCE, async {
+    while logs.lines_with(&[kept]).len() < 2 {
+      tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+  })
+  .await
+  .expect("both answers are kept");
+  let mut carol = carol_pierces(&session, request).await;
+  let mut tokens = Vec::new();
+  let both = tokio::time::timeout(Duration::from_secs(2), async {
+    while tokens.len() < 2 {
+      let PeerMessage::SearchResponse(response) = carol.read_peer().await else {
+        panic!("not a search response");
+      };
+      tokens.push(response.token);
+    }
+  })
+  .await;
+  tokens.sort_unstable();
+  assert!(both.is_ok(), "only the answers to {tokens:?} went out");
+  assert_eq!(tokens, [8, 9]);
 }

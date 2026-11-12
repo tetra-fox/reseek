@@ -5,13 +5,17 @@
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use crate::support::peer::PeerSide;
 use crate::support::scripted::{BOB, Scripted};
 use crate::support::soulfind::{self, User};
 use crate::support::{Logs, PATIENCE, free_port, listening_options};
 use soulseek_client::{BrowseOptions, BrowseProgress, ClientError, ClientOptions, Event};
+use soulseek_proto::init::PierceFirewall;
 use soulseek_proto::peer::{BrowseResponse, Directory, File, FolderContentsResponse, UserInfo};
+use soulseek_proto::server::{ConnectToPeerRequest, GetPeerAddressResponse};
 use soulseek_proto::{
-  LIMIT_USER_INFO_PICTURE_BYTES, Limits, PeerCode, PeerMessage, RemoteFilename,
+  InitMessage, LIMIT_USER_INFO_PICTURE_BYTES, Limits, PeerCode, PeerMessage, RemoteFilename,
+  ServerRequest, ServerResponse,
 };
 use tokio_util::sync::CancellationToken;
 
@@ -299,6 +303,47 @@ async fn user_info_too_large_to_read_fails_the_request() {
     error.to_string().contains("user info too large"),
     "{error:?}"
   );
+}
+
+#[tokio::test]
+async fn user_info_is_received_from_a_peer_slower_to_connect_than_the_message_timeout() {
+  let mut options = listening_options();
+  options.message_timeout = Duration::from_millis(300);
+  let mut scripted = Scripted::with_options(options).await;
+  let client = scripted.client().clone();
+  let asked =
+    tokio::spawn(async move { client.get_user_info(BOB, &CancellationToken::new()).await });
+  // nothing listens where the server says bob is, so only bob dialing us can connect
+  let server = &mut scripted.session.server;
+  server
+    .request_matching(|request| matches!(request, ServerRequest::GetPeerAddress(_)).then_some(()))
+    .await;
+  server
+    .send(&ServerResponse::GetPeerAddress(GetPeerAddressResponse {
+      username: BOB.into(),
+      ip: std::net::Ipv4Addr::LOCALHOST,
+      port: u32::from(free_port()),
+      obfuscation: None,
+    }))
+    .await;
+  let token = server
+    .request_matching(|request| match request {
+      ServerRequest::ConnectToPeer(ConnectToPeerRequest { token, .. }) => Some(token),
+      _ => None,
+    })
+    .await;
+  tokio::time::sleep(Duration::from_millis(600)).await;
+  let mut bob = PeerSide::connect(scripted.session.listen_address()).await;
+  bob
+    .send(&InitMessage::PierceFirewall(PierceFirewall { token }).encode())
+    .await;
+  assert_eq!(bob.read_peer().await, PeerMessage::InfoRequest);
+  bob.send(&PeerMessage::InfoResponse(info()).encode()).await;
+  let answer = tokio::time::timeout(PATIENCE, asked)
+    .await
+    .unwrap()
+    .unwrap();
+  assert_eq!(answer.unwrap(), info());
 }
 
 #[tokio::test]

@@ -339,3 +339,89 @@ impl Client {
     }
   }
 }
+
+#[cfg(test)]
+mod tests {
+  use soulseek_proto::frame::{self, FrameKind};
+  use soulseek_proto::server::{CannotConnectResponse, LoginResponse};
+  use soulseek_proto::{Limits, Secret, ServerRequest, ServerResponse};
+  use tokio::io::{AsyncReadExt, AsyncWriteExt};
+  use tokio::net::{TcpListener, TcpStream};
+
+  use super::*;
+  use crate::options::ClientOptions;
+
+  /// the next message the client wrote to `server` that `pick` accepts, skipping the others
+  async fn request<T>(
+    server: &mut TcpStream,
+    buffer: &mut Vec<u8>,
+    pick: impl Fn(ServerRequest) -> Option<T>,
+  ) -> T {
+    loop {
+      while let Some((_, consumed)) =
+        frame::split(FrameKind::Server, buffer, &Limits::DEFAULT).unwrap()
+      {
+        let frame: Vec<u8> = buffer.drain(..consumed).collect();
+        if let Some(picked) = pick(ServerRequest::decode(&frame).unwrap()) {
+          return picked;
+        }
+      }
+      let mut chunk = [0; 4096];
+      let read = server.read(&mut chunk).await.unwrap();
+      assert!(read > 0, "the client closed the connection");
+      buffer.extend_from_slice(&chunk[..read]);
+    }
+  }
+
+  #[tokio::test]
+  async fn a_refused_connection_request_that_carried_no_answer_leaves_nothing_behind() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let client = Client::new(ClientOptions {
+      enable_listener: false,
+      ..ClientOptions::default()
+    })
+    .unwrap();
+    let cancel = CancellationToken::new();
+    let mut buffer = Vec::new();
+    let connecting = client.connect("127.0.0.1", port, "alice", "hunter2", &cancel);
+    let serving = async {
+      let (mut server, _) = listener.accept().await.unwrap();
+      request(&mut server, &mut buffer, |request| {
+        matches!(request, ServerRequest::Login(_)).then_some(())
+      })
+      .await;
+      let accepted = ServerResponse::Login(LoginResponse::Success {
+        greeting: String::new(),
+        ip: std::net::Ipv4Addr::LOCALHOST,
+        hash: Secret::new("0123456789abcdef0123456789abcdef"),
+        is_supporter: false,
+      });
+      server.write_all(&accepted.encode()).await.unwrap();
+      server
+    };
+    let (connected, mut server) = tokio::join!(connecting, serving);
+    connected.unwrap();
+    // nothing listens where bob is said to be, and bob refuses the request the server relays
+    let nowhere = std::net::TcpListener::bind("127.0.0.1:0")
+      .unwrap()
+      .local_addr()
+      .unwrap();
+    let asking = client.get_or_add_message_connection("bob", Some(nowhere), &cancel);
+    let refusing = async {
+      let token = request(&mut server, &mut buffer, |request| match request {
+        ServerRequest::ConnectToPeer(request) => Some(request.token),
+        _ => None,
+      })
+      .await;
+      let refusal = ServerResponse::CannotConnect(CannotConnectResponse {
+        token,
+        username: None,
+      });
+      server.write_all(&refusal.encode()).await.unwrap();
+    };
+    let (asked, ()) = tokio::join!(asking, refusing);
+    assert!(asked.is_err());
+    assert_eq!(crate::lock(&client.responder().refused).len(), 0);
+  }
+}

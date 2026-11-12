@@ -721,4 +721,18 @@ mod tests {
     );
     assert_eq!(app.send(me(&cookie, None)).await.status, 401);
   }
+
+  #[tokio::test]
+  async fn authentication_turned_off_in_the_file_stays_on_until_the_restart_it_takes() {
+    let app = app("", &[]).await;
+    let asked = || app.send_from(OUTSIDE, request("GET", "/api/v0/application", None));
+    assert_eq!(asked().await.status, 401);
+    app
+      .configure_for_restart(
+        "[web.authentication]\ndisabled = true\n",
+        "web.authentication.disabled",
+      )
+      .await;
+    assert_eq!(asked().await.status, 401);
+  }
 }

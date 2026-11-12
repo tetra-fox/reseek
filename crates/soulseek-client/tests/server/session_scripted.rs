@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use crate::support::{
   FakeServer, PASSWORD, Session, USERNAME, disconnected, drain, listening_options, login_success,
-  next_event, options,
+  next_event, options, poll_once, transitions,
 };
 use soulseek_client::{
   Client, ClientError, ClientOptions, ClientOptionsPatch, ClientState, ConnectionErrorKind, Event,
@@ -217,6 +217,85 @@ async fn a_connect_queued_behind_another_login_is_refused_for_another_name() {
 }
 
 #[tokio::test]
+async fn a_connect_queued_behind_a_login_to_another_server_is_refused_under_the_same_name() {
+  let fake = FakeServer::start().await;
+  let elsewhere = FakeServer::start().await;
+  let client = Client::new(listening_options()).unwrap();
+  let first = connect(&client, &fake, CancellationToken::new());
+  let mut server = fake.accept().await;
+  server.read_login().await;
+  server.send(&login_success()).await;
+  first.await.unwrap().unwrap();
+
+  // both connects pass their first check while the disconnect stops the listener, so the second
+  // waits for the first to log in
+  let address = fake.address();
+  let other = elsewhere.address();
+  let host = address.ip().to_string();
+  let cancel = CancellationToken::new();
+  let serve = async {
+    let mut server = fake.accept().await;
+    server.read_login().await;
+    server.send(&login_success()).await;
+    server
+  };
+  let ((), here, there, _server) = tokio::join!(
+    client.disconnect(None, None),
+    client.connect(&host, address.port(), USERNAME, PASSWORD, &cancel),
+    client.connect(&host, other.port(), USERNAME, PASSWORD, &cancel),
+    serve,
+  );
+  here.unwrap();
+  assert_eq!(client.ip_endpoint(), Some(address));
+  // the session is with the first server, which is not the one the second connect asked for
+  assert!(there.is_err(), "{there:?}");
+  drop(server);
+}
+
+#[tokio::test]
+async fn a_disconnect_while_a_connect_waits_for_the_last_session_to_end_cancels_that_connect() {
+  let session = Session::with_options(listening_options()).await;
+  let client = &session.client;
+  let mut events = client.subscribe();
+  let address = session.fake.address();
+  let host = address.ip().to_string();
+  let cancel = CancellationToken::new();
+  // the connect starts while the first disconnect stops the listener and waits for it to end;
+  // the second disconnect is asked for after the connect
+  let connecting = tokio::time::timeout(
+    Duration::from_secs(2),
+    client.connect(&host, address.port(), USERNAME, PASSWORD, &cancel),
+  );
+  let ((), connected, ()) = tokio::join!(
+    client.disconnect(None, None),
+    connecting,
+    client.disconnect(None, None),
+  );
+  let states: Vec<ClientState> = transitions(&drain(&mut events))
+    .into_iter()
+    .map(|(_, state, _)| state)
+    .collect();
+  assert!(
+    matches!(connected, Ok(Err(ClientError::Canceled))),
+    "{connected:?}, through {states:?}"
+  );
+  assert_eq!(client.state(), ClientState::Disconnected);
+}
+
+#[tokio::test]
+async fn a_second_disconnect_returns_once_the_one_under_way_has_ended() {
+  let session = Session::with_options(listening_options()).await;
+  let client = &session.client;
+  let second = async {
+    client.disconnect(None, None).await;
+    client.state()
+  };
+  // the first is polled first and waits for the listener to stop
+  let ((), after_second) = tokio::join!(client.disconnect(None, None), second);
+  assert_eq!(after_second, ClientState::Disconnected);
+}
+
+#[tokio::test]
 async fn a_connect_queued_behind_a_login_that_ends_waits_and_connects_as_itself() {
   let fake = FakeServer::start().await;
   let client = Client::new(listening_options()).unwrap();
@@ -296,6 +375,125 @@ async fn a_connect_dropped_while_another_waits_leaves_a_session_the_other_can_ta
   queued.unwrap();
   assert_eq!(name, "queued");
   drop(server);
+}
+
+#[tokio::test]
+async fn a_disconnect_dropped_while_the_listener_stops_ends_disconnected_and_can_connect_again() {
+  let session = Session::with_options(listening_options()).await;
+  let client = session.client.clone();
+  let mut disconnecting = Box::pin(client.disconnect(None, None));
+  // polled once, it waits for the listener's task to end
+  assert!(poll_once(&mut disconnecting).await.is_pending());
+  drop(disconnecting);
+  let ended = tokio::time::timeout(Duration::from_secs(2), async {
+    while client.state() != ClientState::Disconnected {
+      tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+  })
+  .await;
+  assert!(ended.is_ok(), "the client stayed {:?}", client.state());
+
+  let fake = FakeServer::start().await;
+  let connecting = connect(&client, &fake, CancellationToken::new());
+  let mut server = fake.accept().await;
+  server.accept_login().await;
+  server.read_configuration().await;
+  connecting.await.unwrap().unwrap();
+}
+
+/// What a dropped connect does today once it has logged in: the session it made is ended as a
+/// canceled attempt. Whether a logged in session should end with the call that made it is not
+/// settled; this holds the behavior still until it is.
+#[tokio::test]
+async fn a_connect_dropped_while_sending_the_configuration_ends_the_logged_in_session_as_canceled()
+{
+  let fake = FakeServer::start().await;
+  let client = Client::new(options()).unwrap();
+  let mut events = client.subscribe();
+  let address = fake.address();
+  let host = address.ip().to_string();
+  let cancel = CancellationToken::new();
+  let mut connecting = Box::pin(client.connect(&host, address.port(), USERNAME, PASSWORD, &cancel));
+  let mut server = tokio::select! {
+    server = fake.accept() => server,
+    connected = &mut connecting => panic!("connected without a server: {connected:?}"),
+  };
+  tokio::select! {
+    _ = server.read_login() => {}
+    connected = &mut connecting => panic!("connected without an answer: {connected:?}"),
+  }
+  server.send(&login_success()).await;
+  // polled until it has logged in, which is when it writes the configuration
+  while client.state() != ClientState::LoggedIn {
+    assert!(poll_once(&mut connecting).await.is_pending());
+    tokio::time::sleep(Duration::from_millis(1)).await;
+  }
+  drop(connecting);
+  let (message, error) = next_event(&mut events, |event| match event {
+    Event::Disconnected { message, error, .. } => Some((message, error)),
+    _ => None,
+  })
+  .await;
+  assert_eq!(message, "connect dropped");
+  assert!(matches!(error, Some(ClientError::Canceled)), "{error:?}");
+  server.closed().await;
+}
+
+#[test]
+fn a_connect_dropped_outside_the_runtime_does_not_make_a_queued_connect_panic() {
+  let runtime = tokio::runtime::Builder::new_current_thread()
+    .enable_all()
+    .build()
+    .unwrap();
+  let session = runtime.block_on(Session::with_options(listening_options()));
+  let client = session.client.clone();
+  let address = session.fake.address();
+  let host = address.ip().to_string();
+  let cancel = CancellationToken::new();
+  let mut dropped = Box::pin(client.connect(&host, address.port(), "dropped", PASSWORD, &cancel));
+  let (queued, _hung) = runtime.block_on(async {
+    // both connects start while the disconnect stops the listener: the first takes the lock,
+    // the second waits for it
+    let mut disconnecting = Box::pin(client.disconnect(None, None));
+    assert!(poll_once(&mut disconnecting).await.is_pending());
+    assert!(poll_once(&mut dropped).await.is_pending());
+    let mut queued = Box::pin({
+      let (client, host, cancel) = (client.clone(), host.clone(), cancel.clone());
+      async move {
+        client
+          .connect(&host, address.port(), "queued", PASSWORD, &cancel)
+          .await
+      }
+    });
+    assert!(poll_once(&mut queued).await.is_pending());
+    let queued = tokio::spawn(queued);
+    disconnecting.await;
+    // the server takes the login and never answers it
+    let hang = async {
+      let mut hung = session.fake.accept().await;
+      hung.read_login().await;
+      hung
+    };
+    let (timed_out, hung) = tokio::join!(
+      tokio::time::timeout(Duration::from_millis(300), &mut dropped),
+      hang
+    );
+    assert!(timed_out.is_err());
+    (queued, hung)
+  });
+  drop(dropped);
+  let joined = runtime.block_on(async {
+    let serve = async {
+      let mut second = session.fake.accept().await;
+      second.accept_login().await;
+      second.discard().await;
+    };
+    tokio::select! {
+      joined = queued => joined,
+      () = serve => unreachable!("the server reads until the test ends"),
+    }
+  });
+  assert!(joined.is_ok(), "the queued connect panicked: {joined:?}");
 }
 
 #[tokio::test]

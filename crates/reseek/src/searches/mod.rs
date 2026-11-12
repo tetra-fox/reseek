@@ -544,6 +544,41 @@ mod tests {
     assert_eq!(app.send(gone).await.status, 404);
   }
 
+  #[tokio::test]
+  async fn the_list_answers_with_the_other_searches_when_one_row_holds_an_unknown_state() {
+    let app = app(TRUSTED, &[]).await;
+    let known = "00000000-0000-4000-8000-0000000000aa";
+    let odd = "00000000-0000-4000-8000-0000000000bb";
+    for id in [known, odd] {
+      let start = json!({ "id": id, "searchText": "pink floyd" });
+      let refused = app
+        .send(request("POST", "/api/v0/searches", Some(start)))
+        .await;
+      assert_eq!(
+        refused.status, 409,
+        "kept ended, since we are not logged in"
+      );
+    }
+    // completed without a way it ended, which nothing writes
+    app
+      .state
+      .searches
+      .database()
+      .write(move |conn| conn.execute("UPDATE searches SET state = 4 WHERE id = ?1", [odd]))
+      .await
+      .unwrap();
+    let listed = app.send(request("GET", "/api/v0/searches", None)).await;
+    assert_eq!(listed.status, 200, "{:?}", listed.body);
+    let listed = listed.json();
+    let ids: Vec<&str> = listed
+      .as_array()
+      .unwrap()
+      .iter()
+      .filter_map(|search| search["id"].as_str())
+      .collect();
+    assert!(ids.contains(&known), "{ids:?}");
+  }
+
   #[test]
   fn the_text_sent_is_the_terms_then_the_exclusions() {
     assert_eq!(normalized("pink  floyd\t-live --live"), "pink floyd -live");
