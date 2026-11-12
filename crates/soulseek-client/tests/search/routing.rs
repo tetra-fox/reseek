@@ -7,7 +7,7 @@ use std::net::{IpAddr, Ipv4Addr};
 use std::sync::{Arc, Mutex};
 
 use crate::support::soulfind::{self, Soulfind, User};
-use crate::support::{PATIENCE, free_port};
+use crate::support::{PATIENCE, drain, free_port};
 use soulseek_client::{
   ClientOptions, Event, SearchOptions, SearchReply, SearchResponseResolver, SearchScope,
 };
@@ -100,6 +100,18 @@ async fn responder_and_searcher(
   (responder, searcher, asked)
 }
 
+/// waits until the responder's resolver was asked to answer the search `token`
+async fn asked_for(asked: &Asked, token: u32) {
+  let seen = || asked.lock().unwrap().iter().any(|(_, at, _)| *at == token);
+  tokio::time::timeout(PATIENCE, async {
+    while !seen() {
+      tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+  })
+  .await
+  .expect("the search reaches the resolver");
+}
+
 /// waits until `responder` has delivered its answer to `token`
 async fn delivered(responder: &mut User, token: u32) -> Arc<SearchReply> {
   responder
@@ -154,10 +166,9 @@ async fn an_empty_answer_is_not_sent() {
     )
     .await
     .unwrap();
-  responder
-    .event(|event| matches!(event, Event::SearchRequestReceived { token: 31, .. }).then_some(()))
-    .await;
-  // a later search proves the first was handled without a delivery
+  asked_for(&asked, 31).await;
+  // a later search, its round trip through the server, proves the first was handled without a
+  // delivery
   searcher
     .client
     .send_search_request(
@@ -167,14 +178,11 @@ async fn an_empty_answer_is_not_sent() {
     )
     .await
     .unwrap();
-  let delivered = responder
-    .event(|event| match event {
-      Event::SearchResponseDelivered(delivery) => Some(delivery.token),
-      Event::SearchRequestReceived { token: 32, .. } => Some(32),
-      _ => None,
-    })
-    .await;
-  assert_eq!(delivered, 32, "nothing was delivered for the empty answer");
+  asked_for(&asked, 32).await;
+  let delivered = drain(&mut responder.events)
+    .into_iter()
+    .any(|event| matches!(event, Event::SearchResponseDelivered(_)));
+  assert!(!delivered, "nothing was delivered for the empty answer");
   assert_eq!(asked.lock().unwrap().len(), 2);
 }
 

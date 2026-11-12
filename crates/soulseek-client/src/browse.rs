@@ -93,7 +93,7 @@ impl BrowseProgress {
   }
 }
 
-/// `(progress)` as a browse response arrives, before the client raises the event
+/// `(progress)` as a browse response arrives; given, no progress event is raised for the browse
 pub type BrowseProgressUpdated = Arc<dyn Fn(&BrowseProgress) + Send + Sync>;
 
 /// What shapes one browse
@@ -102,6 +102,7 @@ pub struct BrowseOptions {
   /// how long to wait for the first bytes of the response; a peer with a large share takes a
   /// while to put it together
   pub response_timeout: Duration,
+  /// called as the response arrives, in place of the progress event
   pub progress_updated: Option<BrowseProgressUpdated>,
 }
 
@@ -194,10 +195,10 @@ impl Client {
     tracing::debug!(username, size, "browse response arriving");
     let progress = |received: u64| {
       let progress = BrowseProgress::new(username, received, size);
-      if let Some(callback) = &options.progress_updated {
-        callback(&progress);
+      match &options.progress_updated {
+        Some(callback) => callback(&progress),
+        None => self.emit(Event::BrowseProgressUpdated(progress)),
       }
-      self.emit(Event::BrowseProgressUpdated(progress));
     };
     // the first chunk was read with the header, so its own progress is not seen
     progress(0);

@@ -4,6 +4,7 @@
 //! children and are answered, and losing the parent, a reset from the server or a long time
 //! without one all lead back to asking the server.
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use crate::support::peer::{FakePeer, PeerSide};
@@ -11,10 +12,13 @@ use crate::support::tree::{
   Status, approached, branch_information, branch_level, branch_root, child_requests, join_as_child,
   net_info, search, status, wrapped_search,
 };
-use crate::support::{FakeServer, Logs, Session, USERNAME, listening_options, next_event};
+use crate::support::{
+  FakeServer, Logs, PATIENCE, Session, USERNAME, listening_options, next_event,
+};
 use soulseek_client::{ClientOptions, DistributedParent, Event};
 use soulseek_proto::distributed::Ping;
 use soulseek_proto::{DistributedMessage, ServerResponse};
+use tokio::sync::mpsc;
 
 fn parent_options() -> ClientOptions {
   let mut options = listening_options();
@@ -24,6 +28,26 @@ fn parent_options() -> ClientOptions {
 
 async fn session() -> Session {
   Session::with_options(parent_options()).await
+}
+
+/// `options` with a search resolver that answers nothing and tells the receiver the token of
+/// every search it is asked to answer
+fn asking(mut options: ClientOptions) -> (ClientOptions, mpsc::UnboundedReceiver<u32>) {
+  let (tell, asked) = mpsc::unbounded_channel();
+  options.resolvers.search_response_resolver = Some(Arc::new(move |_, token, _| {
+    // the test may have stopped listening
+    let _ = tell.send(token);
+    Box::pin(async { Ok(None) })
+  }));
+  (options, asked)
+}
+
+/// the token of the next search the client was asked to answer
+async fn next_asked(asked: &mut mpsc::UnboundedReceiver<u32>) -> u32 {
+  tokio::time::timeout(PATIENCE, asked.recv())
+    .await
+    .expect("a search reaches the resolver")
+    .expect("the resolver lives as long as the client")
 }
 
 /// a candidate that answers as a parent at `level` under `root`
@@ -196,7 +220,12 @@ async fn a_root_candidate_need_not_name_itself() {
 
 /// a client with an adopted parent and one child below it
 async fn with_parent_and_child() -> (Session, PeerSide, PeerSide) {
-  let mut session = session().await;
+  with_parent_and_child_on(parent_options()).await
+}
+
+/// [`with_parent_and_child`] for a client made with `options`
+async fn with_parent_and_child_on(options: ClientOptions) -> (Session, PeerSide, PeerSide) {
+  let mut session = Session::with_options(options).await;
   let candidate = FakePeer::start().await;
   session
     .server
@@ -213,7 +242,8 @@ async fn with_parent_and_child() -> (Session, PeerSide, PeerSide) {
 #[tokio::test]
 async fn the_parents_searches_go_on_to_the_children_and_are_answered() {
   let logs = Logs::capture();
-  let (mut session, mut parent, mut child) = with_parent_and_child().await;
+  let (options, mut asked) = asking(parent_options());
+  let (session, mut parent, mut child) = with_parent_and_child_on(options).await;
   let theirs = search("bob", 21, "jazz");
   parent.send(&theirs).await;
   assert_eq!(
@@ -222,9 +252,7 @@ async fn the_parents_searches_go_on_to_the_children_and_are_answered() {
       .await,
     theirs
   );
-  session
-    .event(|event| matches!(event, Event::SearchRequestReceived { token: 21, .. }).then_some(()))
-    .await;
+  assert_eq!(next_asked(&mut asked).await, 21);
 
   // our own search goes on but is not answered; a repeat of the last frame and a search with
   // a bad identifier go nowhere
@@ -249,13 +277,7 @@ async fn the_parents_searches_go_on_to_the_children_and_are_answered() {
       .await,
     after
   );
-  let answered = session
-    .event(|event| match event {
-      Event::SearchRequestReceived { token, .. } => Some(token),
-      _ => None,
-    })
-    .await;
-  assert_eq!(answered, 24);
+  assert_eq!(next_asked(&mut asked).await, 24);
   assert_eq!(logs.lines_with(&["bad identifier dropped"]).len(), 1);
 
   // an old parent forwarding the server's wrapper: the child gets the search inside
@@ -298,7 +320,7 @@ async fn a_change_in_the_parents_branch_reaches_the_children_and_the_server() {
 #[tokio::test]
 async fn a_parent_flooding_its_branch_does_not_crowd_out_the_server() {
   let logs = Logs::capture();
-  let mut options = parent_options();
+  let (mut options, mut asked) = asking(parent_options());
   options.server_connection_options.write_queue_size = 4096;
   let mut session = Session::on(FakeServer::with_receive_buffer(4096).await, options).await;
   session.stall_server_writes();
@@ -315,9 +337,7 @@ async fn a_parent_flooding_its_branch_does_not_crowd_out_the_server() {
   frames.extend(branch_level(7));
   frames.extend(search("bob", 30, "after"));
   parent.send(&frames).await;
-  session
-    .event(|event| matches!(event, Event::SearchRequestReceived { token: 30, .. }).then_some(()))
-    .await;
+  assert_eq!(next_asked(&mut asked).await, 30);
   session.server.send(&ServerResponse::DistributedReset).await;
   let Session { server, events, .. } = &mut session;
   let lost = next_event(events, |event| match event {

@@ -348,14 +348,8 @@ impl Client {
     true
   }
 
-  /// Announces the request and asks the application for an answer; `None` when there is none
-  /// to send
+  /// asks the application for an answer; `None` when there is none to send
   async fn resolve_search(&self, username: &str, token: u32, query: &str) -> Option<SearchReply> {
-    self.emit(Event::SearchRequestReceived {
-      username: username.to_owned(),
-      token,
-      query: query.to_owned(),
-    });
     let resolve = self.options().resolvers.search_response_resolver.clone()?;
     let reply = match resolve(username.to_owned(), token, SearchQuery::parse(query)).await {
       Ok(reply) => reply?,

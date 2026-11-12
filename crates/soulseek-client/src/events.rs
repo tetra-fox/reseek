@@ -145,12 +145,6 @@ pub enum Event {
   PromotedToDistributedBranchRoot,
   /// we stopped being a branch root
   DemotedFromDistributedBranchRoot,
-  /// another user's search reached us
-  SearchRequestReceived {
-    username: String,
-    token: u32,
-    query: String,
-  },
   /// we sent our results for another user's search
   SearchResponseDelivered(SearchDelivery),
   /// results we kept for an unreachable searcher were given up
@@ -195,7 +189,7 @@ pub enum Event {
     search: Search,
     response: Arc<SearchResponse>,
   },
-  /// more of a browse response arrived
+  /// more of a browse response arrived, for a browse started without a progress callback
   BrowseProgressUpdated(BrowseProgress),
 }
 

@@ -381,7 +381,6 @@ async fn handle(app: &AppState, event: Event, session: &mut Session) {
     | Event::DistributedChildDisconnected { .. }
     | Event::PromotedToDistributedBranchRoot
     | Event::DemotedFromDistributedBranchRoot
-    | Event::SearchRequestReceived { .. }
     | Event::SearchResponseDeliveryFailed(_)
     | Event::TransferProgressUpdated { .. }
     | Event::SearchStateChanged { .. } => {}

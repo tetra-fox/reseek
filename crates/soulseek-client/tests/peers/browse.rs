@@ -9,7 +9,7 @@ use crate::support::peer::PeerSide;
 use crate::support::scripted::{BOB, Scripted};
 use crate::support::soulfind::{self, User};
 use crate::support::{Logs, PATIENCE, free_port, listening_options};
-use soulseek_client::{BrowseOptions, BrowseProgress, ClientError, ClientOptions, Event};
+use soulseek_client::{BrowseOptions, BrowseProgress, ClientError, ClientOptions};
 use soulseek_proto::init::PierceFirewall;
 use soulseek_proto::peer::{BrowseResponse, Directory, File, FolderContentsResponse, UserInfo};
 use soulseek_proto::server::{ConnectToPeerRequest, GetPeerAddressResponse};
@@ -88,12 +88,17 @@ async fn a_browse_brings_the_whole_listing_and_reports_its_progress() {
     return;
   };
   let sharer = sharer(&server).await;
-  let mut browser = server.login("browser", crate::support::options()).await;
+  let browser = server.login("browser", crate::support::options()).await;
   let seen = Arc::new(Mutex::new(Vec::new()));
   let options = BrowseOptions {
     progress_updated: Some(Arc::new({
       let seen = seen.clone();
-      move |progress: &BrowseProgress| seen.lock().unwrap().push(progress.percent_complete)
+      move |progress: &BrowseProgress| {
+        seen
+          .lock()
+          .unwrap()
+          .push((progress.username.clone(), progress.percent_complete));
+      }
     })),
     ..BrowseOptions::default()
   };
@@ -104,15 +109,13 @@ async fn a_browse_brings_the_whole_listing_and_reports_its_progress() {
     .unwrap();
   assert_eq!(browsed, listing(3000));
   let seen = seen.lock().unwrap().clone();
-  assert_eq!(seen.first(), Some(&0.0));
-  assert_eq!(seen.last(), Some(&100.0));
-  let progress = browser
-    .event(|event| match event {
-      Event::BrowseProgressUpdated(progress) => Some(progress),
-      _ => None,
-    })
-    .await;
-  assert_eq!(progress.username, sharer.username);
+  assert!(
+    seen
+      .iter()
+      .all(|(username, _)| *username == sharer.username)
+  );
+  assert_eq!(seen.first().map(|(_, percent)| *percent), Some(0.0));
+  assert_eq!(seen.last().map(|(_, percent)| *percent), Some(100.0));
 }
 
 #[tokio::test]
