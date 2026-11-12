@@ -168,7 +168,8 @@ pub(super) async fn follow(
 
 /// Events were missed: the client's state is read again, and each edge of its session that
 /// nothing handled is handled now, so a lost connection is reconnected and what follows a
-/// login is not skipped.
+/// login is not skipped. Within one session, the messaging engine marks the loss in the rooms'
+/// history; a session that ended or began meanwhile leaves a gap there already.
 async fn caught_up(app: &AppState, missed: u64, session: &mut Session) {
   if let Some(suppressed) = LAGGED.allow() {
     warn!(
@@ -181,7 +182,11 @@ async fn caught_up(app: &AppState, missed: u64, session: &mut Session) {
   server_state(app, status.state);
   distributed_network(app, &client.distributed_network());
   let number = status.number;
-  for edge in session.catch_up(&status) {
+  let edges = session.catch_up(&status);
+  if edges.is_empty() {
+    app.messaging.missed().await;
+  }
+  for edge in edges {
     match edge {
       Missed::Ended { end, reached } => {
         info!(session = number, "a missed disconnect is handled now");

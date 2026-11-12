@@ -6,7 +6,8 @@
 //! can say where it has holes.
 //!
 //! [`Messaging`] is the engine. The client's events about messages and rooms reach it through
-//! [`Messaging::take`], in the order the client raised them, and one task handles them.
+//! [`Messaging::take`], in the order the client raised them, and one task handles them. Events
+//! lost on the way are marked in that order by [`Messaging::missed`].
 
 mod away;
 mod conversations;
@@ -27,7 +28,7 @@ use std::time::Duration;
 
 use api_types::messaging::NotifyLevel;
 use cascade::Watcher;
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use reseek_shares::lock;
 use soulseek_client::{Client, Event};
 use tokio::sync::mpsc;
@@ -49,7 +50,7 @@ use rooms::Rooms;
 
 /// `messaging.db`: conversations, private and room messages, room settings, the pinned chats and
 /// the sessions.
-pub static SCHEMA: Schema = db::schema!("messaging", ["0001_initial"]);
+pub static SCHEMA: Schema = db::schema!("messaging", ["0001_initial", "0002_sessions_after_loss"]);
 
 /// How many client events may wait for the messaging task.
 const INTAKE: usize = 256;
@@ -85,6 +86,14 @@ fn notify_level(text: &str) -> rusqlite::Result<NotifyLevel> {
   }
 }
 
+/// What the messaging task takes, in the order it came.
+enum Taken {
+  /// a client event, boxed as most are far larger than the marker
+  Event(Box<Event>),
+  /// client events were lost before they reached the engine
+  Missed,
+}
+
 /// The messaging engine.
 pub struct Messaging {
   this: Weak<Messaging>,
@@ -96,7 +105,7 @@ pub struct Messaging {
   config: Watcher<Options>,
   state: StateOwner,
   /// the client events waiting for the task that handles them
-  intake: mpsc::Sender<Event>,
+  intake: mpsc::Sender<Taken>,
   /// that task
   worker: Mutex<Option<JoinHandle<()>>>,
   /// tells that task to end once it handled every event taken so far
@@ -239,29 +248,54 @@ impl Messaging {
   /// Hands a client event about a message, a room, a login or a disconnect to the messaging
   /// task, waiting while it is behind.
   pub async fn take(&self, event: Event) {
-    if self.intake.send(event).await.is_err() {
+    if self
+      .intake
+      .send(Taken::Event(Box::new(event)))
+      .await
+      .is_err()
+    {
       debug!("messaging stopped; client event not handled");
     }
   }
 
+  /// Tells the messaging task that client events were lost here, after those taken so far and
+  /// before those taken next, waiting while it is behind.
+  pub async fn missed(&self) {
+    if self.intake.send(Taken::Missed).await.is_err() {
+      debug!("messaging stopped; lost client events not marked");
+    }
+  }
+
   /// Handles the events taken, in order, until the stop and every event taken before it.
-  async fn work(self: Arc<Self>, mut receiver: mpsc::Receiver<Event>) {
+  async fn work(self: Arc<Self>, mut receiver: mpsc::Receiver<Taken>) {
+    // when the last event was handled, which is where events lost after it go missing
+    let mut handled_at = Utc::now();
     loop {
-      let event = tokio::select! {
+      let taken = tokio::select! {
         biased;
-        event = receiver.recv() => event,
+        taken = receiver.recv() => taken,
         () = self.drained.cancelled() => {
-          while let Ok(event) = receiver.try_recv() {
-            self.handle(event).await;
+          while let Ok(taken) = receiver.try_recv() {
+            handled_at = self.take_in(taken, handled_at).await;
           }
           return;
         }
       };
-      match event {
-        Some(event) => self.handle(event).await,
+      match taken {
+        Some(taken) => handled_at = self.take_in(taken, handled_at).await,
         None => return,
       }
     }
+  }
+
+  /// Handles `taken`, the last event before it handled at `handled_at`; returns when it was
+  /// handled.
+  async fn take_in(&self, taken: Taken, handled_at: DateTime<Utc>) -> DateTime<Utc> {
+    match taken {
+      Taken::Event(event) => self.handle(*event).await,
+      Taken::Missed => self.events_missed(handled_at).await,
+    }
+    Utc::now()
   }
 
   async fn handle(&self, event: Event) {
