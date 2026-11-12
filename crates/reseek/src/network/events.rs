@@ -367,11 +367,11 @@ async fn handle(app: &AppState, event: Event, session: &mut Session) {
         .statistics_received(&statistics.username, &statistics.stats);
     }
     Event::PrivilegedUserListReceived(usernames) => app.users.privileged_listed(&usernames),
+    Event::PrivilegeNotificationReceived { username, .. } => privileges_granted(app, username),
     Event::RoomListReceived(list) => app.messaging.room_list_received(list).await,
     // the transfer, search, room, user and distributed engines follow these themselves, and the
     // rest change nothing the daemon keeps
     Event::ServerInfoReceived(_)
-    | Event::PrivilegeNotificationReceived { .. }
     | Event::UserCannotConnect { .. }
     | Event::BrowseProgressUpdated(_)
     | Event::DistributedNetworkReset
@@ -430,6 +430,25 @@ async fn user_status(app: &AppState, status: &soulseek_proto::server::UserStatus
       app.users.presence_moved(username, previous, presence);
     }
   }
+}
+
+/// The server says `username` was granted privileges: they are privileged from now on, and when
+/// they are us, our own privileges are read again so the time we have shows at once.
+fn privileges_granted(app: &AppState, username: String) {
+  debug!(username, "privileges granted");
+  app.users.privileged_listed(std::slice::from_ref(&username));
+  if app.network.client().username().as_deref() != Some(username.as_str()) {
+    return;
+  }
+  let network = app.network.clone();
+  tokio::spawn(
+    async move {
+      if let Err(e) = network.refresh_user_statistics(true).await {
+        warn!(error = %e, "our privileges not read again after they were granted");
+      }
+    }
+    .in_current_span(),
+  );
 }
 
 /// `State.server` and our username as the client has them in `state`. The client may have
