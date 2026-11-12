@@ -10992,7 +10992,7 @@
         "tags": [
           "tokens"
         ],
-        "summary": "Revokes a token; the owner's or, for an administrator, anyone's. The record is kept a month\nfor the audit view.",
+        "summary": "Revokes a token, closing the event streams it opened; the owner's or, for an administrator,\nanyone's. The record is kept a month for the audit view.",
         "operationId": "revoke_token",
         "parameters": [
           {

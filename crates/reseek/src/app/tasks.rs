@@ -137,7 +137,8 @@ async fn forward_logs(app: AppState) {
   }
 }
 
-/// Marks the sessions that expired or went unused as ended, raising `SessionRevoked` for each.
+/// Marks the sessions that expired or went unused as ended, raising `SessionRevoked` for each
+/// and closing the event streams they opened.
 pub(crate) async fn end_lapsed_sessions(app: &AppState) {
   let db = &app.auth.db;
   let ended = match sessions::lapsed(db, crate::auth::idle(app)).await {
@@ -146,6 +147,9 @@ pub(crate) async fn end_lapsed_sessions(app: &AppState) {
   };
   match ended {
     Ok(ended) => {
+      if !ended.is_empty() {
+        app.live.credentials_ended();
+      }
       for session in ended {
         debug!(subject = session.subject, "session ended by time");
         app.events.raise(Event::SessionRevoked(SessionRevoked {

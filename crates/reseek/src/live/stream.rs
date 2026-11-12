@@ -1,6 +1,6 @@
 //! One open stream: its queue of published frames, and the task that writes the stream with
 //! keep-alive comments, at most one application state every 100 ms, a fresh check of its
-//! credential every 30 s, and a goodbye before it closes.
+//! credential every 30 s and whenever a session or token ends, and a goodbye before it closes.
 
 use std::collections::VecDeque;
 use std::convert::Infallible;
@@ -171,6 +171,9 @@ async fn write(
   output: mpsc::Sender<Bytes>,
 ) {
   let queue = registered.queue.clone();
+  let mut ended = registered.hub.ended.subscribe();
+  // a session or token that ended while the stream opened is caught by checking once at the start
+  ended.mark_changed();
   let mut last_id = registered.at;
   for bytes in std::iter::once(Bytes::from_static(b"retry: 1000\n\n")).chain(first) {
     if output.send(bytes).await.is_err() {
@@ -215,27 +218,30 @@ async fn write(
       break ByeReason::Lagged;
     }
     let far = Instant::now() + RECHECK;
-    tokio::select! {
+    let check = tokio::select! {
       () = cancel.cancelled() => break ByeReason::Shutdown,
       () = output.closed() => {
         debug!("event stream closed by the client");
         return;
       }
-      () = queue.ready.notified() => {}
-      () = sleep_until(held.unwrap_or(far)), if held.is_some() => {}
+      () = queue.ready.notified() => false,
+      () = sleep_until(held.unwrap_or(far)), if held.is_some() => false,
       () = sleep_until(last_write + PING) => {
         if output.send(Bytes::from_static(b": ping\n\n")).await.is_err() {
           return;
         }
         last_write = Instant::now();
+        false
       }
-      () = sleep_until(recheck) => {
-        if !revalidate().await {
-          debug!("event stream credential no longer valid");
-          break ByeReason::Unauthorized;
-        }
-        recheck = Instant::now() + RECHECK;
+      () = sleep_until(recheck) => true,
+      Ok(()) = ended.changed() => true,
+    };
+    if check {
+      if !revalidate().await {
+        debug!("event stream credential no longer valid");
+        break ByeReason::Unauthorized;
       }
+      recheck = Instant::now() + RECHECK;
     }
   };
   match registered.render(last_id, &LiveFrame::Bye(Bye { reason })) {

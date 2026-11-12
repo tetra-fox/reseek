@@ -474,6 +474,82 @@ mod tests {
     assert!(!check().await, "a revoked token ends the stream");
   }
 
+  #[tokio::test]
+  async fn a_revoked_token_or_session_ends_its_streams_at_once() {
+    let app = app(TRUSTED, &[]).await;
+    let mut bystander = open(&app, "/api/v0/live?topics=users").await;
+    bystander.next().await.unwrap();
+    let token = app
+      .send(request(
+        "POST",
+        "/api/v0/tokens",
+        Some(json!({ "name": "stream", "role": "ReadOnly" })),
+      ))
+      .await
+      .json();
+    let secret = token["secret"].as_str().unwrap();
+    let mut by_token = app
+      .stream_from(
+        OUTSIDE,
+        request(
+          "GET",
+          &format!("/api/v0/live?topics=users&access_token={secret}"),
+          None,
+        ),
+      )
+      .await;
+    by_token.next().await.unwrap();
+    let login = app
+      .send_from(
+        OUTSIDE,
+        request(
+          "POST",
+          "/api/v0/session",
+          Some(json!({ "username": "reseek", "password": "reseek" })),
+        ),
+      )
+      .await;
+    let cookie = crate::testing::set_cookie(&login.headers, "reseek_session").unwrap();
+    let mut by_cookie = app
+      .stream_from(
+        OUTSIDE,
+        with(
+          request("GET", "/api/v0/live?topics=users", None),
+          "cookie",
+          &cookie,
+        ),
+      )
+      .await;
+    by_cookie.next().await.unwrap();
+
+    // well inside the 30 s between the checks a stream makes by itself
+    let started = tokio::time::Instant::now();
+    let id = token["token"]["id"].as_str().unwrap();
+    app
+      .send(request("DELETE", &format!("/api/v0/tokens/{id}"), None))
+      .await;
+    let bye = by_token.until("bye").await.pop().unwrap();
+    assert_eq!(bye.data, json!({ "reason": "unauthorized" }));
+    let session = cookie.split_once('=').unwrap().1.split_once('.').unwrap().0;
+    app
+      .send(request(
+        "DELETE",
+        &format!("/api/v0/sessions/{session}"),
+        None,
+      ))
+      .await;
+    let bye = by_cookie.until("bye").await.pop().unwrap();
+    assert_eq!(bye.data, json!({ "reason": "unauthorized" }));
+    assert!(started.elapsed() < std::time::Duration::from_secs(5));
+
+    removed(&app, "alice");
+    assert_eq!(
+      bystander.next().await.unwrap().event,
+      "users.removed",
+      "a stream of another credential carries on"
+    );
+  }
+
   // the clock's ticks run on paused time, which moves on whenever every task waits
   #[tokio::test(start_paused = true)]
   async fn transfer_figures_go_out_each_second_they_changed_while_a_stream_follows_them() {

@@ -381,7 +381,8 @@ pub async fn start_session(
   Ok(session)
 }
 
-/// Revokes the sessions `ids`, raising `SessionRevoked` for each one that was still going.
+/// Revokes the sessions `ids`, raising `SessionRevoked` for each one that was still going and
+/// closing the event streams they opened.
 pub async fn end_sessions(
   app: &AppState,
   ids: Vec<String>,
@@ -391,6 +392,9 @@ pub async fn end_sessions(
   let ended = sessions::revoke(&app.auth.db, ids)
     .await
     .map_err(ApiError::internal)?;
+  if !ended.is_empty() {
+    app.live.credentials_ended();
+  }
   for session in ended {
     info!(subject = session.subject, by, ?reason, "session revoked");
     app.events.raise(Event::SessionRevoked(SessionRevoked {

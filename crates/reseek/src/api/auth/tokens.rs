@@ -186,8 +186,8 @@ async fn update(
   Ok(Json(token.to_api()))
 }
 
-/// Revokes a token; the owner's or, for an administrator, anyone's. The record is kept a month
-/// for the audit view.
+/// Revokes a token, closing the event streams it opened; the owner's or, for an administrator,
+/// anyone's. The record is kept a month for the audit view.
 #[utoipa::path(
   operation_id = "revoke_token",
   delete, path = "/tokens/{id}", tag = "tokens",
@@ -210,6 +210,7 @@ async fn revoke(
     return Err(ApiError::not_found("No such token"));
   }
   info!(id = %id, by = caller.principal.subject, "API token revoked");
+  app.live.credentials_ended();
   raise(&app, &token, &caller.principal.subject, false);
   Ok(StatusCode::NO_CONTENT)
 }

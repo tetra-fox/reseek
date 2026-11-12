@@ -2433,8 +2433,8 @@ export interface paths {
         put: operations["update"];
         post?: never;
         /**
-         * Revokes a token; the owner's or, for an administrator, anyone's. The record is kept a month
-         *     for the audit view.
+         * Revokes a token, closing the event streams it opened; the owner's or, for an administrator,
+         *     anyone's. The record is kept a month for the audit view.
          */
         delete: operations["revoke_token"];
         options?: never;
