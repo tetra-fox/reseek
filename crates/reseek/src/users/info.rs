@@ -7,6 +7,7 @@ use rusqlite::{Connection, params};
 use tracing::warn;
 
 use super::Directory;
+use super::group_cache::Reported;
 use super::service::picture_tag;
 use super::store::{Info, ensure};
 use crate::db::timestamp;
@@ -49,9 +50,10 @@ impl Directory {
       picture_tag: picture.as_deref().map(picture_tag),
     };
     let name = username.to_string();
+    let reported = self.groups.reported();
     let written = self
       .db
-      .write(move |conn| write(conn, &name, &stored, picture.as_deref()))
+      .write(move |conn| write(conn, &name, &stored, picture.as_deref(), &reported))
       .await;
     match written {
       Ok(()) => self.changed(username).await,
@@ -60,15 +62,17 @@ impl Directory {
   }
 }
 
-/// Writes `info` and `picture` to `username`'s row, making the row when there is none.
+/// Writes `info` and `picture` to `username`'s row, making the row when there is none, started
+/// with what `reported` holds of them.
 fn write(
   conn: &mut Connection,
   username: &str,
   info: &Info,
   picture: Option<&[u8]>,
+  reported: &Reported,
 ) -> rusqlite::Result<()> {
   let tx = conn.transaction()?;
-  ensure(&tx, username, info.at)?;
+  ensure(&tx, username, info.at, reported)?;
   tx.execute(
     "UPDATE users SET description = ?2, has_picture = ?3, picture = ?4, picture_tag = ?5, \
      upload_slots = ?6, queue_length = ?7, has_free_slot = ?8, info_at = ?9 WHERE username = ?1",

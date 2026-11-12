@@ -12,7 +12,7 @@
 //! of a server session forgets which users the server was watching for us, not what it said.
 
 use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock, RwLockReadGuard};
 use std::time::{Duration, Instant};
 
 use api_types::state::UserStatistics;
@@ -35,11 +35,43 @@ const STALE: Duration = Duration::from_secs(4 * 3600);
 
 static REFETCH_FAILED: LogLimiter = LogLimiter::new();
 
+/// What the server last said of each user known, with the groups we put them in, by user. It
+/// is shared with the database writes that make a user's row, which start the row with it.
+#[derive(Clone, Default)]
+pub struct Reported(Arc<RwLock<HashMap<String, Facts>>>);
+
+impl Reported {
+  /// What is known of `username`, when anything is.
+  pub fn of(&self, username: &str) -> Option<Facts> {
+    self.read().get(username).cloned()
+  }
+
+  /// Changes what is known of `username` with `change`, making their entry when `create` or
+  /// when it exists; returns whether there was one to change.
+  pub fn update(&self, username: &str, create: bool, change: impl FnOnce(&mut Facts)) -> bool {
+    // every change is made whole before the lock is let go
+    let mut facts = self.0.write().unwrap_or_else(PoisonError::into_inner);
+    match facts.get_mut(username) {
+      Some(known) => change(known),
+      None if create => change(facts.entry(username.to_string()).or_default()),
+      None => return false,
+    }
+    true
+  }
+
+  fn read(&self) -> RwLockReadGuard<'_, HashMap<String, Facts>> {
+    self.0.read().unwrap_or_else(PoisonError::into_inner)
+  }
+}
+
 /// What the server last said of every user known, and the users the server watches for us.
 #[derive(Default)]
 pub struct GroupCache {
-  facts: RwLock<HashMap<String, Facts>>,
+  facts: Reported,
   watched: Mutex<HashSet<String>>,
+  /// when each user forgotten by hand in this run was forgotten, so a watch asked for before
+  /// does not watch them; taken with `watched` held
+  forgotten: Mutex<HashMap<String, Instant>>,
   /// one watch of a user at a time
   watching: Turns,
   /// how many watches of each user completed, so a caller that waited for another's knows
@@ -64,32 +96,25 @@ impl GroupCache {
       facts.entry(username).or_default().memberships.push(group);
     }
     Self {
-      facts: RwLock::new(facts),
+      facts: Reported(Arc::new(RwLock::new(facts))),
       ..Self::default()
     }
   }
 
   /// What is known of `username`, when anything is.
   pub fn facts(&self, username: &str) -> Option<Facts> {
-    self
-      .facts
-      .read()
-      .unwrap_or_else(PoisonError::into_inner)
-      .get(username)
-      .cloned()
+    self.facts.of(username)
+  }
+
+  /// What is known of every user, for the writes that make a row.
+  pub fn reported(&self) -> Reported {
+    self.facts.clone()
   }
 
   /// Changes what is known of `username` with `change`, making their entry when `create` or
   /// when it exists; returns whether there was one to change.
   fn update(&self, username: &str, create: bool, change: impl FnOnce(&mut Facts)) -> bool {
-    // every change is made whole before the lock is let go
-    let mut facts = self.facts.write().unwrap_or_else(PoisonError::into_inner);
-    match facts.get_mut(username) {
-      Some(known) => change(known),
-      None if create => change(facts.entry(username.to_string()).or_default()),
-      None => return false,
-    }
-    true
+    self.facts.update(username, create, change)
   }
 
   fn watched(&self) -> MutexGuard<'_, HashSet<String>> {
@@ -101,6 +126,15 @@ impl GroupCache {
   pub async fn regrouping(&self) -> tokio::sync::MutexGuard<'_, ()> {
     self.regrouping.lock().await
   }
+}
+
+/// What [`Directory::forget_watched`] took away, for [`Directory::unforget_watched`] to put back.
+#[derive(Clone, Copy, Debug)]
+pub struct Unwatched {
+  /// the user was watched
+  pub was: bool,
+  /// the mark an earlier forget had left
+  mark: Option<Instant>,
 }
 
 /// What a status the server sent tells beside itself.
@@ -395,32 +429,37 @@ impl Directory {
   /// as [`Directory::forget_watched`] forgets with them held, so the two never cross.
   fn watch_taken(&self, username: &str, asked: Instant) -> bool {
     let mut watched = self.groups.watched();
-    if self.toucher.forgotten().outdates(username, asked) {
+    let forgotten = lock(&self.groups.forgotten).get(username).copied();
+    if forgotten.is_some_and(|forgotten| asked <= forgotten) {
       return false;
     }
     watched.insert(username.to_string());
     true
   }
 
-  /// Forgets `username`: off the watched users, without telling the server, and marked
-  /// forgotten now, both with the watched users held; says whether they were watched. A status
-  /// of theirs handled from here on makes no touch, and whatever was told of them before the
-  /// mark is not written.
-  pub(super) fn forget_watched(&self, username: &str) -> bool {
+  /// Forgets `username` for the watched users: off them, without telling the server, and
+  /// marked forgotten now, both with the watched users held. A status of theirs handled from
+  /// here on makes no touch, and a watch asked for before does not watch them. Says what
+  /// [`Directory::unforget_watched`] puts back.
+  pub(super) fn forget_watched(&self, username: &str) -> Unwatched {
     let mut watched = self.groups.watched();
     let was = watched.remove(username);
-    self.toucher.forgotten().forget(username);
-    was
+    let mark = lock(&self.groups.forgotten).insert(username.to_string(), Instant::now());
+    Unwatched { was, mark }
   }
 
-  /// Undoes [`Directory::forget_watched`] when nothing was forgotten after all: `username` is
-  /// watched again when they were, and what is told of them is written.
-  pub(super) fn unforget_watched(&self, username: &str, was: bool) {
+  /// Undoes [`Directory::forget_watched`] when there was nobody to forget: `username` is
+  /// watched again when they were, and an earlier forget's mark is kept as it was.
+  pub(super) fn unforget_watched(&self, username: &str, before: Unwatched) {
     let mut watched = self.groups.watched();
-    if was {
+    if before.was {
       watched.insert(username.to_string());
     }
-    self.toucher.forgotten().remember(username);
+    let mut forgotten = lock(&self.groups.forgotten);
+    match before.mark {
+      Some(mark) => forgotten.insert(username.to_string(), mark),
+      None => forgotten.remove(username),
+    };
   }
 
   /// Tells the server to stop watching `username`, who was forgotten and is off the watched
@@ -528,11 +567,7 @@ impl Directory {
 
   /// Every user the cache knows, by name, with what the server last said of them.
   pub fn cached_users(&self) -> Vec<CachedUser> {
-    let facts = self
-      .groups
-      .facts
-      .read()
-      .unwrap_or_else(PoisonError::into_inner);
+    let facts = self.groups.facts.read();
     let mut users: Vec<CachedUser> = facts
       .iter()
       .map(|(username, facts)| CachedUser {

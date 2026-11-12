@@ -2,23 +2,24 @@
 //! Touches go through a bounded channel to one writer, which folds the touches of a user that
 //! arrive within a second into one write. Only a reason to know the user makes their row: what
 //! the server reports of them, their presence and statistics, fills in a row and never makes
-//! one, so nothing it says of a user forgotten by hand brings them back, whenever it lands. The
-//! touches made before a user was forgotten and not written yet are dropped.
+//! one, so nothing it says of a user forgotten by hand brings them back, whenever it lands. A
+//! row made starts with what the server last said of the user. Forgetting a user goes through
+//! the same channel and deletes the row in order with the touches: when there was a row, the
+//! touches queued before the forget are dropped with it.
 
-use std::collections::{BTreeMap, HashMap};
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::collections::BTreeMap;
+use std::time::Duration;
 
 use api_types::state::UserStatistics;
 use api_types::users::UserPresence;
 use chrono::{DateTime, Utc};
-use reseek_shares::lock;
 use rusqlite::{Connection, params};
 use soulseek_client::LogLimiter;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
+use super::group_cache::Reported;
 use super::store::{ensure, presence_text};
 use crate::db::timestamp;
 
@@ -66,66 +67,66 @@ pub struct Touched {
   pub touch: Touch,
   /// when it was made, as stored
   pub at: DateTime<Utc>,
-  /// when it was made, on the clock that only goes forward
-  pub made: Instant,
 }
 
-/// The users forgotten by hand in this run, with when on the clock that only goes forward, so
-/// the touches of theirs made before and not written yet are dropped. Kept for the run; only
-/// users forgotten by hand are here.
-#[derive(Clone, Default)]
-pub struct Forgotten(Arc<Mutex<HashMap<String, Instant>>>);
+/// A user being forgotten: the writer deletes their row and, when there was one, drops their
+/// touches queued before; it says whether there was a row, or why it could not tell.
+#[derive(Debug)]
+pub struct Forget {
+  /// who
+  pub username: String,
+  /// told whether a row was deleted
+  pub done: oneshot::Sender<Result<bool, String>>,
+}
 
-impl Forgotten {
-  /// `username` is forgotten now.
-  pub fn forget(&self, username: &str) {
-    lock(&self.0).insert(username.to_string(), Instant::now());
-  }
-
-  /// `username` was not forgotten after all: their touches are written again.
-  pub fn remember(&self, username: &str) {
-    lock(&self.0).remove(username);
-  }
-
-  /// Whether something of `username`'s made at `made` came before they were forgotten.
-  pub fn outdates(&self, username: &str, made: Instant) -> bool {
-    lock(&self.0)
-      .get(username)
-      .is_some_and(|forgotten| made <= *forgotten)
-  }
+/// What goes to the writer, in order.
+#[derive(Debug)]
+pub enum Queued {
+  /// a touch
+  Touched(Touched),
+  /// a user forgotten
+  Forget(Forget),
 }
 
 /// The sending half of the touch channel.
 #[derive(Clone)]
 pub struct Toucher {
-  sender: mpsc::Sender<Touched>,
-  forgotten: Forgotten,
+  sender: mpsc::Sender<Queued>,
 }
 
 impl Toucher {
   /// A channel for touches, with its receiving half for the writer.
-  pub fn channel() -> (Self, mpsc::Receiver<Touched>) {
+  pub fn channel() -> (Self, mpsc::Receiver<Queued>) {
     let (sender, receiver) = mpsc::channel(CAPACITY);
-    let forgotten = Forgotten::default();
-    (Self { sender, forgotten }, receiver)
+    (Self { sender }, receiver)
   }
 
-  /// The users forgotten by hand, whose earlier touches the writer drops.
-  pub fn forgotten(&self) -> &Forgotten {
-    &self.forgotten
+  /// Forgets `username` through the writer: their row is deleted and, when there was one, the
+  /// touches of theirs sent before are dropped, in one write. Says whether there was a row.
+  pub async fn forget(&self, username: &str) -> Result<bool, String> {
+    const STOPPED: &str = "the user touch writer has stopped";
+    let (done, answer) = oneshot::channel();
+    let forget = Forget {
+      username: username.to_string(),
+      done,
+    };
+    if self.sender.send(Queued::Forget(forget)).await.is_err() {
+      return Err(STOPPED.to_string());
+    }
+    answer.await.map_err(|_| STOPPED.to_string())?
   }
 
   /// Sends a touch of `username`. A room message or a presence report is dropped when the
   /// channel is full, since a later one says the same; any other touch waits for room. Returns
   /// whether it was sent.
   pub async fn send(&self, username: &str, touch: Touch) -> bool {
-    let touched = Touched {
+    let lossy = matches!(touch, Touch::RoomMessage | Touch::Status { .. });
+    let touched = Queued::Touched(Touched {
       username: username.to_string(),
       touch,
       at: Utc::now(),
-      made: Instant::now(),
-    };
-    if matches!(touched.touch, Touch::RoomMessage | Touch::Status { .. }) {
+    });
+    if lossy {
       return match self.sender.try_send(touched) {
         Ok(()) => true,
         Err(mpsc::error::TrySendError::Full(_)) => {
@@ -146,8 +147,6 @@ impl Toucher {
 pub struct Pending {
   /// the latest touch
   pub seen_at: Option<DateTime<Utc>>,
-  /// the latest touch, on the clock that only goes forward
-  pub made: Option<Instant>,
   /// a touch that makes a row when there is none
   pub creates: bool,
   /// a room message was among them
@@ -159,11 +158,9 @@ pub struct Pending {
 }
 
 impl Pending {
-  /// Adds `touch`, made at `at`, `made` on the clock that only goes forward, to the touches
-  /// folded so far.
-  pub fn fold(&mut self, touch: Touch, at: DateTime<Utc>, made: Instant) {
+  /// Adds `touch`, made at `at`, to the touches folded so far.
+  pub fn fold(&mut self, touch: Touch, at: DateTime<Utc>) {
     self.seen_at = Some(self.seen_at.map_or(at, |seen| seen.max(at)));
-    self.made = Some(self.made.map_or(made, |before| before.max(made)));
     match touch {
       Touch::RoomMessage => self.room = true,
       Touch::Status {
@@ -178,43 +175,56 @@ impl Pending {
   }
 }
 
+/// The touches gathered for one write, and the forget that ended the gathering early.
+#[derive(Debug, Default)]
+pub struct Gathered {
+  /// the touches, folded by user
+  pub batch: BTreeMap<String, Pending>,
+  /// a user forgotten after them
+  pub forget: Option<Forget>,
+}
+
 /// Waits for the next touch, then gathers every touch that arrives within [`WINDOW`] of it,
-/// folded by user. `None` once the channel is closed and empty or `cancel` is canceled.
+/// folded by user, until a forget comes, which ends the gathering. `None` once the channel is
+/// closed and empty or `cancel` is canceled.
 pub async fn gather(
-  receiver: &mut mpsc::Receiver<Touched>,
+  receiver: &mut mpsc::Receiver<Queued>,
   cancel: &CancellationToken,
-) -> Option<BTreeMap<String, Pending>> {
-  let first = tokio::select! {
+) -> Option<Gathered> {
+  let mut next = tokio::select! {
     () = cancel.cancelled() => return None,
     first = receiver.recv() => first?,
   };
   let deadline = tokio::time::Instant::now() + WINDOW;
-  let mut batch: BTreeMap<String, Pending> = BTreeMap::new();
-  let mut take = |touched: Touched| {
-    let pending = batch.entry(touched.username).or_default();
-    pending.fold(touched.touch, touched.at, touched.made);
-  };
-  take(first);
+  let mut gathered = Gathered::default();
   loop {
-    tokio::select! {
-      () = tokio::time::sleep_until(deadline) => break,
-      next = receiver.recv() => match next {
-        Some(touched) => take(touched),
-        None => break,
-      },
+    match next {
+      Queued::Touched(touched) => {
+        let pending = gathered.batch.entry(touched.username).or_default();
+        pending.fold(touched.touch, touched.at);
+      }
+      Queued::Forget(forget) => {
+        gathered.forget = Some(forget);
+        return Some(gathered);
+      }
     }
+    next = tokio::select! {
+      () = tokio::time::sleep_until(deadline) => return Some(gathered),
+      next = receiver.recv() => match next {
+        Some(next) => next,
+        None => return Some(gathered),
+      },
+    };
   }
-  Some(batch)
 }
 
 /// Writes a gathered batch in one transaction and returns the users whose row it changed. A
-/// user `forgotten` after their latest touch was made is left out; this is checked here, in
-/// the write, so a forget that ran before it is always seen. A presence or statistics only
-/// fills in a row that is there.
+/// presence or statistics only fills in a row that is there; a row made here starts with what
+/// the server last said of the user, as `reported` holds it.
 pub fn write(
   conn: &mut Connection,
   batch: &BTreeMap<String, Pending>,
-  forgotten: &Forgotten,
+  reported: &Reported,
 ) -> rusqlite::Result<Vec<String>> {
   let tx = conn.transaction()?;
   let mut changed = Vec::new();
@@ -222,14 +232,8 @@ pub fn write(
     let Some(seen_at) = pending.seen_at else {
       continue;
     };
-    if pending
-      .made
-      .is_some_and(|made| forgotten.outdates(username, made))
-    {
-      continue;
-    }
     if pending.creates {
-      ensure(&tx, username, seen_at)?;
+      ensure(&tx, username, seen_at, reported)?;
     } else if pending.status.is_some() || pending.statistics.is_some() {
       // what the server reports fills in a row that is there, and makes none
       let rows = tx.execute(
@@ -315,7 +319,7 @@ mod tests {
         },
       )
       .await;
-    let batch = gather(&mut receiver, &cancel).await.unwrap();
+    let batch = gather(&mut receiver, &cancel).await.unwrap().batch;
     assert_eq!(batch.len(), 2);
     let alice = &batch["alice"];
     assert!(alice.creates);
@@ -326,13 +330,13 @@ mod tests {
     );
     tokio::time::sleep(WINDOW * 2).await;
     toucher.send("carol", Touch::Browse).await;
-    let later = gather(&mut receiver, &cancel).await.unwrap();
+    let later = gather(&mut receiver, &cancel).await.unwrap().batch;
     assert_eq!(later.keys().collect::<Vec<_>>(), ["carol"], "a new window");
 
     let db = users_db().await;
     let written = db
       .write(move |conn| {
-        let changed = write(conn, &batch, &Forgotten::default())?;
+        let changed = write(conn, &batch, &Reported::default())?;
         Ok((changed, get(conn, "alice")?, get(conn, "bob")?))
       })
       .await
@@ -348,20 +352,62 @@ mod tests {
     assert_eq!(written.2, None);
   }
 
-  #[test]
-  fn touches_made_before_a_user_was_forgotten_are_not_written() {
-    let forgotten = Forgotten::default();
-    let before = Instant::now();
-    forgotten.forget("alice");
-    let after = Instant::now() + Duration::from_secs(1);
-    assert!(forgotten.outdates("alice", before));
-    assert!(
-      !forgotten.outdates("alice", after),
-      "a dealing after the forget makes the row again"
-    );
-    assert!(!forgotten.outdates("bob", before));
-    forgotten.remember("alice");
-    assert!(!forgotten.outdates("alice", before));
+  #[tokio::test(start_paused = true)]
+  async fn a_forget_ends_the_window_its_touches_were_gathered_in() {
+    let (toucher, mut receiver) = Toucher::channel();
+    let cancel = CancellationToken::new();
+    toucher.send("alice", Touch::MessageIn).await;
+    toucher.send("bob", Touch::Transfer).await;
+    let forgetting = tokio::spawn({
+      let toucher = toucher.clone();
+      async move { toucher.forget("alice").await }
+    });
+    // the forget is queued behind the touches; a touch after it is the next window's
+    while receiver.len() < 3 {
+      tokio::task::yield_now().await;
+    }
+    toucher.send("alice", Touch::MessageOut).await;
+    let gathered = gather(&mut receiver, &cancel).await.unwrap();
+    assert_eq!(gathered.batch.keys().collect::<Vec<_>>(), ["alice", "bob"]);
+    let forget = gathered.forget.unwrap();
+    assert_eq!(forget.username, "alice");
+    forget.done.send(Ok(true)).unwrap();
+    assert_eq!(forgetting.await.unwrap(), Ok(true));
+    let next = gather(&mut receiver, &cancel).await.unwrap();
+    assert_eq!(next.batch.keys().collect::<Vec<_>>(), ["alice"]);
+  }
+
+  #[tokio::test]
+  async fn a_row_made_starts_with_what_the_server_last_said() {
+    let db = users_db().await;
+    let reported = Reported::default();
+    reported.update("alice", true, |facts| {
+      facts.presence = Some(UserPresence::Away);
+      facts.privileged = true;
+      facts.statistics = Some(api_types::users::StatisticsSnapshot {
+        statistics: UserStatistics {
+          average_speed: 7,
+          directory_count: 1,
+          file_count: 1,
+          upload_count: 1,
+        },
+        updated_at: Utc::now(),
+      });
+    });
+    let mut pending = Pending::default();
+    pending.fold(Touch::MessageIn, Utc::now());
+    let batch = BTreeMap::from([("alice".to_string(), pending)]);
+    let alice = db
+      .write(move |conn| {
+        write(conn, &batch, &reported)?;
+        get(conn, "alice")
+      })
+      .await
+      .unwrap()
+      .unwrap();
+    assert_eq!(alice.presence.map(|(p, _)| p), Some(UserPresence::Away));
+    assert!(alice.is_privileged);
+    assert_eq!(alice.statistics.map(|(s, _)| s.average_speed), Some(7));
   }
 
   #[tokio::test]
@@ -374,22 +420,22 @@ mod tests {
         presence: UserPresence::Away,
         is_privileged: false,
       };
-      pending.fold(status, now, Instant::now());
+      pending.fold(status, now);
       let statistics = UserStatistics {
         average_speed: 1,
         directory_count: 1,
         file_count: 1,
         upload_count: 1,
       };
-      pending.fold(Touch::Statistics(statistics), now, Instant::now());
+      pending.fold(Touch::Statistics(statistics), now);
       BTreeMap::from([("alice".to_string(), pending)])
     };
     let (none, filled) = db
       .write(move |conn| {
-        let forgotten = Forgotten::default();
-        let none = write(conn, &reported(), &forgotten)?;
-        ensure(conn, "alice", Utc::now())?;
-        write(conn, &reported(), &forgotten)?;
+        let known = Reported::default();
+        let none = write(conn, &reported(), &known)?;
+        ensure(conn, "alice", Utc::now(), &known)?;
+        write(conn, &reported(), &known)?;
         Ok((none, get(conn, "alice")?.unwrap()))
       })
       .await
@@ -441,7 +487,7 @@ mod tests {
           write(
             conn,
             &BTreeMap::from([("alice".to_string(), pending)]),
-            &Forgotten::default(),
+            &Reported::default(),
           )?;
           Ok(get(conn, "alice")?.unwrap().presence)
         })

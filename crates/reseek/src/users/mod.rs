@@ -339,16 +339,15 @@ impl Directory {
   /// changed.
   async fn touch_now(&self, username: &str, touches: Vec<Touch>) {
     let now = Utc::now();
-    let made = std::time::Instant::now();
     let mut pending = touch::Pending::default();
     for touch in touches {
-      pending.fold(touch, now, made);
+      pending.fold(touch, now);
     }
     let batch = BTreeMap::from([(username.to_string(), pending)]);
-    let forgotten = self.toucher.forgotten().clone();
+    let reported = self.groups.reported();
     let written = self
       .db
-      .write(move |conn| touch::write(conn, &batch, &forgotten));
+      .write(move |conn| touch::write(conn, &batch, &reported));
     match written.await {
       Ok(changed) => {
         for username in changed {
@@ -513,25 +512,45 @@ impl Directory {
     lock(&self.summaries).remove(username);
   }
 
-  /// Writes the touches as they come, pushing the users whose row changed.
+  /// Writes the touches as they come, pushing the users whose row changed, and forgets the
+  /// users asked for in order with them: a forgotten user's row is deleted, and when there was
+  /// one, their touches gathered before the forget go with it.
   async fn write_touches(
     self: Arc<Self>,
-    mut receiver: tokio::sync::mpsc::Receiver<touch::Touched>,
+    mut receiver: tokio::sync::mpsc::Receiver<touch::Queued>,
     shutdown: CancellationToken,
   ) {
-    while let Some(batch) = touch::gather(&mut receiver, &shutdown).await {
+    while let Some(gathered) = touch::gather(&mut receiver, &shutdown).await {
+      let touch::Gathered { mut batch, forget } = gathered;
       let count = batch.len();
-      let forgotten = self.toucher.forgotten().clone();
-      let written = self
-        .db
-        .write(move |conn| touch::write(conn, &batch, &forgotten));
-      match written.await {
-        Ok(changed) => {
-          for username in changed {
-            self.changed(&username).await;
+      let forgotten = forget.as_ref().map(|forget| forget.username.clone());
+      let reported = self.groups.reported();
+      let written = self.db.write(move |conn| {
+        let deleted = match &forgotten {
+          Some(username) => {
+            let deleted = store::delete(conn, username)?;
+            if deleted {
+              batch.remove(username);
+            }
+            Some(deleted)
           }
+          None => None,
+        };
+        Ok((touch::write(conn, &batch, &reported)?, deleted))
+      });
+      let (changed, answer) = match written.await {
+        Ok((changed, deleted)) => (changed, deleted.map(Ok)),
+        Err(e) => {
+          warn!(users = count, error = %e, "user touches not written");
+          (Vec::new(), forget.is_some().then(|| Err(e.to_string())))
         }
-        Err(e) => warn!(users = count, error = %e, "user touches not written"),
+      };
+      if let (Some(forget), Some(answer)) = (forget, answer) {
+        // a forget whose caller went away is done all the same
+        let _ = forget.done.send(answer);
+      }
+      for username in changed {
+        self.changed(&username).await;
       }
     }
   }

@@ -74,13 +74,14 @@ impl Directory {
   /// Applies `change` to `username`'s row and pushes the new summary.
   pub(super) async fn change(&self, username: &str, change: Change) -> Result<(), ApiError> {
     let name = username.to_string();
+    let reported = self.groups.reported();
     let buddy = match &change {
       Change::Buddy(buddy) => Some(*buddy),
       _ => None,
     };
     self
       .db
-      .write(move |conn| store::change(conn, &name, &change, Utc::now()))
+      .write(move |conn| store::change(conn, &name, &change, Utc::now(), &reported))
       .await
       .map_err(internal)?;
     if let Some(buddy) = buddy {
@@ -115,9 +116,10 @@ impl Directory {
   /// Stores `block`, raises `UserBlocked` as `by` and pushes the user's summary.
   async fn put_block(&self, block: Block, by: &Principal) -> Result<(), ApiError> {
     let stored = block.clone();
+    let reported = self.groups.reported();
     self
       .db
-      .write(move |conn| blocking::store(conn, &stored, Utc::now()))
+      .write(move |conn| blocking::store(conn, &stored, Utc::now(), &reported))
       .await
       .map_err(internal)?;
     self.blocks.set(&block);
@@ -324,8 +326,8 @@ impl Directory {
     let _changing = self.buddies.changing().await;
     let _regrouping = self.groups.regrouping().await;
     let watched = self.forget_watched(username);
-    let name = username.to_string();
-    let deleted = self.db.write(move |conn| store::delete(conn, &name)).await;
+    // through the touch writer, which drops the touches queued before when there was a row
+    let deleted = self.toucher.forget(username).await;
     if !matches!(deleted, Ok(true)) {
       // nobody was forgotten: they stay watched and their touches are written
       self.unforget_watched(username, watched);
@@ -339,7 +341,7 @@ impl Directory {
       self.buddies.set(username, None);
       self.memberships_changed(username, Vec::new());
     });
-    if watched {
+    if watched.was {
       self.unwatch_forgotten(username).await;
     }
     if purge {

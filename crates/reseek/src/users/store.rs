@@ -6,6 +6,7 @@ use chrono::{DateTime, Utc};
 use rusqlite::types::Type;
 use rusqlite::{Connection, OptionalExtension, Row, params};
 
+use super::group_cache::Reported;
 use crate::db::{self, Schema, read_timestamp, timestamp};
 
 /// `users.db`: the `users`, `blocks` and `memberships` tables.
@@ -196,15 +197,54 @@ pub fn get(conn: &Connection, username: &str) -> rusqlite::Result<Option<Stored>
 }
 
 /// Makes sure `username` has a row, seen at `now` unless they were seen later. Writes do not
-/// come in the order of what they record, as touches wait up to a second and info does not.
-pub fn ensure(conn: &Connection, username: &str, now: DateTime<Utc>) -> rusqlite::Result<()> {
-  let now = timestamp(now);
-  conn.execute(
+/// come in the order of what they record, as touches wait up to a second and info does not. A
+/// row made here starts with what the server last said of the user, as `reported` holds it,
+/// since a report that came before the row had no row to fill in.
+pub fn ensure(
+  conn: &Connection,
+  username: &str,
+  now: DateTime<Utc>,
+  reported: &Reported,
+) -> rusqlite::Result<()> {
+  let seen = timestamp(now);
+  let made = conn.execute(
     "INSERT INTO users (username, first_seen_at, last_seen_at) VALUES (?1, ?2, ?2) \
-     ON CONFLICT (username) DO UPDATE SET \
-     last_seen_at = max(last_seen_at, excluded.last_seen_at)",
-    params![username, now],
-  )?;
+     ON CONFLICT (username) DO NOTHING",
+    params![username, seen],
+  )? > 0;
+  if !made {
+    conn.execute(
+      "UPDATE users SET last_seen_at = max(last_seen_at, ?2) WHERE username = ?1",
+      params![username, seen],
+    )?;
+    return Ok(());
+  }
+  let Some(facts) = reported.of(username) else {
+    return Ok(());
+  };
+  if let Some(presence) = facts.presence {
+    conn.execute(
+      "UPDATE users SET last_presence = ?2, presence_at = ?3, is_privileged = ?4 \
+       WHERE username = ?1",
+      params![username, presence_text(presence), seen, facts.privileged],
+    )?;
+  }
+  if let Some(known) = facts.statistics {
+    let statistics = known.statistics;
+    conn.execute(
+      "UPDATE users SET average_speed = ?2, upload_count = ?3, file_count = ?4, \
+       directory_count = ?5, statistics_at = ?6 WHERE username = ?1",
+      params![
+        username,
+        statistics.average_speed,
+        // SQLite integers are signed; a count past them is kept at the largest
+        i64::try_from(statistics.upload_count).unwrap_or(i64::MAX),
+        statistics.file_count,
+        statistics.directory_count,
+        timestamp(known.updated_at)
+      ],
+    )?;
+  }
   Ok(())
 }
 
@@ -221,15 +261,17 @@ pub enum Change {
   Muted(bool),
 }
 
-/// Applies `change` to `username`'s row, making the row when there is none.
+/// Applies `change` to `username`'s row, making the row when there is none, started with what
+/// `reported` holds of them.
 pub fn change(
   conn: &mut Connection,
   username: &str,
   change: &Change,
   now: DateTime<Utc>,
+  reported: &Reported,
 ) -> rusqlite::Result<()> {
   let tx = conn.transaction()?;
-  ensure(&tx, username, now)?;
+  ensure(&tx, username, now, reported)?;
   match change {
     Change::Notes(notes) => tx.execute(
       "UPDATE users SET notes = ?2 WHERE username = ?1",

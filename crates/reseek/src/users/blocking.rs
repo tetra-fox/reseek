@@ -18,6 +18,7 @@ use rusqlite::{Connection, OptionalExtension, Row, params};
 use tracing::warn;
 
 use super::blocklist::Blocklist;
+use super::group_cache::Reported;
 use super::store::ensure;
 use crate::config::Options;
 use crate::config::cidr::IpRange;
@@ -156,7 +157,12 @@ pub fn stored_of(conn: &Connection, username: &str) -> rusqlite::Result<Option<B
 
 /// Stores `block`, replacing the user's earlier one, and makes the user's row when there is
 /// none.
-pub fn store(conn: &mut Connection, block: &Block, now: DateTime<Utc>) -> rusqlite::Result<()> {
+pub fn store(
+  conn: &mut Connection,
+  block: &Block,
+  now: DateTime<Utc>,
+  reported: &Reported,
+) -> rusqlite::Result<()> {
   // only a block from the configuration has no maker, and those are never stored
   let created_by = block.created_by.as_deref().ok_or_else(|| {
     rusqlite::Error::ToSqlConversionFailure("a stored block names who made it".into())
@@ -164,7 +170,7 @@ pub fn store(conn: &mut Connection, block: &Block, now: DateTime<Utc>) -> rusqli
   let addresses = serde_json::to_string(&block.addresses)
     .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
   let tx = conn.transaction()?;
-  ensure(&tx, &block.username, now)?;
+  ensure(&tx, &block.username, now, reported)?;
   tx.execute(
     "INSERT INTO blocks (username, reason, scopes, created_at, expires_at, created_by, addresses) \
      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) \

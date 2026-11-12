@@ -32,18 +32,26 @@ mod tests {
     let mut pruned = db
       .write(move |conn| {
         for name in ["plain", "noted", "grouped", "buddy", "muted", "blocked"] {
-          ensure(conn, name, old)?;
+          ensure(conn, name, old, &Default::default())?;
         }
-        ensure(conn, "recent", old + chrono::Duration::days(60))?;
-        change(conn, "noted", &Change::Notes("x".into()), old)?;
+        ensure(
+          conn,
+          "recent",
+          old + chrono::Duration::days(60),
+          &Default::default(),
+        )?;
+        let known = Default::default();
+        change(conn, "noted", &Change::Notes("x".into()), old, &known)?;
         change(
           conn,
           "grouped",
           &Change::Groups(vec!["friends".into()]),
           old,
+          &known,
         )?;
-        change(conn, "buddy", &Change::Buddy(Some(Default::default())), old)?;
-        change(conn, "muted", &Change::Muted(true), old)?;
+        let buddy = Change::Buddy(Some(Default::default()));
+        change(conn, "buddy", &buddy, old, &known)?;
+        change(conn, "muted", &Change::Muted(true), old, &known)?;
         let block = Block {
           username: "blocked".into(),
           reason: String::new(),
@@ -54,7 +62,7 @@ mod tests {
           created_by: Some("admin".into()),
           source: BlockSource::Api,
         };
-        blocking::store(conn, &block, old)?;
+        blocking::store(conn, &block, old, &Default::default())?;
         prune(conn, old + chrono::Duration::days(30))
       })
       .await
