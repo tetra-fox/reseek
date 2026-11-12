@@ -449,14 +449,19 @@ async fn user_status(app: &AppState, status: &soulseek_proto::server::UserStatus
   }
 }
 
-/// `State.server` and our username as the client has them in `state`.
+/// `State.server` and our username as the client has them in `state`. The client may have
+/// moved on since, so its address and username are written only where `state` has them.
 fn server_state(app: &AppState, state: ClientState) {
   let client = app.network.client();
-  let username = client.username();
-  let (address, ip_end_point) = (
-    client.address(),
-    client.ip_endpoint().map(|e| e.to_string()),
-  );
+  let username = state.is_logged_in().then(|| client.username()).flatten();
+  let (address, ip_end_point) = if state.is_connected() {
+    (
+      client.address(),
+      client.ip_endpoint().map(|e| e.to_string()),
+    )
+  } else {
+    (None, None)
+  };
   app.state.update(|current| {
     let server = &mut current.server;
     server.address = address;
@@ -988,6 +993,29 @@ mod tests {
     };
     disconnected(&app.state, "Read error", Some(&lost), true);
     assert!(!app.state.network.watchdog().is_enabled());
+  }
+
+  #[tokio::test]
+  async fn a_disconnect_handled_once_the_client_is_logged_in_again_shows_no_server_or_user() {
+    use crate::testing::soulseek::{Server, app};
+
+    let app = app(crate::testing::TRUSTED).await;
+    let server = Server::silent().await;
+    server.login(&app).await;
+    let logged_in = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+      while !app.state.state.current().server.is_logged_in {
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+      }
+    })
+    .await;
+    assert!(logged_in.is_ok(), "the login never reached the state");
+    // the end of the session before, handled after this one logged in
+    server_state(&app.state, ClientState::Disconnected);
+    let current = app.state.state.current();
+    assert_eq!(current.server.state, ServerConnectionState::Disconnected);
+    assert_eq!(current.server.address, None);
+    assert_eq!(current.server.ip_end_point, None);
+    assert_eq!(current.user.username, None);
   }
 
   #[tokio::test]
