@@ -704,7 +704,7 @@
       "doc": "Refuses users at the addresses in the blocklist file.",
       "choices": null,
       "default": false,
-      "apply": "restart",
+      "apply": "live",
       "secret": false,
       "notApplied": null,
       "entries": []
@@ -2540,10 +2540,10 @@
       "envVar": "RESEEK_SHUTDOWN_TIMEOUT",
       "cliFlag": "--shutdown-timeout",
       "kind": "duration",
-      "doc": "How long a shutdown waits for work in progress to finish.",
+      "doc": "How long a shutdown waits for open HTTP connections to finish. Transfers in progress are not waited for.",
       "choices": null,
       "default": "10s",
-      "apply": "live",
+      "apply": "restart",
       "secret": false,
       "notApplied": null,
       "entries": []
