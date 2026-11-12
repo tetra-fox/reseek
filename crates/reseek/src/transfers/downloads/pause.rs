@@ -8,7 +8,7 @@ use std::collections::hash_map::Entry;
 
 use api_types::transfers::BulkFailure;
 use reseek_shares::lock;
-use tracing::{debug, info, warn};
+use tracing::{Instrument, debug, info, warn};
 use uuid::Uuid;
 
 use super::enqueue::gate_for;
@@ -115,6 +115,24 @@ impl Downloads {
   /// one user taking their turns as an enqueue's do. A download whose task is still stopping to
   /// be paused is waited for first. One not paused is refused.
   pub async fn resume_paused(&self, ids: Vec<Uuid>) -> Vec<Result<Uuid, BulkFailure>> {
+    // the resume runs on a task of its own, so a caller that stops waiting, such as a request
+    // whose connection drops, leaves no download written resumed without its task
+    let this = self.this();
+    let ran = self
+      .tasks
+      .spawn(async move { this.resume_each(ids).await }.in_current_span());
+    match ran.await {
+      Ok(outcomes) => outcomes,
+      Err(e) if e.is_panic() => std::panic::resume_unwind(e.into_panic()),
+      Err(e) => vec![Err(failure(
+        Uuid::nil(),
+        format!("the downloads were not resumed: {e}"),
+      ))],
+    }
+  }
+
+  /// The resume of [`Downloads::resume_paused`], on the task it runs on.
+  async fn resume_each(&self, ids: Vec<Uuid>) -> Vec<Result<Uuid, BulkFailure>> {
     for id in &ids {
       self.pause_done(*id).await;
     }
