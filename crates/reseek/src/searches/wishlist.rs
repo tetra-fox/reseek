@@ -252,7 +252,7 @@ impl Searches {
       }
     };
     // the client's end is enough, as a search's responses are read from memory until its end
-    // is written; only the receiver is kept, so a search dropped without ending says so
+    // is written
     let ended = self
       .running()
       .get(&search.id)
