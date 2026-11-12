@@ -48,7 +48,8 @@ pub(super) struct Running {
 /// What the client reported so far.
 struct Progress {
   record: Search,
-  /// every response taken, in order; a reader takes the list without copying it under the lock
+  /// every response taken, in order; a reader takes the list without copying it under the lock,
+  /// and a response taken while a reader still holds it copies the list
   responses: Arc<Vec<SearchResponse>>,
   /// how many of `responses` are saved
   saved: usize,
@@ -503,6 +504,158 @@ mod tests {
     running.ended.send_replace(Some(limit));
     assert_eq!(searches.cancel(id).await.unwrap(), Canceled::Already);
     assert!(!running.cancel.is_cancelled());
+  }
+
+  /// A response from `username` with no files.
+  fn taken(username: &str) -> peer::SearchResponse {
+    peer::SearchResponse {
+      username: username.into(),
+      token: 7,
+      files: Vec::new(),
+      has_free_upload_slot: true,
+      upload_speed: 0,
+      queue_length: 0,
+      locked_files: Vec::new(),
+    }
+  }
+
+  /// The client's search as it returns once it timed out.
+  fn timed_out() -> soulseek_client::Search {
+    soulseek_client::Search {
+      query: SearchQuery::parse("animals"),
+      scope: ClientScope::Network,
+      token: 7,
+      state: ClientState::Completed(soulseek_client::SearchOutcome::TimedOut),
+      response_count: 0,
+      file_count: 0,
+      locked_file_count: 0,
+    }
+  }
+
+  /// Makes every write to a search's row fail while `refused` is true.
+  async fn refuse_writes(searches: &Searches, refused: bool) {
+    let sql = if refused {
+      "CREATE TRIGGER refused BEFORE UPDATE ON searches BEGIN SELECT RAISE(ABORT, 'refused'); END"
+    } else {
+      "DROP TRIGGER refused"
+    };
+    searches
+      .db
+      .write(move |conn| conn.execute_batch(sql))
+      .await
+      .unwrap();
+  }
+
+  async fn batches(searches: &Searches) -> i64 {
+    searches
+      .db
+      .read(|conn| conn.query_row("SELECT count(*) FROM running_responses", [], |r| r.get(0)))
+      .await
+      .unwrap()
+  }
+
+  /// A running search `searches` keeps, written to its row.
+  async fn started(searches: &Searches) -> Arc<Running> {
+    let record = record();
+    let (id, written) = (record.id, record.clone());
+    searches
+      .db
+      .write(move |conn| store::insert(conn, &written))
+      .await
+      .unwrap();
+    let (accepted, _acceptance) = oneshot::channel();
+    let running = Arc::new(Running::new(record, accepted));
+    running.state_changed(ClientState::InProgress);
+    searches.running().insert(id, running.clone());
+    running
+  }
+
+  #[tokio::test]
+  async fn an_end_that_cannot_be_written_is_tried_again_its_responses_served_meanwhile() {
+    let app = app("", &[]).await;
+    let searches = app.state.searches.clone();
+    let running = started(&searches).await;
+    let id = running.record().id;
+    running.response_taken(taken("alice"), &app.state.live, &app.state.users);
+    refuse_writes(&searches, true).await;
+    let following = (searches.clone(), running.clone());
+    tokio::spawn(async move {
+      let (searches, running) = following;
+      searches.follow(running, async { Ok(timed_out()) }).await;
+    });
+    running
+      .ended
+      .subscribe()
+      .wait_for(Option::is_some)
+      .await
+      .unwrap();
+    let mut done = running.done.subscribe();
+    assert!(
+      tokio::time::timeout(Duration::from_millis(500), done.wait_for(|done| *done))
+        .await
+        .is_err(),
+      "not written while writes fail"
+    );
+    assert_eq!(searches.responses(id).await.unwrap().len(), 1);
+    assert!(!searches.get(id, false).await.unwrap().state.is_complete());
+
+    refuse_writes(&searches, false).await;
+    tokio::time::timeout(Duration::from_secs(10), done.wait_for(|done| *done))
+      .await
+      .expect("written once writes work")
+      .unwrap();
+    searches.running().remove(&id);
+    let stored = searches.get(id, true).await.unwrap();
+    assert_eq!(
+      stored.state,
+      SearchState::Completed(SearchOutcome::TimedOut)
+    );
+    assert_eq!(stored.responses.map(|r| r.len()), Some(1));
+    assert_eq!(batches(&searches).await, 0);
+  }
+
+  #[tokio::test]
+  async fn a_batch_not_saved_goes_with_the_next_and_a_stop_leaves_them_to_the_next_start() {
+    let app = app("", &[]).await;
+    let searches = app.state.searches.clone();
+    let running = started(&searches).await;
+    let id = running.record().id;
+    let (live, users) = (&app.state.live, &app.state.users);
+    running.response_taken(taken("alice"), live, users);
+    searches.write_progress(&running).await;
+    refuse_writes(&searches, true).await;
+    running.response_taken(taken("bob"), live, users);
+    searches.write_progress(&running).await;
+    assert_eq!(lock(&running.progress).saved, 1, "bob is not saved");
+    refuse_writes(&searches, false).await;
+    searches.write_progress(&running).await;
+    assert_eq!(lock(&running.progress).saved, 2);
+    assert_eq!(batches(&searches).await, 2);
+
+    // the end cannot be written, and the stop ends the tries
+    refuse_writes(&searches, true).await;
+    searches.stopping.cancel();
+    searches
+      .follow(running.clone(), async { Ok(timed_out()) })
+      .await;
+    assert!(*running.done.borrow());
+    assert_eq!(
+      searches.get(id, false).await.unwrap().state,
+      SearchState::InProgress
+    );
+
+    refuse_writes(&searches, false).await;
+    searches.running().remove(&id);
+    searches.end_dangling().await;
+    let ended = searches.get(id, true).await.unwrap();
+    assert_eq!(ended.state, SearchState::Completed(SearchOutcome::TimedOut));
+    let users: Vec<_> = ended
+      .responses
+      .unwrap()
+      .into_iter()
+      .map(|r| r.username)
+      .collect();
+    assert_eq!(users, ["alice", "bob"]);
   }
 
   #[tokio::test]
