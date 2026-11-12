@@ -249,6 +249,29 @@ describe("search results", () => {
     expect(cards()).toEqual(["folder:user:0:bob", "folder:user:0:carol"]);
   });
 
+  it("show what a running search took before the page opened, also on coming back", async () => {
+    const taken = [response("alice", 300), response("bob", 200)];
+    const net = await open([], { taken });
+    await flushFaked();
+    const cards = () =>
+      [
+        ...document.querySelectorAll('[role=treegrid] [role=rowgroup] [data-line^="folder:user:"]')
+      ].map((c) => c.getAttribute("data-line"));
+    expect(cards()).toEqual(["folder:user:0:alice", "folder:user:0:bob"]);
+
+    net.frame("search.response", { searchId: ID, response: taken[0] });
+    await streamed();
+    expect(cards()).toEqual(["folder:user:0:alice", "folder:user:0:bob"]);
+
+    // leaving and coming back before the stream changes topics: no greeting, no frame
+    unmount(component!);
+    document.body.innerHTML = "";
+    component = mount(SearchDetail, { target: document.body, props: { id: ID } });
+    await flushFaked();
+    await flushFaked();
+    expect(cards()).toEqual(["folder:user:0:alice", "folder:user:0:bob"]);
+  });
+
   it("show no file in the inspector once the filter takes it out of the results", async () => {
     searchOptions.layout = "list";
     const stored = [response("alice", 300)];
