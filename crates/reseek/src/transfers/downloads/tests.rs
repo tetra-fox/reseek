@@ -810,7 +810,8 @@ async fn a_resume_that_loses_the_race_to_a_cancel_fails_and_starts_no_task() {
   });
   held.await.unwrap();
   let mut resuming = Box::pin(app.state.downloads.resume_paused(vec![id]));
-  // polled a second time in case the first ran out of the task's budget before it queued
+  // the first poll spawns the resume's task, and the second round's yield lets that task run
+  // until its read queues behind the held writer
   for _ in 0..2 {
     tokio::task::yield_now().await;
     let polled = std::future::poll_fn(|cx| Poll::Ready(resuming.as_mut().poll(cx))).await;

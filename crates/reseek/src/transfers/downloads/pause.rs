@@ -113,7 +113,8 @@ impl Downloads {
 
   /// Resumes the paused downloads `ids`: each starts its task again on its record, the files of
   /// one user taking their turns as an enqueue's do. A download whose task is still stopping to
-  /// be paused is waited for first. One not paused is refused.
+  /// be paused is waited for first. One not paused is refused, and one a cancel ended after it
+  /// was read fails without a task.
   pub async fn resume_paused(&self, ids: Vec<Uuid>) -> Vec<Result<Uuid, BulkFailure>> {
     // the resume runs on a task of its own, so a caller that stops waiting, such as a request
     // whose connection drops, leaves no download written resumed without its task
@@ -176,7 +177,18 @@ impl Downloads {
         record
           .enter(State::WAITING)
           .expect("a paused download that has not completed may wait");
-        self.save(&record, true).await;
+        let unsaved = match self.save(&record, true).await {
+          Some(Saved::Written) => None,
+          // a cancel that ended it since it was read keeps how it ended
+          Some(Saved::Refused(_)) => Some("the download has ended"),
+          Some(Saved::Gone) => Some("the download is gone"),
+          None => Some("the download was not written"),
+        };
+        if let Some(why) = unsaved {
+          lock(&self.in_flight).remove(&record.id);
+          outcomes.push(Err(failure(record.id, why)));
+          continue;
+        }
         info!(id = %record.id, username, "download resumed");
         let id = record.id;
         // the offer of a file sent unasked is long gone; a resumed one asks for it

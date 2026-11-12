@@ -394,7 +394,15 @@ impl Downloads {
     match self.cancel_running(id, remove, None) {
       Running::Stopped => Ok(true),
       Running::Arrived => Ok(remove),
-      Running::No => self.cancel_unrun(record, remove).await,
+      Running::No => {
+        let canceled = self.cancel_unrun(record, remove).await?;
+        // a resume that started its task after the check above saved its record before the
+        // cancel's write, which ended it, so that task is stopped here
+        if canceled && self.cancel_running(id, remove, None) == Running::Stopped {
+          debug!(%id, "task of a download resumed during its cancel stopped");
+        }
+        Ok(canceled)
+      }
     }
   }
 
