@@ -116,13 +116,16 @@ class Searches {
     const id = newId();
     this.starting.add(id);
     this.list.upsert(placeholder(id, text, scope));
+    // the search's frames can come before the answer, and are newer than it
+    const turn = this.list.readingRow();
     const done = call(() =>
       api.POST("/api/v0/searches", { body: { id, searchText: text, scope } })
     ).then((outcome) => {
       this.starting.delete(id);
       if (outcome.ok) {
-        this.list.upsert(outcome.data);
+        this.list.takeRow(outcome.data, turn);
       } else {
+        this.list.dropRow();
         this.list.remove(id);
         this.refused.set(id, outcome.error);
       }
@@ -133,10 +136,12 @@ class Searches {
 
   /** Fetches one search into the list, for a page opened before its frame arrived */
   fetch = async (id: string): Promise<Outcome<Search>> => {
+    const turn = this.list.readingRow();
     const outcome = await call(() =>
       api.GET("/api/v0/searches/{id}", { params: { path: { id } } })
     );
-    if (outcome.ok) this.list.upsert(outcome.data);
+    if (outcome.ok) this.list.takeRow(outcome.data, turn);
+    else this.list.dropRow();
     return outcome;
   };
 

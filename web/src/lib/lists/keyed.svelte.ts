@@ -32,7 +32,8 @@ export const patch = <T extends object>(target: T, source: T) => {
  * answer goes through `reconcile`. A reload takes a turn from `reading` before it asks and hands
  * it to `reconcile` with the answer, or to `abandon`: the answer may have been read before frames
  * that arrive while it is on its way, so the rows those frames changed keep their change, and an
- * answer overtaken by a later reload is not taken. While the user interacts with a list
+ * answer overtaken by a later reload is not taken. A read of one row works the same way with
+ * `readingRow` and `takeRow` or `assignRow`. While the user interacts with a list
  * (`interaction.frozen`), removals wait, marked in `removed`, and happen when it ends
  */
 export class Keyed<T extends object> {
@@ -46,6 +47,14 @@ export class Keyed<T extends object> {
   #turn = 0;
   /** the keys added, patched or removed since that reload began, until its answer is taken */
   #changed: Set<string> | null = null;
+  /** counts the reads of one row begun and the changes made while any is under way */
+  #rowTurn = 0;
+  /** reads of one row under way */
+  #rowReads = 0;
+  /** while a read of one row is under way: the turn each key last changed at */
+  #touched = new Map<string, number>();
+  /** the last turn begun before the list was emptied, whose reads are older than it */
+  #cleared = 0;
 
   constructor(key: (row: T) => string) {
     this.#key = key;
@@ -62,7 +71,11 @@ export class Keyed<T extends object> {
   /** Adds a row, or patches the one with its key; gives back the row the list keeps */
   upsert(row: T): T {
     const key = this.#key(row);
-    this.#changed?.add(key);
+    this.#touch(key);
+    return this.#put(key, row);
+  }
+
+  #put(key: string, row: T): T {
     const kept = this.#rows.get(key);
     if (kept) {
       patch(kept, row);
@@ -78,13 +91,13 @@ export class Keyed<T extends object> {
   assign(key: string, fields: Partial<T>) {
     const row = this.#rows.get(key);
     if (!row) return;
-    this.#changed?.add(key);
+    this.#touch(key);
     Object.assign(row, fields);
   }
 
   /** Removes a row, or marks it removed until the interaction ends */
   remove(key: string) {
-    this.#changed?.add(key);
+    this.#touch(key);
     if (!this.#rows.has(key)) return;
     if (!interaction.frozen) {
       this.#rows.delete(key);
@@ -96,6 +109,54 @@ export class Keyed<T extends object> {
       this.removed.delete(key);
       this.#rows.delete(key);
     });
+  }
+
+  /** A change to the row with `key`, which an answer read before it must not undo */
+  #touch(key: string) {
+    this.#changed?.add(key);
+    if (this.#rowReads) this.#touched.set(key, ++this.#rowTurn);
+  }
+
+  /** Begins a read of one row and gives back its turn, for `takeRow` or `assignRow`, or `dropRow` */
+  readingRow(): number {
+    this.#rowReads += 1;
+    return ++this.#rowTurn;
+  }
+
+  /**
+   * Ends the read of one row with `turn`; gives back whether its answer for `key` is the newest:
+   * no change to that row since it began, and no answer of a read begun after it taken
+   */
+  #answered(key: string, turn: number): boolean {
+    const newest = turn > this.#cleared && (this.#touched.get(key) ?? 0) <= turn;
+    this.#rowReads -= 1;
+    if (!this.#rowReads) this.#touched.clear();
+    else if (newest) this.#touched.set(key, turn);
+    return newest;
+  }
+
+  /** Takes `row` as the answer of the read with `turn`, when it is the newest; gives back whether */
+  takeRow(row: T, turn: number): boolean {
+    const key = this.#key(row);
+    if (!this.#answered(key, turn)) return false;
+    this.#changed?.add(key);
+    this.#put(key, row);
+    return true;
+  }
+
+  /** Writes `fields` onto the row with `key` as the answer of the read with `turn`, likewise */
+  assignRow(key: string, fields: Partial<T>, turn: number): boolean {
+    const row = this.#rows.get(key);
+    if (!this.#answered(key, turn) || !row) return false;
+    this.#changed?.add(key);
+    Object.assign(row, fields);
+    return true;
+  }
+
+  /** Ends a read of one row without an answer, as when it failed */
+  dropRow() {
+    this.#rowReads -= 1;
+    if (!this.#rowReads) this.#touched.clear();
   }
 
   /** Begins a reload of the whole list and gives back its turn */
@@ -147,5 +208,6 @@ export class Keyed<T extends object> {
     this.removed.clear();
     this.#changed = null;
     this.#turn += 1;
+    this.#cleared = this.#rowTurn;
   }
 }
