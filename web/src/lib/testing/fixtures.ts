@@ -1,7 +1,25 @@
 import type { Schemas } from "#lib/api/client.js";
 import type { Conversation, JoinedRoom } from "#lib/chat/chat.svelte.js";
 import { newId } from "#lib/ids.js";
-import type { Transfer } from "#lib/transfers/states.js";
+import type { Transfer, TransferState } from "#lib/transfers/states.js";
+
+/**
+ * Every transfer state, the transient ones first. Written as a record so a state the daemon adds
+ * fails the type check until it is listed here
+ */
+export const TRANSFER_STATES = Object.keys({
+  "Requested": true,
+  "Queued, Locally": true,
+  "Queued, Remotely": true,
+  "Initializing": true,
+  "InProgress": true,
+  "Completed, Succeeded": true,
+  "Completed, Cancelled": true,
+  "Completed, TimedOut": true,
+  "Completed, Errored": true,
+  "Completed, Rejected": true,
+  "Completed, Aborted": true
+} satisfies Record<TransferState, true>) as TransferState[];
 
 /** A queued download from alice, with `fields` over it */
 export const transfer = (fields: Partial<Transfer> = {}): Transfer => ({

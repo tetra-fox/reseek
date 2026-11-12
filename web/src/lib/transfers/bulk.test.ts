@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { transfer } from "#lib/testing/fixtures.js";
+import { TRANSFER_STATES, transfer } from "#lib/testing/fixtures.js";
 
 import { activeAmong, bulkRequest, summary } from "./bulk";
-import { TRANSFER_STATES, type TransferState } from "./states";
+import type { TransferState } from "./states";
 
 describe("bulk actions", () => {
   const rows = TRANSFER_STATES.map((state) => transfer({ state }));

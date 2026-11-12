@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { transfer } from "#lib/testing/fixtures.js";
+import { TRANSFER_STATES, transfer } from "#lib/testing/fixtures.js";
 
 import {
   FAILED_OUTCOMES,
@@ -20,7 +20,6 @@ import {
   rowActions,
   stateChip,
   stateName,
-  TRANSFER_STATES,
   type TransferState
 } from "./states";
 
@@ -185,5 +184,38 @@ describe("a file's download fill", () => {
   it("is nothing without a download, and waiting for one just asked for", () => {
     expect(fillOf(undefined)).toBe(null);
     expect(fillOf(undefined, true)).toBe("waiting");
+  });
+});
+
+describe("a state this page does not know", () => {
+  it("reads as its own words, in no stage, with nothing but remove offered", () => {
+    const newer = "Paused" as TransferState;
+    const predicates = [
+      isRequested,
+      isQueued,
+      isQueuedLocally,
+      isQueuedRemotely,
+      isActive,
+      isMoving,
+      isCancelable,
+      isEnded,
+      isSucceeded,
+      isCanceled,
+      isFailed,
+      isRetryable
+    ];
+    expect(predicates.filter((p) => p(newer))).toEqual([]);
+    expect(stateName(newer)).toBe("Paused");
+    // a key every object has is no state either
+    expect(stateName("toString" as TransferState)).toBe("toString");
+    const t = transfer({ state: newer });
+    expect(stateChip(t)).toEqual({ text: "Paused", tone: "neutral", title: null });
+    expect(fillOf(t)).toBe(null);
+    for (const direction of ["download", "upload"] as const) {
+      const enabled = Object.entries(rowActions({ ...t, paused: true }, direction))
+        .filter(([, on]) => on)
+        .map(([name]) => name);
+      expect(enabled).toEqual(["remove"]);
+    }
   });
 });

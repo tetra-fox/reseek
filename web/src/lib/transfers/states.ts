@@ -5,11 +5,22 @@ export type Transfer = Schemas["Transfer"];
 export type TransferState = Schemas["TransferStates"];
 export type Direction = "download" | "upload";
 
-/** Where a transfer stands: before it moves, moving, or how it ended */
-type Stage = "requested" | "queued" | "starting" | "moving" | "succeeded" | "canceled" | "failed";
+/**
+ * Where a transfer stands: before it moves, moving, or how it ended. A state this page does not
+ * know, from a daemon newer than it, is unknown: neither waiting, moving nor ended
+ */
+type Stage =
+  | "requested"
+  | "queued"
+  | "starting"
+  | "moving"
+  | "succeeded"
+  | "canceled"
+  | "failed"
+  | "unknown";
 
 type Facts =
-  | { stage: Exclude<Stage, "failed">; name: string }
+  | { stage: Exclude<Stage, "failed" | "unknown">; name: string }
   | { stage: "failed"; name: string; outcome: string };
 
 /**
@@ -31,12 +42,6 @@ const FACTS: Record<TransferState, Facts> = {
 };
 
 /**
- * Every state, the transient ones first. Object.keys is typed string[], and the keys of FACTS are
- * exactly the states
- */
-export const TRANSFER_STATES = Object.keys(FACTS) as TransferState[];
-
-/**
  * The report outcomes of a failed transfer: a timeout, an error, a refusal or a size mismatch. A
  * cancel is not a failure
  */
@@ -44,7 +49,8 @@ export const FAILED_OUTCOMES = Object.values(FACTS).flatMap((f) =>
   f.stage === "failed" ? [f.outcome] : []
 );
 
-const stageOf = (state: TransferState) => FACTS[state].stage;
+const stageOf = (state: TransferState): Stage =>
+  Object.hasOwn(FACTS, state) ? FACTS[state].stage : "unknown";
 
 /** It ended, so it can leave the list */
 export const isEnded = (state: TransferState) => {
@@ -59,7 +65,10 @@ export const isRetryable = (state: TransferState) => {
 };
 
 /** It is waiting or moving, so it can be stopped */
-export const isCancelable = (state: TransferState) => !isEnded(state);
+export const isCancelable = (state: TransferState) => {
+  const stage = stageOf(state);
+  return stage === "requested" || stage === "queued" || stage === "starting" || stage === "moving";
+};
 
 export const isSucceeded = (state: TransferState) => stageOf(state) === "succeeded";
 
@@ -86,8 +95,9 @@ export const isActive = (state: TransferState) => {
 /** It is moving bytes */
 export const isMoving = (state: TransferState) => stageOf(state) === "moving";
 
-/** A state's name alone: "Queued", "Failed", "Timed out" */
-export const stateName = (state: TransferState) => FACTS[state].name;
+/** A state's name alone: "Queued", "Failed", "Timed out"; an unknown state as the daemon says it */
+export const stateName = (state: TransferState): string =>
+  Object.hasOwn(FACTS, state) ? FACTS[state].name : state;
 
 /** How an ended transfer's state reads in a sentence: "failed", "timed out", "canceled" */
 export const endingText = (state: TransferState) => stateName(state).toLowerCase();
@@ -105,7 +115,8 @@ const FILLS: Record<Stage, Fill> = {
   moving: "moving",
   succeeded: "done",
   canceled: null,
-  failed: "failed"
+  failed: "failed",
+  unknown: null
 };
 
 export const fillOf = (t: Transfer | undefined, starting = false): Fill => {
@@ -147,7 +158,7 @@ export const stateChip = (t: Transfer): { text: string; tone: Tone; title: strin
   const why = t.exception ?? null;
   const s = t.state;
   const name = stateName(s);
-  if (t.paused && !isEnded(s)) return { text: "Paused", tone: "neutral", title: null };
+  if (t.paused && isCancelable(s)) return { text: "Paused", tone: "neutral", title: null };
   switch (stageOf(s)) {
     case "moving":
       // whole percents rounded down, as a group's are, so a file never reads 100% before it is done
@@ -172,6 +183,8 @@ export const stateChip = (t: Transfer): { text: string; tone: Tone; title: strin
     }
     case "canceled":
       return { text: name + tries, tone: "danger", title: why };
+    case "unknown":
+      return { text: name, tone: "neutral", title: null };
   }
 };
 
@@ -190,10 +203,10 @@ export const rowActions = (t: Transfer, direction: Direction) => {
     remove: true,
     downloadAgain: download && succeeded,
     pause: download && isCancelable(s) && !t.paused,
-    resume: download && !!t.paused && !isEnded(s),
+    resume: download && !!t.paused && isCancelable(s),
     reorder: download && isQueuedLocally(s) && !t.paused,
     queuePosition: download && isQueuedRemotely(s),
-    deny: !download && !isEnded(s),
+    deny: !download && isCancelable(s),
     bump: !download && isQueued(s)
   };
 };
