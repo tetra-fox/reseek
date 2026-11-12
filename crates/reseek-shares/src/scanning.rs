@@ -19,10 +19,9 @@ impl Shares {
         None => Err(ScanConflict::Running),
       };
     };
-    let settings = Arc::new(self.scan_settings());
     // the scan outlives whatever asked for it, such as a request, so its span stands alone
     tokio::spawn(
-      async move { shares.run_scan(force, origin, cancel, settings).await }
+      async move { shares.run_scan(force, origin, cancel).await }
         .instrument(info_span!(parent: None, "scan", force)),
     );
     Ok(())
@@ -60,16 +59,16 @@ impl Shares {
     }
   }
 
-  /// Runs a scan of `settings`, made as its slot was taken, telling the hook as it starts and
-  /// ends, and frees the slot once the hook was told of the end.
+  /// Runs a scan, telling the hook as it starts and ends, and frees the slot once the hook was
+  /// told of the end. It goes by the shares as configured once the hook heard of its start.
   pub(super) async fn run_scan(
     self: &Arc<Self>,
     force: bool,
     origin: ScanOrigin,
     cancel: CancellationToken,
-    settings: Arc<Settings>,
   ) -> bool {
     (self.scans)(ScanNotice::Started { force, origin }).await;
+    let settings = Arc::new(self.scan_settings());
     let ended = self.scan_now(force, cancel, settings).await;
     let completed = matches!(ended, ScanEnded::Completed(_));
     // the hook hears of the end while the slot is held, so no scan starts between the two
@@ -130,11 +129,7 @@ impl Shares {
           Ok(counted) => {
             let totals = counted.total();
             *lock(&self.covered) = Some(settings.clone());
-            let current = self.covers_current(&settings);
-            if !current {
-              debug!("the share options changed while the scan ran, so a rescan stays pending");
-            }
-            self.settle_pending(current).await;
+            self.settle_pending(settings.clone()).await;
             self.hold(Edge::ScanEnded(ScanResult::Completed(totals)));
             info!(
               directories = totals.directories,
@@ -172,26 +167,32 @@ impl Shares {
     completed
   }
 
-  /// Clears the pending rescan after a scan that completed, unless the options changed since it
-  /// started (`current` false) or a drift from the disk marked its row. The row is read and
-  /// the flag cleared in one write, which a drift's mark and flag are ordered against.
-  pub(super) async fn settle_pending(&self, current: bool) {
-    let status = self.status.clone();
+  /// Clears the pending rescan after a scan of `settings` that completed, unless the share
+  /// options no longer match them or a drift from the disk marked its row. The row is read,
+  /// the options compared and the flag cleared in one write under the state's lock, which a
+  /// drift's mark and an option change's flag are ordered against.
+  pub(super) async fn settle_pending(self: &Arc<Self>, settings: Arc<Settings>) {
+    let shares = self.clone();
     let settled = self
       .db
       .write(move |conn| {
         let suspect = repository::latest_scan(conn)?.is_some_and(|scan| scan.suspect);
+        let mut status = lock(&shares.status);
+        let current = shares.covers_current(&settings);
         if current && !suspect {
-          lock(&status).scan_pending = false;
+          status.scan_pending = false;
         }
-        Ok(suspect)
+        Ok((current, suspect))
       })
       .await;
     match settled {
-      Ok(true) => {
+      Ok((_, true)) => {
         debug!("a drift from the disk was reported while the scan ran, so a rescan stays pending")
       }
-      Ok(false) => {}
+      Ok((false, false)) => {
+        debug!("the share options changed while the scan ran, so a rescan stays pending")
+      }
+      Ok((true, false)) => {}
       Err(e) => {
         warn!(error = %e, "the scan's row not read again; the pending rescan is left as it was")
       }

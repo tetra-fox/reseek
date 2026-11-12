@@ -73,6 +73,22 @@ impl Engine {
       .unwrap()
   }
 
+  /// [`Engine::again`] with `scans` told of every scan, with what it says of its state.
+  async fn again_hooked(&self, scans: ScanHook) -> (Arc<Shares>, watch::Receiver<SharesState>) {
+    let (mut setup, state) = setup(self.dir.path(), &self.cache());
+    setup.scans = scans;
+    let shares = Shares::open_with(
+      &self.config,
+      shares_of,
+      setup,
+      CancellationToken::new(),
+      QUIET,
+    )
+    .await
+    .unwrap();
+    (shares, state)
+  }
+
   /// Rewrites the configuration file to `text` and loads it.
   async fn reconfigure(&self, text: &str) {
     std::fs::write(self.dir.path().join("config.toml"), text).unwrap();
@@ -363,22 +379,14 @@ async fn a_scan_asked_for_while_the_index_loads_is_the_one_that_follows_it() {
 #[tokio::test]
 async fn a_forced_scan_asked_for_during_the_startup_load_is_the_scan_after_it() {
   let (files, engine) = shared_engine().await;
-  let (mut setup, _) = setup(engine.dir.path(), &engine.cache());
   let notices = Arc::new(std::sync::Mutex::new(Vec::new()));
   let heard = notices.clone();
-  setup.scans = Box::new(move |notice| {
-    lock(&heard).push(notice);
-    Box::pin(async {})
-  });
-  let again = Shares::open_with(
-    &engine.config,
-    shares_of,
-    setup,
-    CancellationToken::new(),
-    QUIET,
-  )
-  .await
-  .unwrap();
+  let (again, _) = engine
+    .again_hooked(Box::new(move |notice| {
+      lock(&heard).push(notice);
+      Box::pin(async {})
+    }))
+    .await;
   // the startup load runs on a task of its own, which this one lets go on a step at a time
   while !matches!(lock(&again.status).phase, Phase::Loading { .. }) {
     tokio::task::yield_now().await;
@@ -416,7 +424,7 @@ async fn a_scan_requested_while_one_runs_stays_pending_after_it() {
     .write(|conn| repository::end_scan(conn, STARTED, STARTED))
     .await
     .unwrap();
-  shares.settle_pending(true).await;
+  shares.settle_pending(shares.filled_from()).await;
   shares.hold(Edge::ScanEnded(ScanResult::Completed(
     SharedCounts::default(),
   )));
@@ -826,12 +834,7 @@ async fn a_canceled_scan_leaves_the_engine_idle_at_full_progress() {
   eventually(async || idle(&shares)).await;
   let cancel = shares.take_slot(Edge::Scan).unwrap();
   cancel.cancel();
-  let settings = Arc::new(shares.scan_settings());
-  assert!(
-    !shares
-      .run_scan(false, ScanOrigin::Asked, cancel, settings)
-      .await
-  );
+  assert!(!shares.run_scan(false, ScanOrigin::Asked, cancel).await);
   let shown = engine.state();
   assert!(shown.cancelled && shown.scan_pending && !shown.scanning);
   assert_eq!(shown.scan_progress, 1.0);
@@ -839,16 +842,17 @@ async fn a_canceled_scan_leaves_the_engine_idle_at_full_progress() {
   drop(files);
 }
 
-/// Adds `dir/other`, holding one file, to the shared directories as `Other`.
-fn add_other(engine: &Engine, files: &Path) {
+/// Adds `dir/other`, holding one file, to the directories `shares` shares as `Other`, beside
+/// those `config` lists.
+fn add_other(shares: &Shares, config: &Watcher<Config>, files: &Path) {
   let other = files.join("other");
   std::fs::create_dir_all(&other).unwrap();
   std::fs::write(other.join("x.mp3"), "x").unwrap();
-  let mut options = engine.config.current().values.shares.clone();
+  let mut options = config.current().values.shares.clone();
   options
     .directories
     .push(format!("[Other]{}", other.display()));
-  engine.shares.apply_options(&options);
+  shares.apply_options(&options);
 }
 
 /// The counts of the configured share `alias`.
@@ -863,7 +867,7 @@ async fn a_share_added_since_the_last_scan_is_not_counted_by_watched_changes() {
   let (files, engine) = shared_engine().await;
   let shares = engine.shares.clone();
   eventually(async || idle(&shares)).await;
-  add_other(&engine, files.path());
+  add_other(&engine.shares, &engine.config, files.path());
   let album = files.path().join("music/Album");
   std::fs::write(album.join("02.mp3"), "two").unwrap();
   watcher::apply(
@@ -885,9 +889,20 @@ async fn a_share_added_since_the_last_scan_is_not_counted_by_watched_changes() {
 #[tokio::test]
 async fn options_changed_while_a_scan_runs_stay_pending_and_uncounted() {
   let (files, engine) = shared_engine().await;
-  let shares = engine.shares.clone();
+  let started = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+  let told = started.clone();
+  let (shares, state) = engine
+    .again_hooked(Box::new(move |notice| {
+      if matches!(notice, ScanNotice::Started { .. }) {
+        told.fetch_add(1, Ordering::AcqRel);
+      }
+      Box::pin(async {})
+    }))
+    .await;
+  shares.initialized().await;
   eventually(async || idle(&shares)).await;
-  // the scan has made its settings and waits for the writer while the options change
+  // the scan has made its settings and waits for the writer while the options change; it
+  // makes them as the hook returns, before it next waits
   let (release, held) = std::sync::mpsc::channel::<()>();
   let (taken, writer_taken) = tokio::sync::oneshot::channel();
   let hold = {
@@ -903,20 +918,47 @@ async fn options_changed_while_a_scan_runs_stay_pending_and_uncounted() {
   };
   writer_taken.await.unwrap();
   shares.scan(false, ScanOrigin::Asked).unwrap();
-  eventually(async || engine.state().scanning).await;
-  add_other(&engine, files.path());
+  // the startup's scan after the load, then this one
+  eventually(async || started.load(Ordering::Acquire) == 2).await;
+  add_other(&shares, &engine.config, files.path());
   release.send(()).unwrap();
   hold.await.unwrap().unwrap();
   eventually(async || idle(&shares)).await;
-  let shown = engine.state();
+  let shown = state.borrow().clone();
   assert!(shown.ready && !shown.scanning);
   assert!(shown.scan_pending, "the scan did not cover the share added");
   assert_eq!(counts(&shares, "Other"), (None, None));
   assert_eq!(counts(&shares, "Music"), (Some(2), Some(1)));
   shares.scan(false, ScanOrigin::Asked).unwrap();
   eventually(async || idle(&shares)).await;
-  assert!(!engine.state().scan_pending);
+  assert!(!state.borrow().scan_pending);
   assert_eq!(counts(&shares, "Other"), (Some(1), Some(1)));
+}
+
+#[tokio::test]
+async fn the_scan_after_the_load_covers_the_shares_as_configured_when_it_starts() {
+  let (files, engine) = shared_engine().await;
+  let (open, gate) = watch::channel(false);
+  let (again, _) = engine
+    .again_hooked(Box::new(move |notice| {
+      let mut gate = gate.clone();
+      Box::pin(async move {
+        if matches!(notice, ScanNotice::Started { .. }) {
+          gate.wait_for(|open| *open).await.unwrap();
+        }
+      })
+    }))
+    .await;
+  again.initialized().await;
+  // the index is loaded, and the scan that follows waits on the hook to start
+  add_other(&again, &engine.config, files.path());
+  open.send_replace(true);
+  eventually(async || idle(&again)).await;
+  assert_eq!(counts(&again, "Other"), (Some(1), Some(1)));
+  assert!(
+    !lock(&again.status).scan_pending,
+    "the scan covered the share added"
+  );
 }
 
 /// The state of the scan `shares` records as started at `started_at`.

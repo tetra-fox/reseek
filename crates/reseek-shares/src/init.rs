@@ -129,11 +129,11 @@ impl Shares {
       match self.load(mode).await {
         Ok((settings, totals)) => {
           let (force, origin) = handed(&self.hold(Edge::Loaded(Some(totals))));
-          let (shares, scanned) = (self.clone(), settings.clone());
+          let shares = self.clone();
           self.watch_shares(settings).await;
           self.initialized.send_replace(true);
           tokio::spawn(
-            async move { shares.run_scan(force, origin, cancel, scanned).await }
+            async move { shares.run_scan(force, origin, cancel).await }
               .instrument(info_span!("scan", force)),
           );
           return;
@@ -143,9 +143,8 @@ impl Shares {
           info!("Re-attempting initialization");
           let (_, origin) = handed(&self.hold(Edge::Loaded(None)));
           // the index that failed to load is not trusted, so no row of it is reused
-          let settings = Arc::new(self.scan_settings());
           let repaired = self
-            .run_scan(true, origin, cancel, settings)
+            .run_scan(true, origin, cancel)
             .instrument(info_span!("scan", force = true))
             .await;
           if !repaired {
@@ -170,12 +169,7 @@ impl Shares {
       return true;
     };
     self
-      .run_scan(
-        force,
-        ScanOrigin::Startup,
-        cancel,
-        Arc::new(self.scan_settings()),
-      )
+      .run_scan(force, ScanOrigin::Startup, cancel)
       .instrument(info_span!("scan", force))
       .await
   }
