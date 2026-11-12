@@ -49,6 +49,9 @@ pub struct GroupCache {
   /// the presence of each buddy as we knew it when a server session ended, until a status of
   /// theirs arrives in the next
   missed: Mutex<HashMap<String, UserPresence>>,
+  /// held while the groups we put users in change, from the rows to the memberships here, so of
+  /// two changes made at once the rows and the memberships keep the same one
+  regrouping: tokio::sync::Mutex<()>,
 }
 
 impl GroupCache {
@@ -89,6 +92,12 @@ impl GroupCache {
 
   fn watched(&self) -> MutexGuard<'_, HashSet<String>> {
     lock(&self.watched)
+  }
+
+  /// Waits until no other change to the groups we put users in runs, and holds off the next one
+  /// until it is dropped.
+  pub async fn regrouping(&self) -> tokio::sync::MutexGuard<'_, ()> {
+    self.regrouping.lock().await
   }
 }
 

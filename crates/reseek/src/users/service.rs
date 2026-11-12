@@ -206,6 +206,7 @@ impl Directory {
     username: &str,
     wanted: Vec<String>,
   ) -> Result<(), ApiError> {
+    let _regrouping = self.groups.regrouping().await;
     let options = self.config.current().values.clone();
     let held = self
       .groups
@@ -253,6 +254,7 @@ impl Directory {
     if from == to {
       return Ok(0);
     }
+    let _regrouping = self.groups.regrouping().await;
     let (from_name, to_name) = (from.to_string(), to.to_string());
     let moved = self
       .db
@@ -272,6 +274,7 @@ impl Directory {
 
   /// Takes every member out of the group `group`, and says how many there were.
   pub(crate) async fn let_go_members(&self, group: &str) -> Result<u64, ApiError> {
+    let _regrouping = self.groups.regrouping().await;
     let name = group.to_string();
     let members = self
       .db
@@ -311,6 +314,7 @@ impl Directory {
   pub(crate) async fn remove(&self, username: &str, purge: bool) -> Result<(), ApiError> {
     // a buddy change made meanwhile would leave the map holding a buddy without a row
     let _changing = self.buddies.changing().await;
+    let _regrouping = self.groups.regrouping().await;
     // off the watched users before the forget time is noted, so a status of theirs handled from
     // here on makes no touch and every touch made before is older than the forget
     let watched = self.drop_watch(username);
