@@ -298,7 +298,8 @@ impl Tracker {
     });
   }
 
-  /// records the position `bytes` and reports it
+  /// records the position `bytes` and reports it to the progress callback, or as an event when
+  /// the transfer has none
   pub(crate) fn emit_progress(&self, bytes: u64) {
     let (previous, transfer) = {
       let mut record = lock(&self.record);
@@ -307,13 +308,13 @@ impl Tracker {
       (previous, record.snapshot())
     };
     tracing::trace!(bytes, "transfer progress");
-    if let Some(callback) = &self.progress_updated {
-      callback(previous, &transfer);
+    match &self.progress_updated {
+      Some(callback) => callback(previous, &transfer),
+      None => self.client.emit(Event::TransferProgressUpdated {
+        previous_bytes_transferred: previous,
+        transfer,
+      }),
     }
-    self.client.emit(Event::TransferProgressUpdated {
-      previous_bytes_transferred: previous,
-      transfer,
-    });
   }
 }
 

@@ -179,8 +179,8 @@ pub enum Event {
     previous_state: Option<TransferState>,
     transfer: Transfer,
   },
-  /// bytes of a download or upload moved; raised for every chunk, so a consumer that shows it
-  /// should pace itself
+  /// bytes of a download or upload started without a progress callback moved; raised for every
+  /// chunk, so a consumer that shows it should pace itself
   TransferProgressUpdated {
     previous_bytes_transferred: u64,
     transfer: Transfer,

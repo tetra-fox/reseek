@@ -35,8 +35,8 @@ pub type Reporter = Arc<dyn Fn(&Transfer, u32, u32, u32) + Send + Sync>;
 /// previous state for the first report of a new transfer
 pub type StateChanged = Arc<dyn Fn(Option<TransferState>, &Transfer) + Send + Sync>;
 
-/// `(previous_bytes_transferred, transfer)` on every progress update, before the client raises
-/// the event
+/// `(previous_bytes_transferred, transfer)` on every progress update; given, no progress event is
+/// raised for the transfer
 pub type ProgressUpdated = Arc<dyn Fn(u64, &Transfer) + Send + Sync>;
 
 /// `(transfer, cancel)`: resolves once the application's upload slot policy lets the upload
@@ -99,7 +99,8 @@ pub struct TransferOptions {
   pub reporter: Option<Reporter>,
   /// called on every state change
   pub state_changed: Option<StateChanged>,
-  /// called on every progress update
+  /// called on every progress update in place of the event, which every chunk of every
+  /// transfer would otherwise put on the one event channel all subscribers share
   pub progress_updated: Option<ProgressUpdated>,
   /// uploads: waits for the application's upload slot; unset starts at once
   pub slot_awaiter: Option<SlotAwaiter>,
