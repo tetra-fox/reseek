@@ -227,7 +227,7 @@ pub struct ConfigView {
 /// Sets and removes runtime overrides, which apply on top of every other layer until they
 /// expire or the files change the value under them.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct OptionsPatch {
   /// the keys to override and their values; `*****` for a secret, or for one in an entry of a
   /// map, keeps it

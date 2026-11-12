@@ -543,6 +543,10 @@ mod tests {
     assert_eq!(env.json()["error"], "Set by RESEEK_SLSK_DESCRIPTION");
     let empty = app.send(set(json!({}))).await;
     assert_eq!(empty.status, 204);
+    let nested = app
+      .send(set(json!({ "soulseek": { "description": "x" } })))
+      .await;
+    assert_eq!(nested.status, 400, "a body of values is not a patch");
 
     let removed = app
       .send(request("DELETE", "/api/v0/options/overrides/rooms", None))
