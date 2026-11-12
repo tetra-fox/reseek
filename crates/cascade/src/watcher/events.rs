@@ -195,7 +195,7 @@ mod tests {
     let watcher = watched(dir.path());
     let mut changes = watcher.changes();
     let cancel = CancellationToken::new();
-    watcher.start(Watch::Events, cancel.clone());
+    watcher.start(Watch::Events, cancel.clone()).await;
 
     for port in 2001..=2005 {
       fs::write(&path, format!("[server]\nport = {port}\n")).unwrap();
@@ -234,7 +234,7 @@ mod tests {
     let watcher = watched(dir.path());
     let mut changes = watcher.changes();
     let cancel = CancellationToken::new();
-    watcher.start(Watch::Events, cancel.clone());
+    watcher.start(Watch::Events, cancel.clone()).await;
 
     // removed and made again in one burst, which ends the old directory's watch
     fs::remove_dir_all(&drop_ins).unwrap();
@@ -256,7 +256,9 @@ mod tests {
     let watcher = watched(dir.path());
     let mut changes = watcher.changes();
     let cancel = CancellationToken::new();
-    watcher.start(Watch::Poll(Duration::from_millis(50)), cancel.clone());
+    watcher
+      .start(Watch::Poll(Duration::from_millis(50)), cancel.clone())
+      .await;
     fs::write(
       &path,
       "[server]\nport = 2001\n# longer, so the size changes too\n",
@@ -275,7 +277,7 @@ mod tests {
     let watcher = watched(dir.path());
     let mut changes = watcher.changes();
     let cancel = CancellationToken::new();
-    watcher.start(Watch::Events, cancel.clone());
+    watcher.start(Watch::Events, cancel.clone()).await;
     watcher
       .patch_file(
         "config.toml",

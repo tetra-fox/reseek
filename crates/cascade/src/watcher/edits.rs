@@ -191,7 +191,7 @@ mod tests {
     let watcher = watched(dir.path());
     let mut changes = watcher.changes();
     let cancel = CancellationToken::new();
-    watcher.start(Watch::Off, cancel.clone());
+    watcher.start(Watch::Off, cancel.clone()).await;
 
     let soon = Utc::now() + chrono::Duration::milliseconds(300);
     let change = watcher

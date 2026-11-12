@@ -21,9 +21,15 @@ use crate::config::Options;
 /// was missed, is applied with the next.
 pub async fn follow_changes(app: AppState) {
   let mut changes = app.config.changes();
-  let mut applied = app.config.current().values.clone();
+  // the client was built from the options the daemon started with; a change made before this
+  // subscribed is applied at once
+  let mut applied = app.startup.values.clone();
+  let mut current = app.config.current();
   loop {
-    let current = tokio::select! {
+    if let Some(now) = apply(&app, &applied, &current).await {
+      applied = now;
+    }
+    current = tokio::select! {
       () = app.shutdown.cancelled() => return,
       change = changes.recv() => match change {
         Ok(change) => change.current.clone(),
@@ -34,9 +40,6 @@ pub async fn follow_changes(app: AppState) {
         Err(RecvError::Closed) => return,
       },
     };
-    if let Some(now) = apply(&app, &applied, &current).await {
-      applied = now;
-    }
   }
 }
 

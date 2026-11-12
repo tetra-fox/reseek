@@ -355,7 +355,7 @@ mod tests {
       });
     let watcher = Watcher::new(layers).unwrap();
     let cancel = CancellationToken::new();
-    watcher.start(Watch::Off, cancel.clone());
+    watcher.start(Watch::Off, cancel.clone()).await;
     let soon = Utc::now() + chrono::Duration::milliseconds(300);
     watcher
       .set_overrides(

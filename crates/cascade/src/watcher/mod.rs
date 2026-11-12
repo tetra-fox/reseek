@@ -196,27 +196,35 @@ impl<T: Root> Watcher<T> {
   }
 
   /// Starts the task that reloads on file changes (as `watch` says) and ends runtime
-  /// overrides when they expire. It stops when `cancel` is canceled. Call it once.
-  pub fn start(&self, watch: Watch, cancel: CancellationToken) {
-    let _span = info_span!("config_watcher").entered();
+  /// overrides when they expire. It stops when `cancel` is canceled. Call it once. When the
+  /// files are watched, they are read again before this returns if they changed since they
+  /// were loaded, so an edit made before the watch began is not missed.
+  pub async fn start(&self, watch: Watch, cancel: CancellationToken) {
+    let span = info_span!("config_watcher");
     let events = Arc::new(Notify::new());
     let poll = match watch {
       Watch::Events => Some(None),
       Watch::Poll(interval) => Some(Some(interval)),
       Watch::Off => None,
     };
-    // watched before this returns, so no change made after it is missed
-    let files = poll.and_then(|poll| {
-      match FileEvents::new(poll, self.shared.entries.clone(), events.clone()) {
-        Ok(files) => Some(files),
-        Err(e) => {
-          warn!(error = %e, "configuration files are not watched; a change takes effect on the next reload");
-          None
+    // watched before the files are read again, so no change made after the load is missed
+    let files = span.in_scope(|| {
+      poll.and_then(|poll| {
+        match FileEvents::new(poll, self.shared.entries.clone(), events.clone()) {
+          Ok(files) => Some(files),
+          Err(e) => {
+            warn!(error = %e, "configuration files are not watched; a change takes effect on the next reload");
+            None
+          }
         }
-      }
+      })
     });
+    if files.is_some() {
+      // a failure is logged and kept in the current state where it happens
+      drop(self.reload_files(true).instrument(span.clone()).await);
+    }
     let this = self.clone();
-    tokio::spawn(this.run(files, events, cancel).in_current_span());
+    tokio::spawn(this.run(files, events, cancel).instrument(span));
   }
 
   /// The configuration in effect.

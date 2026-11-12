@@ -690,12 +690,12 @@ async fn host(
   } else {
     Watch::Events
   };
-  watcher.start(watch, cancel.clone());
   let logging = Arc::new(logging);
   tokio::spawn(
     tasks::follow_changes(watcher.clone(), logging.clone(), cancel.clone()).in_current_span(),
   );
-  spawn_signals(watcher.clone(), cancel.clone());
+  let (started, on_start) = tokio::sync::oneshot::channel();
+  spawn_signals(watcher.clone(), on_start, cancel.clone());
 
   let grace = options.shutdown_timeout;
   let location = paths.databases(options);
@@ -741,6 +741,11 @@ async fn host(
   state.state.update(|current| current.listeners = urls);
   state.spawn_tasks();
   state.start().await;
+  // the options change only from here, once every engine is built from the ones loaded above
+  // and follows them; an edit made since they loaded is read now
+  state.config.start(watch, cancel.clone()).await;
+  // the receiver is gone when SIGHUP is not handled
+  let _ = started.send(());
   info!(base = %state.url_base, "Using base url");
   info!("reseek started");
   // agents are told of the stop before the HTTP host stops taking requests

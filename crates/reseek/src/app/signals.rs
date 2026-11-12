@@ -1,14 +1,19 @@
 //! The process signals: SIGINT and SIGTERM stop the daemon, SIGHUP reloads the configuration.
 
 use cascade::Watcher;
+use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, error, info, warn};
 
 use crate::config::Options;
 
 /// Shuts down on the first SIGINT or SIGTERM and exits at once on a second; reloads the
-/// configuration on SIGHUP.
-pub(super) fn spawn_signals(watcher: Watcher<Options>, cancel: CancellationToken) {
+/// configuration on SIGHUP once `started` is sent, which a SIGHUP before then waits for.
+pub(super) fn spawn_signals(
+  watcher: Watcher<Options>,
+  started: oneshot::Receiver<()>,
+  cancel: CancellationToken,
+) {
   #[cfg(unix)]
   {
     use tokio::signal::unix::{SignalKind, signal};
@@ -19,6 +24,10 @@ pub(super) fn spawn_signals(watcher: Watcher<Options>, cancel: CancellationToken
           warn!("SIGHUP not handled; reload the configuration through the API instead");
           return;
         };
+        // dropped unsent when the daemon stops before it starts
+        if started.await.is_err() {
+          return;
+        }
         while hangup.recv().await.is_some() {
           info!("configuration reload asked for by SIGHUP");
           // a failed reload is logged and kept in the configuration's state where it happens
@@ -55,7 +64,7 @@ pub(super) fn spawn_signals(watcher: Watcher<Options>, cancel: CancellationToken
   }
   #[cfg(not(unix))]
   {
-    drop(watcher);
+    drop((watcher, started));
     tokio::spawn(
       async move {
         if tokio::signal::ctrl_c().await.is_ok() {

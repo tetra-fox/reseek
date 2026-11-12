@@ -238,7 +238,6 @@ fn create(paths: &Paths, options: &Options) -> Result<(), String> {
 async fn serve(config: Watcher<Options>, paths: Paths) -> ExitCode {
   let shutdown = CancellationToken::new();
   stop_on_signals(shutdown.clone());
-  config.start(Watch::Events, shutdown.clone());
   let options = config.current().values.clone();
   info!(
     version = crate::VERSION,
@@ -268,9 +267,17 @@ async fn serve(config: Watcher<Options>, paths: Paths) -> ExitCode {
       return ExitCode::FAILURE;
     }
   };
-  AgentClient::new(config, shares, paths.downloads, paths.uploads, shutdown)
-    .run()
-    .await;
+  let agent = AgentClient::new(
+    config.clone(),
+    shares,
+    paths.downloads,
+    paths.uploads,
+    shutdown.clone(),
+  );
+  // the options change only from here, once the shares and the connection are built from the
+  // ones loaded; an edit made since they loaded is read now
+  config.start(Watch::Events, shutdown).await;
+  agent.run().await;
   info!("reseek-agent stopped");
   ExitCode::SUCCESS
 }
