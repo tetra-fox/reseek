@@ -67,8 +67,9 @@ impl Shares {
     origin: ScanOrigin,
     cancel: CancellationToken,
   ) -> bool {
-    let slot = HeldSlot {
+    let mut slot = HeldSlot {
       shares: self.clone(),
+      told_end: false,
       released: false,
     };
     (self.scans)(ScanNotice::Started { force, origin }).await;
@@ -76,6 +77,7 @@ impl Shares {
     let ended = self.scan_now(force, cancel, settings).await;
     let completed = matches!(ended, ScanEnded::Completed(_));
     // the hook hears of the end while the slot is held, so no scan starts between the two
+    slot.told_end = true;
     (self.scans)(ScanNotice::Ended(ended)).await;
     slot.release();
     completed
@@ -254,11 +256,18 @@ impl Shares {
   }
 }
 
+/// Why a scan that stopped while it ran failed.
+const STOPPED: &str = "the scan stopped before it ended";
+
 /// The scan slot as a running scan holds it, freed by [`HeldSlot::release`] once the hook heard
-/// of the scan's end. Dropped before that, by a panic or a dropped future, it ends the scan as
-/// failed and tells the hook, then frees the slot, so later scans can still start.
+/// of the scan's end. Dropped before that, by a panic or a dropped future, it ends a scan that
+/// still ran as failed, tells the hook the end it was not yet told, then frees the slot, so
+/// later scans can still start. Dropped as the engine shuts down, it does nothing: the next
+/// start ends the scan's row.
 struct HeldSlot {
   shares: Arc<Shares>,
+  /// the end was handed to the hook
+  told_end: bool,
   released: bool,
 }
 
@@ -269,27 +278,49 @@ impl HeldSlot {
   }
 }
 
+/// The end the hook is told of a scan that ended as `ended`, serving `served`.
+fn told_as(ended: phase::Ended, served: Option<SharedCounts>) -> ScanEnded {
+  match ended {
+    // a completed scan always serves its totals
+    phase::Ended::Completed => ScanEnded::Completed(served.unwrap_or_default()),
+    phase::Ended::Canceled => ScanEnded::Canceled,
+    phase::Ended::Failed => ScanEnded::Failed("the scan failed; the log says why".to_string()),
+  }
+}
+
 impl Drop for HeldSlot {
   fn drop(&mut self) {
     if self.released {
       return;
     }
     let shares = self.shares.clone();
-    let ended = !matches!(lock(&shares.status).phase, Phase::Scanning { .. });
-    if ended {
-      warn!("the scan hook stopped before it heard all of the scan's end; the scan slot is freed");
+    if shares.shutdown.is_cancelled() {
+      return debug!("a share scan stopped with the engine; the next start ends its row");
+    }
+    if self.told_end {
+      warn!("the scan hook did not finish hearing of the scan's end; the scan slot is freed");
       shares.hold(Edge::Release);
       return;
     }
-    const STOPPED: &str = "the scan stopped before it ended";
-    shares.faulted(STOPPED);
+    let phase = lock(&shares.status).phase.clone();
+    let ended = match phase {
+      Phase::Ending { ended, served } => {
+        warn!("a share scan stopped after it ended, before the scan hook heard of the end");
+        told_as(ended, served)
+      }
+      // the slot is held, so the scan still ran
+      _ => {
+        shares.faulted(STOPPED);
+        ScanEnded::Failed(STOPPED.to_string())
+      }
+    };
     match tokio::runtime::Handle::try_current() {
       // the hook hears of the end before the slot is free, as after any scan; the task runs
       // on its own
       Ok(runtime) => drop(
         runtime.spawn(
           async move {
-            (shares.scans)(ScanNotice::Ended(ScanEnded::Failed(STOPPED.to_string()))).await;
+            (shares.scans)(ScanNotice::Ended(ended)).await;
             shares.hold(Edge::Release);
           }
           .in_current_span(),
