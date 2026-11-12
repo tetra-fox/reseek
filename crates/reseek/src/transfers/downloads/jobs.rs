@@ -32,8 +32,8 @@ use crate::transfers::{ASKED_ORDER, Record, readable, text_at};
 /// downloads do. A job is opened before any download of it runs, as none exists yet or, on a
 /// resume, every one has ended, so no write ending one can come before it; it is closed and
 /// read only inside writes of `transfers.db`, whose one writer orders them. A job may be
-/// opened more than once, by an enqueue and by a resume holding it for files that wait for a
-/// login, and stays open until each has closed it.
+/// opened more than once, by an enqueue and by the resume that runs it, which clears the marks
+/// of the files it tried before it closes the job, and stays open until each has closed it.
 #[derive(Clone, Default)]
 pub(super) struct Open(Arc<Mutex<HashMap<Uuid, usize>>>);
 
@@ -98,7 +98,8 @@ fn finished(
   }
   let pending: bool = conn
     .prepare_cached(&format!(
-      "SELECT EXISTS (SELECT 1 FROM Transfers WHERE JobId = ?1 AND Removed = 0 AND {UNFINISHED})"
+      "SELECT EXISTS (SELECT 1 FROM Transfers WHERE JobId = ?1 AND Removed = 0 \
+       AND ({UNFINISHED} OR Resumable = 1))"
     ))?
     .query_row([job.to_string()], |row| row.get(0))?;
   if pending {
@@ -301,6 +302,18 @@ fn name_under<'a>(filename: &'a str, folder: &str) -> &'a str {
     .map_or(filename, |rest| rest.trim_start_matches(['\\', '/']))
 }
 
+/// Whether the job `job` ever had a download, removed ones included, and whether files of it
+/// wait for a login to be enqueued again: downloads a stop interrupted, marked resumable and
+/// still listed.
+fn standing(conn: &Connection, job: Uuid) -> rusqlite::Result<(bool, bool)> {
+  conn
+    .prepare_cached(
+      "SELECT EXISTS (SELECT 1 FROM Transfers WHERE JobId = ?1), \
+       EXISTS (SELECT 1 FROM Transfers WHERE JobId = ?1 AND Removed = 0 AND Resumable = 1)",
+    )?
+    .query_row([job.to_string()], |row| Ok((row.get(0)?, row.get(1)?)))
+}
+
 /// The downloads of the job `job` still listed, in the order they were asked for.
 fn parts(conn: &Connection, job: Uuid) -> rusqlite::Result<Vec<Part>> {
   conn
@@ -436,43 +449,47 @@ impl Downloads {
   }
 
   /// Brings the job `job` in the jobs list in step with its downloads: ended with its files
-  /// once every one of them ended and it is not being enqueued, canceled when every one was
-  /// removed, else its counts and whether it is paused. Syncs of one job run one at a time, so
-  /// the last leaves what the downloads are now. A job that never had a download is left as it
-  /// is, for the caller to end with its reason; returns whether it was one.
+  /// once every one of them ended, it is not being enqueued and none of its files waits for a
+  /// login, canceled when every one was removed, else its counts and whether it is paused.
+  /// Syncs of one job run one at a time, so the last leaves what the downloads are now. A job
+  /// that never had a download is left as it is, for the caller to end with its reason;
+  /// returns whether it was one.
   pub(super) async fn sync_job(&self, job: Uuid) -> bool {
+    self.sync_job_as(job, None).await
+  }
+
+  /// [`Downloads::sync_job`], ending the job as `ending` when this sync ends it and says how,
+  /// else as its downloads ended.
+  async fn sync_job_as(&self, job: Uuid, ending: Option<api_types::jobs::JobEnding>) -> bool {
     // held from the read to the write, so of syncs that ran at once the one that read last
     // writes last
     let _turn = self.job_syncs.take(&job.to_string()).await;
     let open = self.open_jobs.contains(job);
     let read = self
       .db
-      .read(move |conn| Ok((counts(conn, job)?, parts(conn, job)?)))
+      .read(move |conn| {
+        let (had, waiting) = standing(conn, job)?;
+        Ok((counts(conn, job)?, parts(conn, job)?, had, waiting))
+      })
       .await;
-    let (counts, rows) = match read {
+    let (counts, rows, had, waiting) = match read {
       Ok(read) => read,
       Err(e) => {
         warn!(%job, error = %e, "download job not read for the jobs list");
         return false;
       }
     };
-    let ended = counts.ended();
-    if counts.total == 0 && !open {
-      // a job whose every download was removed ends canceled; one that never had any is ended
-      // by its caller, which knows why
-      match self.jobs.get(job).await {
-        Ok(Some(listed)) if listed.counts.total == 0 => return true,
-        Ok(_) => {}
-        Err(e) => {
-          warn!(%job, error = %e, "download job not read from the jobs list");
-          return false;
-        }
-      }
+    // one that never had any is ended by its caller, which knows why
+    if !had && !open {
+      return true;
     }
-    let result = if !open && (counts.total == 0 || ended == counts.total) {
+    let ended = counts.ended();
+    let result = if !open && !waiting && (counts.total == 0 || ended == counts.total) {
       let folder = parts_folder(&rows).to_string();
+      // a job whose every download was removed ends canceled
+      let removed = (counts.total == 0).then_some(api_types::jobs::JobEnding::Canceled);
       let end = Ended {
-        ending: (counts.total == 0).then_some(api_types::jobs::JobEnding::Canceled),
+        ending: ending.or(removed),
         counts: Some(counts),
         parts: Some(rows.iter().map(|part| part.kept(&folder)).collect()),
         ..Ended::default()
@@ -548,16 +565,18 @@ impl Downloads {
     )
   }
 
-  /// Cancels every download of the job `job` that has not finished; a job with none to
-  /// cancel is brought in step, and one that never had a download ends canceled. A job a
-  /// resume holds for files that wait for a login is let go of first, so they are not enqueued.
+  /// Cancels every download of the job `job` that has not finished, after its files that
+  /// wait for a login are given up, so no login enqueues them. A job with none to cancel is
+  /// brought in step, ending canceled when files of it were given up; one that never had a
+  /// download ends canceled.
   pub async fn cancel_job(&self, job: Uuid) -> Result<(), crate::api::error::ApiError> {
-    self.let_go(job).await;
+    let given_up = self.give_up_waiting(job).await;
     let unfinished = self.unfinished_of(job).await?;
     for part in &unfinished {
       self.cancel(&part.username, part.id, false).await?;
     }
-    if unfinished.is_empty() && self.sync_job(job).await {
+    let ending = given_up.then_some(api_types::jobs::JobEnding::Canceled);
+    if unfinished.is_empty() && self.sync_job_as(job, ending).await {
       self
         .end_empty(job, api_types::jobs::JobEnding::Canceled, None)
         .await;

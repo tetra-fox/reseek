@@ -1,8 +1,9 @@
 //! Ending the transfers left unfinished when the daemon stops, or when it stopped without
 //! ending them, and taking the downloads among them to resume. A download ended here is marked
-//! resumable; a login takes the marked downloads not removed since and clears every mark, and
-//! the marks of the files that could not be enqueued for want of the server are set again for
-//! the next login.
+//! resumable. The mark is what says a download waits for a login to be enqueued again: a login
+//! takes the marked downloads not removed since and clears each one's mark once it was tried,
+//! so the files refused for want of the server stay marked for the next login, across a stop
+//! too, and a cancel of their job clears them.
 
 use std::collections::BTreeMap;
 
@@ -78,10 +79,10 @@ pub async fn end_unfinished(db: &Database) -> Result<usize, DbError> {
   Ok(ended.len())
 }
 
-/// Takes the downloads marked resumable that were not removed since, as files to enqueue
-/// grouped by job, then by user, destination and search, each keeping its place in the local
-/// queue, and clears the mark of every marked download, removed or not. A download without a
-/// job is logged and left.
+/// The downloads marked resumable that were not removed since, as files to enqueue grouped by
+/// job, then by user, destination and search, each keeping its place in the local queue. Their
+/// marks stay until each file was tried, [`clear_resumable`]; the marks of downloads that can no
+/// longer be resumed, removed ones and ones without a job, which are logged, are cleared here.
 pub async fn take_resumable(db: &Database) -> Result<Resumable, DbError> {
   db.write(move |conn| {
     let tx = conn.transaction()?;
@@ -115,16 +116,19 @@ pub async fn take_resumable(db: &Database) -> Result<Resumable, DbError> {
         }
       }
     }
-    tx.execute("UPDATE Transfers SET Resumable = 0 WHERE Resumable = 1", [])?;
+    tx.execute(
+      "UPDATE Transfers SET Resumable = 0 WHERE Resumable = 1 AND (Removed = 1 OR JobId IS NULL)",
+      [],
+    )?;
     tx.commit()?;
     Ok(jobs)
   })
   .await
 }
 
-/// Marks resumable again the files `filenames` of `username` in the job `job`, taken by
-/// [`take_resumable`], whose enqueue waits for the next login.
-pub async fn keep_resumable(
+/// Clears the marks of the files `filenames` of `username` in the job `job`, which were tried,
+/// whether or not they could be enqueued again.
+pub async fn clear_resumable(
   db: &Database,
   job: Uuid,
   username: &str,
@@ -134,12 +138,12 @@ pub async fn keep_resumable(
   db.write(move |conn| {
     let tx = conn.transaction()?;
     {
-      let mut mark = tx.prepare(
-        "UPDATE Transfers SET Resumable = 1 WHERE JobId = ?1 AND Username = ?2 \
-         AND Direction = ?3 AND Removed = 0 AND Filename = ?4",
+      let mut clear = tx.prepare(
+        "UPDATE Transfers SET Resumable = 0 WHERE JobId = ?1 AND Username = ?2 \
+         AND Direction = ?3 AND Filename = ?4 AND Resumable = 1",
       )?;
       for filename in &filenames {
-        mark.execute(params![
+        clear.execute(params![
           job.to_string(),
           username,
           direction_text(TransferDirection::Download),
@@ -152,15 +156,34 @@ pub async fn keep_resumable(
   .await
 }
 
-/// Clears the marks of the downloads of the job `job`, whose files are no longer to be resumed.
-pub async fn forget_resumable(db: &Database, job: Uuid) -> Result<(), DbError> {
+/// Clears the marks of the downloads of the job `job`, whose files are given up; returns
+/// whether any that was still listed waited to be resumed.
+pub async fn forget_resumable(db: &Database, job: Uuid) -> Result<bool, DbError> {
   db.write(move |conn| {
-    conn
-      .execute(
-        "UPDATE Transfers SET Resumable = 0 WHERE JobId = ?1 AND Resumable = 1",
-        [job.to_string()],
-      )
-      .map(drop)
+    let tx = conn.transaction()?;
+    let waited = tx.execute(
+      "UPDATE Transfers SET Resumable = 0 WHERE JobId = ?1 AND Resumable = 1 AND Removed = 0",
+      [job.to_string()],
+    )?;
+    tx.execute(
+      "UPDATE Transfers SET Resumable = 0 WHERE JobId = ?1 AND Resumable = 1",
+      [job.to_string()],
+    )?;
+    tx.commit()?;
+    Ok(waited > 0)
+  })
+  .await
+}
+
+/// Whether any download still listed waits to be resumed.
+pub async fn any_resumable(db: &Database) -> Result<bool, DbError> {
+  db.read(|conn| {
+    conn.query_row(
+      "SELECT EXISTS (SELECT 1 FROM Transfers WHERE Resumable = 1 AND Removed = 0 \
+       AND Direction = 'Download' AND JobId IS NOT NULL)",
+      [],
+      |row| row.get(0),
+    )
   })
   .await
 }
@@ -262,7 +285,7 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn the_marked_downloads_are_taken_once_and_every_mark_is_cleared() {
+  async fn a_marked_download_is_taken_until_it_was_tried_and_a_removed_ones_mark_is_cleared() {
     let db = transfers().await;
     let mut kept = Row::new(
       "alice",
@@ -279,31 +302,42 @@ mod tests {
       )
     };
     insert(&db, vec![kept, removed]).await;
-    let job = Uuid::new_v4().to_string();
-    db.write(move |conn| conn.execute("UPDATE Transfers SET JobId = ?1", [job]))
+    let job = Uuid::new_v4();
+    let text = job.to_string();
+    db.write(move |conn| conn.execute("UPDATE Transfers SET JobId = ?1", [text]))
       .await
       .unwrap();
     end_unfinished(&db).await.unwrap();
-    let taken = take_resumable(&db).await.unwrap();
-    let files: Vec<(&str, &str)> = taken
-      .values()
-      .flatten()
-      .flat_map(|group| {
-        group
-          .files
-          .iter()
-          .map(|f| (group.username.as_str(), f.filename.as_str()))
-      })
-      .collect();
+    let files = |taken: Resumable| -> Vec<(String, String)> {
+      taken
+        .into_values()
+        .flatten()
+        .flat_map(|group| {
+          let username = group.username;
+          group
+            .files
+            .into_iter()
+            .map(move |f| (username.clone(), f.filename))
+        })
+        .collect()
+    };
+    let only = [("alice".to_string(), "a\\one.flac".to_string())];
     assert_eq!(
-      files,
-      [("alice", "a\\one.flac")],
+      files(take_resumable(&db).await.unwrap()),
+      only,
       "only what was not removed"
     );
-    assert!(
-      take_resumable(&db).await.unwrap().is_empty(),
-      "resumed once"
+    assert_eq!(
+      files(take_resumable(&db).await.unwrap()),
+      only,
+      "kept until tried"
     );
+    assert!(any_resumable(&db).await.unwrap());
+    clear_resumable(&db, job, "alice", vec!["a\\one.flac".to_string()])
+      .await
+      .unwrap();
+    assert!(take_resumable(&db).await.unwrap().is_empty());
+    assert!(!any_resumable(&db).await.unwrap());
     let marks: i64 = db
       .read(|conn| conn.query_row("SELECT SUM(Resumable) FROM Transfers", [], |r| r.get(0)))
       .await

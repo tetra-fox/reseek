@@ -1221,49 +1221,107 @@ async fn a_download_whose_row_cannot_be_read_is_taken_out_by_a_cancel_that_remov
   assert!(removed);
 }
 
-/// Writes an interrupted download of alice's in a listed job, as a stop leaves it, and resumes
-/// it while logged out, which holds the job for the next login.
-async fn held_for_a_login(app: &TestApp) -> (Uuid, Uuid) {
+/// Writes an interrupted download of alice's in a listed job, as a stop leaves it; returns the
+/// job and the download.
+async fn interrupted_in_a_job(app: &TestApp, filename: &str) -> (Uuid, Uuid) {
   let job = Uuid::new_v4();
   listed_job(app, job, "Album from alice").await;
-  let mut interrupted = Record::download("alice", "@@a\\Album\\1.flac", 10);
+  let mut interrupted = Record::download("alice", filename, 10);
   interrupted.job_id = Some(job);
   insert(app, &interrupted).await;
+  (job, interrupted.id)
+}
+
+/// The job `job` as the jobs list has it: its state and how it ended.
+async fn job_now(
+  app: &TestApp,
+  job: Uuid,
+) -> (
+  api_types::jobs::JobState,
+  Option<api_types::jobs::JobEnding>,
+) {
+  let listed = app.state.jobs.get(job).await.unwrap().unwrap();
+  (listed.state, listed.ending)
+}
+
+#[tokio::test]
+async fn a_job_waiting_for_a_login_ends_canceled_once_its_downloads_are_removed() {
+  use api_types::jobs::{JobEnding, JobState};
+  let app = app(TRUSTED, &[]).await;
+  let (gone, id) = interrupted_in_a_job(&app, "@@a\\Album\\1.flac").await;
+  let (kept, _) = interrupted_in_a_job(&app, "@@a\\Other\\1.flac").await;
+  crate::transfers::cleanup::end_unfinished(&app.state.transfers)
+    .await
+    .unwrap();
+  // the daemon is not connected, so both wait for a login
+  app.state.downloads.resume().await;
+  assert_eq!(job_now(&app, gone).await, (JobState::Running, None));
+  assert_eq!(job_now(&app, kept).await, (JobState::Running, None));
+
+  let uri = format!("/api/v0/transfers/downloads/alice/{id}?remove=true");
+  let (status, _) = app.call("DELETE", &uri, None).await;
+  assert_eq!(status, 204);
+  assert_eq!(
+    job_now(&app, gone).await,
+    (JobState::Ended, Some(JobEnding::Canceled)),
+    "every download of it was removed"
+  );
+  app.state.downloads.resume().await;
+  assert_eq!(job_now(&app, kept).await, (JobState::Running, None));
+}
+
+#[tokio::test]
+async fn canceling_a_job_waiting_for_a_login_ends_it_canceled_and_no_login_enqueues_its_files() {
+  use api_types::jobs::{JobEnding, JobState};
+  let app = app(TRUSTED, &[]).await;
+  let (job, _) = interrupted_in_a_job(&app, "@@a\\Album\\1.flac").await;
   crate::transfers::cleanup::end_unfinished(&app.state.transfers)
     .await
     .unwrap();
   app.state.downloads.resume().await;
-  let listed = app.state.jobs.get(job).await.unwrap().unwrap();
-  assert_eq!(listed.state, api_types::jobs::JobState::Running);
-  (job, interrupted.id)
-}
-
-#[tokio::test]
-async fn a_job_held_for_a_login_whose_downloads_were_removed_ends_at_the_next_resume() {
-  let app = app(TRUSTED, &[]).await;
-  let (job, id) = held_for_a_login(&app).await;
-  let uri = format!("/api/v0/transfers/downloads/alice/{id}?remove=true");
-  let (status, _) = app.call("DELETE", &uri, None).await;
-  assert_eq!(status, 204);
-  app.state.downloads.resume().await;
-  let listed = app.state.jobs.get(job).await.unwrap().unwrap();
-  assert_eq!(listed.state, api_types::jobs::JobState::Ended);
-}
-
-#[tokio::test]
-async fn canceling_a_job_held_for_a_login_ends_it_and_no_login_enqueues_its_files() {
-  let app = app(TRUSTED, &[]).await;
-  let (job, _) = held_for_a_login(&app).await;
   let (status, _) = app
     .call("POST", &format!("/api/v0/jobs/{job}/cancel"), None)
     .await;
   assert_eq!(status, 204);
-  let listed = app.state.jobs.get(job).await.unwrap().unwrap();
-  assert_eq!(listed.state, api_types::jobs::JobState::Ended);
+  assert_eq!(
+    job_now(&app, job).await,
+    (JobState::Ended, Some(JobEnding::Canceled))
+  );
   let left = crate::transfers::cleanup::take_resumable(&app.state.transfers)
     .await
     .unwrap();
   assert!(left.is_empty(), "{left:?}");
+}
+
+#[tokio::test]
+async fn a_job_canceled_after_a_restart_before_any_login_is_not_enqueued_by_the_login() {
+  use api_types::jobs::{JobEnding, JobState};
+  let app = crate::testing::soulseek::app(TRUSTED).await;
+  let server = crate::testing::soulseek::Server::silent().await;
+  let (job, _) = interrupted_in_a_job(&app, "@@a\\Album\\1.flac").await;
+  // the start ends what the last run left; no login has resumed anything yet
+  crate::transfers::cleanup::end_unfinished(&app.state.transfers)
+    .await
+    .unwrap();
+  let (status, _) = app
+    .call("POST", &format!("/api/v0/jobs/{job}/cancel"), None)
+    .await;
+  assert_eq!(status, 204);
+  assert_eq!(
+    job_now(&app, job).await,
+    (JobState::Ended, Some(JobEnding::Canceled))
+  );
+
+  server.login(&app).await;
+  let downloads = &app.state.downloads;
+  let resumed = tokio::time::timeout(std::time::Duration::from_secs(10), async {
+    while !*downloads.resuming.lock().await {
+      tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+  })
+  .await;
+  assert!(resumed.is_ok(), "the login's resume never ran");
+  assert!(!unfinished(&app, "@@a\\Album\\1.flac").await);
 }
 
 #[tokio::test]
