@@ -307,11 +307,13 @@ impl Directory {
       return Ok(());
     }
     let watched = client.watch_user(username).await?;
+    // the server watches them from its answer on, so the status asked for next, which the
+    // follower of the client's events may take before this task does, finds them watched
+    self.groups.watched().insert(username.to_string());
     self.statistics_fetched(username, &watched.stats).await;
     if let Err(e) = self.status_of(client, username).await {
       warn!(username, error = %e, "status of a watched user not fetched");
     }
-    self.groups.watched().insert(username.to_string());
     *lock(&self.groups.watches)
       .entry(username.to_string())
       .or_default() += 1;
