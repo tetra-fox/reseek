@@ -116,3 +116,53 @@ describe("a keyed list on screen", () => {
     expect(items().map((li) => li.dataset.id)).toEqual(["2"]);
   });
 });
+
+describe("a read of one row", () => {
+  const row = (id: string, size: number): Row => ({ id, name: id, size });
+
+  it("is not taken over a frame for that row, and is over a frame for another", () => {
+    const list = new Keyed<Row>((r) => r.id);
+    list.upsert(row("a", 1));
+    const turn = list.readingRow();
+    list.upsert(row("a", 3));
+    expect(list.takeRow(row("a", 2), turn)).toBe(false);
+    expect(list.get("a")?.size).toBe(3);
+
+    const again = list.readingRow();
+    list.upsert(row("b", 1));
+    expect(list.takeRow(row("a", 4), again)).toBe(true);
+    expect(list.get("a")?.size).toBe(4);
+  });
+
+  it("is not taken over a row removed since", () => {
+    const list = new Keyed<Row>((r) => r.id);
+    list.upsert(row("a", 1));
+    const turn = list.readingRow();
+    list.remove("a");
+    expect(list.takeRow(row("a", 2), turn)).toBe(false);
+    expect(list.get("a")).toBeUndefined();
+  });
+
+  it("begun later wins, whichever answers first", () => {
+    const list = new Keyed<Row>((r) => r.id);
+    const first = list.readingRow();
+    const second = list.readingRow();
+    expect(list.takeRow(row("a", 2), second)).toBe(true);
+    expect(list.takeRow(row("a", 1), first)).toBe(false);
+    expect(list.get("a")?.size).toBe(2);
+
+    const third = list.readingRow();
+    const fourth = list.readingRow();
+    expect(list.assignRow("a", { size: 3 }, third)).toBe(true);
+    expect(list.assignRow("a", { size: 4 }, fourth)).toBe(true);
+    expect(list.get("a")?.size).toBe(4);
+  });
+
+  it("is not taken once the list was emptied", () => {
+    const list = new Keyed<Row>((r) => r.id);
+    const turn = list.readingRow();
+    list.clear();
+    expect(list.takeRow(row("a", 1), turn)).toBe(false);
+    expect(list.size).toBe(0);
+  });
+});
