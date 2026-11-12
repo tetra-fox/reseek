@@ -229,7 +229,7 @@ impl Upload {
       .run(
         self
           .client
-          .message_connection(&self.username, Some(endpoint), None, &cancel),
+          .message_connection(&self.username, Some(endpoint), &cancel),
       )
       .await?;
     let answer = self.client.waiter().wait::<TransferResponse>(
@@ -469,7 +469,7 @@ impl Upload {
       // the address is looked up only when there is no connection to the peer to reuse
       let conn = self
         .client
-        .message_connection(&self.username, None, None, &CancellationToken::new())
+        .message_connection(&self.username, None, &CancellationToken::new())
         .await?;
       write_peer(&conn, message).await
     };

@@ -483,21 +483,22 @@ impl Client {
       });
     }
     let discarded = self.try_discard(token);
-    let solicited = self
-      .peers()
-      .solicitations
-      .refused(token)
-      .is_some_and(|solicitation| {
-        self.waiter().fault(
-          &solicitation.key(token),
-          ClientError::connection(
-            ConnectionErrorKind::Other,
-            format!("CannotConnect received for token {token}"),
-          ),
-        )
-      });
-    if solicited {
-      // a search answer riding on this request is not worth keeping for a late connection
+    let refused = self.peers().solicitations.refused(token);
+    let solicited = refused.as_ref().is_some_and(|solicitation| {
+      self.waiter().fault(
+        &solicitation.key(token),
+        ClientError::connection(
+          ConnectionErrorKind::Other,
+          format!("CannotConnect received for token {token}"),
+        ),
+      )
+    });
+    // a search answer riding on this request is not worth keeping for a late connection
+    if let Some(solicitation) = &refused
+      && solicited
+      && solicitation.connection_type == PeerConnectionType::Peer
+      && self.responder().answers_waiting_for(&solicitation.username)
+    {
       self.responder().refuse(token);
     }
     tracing::debug!(token, discarded, solicited, "peer cannot connect");

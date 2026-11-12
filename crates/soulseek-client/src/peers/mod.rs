@@ -12,7 +12,7 @@ mod transfer;
 
 pub(crate) use answer::Answering;
 pub use dispatch::IncomingBrowse;
-pub(crate) use message::request_endpoint;
+pub(crate) use message::{Unreached, request_endpoint};
 pub(crate) use solicit::{Answer, Solicitation, Solicitations, Via, both_failed, race};
 
 use std::collections::{HashMap, VecDeque};
@@ -51,6 +51,9 @@ type Outcome = Option<Result<MessageConn, ClientError>>;
 pub(crate) struct Entry {
   /// tells this entry apart from whatever replaces it under the same user
   id: u64,
+  /// the token of the connection request we had the server relay for this attempt, for an
+  /// attempt of ours
+  request: Option<u32>,
   outcome: watch::Receiver<Outcome>,
 }
 
@@ -118,16 +121,24 @@ impl PeerConnections {
     lock(&self.cache)
   }
 
-  /// a fresh entry for an attempt, with the sender that settles it
-  fn new_entry(&self) -> (Entry, watch::Sender<Outcome>) {
+  /// a fresh entry for an attempt, made with the connection request `request` when it is one of
+  /// ours, with the sender that settles it
+  fn new_entry(&self, request: Option<u32>) -> (Entry, watch::Sender<Outcome>) {
     let (settle, outcome) = watch::channel(None);
     let id = self.next_entry.fetch_add(1, Ordering::Relaxed);
-    (Entry { id, outcome }, settle)
+    (
+      Entry {
+        id,
+        request,
+        outcome,
+      },
+      settle,
+    )
   }
 
   /// an entry already settled with `conn`
   fn settled_entry(&self, conn: MessageConn) -> Entry {
-    let (entry, settle) = self.new_entry();
+    let (entry, settle) = self.new_entry(None);
     settle.send_replace(Some(Ok(conn)));
     entry
   }

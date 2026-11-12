@@ -178,7 +178,7 @@ impl Client {
       self.peers().invalidate(username);
     }
     self
-      .message_connection(username, Some(endpoint), None, &CancellationToken::new())
+      .message_connection(username, Some(endpoint), &CancellationToken::new())
       .await
       .map(drop)
       .map_err(|error| failed(&verb, error))

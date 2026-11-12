@@ -1,9 +1,11 @@
 //! Answering other users' searches. The application's resolver finds what matches; the answer
 //! goes to the searcher over a message connection, dialed directly and requested through the
 //! server at once. An answer that cannot be delivered is kept for a few minutes under the token
-//! of that connection request, so it still reaches a searcher who acts on the request late. How
-//! many requests wait for an answer at once is the resolver's to bound.
+//! of that connection request, so it still reaches a searcher who acts on the request late;
+//! answers that waited on one attempt are kept together under its request. How many requests
+//! wait for an answer at once is the resolver's to bound.
 
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -15,7 +17,7 @@ use crate::cache::BoundedCache;
 use crate::client::Client;
 use crate::conn::MessageConn;
 use crate::events::{Event, SearchDelivery};
-use crate::peers::Answering;
+use crate::peers::{Answering, Unreached};
 use crate::resolvers::SearchReply;
 
 /// how long an undelivered answer waits for its searcher to connect
@@ -33,10 +35,13 @@ struct Undelivered {
 
 /// What the client keeps for answering searches
 pub(crate) struct SearchResponder {
-  undelivered: Mutex<BoundedCache<u32, Undelivered>>,
-  /// connection requests the searcher refused while we were still trying to reach it, so the
-  /// answer they carried is not kept
+  /// the answers we could not deliver, by the connection request they rode on
+  undelivered: Mutex<BoundedCache<u32, Vec<Undelivered>>>,
+  /// connection requests the searcher refused while answers waited on them, so those answers
+  /// are not kept; forgotten once the last of them is done
   refused: Mutex<BoundedCache<u32, ()>>,
+  /// how many answers wait for a connection to each searcher
+  waiting: Mutex<HashMap<String, usize>>,
 }
 
 impl SearchResponder {
@@ -44,23 +49,43 @@ impl SearchResponder {
     Self {
       undelivered: Mutex::new(BoundedCache::new(cache_size as usize, KEEP_UNDELIVERED)),
       refused: Mutex::new(BoundedCache::new(cache_size as usize, KEEP_UNDELIVERED)),
+      waiting: Mutex::new(HashMap::new()),
     }
   }
 
-  fn undelivered(&self) -> std::sync::MutexGuard<'_, BoundedCache<u32, Undelivered>> {
+  fn undelivered(&self) -> std::sync::MutexGuard<'_, BoundedCache<u32, Vec<Undelivered>>> {
     crate::lock(&self.undelivered)
   }
 
-  /// the peer behind the connection request `token`, still being tried, cannot connect to us
+  /// whether an answer of ours waits for a connection to `username`
+  pub(crate) fn answers_waiting_for(&self, username: &str) -> bool {
+    crate::lock(&self.waiting).contains_key(username)
+  }
+
+  /// `username`, whom answers wait to reach, cannot connect to us for the connection request
+  /// `token` still being tried
   pub(crate) fn refuse(&self, token: u32) {
     crate::lock(&self.refused).insert(token, ());
   }
 
-  /// the searcher an undelivered answer is kept for under `response_token`
+  /// counts an answer waiting for a connection to `username` until the returned guard is dropped
+  fn wait_for(&self, username: &str) -> Waiting<'_> {
+    *crate::lock(&self.waiting)
+      .entry(username.to_owned())
+      .or_default() += 1;
+    Waiting {
+      responder: self,
+      username: username.to_owned(),
+      request: None,
+    }
+  }
+
+  /// the searcher the undelivered answers kept under `response_token` are for
   pub(crate) fn kept_for(&self, response_token: u32) -> Option<String> {
     self
       .undelivered()
       .get(&response_token)
+      .and_then(|kept| kept.first())
       .map(|kept| kept.username.clone())
   }
 
@@ -71,11 +96,37 @@ impl SearchResponder {
   }
 }
 
+/// One answer waiting for a connection to its searcher. The last one for a searcher to be done
+/// forgets the refusal of the request it rode on.
+struct Waiting<'a> {
+  responder: &'a SearchResponder,
+  username: String,
+  /// the connection request the answer rode on, once its attempt failed
+  request: Option<u32>,
+}
+
+impl Drop for Waiting<'_> {
+  fn drop(&mut self) {
+    let mut waiting = crate::lock(&self.responder.waiting);
+    let count = waiting
+      .get_mut(&self.username)
+      .expect("a waiting answer is counted");
+    *count -= 1;
+    if *count > 0 {
+      return;
+    }
+    waiting.remove(&self.username);
+    if let Some(request) = self.request {
+      crate::lock(&self.responder.refused).remove(&request);
+    }
+  }
+}
+
 impl Client {
   /// How many answers to other users' searches are kept now because their searcher could not
   /// be reached yet.
   pub fn undelivered_search_responses(&self) -> usize {
-    self.responder().undelivered().len()
+    self.responder().undelivered().values().map(Vec::len).sum()
   }
 
   /// Answers another user's search on a task of its own.
@@ -106,48 +157,55 @@ impl Client {
         return false;
       }
     };
-    let response_token = self.next_token();
+    let mut waiting = self.responder().wait_for(username);
     let conn = match self
-      .message_connection(
-        username,
-        Some(endpoint),
-        Some(response_token),
-        &CancellationToken::new(),
-      )
+      .reach(username, Some(endpoint), &CancellationToken::new())
       .await
     {
       Ok(conn) => conn,
-      Err(error) => {
+      Err(Unreached { error, request }) => {
+        waiting.request = request;
+        let delivery = || {
+          Event::SearchResponseDeliveryFailed(SearchDelivery {
+            username: username.to_owned(),
+            token,
+            query: query.to_owned(),
+            search_response: reply.clone(),
+          })
+        };
+        // an attempt that made no request of its own, such as one answering the searcher's
+        // request to us, leaves the searcher nothing to act on late
+        let Some(request) = request else {
+          tracing::debug!(%error, "the searcher cannot be reached; search response dropped");
+          self.emit(delivery());
+          return false;
+        };
         if crate::lock(&self.responder().refused)
-          .remove(&response_token)
+          .get(&request)
           .is_some()
         {
-          tracing::debug!(response_token, %error, "the searcher cannot connect; search response dropped");
-          self.emit(Event::SearchResponseDeliveryFailed(SearchDelivery {
-            username: username.to_owned(),
-            token,
-            query: query.to_owned(),
-            search_response: reply,
-          }));
+          tracing::debug!(response_token = request, %error, "the searcher cannot connect; search response dropped");
+          self.emit(delivery());
           return false;
         }
-        self.responder().undelivered().insert(
-          response_token,
-          Undelivered {
-            username: username.to_owned(),
-            token,
-            query: query.to_owned(),
-            reply,
-          },
-        );
+        let mut undelivered = self.responder().undelivered();
+        let mut kept = undelivered.remove(&request).unwrap_or_default();
+        kept.push(Undelivered {
+          username: username.to_owned(),
+          token,
+          query: query.to_owned(),
+          reply,
+        });
+        undelivered.insert(request, kept);
         tracing::debug!(
-          response_token,
+          response_token = request,
           %error,
           "Failed to connect to deliver search results; cached response for potential delayed delivery"
         );
         return false;
       }
     };
+    drop(waiting);
     self
       .deliver(&conn, &mut Answering::default(), username, token, query, reply)
       .await
@@ -207,12 +265,19 @@ impl Client {
     }
   }
 
-  /// A searcher acted late on a connection request that carried an answer we could not
-  /// deliver, and has just connected; the kept answer goes out on that connection
-  pub(crate) async fn try_respond_cached(&self, response_token: u32) -> bool {
+  /// A searcher acted late on a connection request that carried answers we could not deliver,
+  /// and has just connected; the kept answers go out on that connection
+  pub(crate) async fn try_respond_cached(&self, response_token: u32) {
     let Some(kept) = self.responder().undelivered().remove(&response_token) else {
-      return false;
+      return;
     };
+    for kept in kept {
+      self.respond_kept(response_token, kept).await;
+    }
+  }
+
+  /// sends one kept answer on the searcher's connection
+  async fn respond_kept(&self, response_token: u32, kept: Undelivered) {
     let delivery = SearchDelivery {
       username: kept.username.clone(),
       token: kept.token,
@@ -226,7 +291,7 @@ impl Client {
         "no connection to deliver the kept search response on"
       );
       self.emit(Event::SearchResponseDeliveryFailed(delivery));
-      return false;
+      return;
     };
     let remote = conn.handle().remote();
     if !kept.reply.may_reach(remote.ip()) {
@@ -236,7 +301,7 @@ impl Client {
         "kept search response confined to another address; not delivered"
       );
       self.emit(Event::SearchResponseDeliveryFailed(delivery));
-      return false;
+      return;
     }
     match conn.write(kept.reply.frame()).await {
       Ok(()) => {
@@ -246,33 +311,33 @@ impl Client {
           "kept search response delivered"
         );
         self.emit(Event::SearchResponseDelivered(delivery));
-        true
       }
       Err(error) => {
         tracing::debug!(username = kept.username, %error, "kept search response not delivered");
         self.emit(Event::SearchResponseDeliveryFailed(delivery));
-        false
       }
     }
   }
 
-  /// The searcher an answer was kept for cannot connect to us; the answer is given up
+  /// The searcher answers were kept for cannot connect to us; the answers are given up
   pub(crate) fn try_discard(&self, response_token: u32) -> bool {
     let Some(kept) = self.responder().undelivered().remove(&response_token) else {
       return false;
     };
-    tracing::debug!(
-      username = kept.username,
-      token = kept.token,
-      response_token,
-      "kept search response discarded"
-    );
-    self.emit(Event::SearchResponseDeliveryFailed(SearchDelivery {
-      username: kept.username,
-      token: kept.token,
-      query: kept.query,
-      search_response: kept.reply,
-    }));
+    for kept in kept {
+      tracing::debug!(
+        username = kept.username,
+        token = kept.token,
+        response_token,
+        "kept search response discarded"
+      );
+      self.emit(Event::SearchResponseDeliveryFailed(SearchDelivery {
+        username: kept.username,
+        token: kept.token,
+        query: kept.query,
+        search_response: kept.reply,
+      }));
+    }
     true
   }
 

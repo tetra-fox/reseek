@@ -87,7 +87,17 @@ impl<K: Eq + Hash + Clone, V> BoundedCache<K, V> {
     (!expired).then_some(entry.value)
   }
 
+  /// the values that have not expired
+  pub(crate) fn values(&mut self) -> impl Iterator<Item = &V> {
+    let now = Instant::now();
+    self
+      .entries
+      .retain(|_, entry| now < entry.stored + self.ttl);
+    self.entries.values().map(|entry| &entry.value)
+  }
+
   /// how many entries have not expired
+  #[cfg(test)]
   pub(crate) fn len(&mut self) -> usize {
     let now = Instant::now();
     self

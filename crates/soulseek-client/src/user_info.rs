@@ -28,7 +28,7 @@ impl Client {
     let ask = async {
       let endpoint = self.get_user_endpoint(username).await?;
       let conn = self
-        .message_connection(username, Some(endpoint), None, cancel)
+        .message_connection(username, Some(endpoint), cancel)
         .await?;
       write_peer(&conn, PeerMessage::InfoRequest).await?;
       answer.await

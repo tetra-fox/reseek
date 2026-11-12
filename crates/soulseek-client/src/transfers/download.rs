@@ -325,7 +325,7 @@ impl Download {
       .run(
         self
           .client
-          .message_connection(&self.username, Some(endpoint), None, &cancel),
+          .message_connection(&self.username, Some(endpoint), &cancel),
       )
       .await
   }
