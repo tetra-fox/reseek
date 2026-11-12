@@ -12,7 +12,7 @@ pub(crate) mod store;
 mod suspect;
 mod wishlist;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex, MutexGuard, Weak};
 use std::time::Duration;
@@ -72,6 +72,8 @@ pub struct Searches {
   tasks: TaskTracker,
   /// canceled by the stop, which ends a search's tries to write its end
   stopping: CancellationToken,
+  /// the ids of the rows that cannot be read that were warned of this run
+  unreadable: Mutex<HashSet<Option<String>>>,
 }
 
 fn internal(error: DbError) -> ApiError {
@@ -155,6 +157,7 @@ impl Searches {
       running: Mutex::new(HashMap::new()),
       tasks: TaskTracker::new(),
       stopping: CancellationToken::new(),
+      unreadable: Mutex::new(HashSet::new()),
     }))
   }
 
@@ -210,10 +213,21 @@ impl Searches {
 
   /// Every search, oldest first, without responses: the search topic's snapshot.
   pub async fn snapshot(&self) -> Result<Vec<Search>, DbError> {
-    self
-      .db
-      .read(|conn| store::list(conn, &SearchListQuery::default()))
-      .await
+    self.listed(SearchListQuery::default()).await
+  }
+
+  /// The searches `query` asks for. A row that cannot be read is left out, warned of the first
+  /// time this run, as the lists are read again every minute.
+  async fn listed(&self, query: SearchListQuery) -> Result<Vec<Search>, DbError> {
+    let (listed, unreadable) = self.db.read(move |conn| store::list(conn, &query)).await?;
+    for row in unreadable {
+      if lock(&self.unreadable).insert(row.id.clone()) {
+        warn!(id = row.id.as_deref(), error = %row.error, "search not listed: its row cannot be read");
+      } else {
+        debug!(id = row.id.as_deref(), error = %row.error, "search not listed: its row cannot be read");
+      }
+    }
+    Ok(listed)
   }
 
   /// What the search `id` searched for, when it is kept.
@@ -415,11 +429,7 @@ impl SearchService for Searches {
   }
 
   async fn list(&self, query: SearchListQuery) -> Result<Vec<Search>, ApiError> {
-    self
-      .db
-      .read(move |conn| store::list(conn, &query))
-      .await
-      .map_err(internal)
+    self.listed(query).await.map_err(internal)
   }
 
   async fn get(&self, id: Uuid, include_responses: bool) -> Result<Search, ApiError> {

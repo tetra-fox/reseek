@@ -97,6 +97,22 @@ fn search(row: &Row) -> rusqlite::Result<Search> {
   })
 }
 
+/// A row [`list`] could not read.
+pub struct Unreadable {
+  /// the row's id, when that much could be read
+  pub id: Option<String>,
+  /// why it cannot be read
+  pub error: rusqlite::Error,
+}
+
+/// The search in `row`, or the row as one that cannot be read; the outer error is the query's.
+fn readable(row: &Row) -> rusqlite::Result<Result<Search, Unreadable>> {
+  Ok(search(row).map_err(|error| Unreadable {
+    id: row.get(0).ok(),
+    error,
+  }))
+}
+
 /// Writes a new search; false when a search with its id exists already.
 pub fn insert(conn: &Connection, search: &Search) -> rusqlite::Result<bool> {
   let subjects = serde_json::to_string(&search.scope.subjects)
@@ -220,28 +236,31 @@ pub fn text(conn: &Connection, id: Uuid) -> rusqlite::Result<Option<String>> {
     .optional()
 }
 
-/// The searches `query` asks for, without their responses, by when they started. A row this
-/// version cannot read is logged and left out, so it does not keep the others from being listed.
-pub fn list(conn: &Connection, query: &SearchListQuery) -> rusqlite::Result<Vec<Search>> {
+/// The searches `query` asks for, without their responses, by when they started, and beside
+/// them the rows this version cannot read, so one such row does not keep the others from being
+/// listed.
+pub fn list(
+  conn: &Connection,
+  query: &SearchListQuery,
+) -> rusqlite::Result<(Vec<Search>, Vec<Unreadable>)> {
   let order = match query.order {
     SortOrder::Asc => "ASC",
     SortOrder::Desc => "DESC",
   };
   // -1 is no limit to SQLite
   let limit = query.limit.map_or(-1, i64::from);
-  let mut listed = Vec::new();
+  let (mut listed, mut unreadable) = (Vec::new(), Vec::new());
   let mut statement = conn.prepare(&format!(
     "SELECT {COLUMNS} FROM searches ORDER BY started_at {order}, rowid {order} \
      LIMIT ?1 OFFSET ?2"
   ))?;
-  // the outer error is the query failing, the inner one a row that cannot be read
-  for row in statement.query_map(params![limit, query.offset], |row| Ok(search(row)))? {
+  for row in statement.query_map(params![limit, query.offset], readable)? {
     match row? {
       Ok(search) => listed.push(search),
-      Err(error) => warn!(%error, "search not listed: its row cannot be read"),
+      Err(row) => unreadable.push(row),
     }
   }
-  Ok(listed)
+  Ok((listed, unreadable))
 }
 
 /// Deletes the search `id` with the batches it saved while it ran, and clears the wishlist's
@@ -278,10 +297,14 @@ pub fn prune(conn: &mut Connection, before: DateTime<Utc>) -> rusqlite::Result<V
   let mut pruned = Vec::new();
   {
     let mut statement = tx.prepare(&format!("SELECT {COLUMNS} FROM searches WHERE {ENDED}"))?;
-    for row in statement.query_map([&before], |row| Ok(search(row)))? {
+    for row in statement.query_map([&before], readable)? {
       match row? {
         Ok(search) => pruned.push(search),
-        Err(error) => warn!(%error, "search pruned whose row cannot be read"),
+        Err(row) => warn!(
+          id = row.id.as_deref(),
+          error = %row.error,
+          "search pruned whose row cannot be read"
+        ),
       }
     }
   }
@@ -491,6 +514,34 @@ mod tests {
   }
 
   #[tokio::test]
+  async fn a_row_with_an_unknown_state_is_listed_apart_by_its_id_and_deleted() {
+    let db = db().await;
+    let search = requested("2026-10-26T10:00:00Z");
+    let id = search.id;
+    db.write(move |conn| {
+      insert(conn, &search)?;
+      conn.execute("UPDATE searches SET state = 4", [])
+    })
+    .await
+    .unwrap();
+    let (listed, unreadable) = db
+      .read(|conn| list(conn, &SearchListQuery::default()))
+      .await
+      .unwrap();
+    assert!(listed.is_empty());
+    assert_eq!(
+      unreadable
+        .iter()
+        .map(|row| row.id.clone())
+        .collect::<Vec<_>>(),
+      [Some(id.to_string())]
+    );
+    let deleted = db.write(move |conn| delete(conn, id)).await.unwrap();
+    assert!(matches!(deleted, Some(Err(_))), "found, though not read");
+    assert!(!db.read(move |conn| exists(conn, id)).await.unwrap());
+  }
+
+  #[tokio::test]
   async fn the_startup_ends_dangling_searches_and_retention_prunes_ended_ones() {
     let db = db().await;
     let running = requested("2026-10-26T10:00:00Z");
@@ -531,7 +582,7 @@ mod tests {
     let pruned = db.write(move |conn| prune(conn, before)).await.unwrap();
     assert_eq!(pruned.len(), 1);
     assert_eq!(pruned[0].id, done.id);
-    let all = db
+    let (all, _) = db
       .read(|conn| list(conn, &SearchListQuery::default()))
       .await
       .unwrap();
