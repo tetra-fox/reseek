@@ -44,7 +44,7 @@ use crate::state::StateOwner;
 use crate::users::Directory;
 use running::Running;
 
-/// How long deleting a running search waits for it to end.
+/// How long canceling or deleting a running search waits for it to end.
 const ENDING: Duration = Duration::from_secs(5);
 
 /// How long the stop waits for running searches to write how they ended.
@@ -455,10 +455,26 @@ impl SearchService for Searches {
   }
 
   async fn cancel(&self, id: Uuid) -> Result<Canceled, ApiError> {
-    if let Some(running) = self.running().get(&id).cloned() {
+    let running = self.running().get(&id).cloned();
+    if let Some(running) = running {
+      let mut ended = running.ended.subscribe();
+      if ended.borrow().is_some() {
+        return Ok(Canceled::Already);
+      }
       running.canceled.store(true, Ordering::Relaxed);
       running.cancel.cancel();
-      return Ok(Canceled::Now);
+      // the client may have decided another end before it saw the cancel
+      let canceled = Some(SearchState::Completed(SearchOutcome::Cancelled));
+      return Ok(
+        match tokio::time::timeout(ENDING, ended.wait_for(Option::is_some)).await {
+          Ok(Ok(state)) if *state != canceled => Canceled::Already,
+          Ok(_) => Canceled::Now,
+          Err(_) => {
+            debug!(%id, "search not ended yet by its cancel; it ends once the client sees it");
+            Canceled::Now
+          }
+        },
+      );
     }
     let exists = self
       .db

@@ -37,6 +37,8 @@ pub(super) struct Running {
   pub cancel: CancellationToken,
   /// the search was stopped by a cancel or a delete, not by a lost connection
   pub canceled: AtomicBool,
+  /// how the search ended, once the client returned it
+  pub ended: watch::Sender<Option<SearchState>>,
   /// true once the end is written, or found not to be
   pub done: watch::Sender<bool>,
   progress: Mutex<Progress>,
@@ -109,6 +111,7 @@ impl Running {
     Self {
       cancel: CancellationToken::new(),
       canceled: AtomicBool::new(false),
+      ended: watch::channel(None).0,
       done: watch::channel(false).0,
       progress: Mutex::new(Progress {
         record,
@@ -229,6 +232,9 @@ impl Searches {
       && running.refused(error.clone())
     {
       // the request that started it writes the refusal
+      running
+        .ended
+        .send_replace(Some(SearchState::Completed(SearchOutcome::Errored)));
       running.done.send_replace(true);
       return;
     }
@@ -242,6 +248,7 @@ impl Searches {
         SearchState::Completed(SearchOutcome::Errored)
       }
     };
+    running.ended.send_replace(Some(ended));
     self.finish(&running, ended).await;
     running.done.send_replace(true);
   }
@@ -349,7 +356,7 @@ mod tests {
   use uuid::Uuid;
 
   use super::*;
-  use crate::services::SearchService;
+  use crate::services::{Canceled, SearchService};
   use crate::testing::{TRUSTED, app};
 
   fn record() -> Search {
@@ -450,6 +457,29 @@ mod tests {
       stored.state,
       SearchState::Completed(SearchOutcome::Cancelled)
     );
+  }
+
+  #[tokio::test]
+  async fn a_cancel_after_the_client_ended_a_search_another_way_changes_nothing() {
+    let app = app(TRUSTED, &[]).await;
+    let searches = app.state.searches.clone();
+    let record = record();
+    let (id, written) = (record.id, record.clone());
+    searches
+      .db
+      .write(move |conn| store::insert(conn, &written))
+      .await
+      .unwrap();
+    let (accepted, _acceptance) = oneshot::channel();
+    let running = Arc::new(Running::new(record, accepted));
+    running.state_changed(ClientState::InProgress);
+    searches.running().insert(id, running.clone());
+
+    // the client ended it on a limit before the cancel came
+    let limit = SearchState::Completed(SearchOutcome::ResponseLimitReached);
+    running.ended.send_replace(Some(limit));
+    assert_eq!(searches.cancel(id).await.unwrap(), Canceled::Already);
+    assert!(!running.cancel.is_cancelled());
   }
 
   #[tokio::test]
