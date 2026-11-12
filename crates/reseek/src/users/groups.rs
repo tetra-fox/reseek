@@ -272,13 +272,6 @@ pub fn place(options: &Options, facts: &Facts, buddy: bool) -> Placement {
   }
 }
 
-/// The groups of `stored`, the row of a user, under `options`; a user without a row is in the
-/// default group only.
-pub fn placement(options: &Options, stored: Option<&Stored>) -> Placement {
-  let facts = stored.map(Facts::of).unwrap_or_default();
-  place(options, &facts, stored.is_some_and(|s| s.buddy.is_some()))
-}
-
 /// Each share alias of `shares.visible_to` with a group listed for it that no member can see
 /// it through: one that is neither buddies nor a user-defined group, such as a misspelled name
 /// or a smart group.

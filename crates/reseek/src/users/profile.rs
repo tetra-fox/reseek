@@ -7,21 +7,21 @@ use api_types::users::{
   UserProfile, UserSummary,
 };
 
-use super::groups;
+use super::groups::Placement;
 use super::store::{Info, Stored};
 use crate::config::Options;
 
 /// What the directory holds about `username`, from their row when there is one, with the
-/// block that applies to them, while the alternative speed limits are in force when
-/// `alternative`.
+/// block that applies to them and the groups `placement` puts them in, while the alternative
+/// speed limits are in force when `alternative`.
 pub fn known(
   options: &Options,
   alternative: bool,
   username: &str,
   stored: Option<&Stored>,
   block: Option<Block>,
+  placement: Placement,
 ) -> KnownUser {
-  let placement = groups::placement(options, stored);
   let uploads = placement.uploads(options, alternative);
   KnownUser {
     username: username.to_string(),
@@ -30,7 +30,7 @@ pub fn known(
     last_seen_at: stored.map(|s| s.last_seen_at),
     presence: stored.and_then(|s| s.presence.map(|(p, _)| p)),
     presence_at: stored.and_then(|s| s.presence.and_then(|(_, at)| at)),
-    is_privileged: stored.is_some_and(|s| s.is_privileged),
+    is_privileged: placement.privileged,
     statistics: stored
       .and_then(|s| s.statistics.clone())
       .map(|(statistics, fetched_at)| StoredStatistics {
@@ -166,14 +166,16 @@ mod tests {
       buddy: None,
     };
     let options = Options::default();
-    let user = known(&options, false, "alice", Some(&stored), None);
+    let placement = || crate::users::groups::place(&options, &Default::default(), false);
+    let user = known(&options, false, "alice", Some(&stored), None, placement());
     let alice = summary(user, Some(&stored), &figures());
     assert_eq!(
       alice.description.as_deref(),
       Some("Jazz.\nVinyl rips.\nAsk first.")
     );
     assert_eq!(alice.notes.as_deref(), Some("met in #indie\nfast"));
-    let empty = summary(known(&options, false, "bob", None, None), None, &figures());
+    let bob = known(&options, false, "bob", None, None, placement());
+    let empty = summary(bob, None, &figures());
     assert_eq!((empty.description, empty.notes), (None, None));
   }
 

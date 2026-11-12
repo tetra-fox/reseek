@@ -176,7 +176,15 @@ impl Directory {
       .map_err(internal)?;
     let options = self.config.current().values.clone();
     let alternative = self.state.current().alternative_speed_limits;
-    let user = profile::known(&options, alternative, username, row.as_ref(), block);
+    let placement = self.placement_of(&options, username, row.as_ref());
+    let user = profile::known(
+      &options,
+      alternative,
+      username,
+      row.as_ref(),
+      block,
+      placement,
+    );
     let user = self.with_network_and_conversation(user).await;
     Ok(profile::profile(user, row.as_ref(), figures))
   }

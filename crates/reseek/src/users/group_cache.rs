@@ -24,7 +24,9 @@ use soulseek_proto::server::UserStats;
 use tracing::{Instrument, debug, info, trace, warn};
 
 use super::groups::{self, Facts, Placement};
+use super::store::Stored;
 use super::{Directory, Touch};
+use crate::config::Options;
 use crate::turns::Turns;
 
 /// How old a user's statistics may be when their group is worked out before they are asked
@@ -127,6 +129,35 @@ fn statistics(stats: &UserStats) -> UserStatistics {
 }
 
 impl Directory {
+  /// The groups `username`, whose row is `stored` when they have one, is shown in: worked out
+  /// from what the server said of them in this run, as the upload engine and the shares have
+  /// it, else from what their row kept from before, the last we knew; the engine itself knows
+  /// nothing of such a user until it asks the server. The groups we put them in are their row's,
+  /// which a change writes first.
+  pub(super) fn placement_of(
+    &self,
+    options: &Options,
+    username: &str,
+    stored: Option<&Stored>,
+  ) -> Placement {
+    let cached = self.groups.facts(username).unwrap_or_default();
+    let heard = cached.privileged || cached.presence.is_some() || cached.statistics.is_some();
+    let mut facts = if heard {
+      cached
+    } else {
+      stored.map(Facts::of).unwrap_or_default()
+    };
+    if let Some(stored) = stored {
+      facts.memberships.clone_from(&stored.groups);
+    }
+    groups::place(options, &facts, self.buddy(username).is_some())
+  }
+
+  /// [`Directory::placement_of`] for a user with a row.
+  pub(super) fn placement_shown(&self, options: &Options, stored: &Stored) -> Placement {
+    self.placement_of(options, &stored.username, Some(stored))
+  }
+
   /// The groups `username` is in by what is known now, without waiting for anyone; statistics
   /// older than four hours are asked for again meanwhile.
   pub fn placement(self: &Arc<Self>, username: &str) -> Placement {

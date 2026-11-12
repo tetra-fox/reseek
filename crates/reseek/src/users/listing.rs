@@ -93,7 +93,7 @@ impl Directory {
         query
           .group
           .as_ref()
-          .is_none_or(|wanted| groups::placement(&options, Some(&c.stored)).is_in(wanted))
+          .is_none_or(|wanted| self.placement_shown(&options, &c.stored).is_in(wanted))
       })
       .collect();
     let order = query.order.unwrap_or(match query.sort {
@@ -150,7 +150,7 @@ impl Directory {
     let options = self.config.current().values.clone();
     let placements: Vec<groups::Placement> = rows
       .iter()
-      .map(|row| groups::placement(&options, Some(row)))
+      .map(|row| self.placement_shown(&options, row))
       .collect();
     let mut names: Vec<String> = vec![PRIVILEGED_GROUP.to_string()];
     names.extend(
