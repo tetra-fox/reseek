@@ -230,7 +230,7 @@
   <div class="flex min-h-svh items-center justify-center p-6">
     <ErrorSegment
       caption={app.lostReason}
-      detail="Check that reseek is running"
+      detail={app.lostDetail}
       retry={() => void app.bootstrap()}
       retryLabel="Retry" />
   </div>

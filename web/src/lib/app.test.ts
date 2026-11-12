@@ -1,13 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { app } from "./app.svelte";
-import { live } from "./live/live.svelte";
+import { FALLBACK_MS, live } from "./live/live.svelte";
+import { fakeNetwork } from "./testing/network";
 import { browserTabs, SETTLE_MS, Tabs } from "./ui/tabs";
 
 describe("the app's bootstrap", () => {
   afterEach(() => {
     app.signedOut();
     vi.unstubAllGlobals();
+    vi.useRealTimers();
   });
 
   it("shows the login when the session goes while it waits for the first state", async () => {
@@ -48,6 +50,55 @@ describe("the app's bootstrap", () => {
     expect(app.phase).toBe("app");
     expect(app.options).toEqual({ soulseek: { username: "me" } });
     expect(app.optionsRevision).toBe("r");
+  });
+
+  it("shows the app once the stream brought both the state and the options", async () => {
+    const net = fakeNetwork((url) =>
+      url.pathname.endsWith("/api/v0/session")
+        ? { name: "admin", role: "Administrator", session: null }
+        : undefined
+    );
+    const booting = app.bootstrap();
+    await vi.waitFor(() => expect(live.status).toBe("connecting"));
+    net.frame("hello", { principal: { name: "admin", role: "Administrator" } } as never);
+    net.frame("application.state", { user: {} } as never);
+    await new Promise((done) => setTimeout(done, 20));
+    expect(app.phase).toBe("initializing");
+    net.frame("application.options", { values: { a: 1 }, revision: "r" } as never);
+    await booting;
+    expect(app.phase).toBe("app");
+    expect(app.options).toEqual({ a: 1 });
+  });
+
+  it("says why the options could not be read, and shows the app once they can", async () => {
+    vi.useFakeTimers();
+    let options = Response.json({ error: "The options are being written" }, { status: 503 });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const request = input instanceof Request ? input : new Request(String(input), init);
+        const path = new URL(request.url).pathname;
+        if (path.endsWith("/api/v0/session")) {
+          return Response.json({ name: "admin", role: "Administrator", session: null });
+        }
+        if (path.endsWith("/api/v0/application")) return Response.json({ user: {} });
+        if (path.endsWith("/api/v0/options")) return options.clone();
+        // the stream is refused, so the state and the options are read
+        return Response.json({ error: "Too many streams" }, { status: 429 });
+      })
+    );
+    const booting = app.bootstrap();
+    await vi.advanceTimersByTimeAsync(SETTLE_MS + 10);
+    await booting;
+    expect(app.phase).toBe("lost");
+    expect([app.lostReason, app.lostDetail]).toEqual([
+      "Could not load the settings",
+      "The options are being written"
+    ]);
+    options = Response.json({ values: { a: 1 }, revision: "r" });
+    await vi.advanceTimersByTimeAsync(FALLBACK_MS);
+    expect(app.phase).toBe("app");
+    expect(app.options).toEqual({ a: 1 });
   });
 
   it("leaves the sound to the tabs that are signed in while it shows the login", async () => {

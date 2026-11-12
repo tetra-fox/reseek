@@ -7,7 +7,7 @@ import { chat } from "#lib/chat/chat.svelte.js";
 import { withValueAt } from "#lib/config/sections.js";
 import { toast } from "#lib/feedback/toast.svelte.js";
 import { jobs } from "#lib/jobs/jobs.svelte.js";
-import { live } from "#lib/live/live.svelte.js";
+import { FALLBACK_MS, live } from "#lib/live/live.svelte.js";
 import { call } from "#lib/request.js";
 import { searches } from "#lib/search/searches.svelte.js";
 import { wishlist } from "#lib/search/wishlist.svelte.js";
@@ -30,8 +30,14 @@ export type Options = Schemas["OptionsDocument"]["values"];
  */
 export type Phase = "initializing" | "login" | "app" | "lost";
 
-/** Why the app could not start when reseek did not answer */
-const LOST = "Lost connection to reseek";
+/** Why the app could not start: what failed, and the daemon's reason or what to check */
+type Missing = { caption: string; detail: string };
+
+/** reseek did not answer */
+const LOST: Missing = {
+  caption: "Lost connection to reseek",
+  detail: "Check that reseek is running"
+};
 
 /**
  * The application as the shell shows it: the daemon's state document, the options in effect
@@ -45,8 +51,12 @@ class App {
   optionsRevision: string | null = null;
   metrics = $state.raw<Metrics | null>(null);
   phase = $state<Phase>("initializing");
-  /** why the last bootstrap ended in `lost` */
+  /** what failed when the last bootstrap ended in `lost` */
   lostReason = $state("");
+  /** the daemon's reason for it, or what to check when it did not answer */
+  lostDetail = $state("");
+  /** why the last read of the options failed, while they could not be had */
+  #optionsError = "";
   #release: (() => void)[] = [];
   /**
    * counts the bootstraps started and the times the phase was taken from one, by a sign-out or
@@ -96,7 +106,7 @@ class App {
       this.phase = "login";
       return;
     }
-    if (found === "unreachable") return this.#lost(LOST);
+    if (found === "unreachable") return this.#lost(LOST, boot);
     // the stream opens once the tabs have had their answers, so its first frame finds one leading
     const settling = browserTabs()?.settling() ?? 0;
     if (settling) await new Promise((done) => setTimeout(done, settling));
@@ -104,7 +114,7 @@ class App {
     this.#follow();
     const missing = await this.#firstState();
     if (boot !== this.#boot) return;
-    if (missing) return this.#lost(missing);
+    if (missing) return this.#lost(missing, boot);
     this.phase = "app";
   };
 
@@ -113,7 +123,7 @@ class App {
    * don't arrive. Gives back what could not be had of the state and the options, which the app
    * needs to show, or null
    */
-  refresh = async (): Promise<string | null> => {
+  refresh = async (): Promise<Missing | null> => {
     const [state, options, metrics] = await Promise.all([
       call(() => api.GET("/api/v0/application")),
       call(() => api.GET("/api/v0/options")),
@@ -121,19 +131,22 @@ class App {
     ]);
     if (state.ok) this.state = state.data;
     if (options.ok) this.#tookOptions(options.data);
+    else this.#optionsError = options.error;
     // figures that can't be read leave the last ones shown until the next poll
     if (metrics.ok) this.metrics = metrics.data;
     return this.#missing();
   };
 
   /** What of the state and the options is not here yet, null once both are */
-  #missing(): string | null {
+  #missing(): Missing | null {
     if (!this.state) return LOST;
-    if (!this.options) return "Could not load the settings";
+    if (!this.options)
+      return { caption: "Could not load the settings", detail: this.#optionsError };
     return null;
   }
 
   #tookOptions(document: Schemas["OptionsDocument"]) {
+    this.#optionsError = "";
     this.options = document.values;
     this.optionsRevision = document.revision;
   }
@@ -214,7 +227,7 @@ class App {
    * Resolves once the state document and the options are here, from the stream or fetched when
    * they can't come, with null; else with what could not be had
    */
-  async #firstState(): Promise<string | null> {
+  async #firstState(): Promise<Missing | null> {
     if (!this.#missing()) return null;
     if (live.status === "connecting") {
       await new Promise<void>((resolve) => {
@@ -241,10 +254,29 @@ class App {
     return this.#missing() && (await this.refresh());
   }
 
-  #lost(reason: string) {
-    browserTabs()?.quit();
-    this.lostReason = reason;
+  /**
+   * Shows why the bootstrap `boot` could not show the app. When reseek answered but the options
+   * could not be read, they are read again on the polling cadence while this shows, and the app
+   * shows once they come, as a passing failure would heal while the app runs
+   */
+  #lost(missing: Missing, boot: number) {
+    this.lostReason = missing.caption;
+    this.lostDetail = missing.detail;
     this.phase = "lost";
+    if (!this.state) {
+      browserTabs()?.quit();
+      return;
+    }
+    setTimeout(() => void this.#heal(boot), FALLBACK_MS);
+  }
+
+  /** Reads the state and the options again for the bootstrap `boot`, showing the app once they come */
+  async #heal(boot: number) {
+    if (boot !== this.#boot) return;
+    const still = await this.refresh();
+    if (boot !== this.#boot) return;
+    if (still) return this.#lost(still, boot);
+    this.phase = "app";
   }
 }
 
