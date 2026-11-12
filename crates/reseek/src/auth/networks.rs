@@ -8,12 +8,12 @@ use crate::config::Options;
 use crate::config::cidr::{ANY, IpRange, parse_list};
 
 /// The principal of a client from a trusted network, `None` when the client's address is in
-/// no trusted network or it reached the daemon by a host that is not allowed. Turning
-/// authentication off trusts every network.
-pub fn trusted(client: &Client, options: &Options) -> Option<Principal> {
+/// no trusted network or it reached the daemon by a host that is not allowed. With
+/// `authentication_off`, the value the daemon started with, every network is trusted.
+pub fn trusted(client: &Client, options: &Options, authentication_off: bool) -> Option<Principal> {
   let authentication = &options.web.authentication;
   let mut networks: Vec<String> = authentication.trusted_networks.clone();
-  if authentication.disabled {
+  if authentication_off {
     networks.extend(ANY.split(',').map(str::to_string));
   }
   let network = networks.iter().find(|text| match text.parse::<IpRange>() {
@@ -87,7 +87,7 @@ mod tests {
     let mut options = Options::default();
     options.web.authentication.trusted_networks = vec!["192.168.1.0/24".into()];
     options.web.hostnames = vec!["reseek.lan".into()];
-    let lan = |host| trusted(&client("192.168.1.5", host), &options);
+    let lan = |host| trusted(&client("192.168.1.5", host), &options, false);
     assert_eq!(
       lan(Some("192.168.1.2")).unwrap().subject,
       "network:192.168.1.0/24"
@@ -96,16 +96,16 @@ mod tests {
     assert!(lan(Some("Reseek.LAN")).is_some());
     assert!(lan(Some("evil.example")).is_none(), "the rebinding rule");
     assert!(lan(None).is_none());
-    assert!(trusted(&client("10.0.0.5", Some("localhost")), &options).is_none());
+    assert!(trusted(&client("10.0.0.5", Some("localhost")), &options, false).is_none());
   }
 
   #[test]
   fn turning_authentication_off_trusts_every_network_with_the_same_host_rule() {
-    let mut options = Options::default();
-    options.web.authentication.disabled = true;
-    let anywhere = trusted(&client("203.0.113.1", Some("203.0.113.2")), &options).unwrap();
+    let options = Options::default();
+    let off = |ip, host| trusted(&client(ip, Some(host)), &options, true);
+    let anywhere = off("203.0.113.1", "203.0.113.2").unwrap();
     assert_eq!(anywhere.role, api_types::auth::Role::Administrator);
-    assert!(trusted(&client("2001:db8::1", Some("localhost")), &options).is_some());
-    assert!(trusted(&client("203.0.113.1", Some("evil.example")), &options).is_none());
+    assert!(off("2001:db8::1", "localhost").is_some());
+    assert!(off("203.0.113.1", "evil.example").is_none());
   }
 }

@@ -207,7 +207,11 @@ pub async fn identify(
     identified.principal = Some(principal);
     return Ok(identified);
   }
-  identified.principal = networks::trusted(&presented.client, options);
+  identified.principal = networks::trusted(
+    &presented.client,
+    options,
+    app.startup.values.web.authentication.disabled,
+  );
   Ok(identified)
 }
 

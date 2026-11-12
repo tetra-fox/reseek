@@ -194,9 +194,8 @@ fn failed_login(app: &AppState, username: &str, client: &Client) -> ApiError {
   responses((status = 200, body = bool, content_type = "application/json"))
 )]
 async fn enabled(State(app): State<AppState>, Extension(client): Extension<Client>) -> Json<bool> {
-  let current = app.config.current();
-  let options = &current.values;
-  Json(!options.web.authentication.disabled && networks::trusted(&client, options).is_none())
+  let off = app.startup.values.web.authentication.disabled;
+  Json(!off && networks::trusted(&client, &app.config.current().values, off).is_none())
 }
 
 /// The ways to sign in the login page offers the caller.
@@ -212,7 +211,12 @@ async fn providers(
   let options = &current.values;
   let authentication = &options.web.authentication;
   let local = options.web.authentication.local.enabled && offered_to(options, &client);
-  let trusted = networks::trusted(&client, options).is_some();
+  let trusted = networks::trusted(
+    &client,
+    options,
+    app.startup.values.web.authentication.disabled,
+  )
+  .is_some();
   let proxy = authentication.proxy.enabled;
   let only = authentication.oidc.len() == 1 && !local && !proxy && !trusted;
   Json(Providers {
