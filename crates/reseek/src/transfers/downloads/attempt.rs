@@ -361,29 +361,29 @@ impl Downloads {
       result
     } else {
       loop {
-      tokio::select! {
-        biased;
-        Some(snapshot) = states.recv() => self.state_changed(record, snapshot, gate, &mut ended).await,
-        result = &mut running => break result,
-        () = &mut deadline, if gate.is_some() => {
-          let history = self.history(record.id).await;
-          warn!(
-            state = %record.state,
-            history,
-            "download not queued by the peer within the time limit"
-          );
-          hard_limited = true;
-          gate.take();
-          stop.cancel();
+        tokio::select! {
+          biased;
+          Some(snapshot) = states.recv() => self.state_changed(record, snapshot, gate, &mut ended).await,
+          result = &mut running => break result,
+          () = &mut deadline, if gate.is_some() => {
+            let history = self.history(record.id).await;
+            warn!(
+              state = %record.state,
+              history,
+              "download not queued by the peer within the time limit"
+            );
+            hard_limited = true;
+            gate.take();
+            stop.cancel();
+          }
+          Ok(()) = progress.changed(), if !throttled => {
+            let (bytes, speed) = *progress.borrow_and_update();
+            self.progressed(record, bytes, speed).await;
+            throttled = true;
+            throttle.as_mut().reset(Instant::now() + PROGRESS_EVERY);
+          }
+          () = &mut throttle, if throttled => throttled = false,
         }
-        Ok(()) = progress.changed(), if !throttled => {
-          let (bytes, speed) = *progress.borrow_and_update();
-          self.progressed(record, bytes, speed).await;
-          throttled = true;
-          throttle.as_mut().reset(Instant::now() + PROGRESS_EVERY);
-        }
-        () = &mut throttle, if throttled => throttled = false,
-      }
       }
     };
     // the states the client reported before its task ended are all queued by now

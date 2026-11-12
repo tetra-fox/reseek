@@ -122,7 +122,11 @@ async fn canceling_a_download_no_task_runs_ends_its_wait_and_can_remove_it() {
     })
     .await
     .unwrap();
-  assert_eq!(columns, (None, None), "the place and the retry time go with the wait");
+  assert_eq!(
+    columns,
+    (None, None),
+    "the place and the retry time go with the wait"
+  );
   let ended = read(&app, id).await;
   assert_eq!(
     ended.state.kind(),
@@ -1156,7 +1160,8 @@ async fn an_albums_files_are_asked_of_their_user_in_the_order_enqueued() {
     search_id: None,
   };
   let downloads = app.state.downloads.clone();
-  let enqueued = tokio::spawn(async move { downloads.enqueue(Uuid::new_v4(), vec![group], false).await });
+  let enqueued =
+    tokio::spawn(async move { downloads.enqueue(Uuid::new_v4(), vec![group], false).await });
 
   let within = std::time::Duration::from_secs(10);
   let (mut stream, _) = tokio::time::timeout(within, alice.accept())

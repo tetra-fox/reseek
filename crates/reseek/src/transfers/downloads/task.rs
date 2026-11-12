@@ -99,12 +99,7 @@ impl Downloads {
         .wait(record.id, &record.username, position, Some(request))
     });
     self.tasks.spawn(
-      async move {
-        this
-          .run(record.id, position, first, cancel, offered)
-          .await
-      }
-      .instrument(span),
+      async move { this.run(record.id, position, first, cancel, offered).await }.instrument(span),
     );
   }
 
@@ -241,7 +236,15 @@ impl Downloads {
       };
       let taking = std::mem::take(&mut offered);
       match self
-        .attempt(&mut record, &incomplete, cancel, &mut gate, taking, pushed, ask)
+        .attempt(
+          &mut record,
+          &incomplete,
+          cancel,
+          &mut gate,
+          taking,
+          pushed,
+          ask,
+        )
         .await
       {
         Attempted::Succeeded(writing) => return Ended::Succeeded(record, incomplete, writing),

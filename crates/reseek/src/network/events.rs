@@ -727,9 +727,7 @@ fn transfer_state(app: &AppState, previous: Option<TransferState>, transfer: &Tr
     .transfers()
     .uploads
     .count(&client.uploads());
-  if transfer.state.succeeded()
-    && transfer.average_speed > 0.0
-  {
+  if transfer.state.succeeded() && transfer.average_speed > 0.0 {
     // servers read the speed as a signed 32-bit number
     let speed = transfer.average_speed.ceil().min(f64::from(i32::MAX)) as u32;
     let client = client.clone();
