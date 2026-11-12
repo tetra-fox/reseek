@@ -557,4 +557,25 @@ describe("the transfers table", () => {
     await flushFaked();
     expect(row("b")).not.toBeNull();
   });
+
+  it("counts no row that is gone while the held list still shows it", async () => {
+    const a = transfer({ filename: "x\\b.flac" });
+    const b = transfer({ filename: "x\\c.flac" });
+    listing = [a, b];
+    const net = await start();
+    const queued = () =>
+      [...document.querySelectorAll("button[aria-pressed]")]
+        .map((chip) => chip.textContent?.replace(/\s+/g, "") ?? "")
+        .find((text) => text.startsWith("Queued"));
+    expect(queued()).toBe("Queued2");
+    const release = interaction.hold();
+    net.frame("transfers.removed", { id: a.id, username: a.username, direction: "Download" });
+    await flushFaked();
+    expect(row(a.id)).not.toBeNull();
+    expect(queued()).toBe("Queued1");
+    release();
+    await flushFaked();
+    expect(row(a.id)).toBeNull();
+    expect(queued()).toBe("Queued1");
+  });
 });

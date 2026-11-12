@@ -114,9 +114,13 @@
 
   // a removal that can still be undone has taken its rows off the screen already
   const all = $derived(store.list.rows.filter((t) => !store.hidden.has(t.id)));
+  /** what is on the daemon: the rows held on screen while the user holds the list are gone */
+  const present = (t: Transfer) => !store.list.removed.has(t.id);
+  const counted = $derived(all.filter(present));
   const counts = $derived.by(() => {
-    const result = { all: all.length } as Record<ChipId | "all", number>;
-    for (const chip of STATE_CHIPS) result[chip.id] = all.filter((t) => chip.test(t.state)).length;
+    const result = { all: counted.length } as Record<ChipId | "all", number>;
+    for (const chip of STATE_CHIPS)
+      result[chip.id] = counted.filter((t) => chip.test(t.state)).length;
     return result;
   });
   // a download's analysis, which its chip shows and the analysis filters read
@@ -136,7 +140,7 @@
   const markCounts = $derived.by(() => {
     if (!markLookup) return null;
     const result = {} as Record<MarkFilter, number>;
-    for (const f of MARK_FILTERS) result[f.id] = all.filter(marked(markLookup, f.id)).length;
+    for (const f of MARK_FILTERS) result[f.id] = counted.filter(marked(markLookup, f.id)).length;
     return result;
   });
   /** whether the filters let a transfer into the table */
@@ -362,8 +366,8 @@
 {#if store.loaded}
   <Filter.Summary
     {filters}
-    shown={filtered.length}
-    total={all.length}
+    shown={filtered.filter(present).length}
+    total={counted.length}
     {noun}
     refocus={() => table?.focus()} />
 {/if}
