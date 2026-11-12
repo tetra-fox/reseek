@@ -182,14 +182,6 @@ impl Downloads {
       let message = "A duplicate download of the same file to the same user is already registered";
       return Ended::failed(Some(record), Failure::terminal(message.to_string()), None);
     }
-    let retry = self
-      .config
-      .current()
-      .values
-      .transfers
-      .download
-      .retry
-      .clone();
     let incomplete = match incomplete_path(
       &self.incomplete,
       &record.username,
@@ -252,6 +244,15 @@ impl Downloads {
             reason = failure.message,
             "Failed attempt to download the file"
           );
+          // read at each failure, so a change reaches the downloads already running
+          let retry = self
+            .config
+            .current()
+            .values
+            .transfers
+            .download
+            .retry
+            .clone();
           if !failure.retryable || attempt >= retry.attempts {
             return Ended::failed(Some(record), failure, Some(incomplete));
           }
