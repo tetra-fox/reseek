@@ -33,6 +33,8 @@ enum Answer {
   Status(u16),
   /// reads the request and closes the connection without an answer
   Dropped,
+  /// reads the request and closes the connection partway through a successful answer's body
+  Cut,
   /// takes the connection and never answers
   Silent,
 }
@@ -179,6 +181,11 @@ async fn controller(answers: Vec<Answer>, calls: Arc<AtomicUsize>) -> String {
           // held open, never answered
           Answer::Silent => return std::future::pending::<()>().await,
           Answer::Dropped => return read_request(&mut connection).await,
+          Answer::Cut => {
+            read_request(&mut connection).await;
+            let head = "HTTP/1.1 200 OK\r\ncontent-length: 10\r\n\r\n{";
+            return connection.write_all(head.as_bytes()).await.unwrap();
+          }
         };
         read_request(&mut connection).await;
         let head =
@@ -482,28 +489,31 @@ fn names_call(text: &str, token: Uuid) -> bool {
 #[tokio::test]
 async fn a_file_whose_call_drops_fails_without_the_call_url() {
   let warnings = Warnings::new();
-  let mut agent = agent(vec![Answer::Dropped], true).await;
+  let mut agent = agent(vec![Answer::Dropped, Answer::Cut], true).await;
   let shared = &agent.agent.shares.browse().await.unwrap()[0];
   let filename = format!("{}\\{}", shared.name, shared.files[0].filename);
-  let token = Uuid::new_v4();
-  let request = RelayMessage::FileRequest {
-    filename,
-    start_offset: 0,
-    transfer_id: Uuid::new_v4(),
-    token,
-  };
-  agent
-    .agent
-    .handle(&agent.link, &frames::encode(Some(token), request));
-  let acked = agent.next().await;
-  assert!(matches!(acked, RelayMessage::FileAck {}), "{acked:?}");
-  let RelayMessage::FileFailed { detail, .. } = agent.next().await else {
-    panic!("the file fails");
-  };
-  let detail = detail.expect("the failure says what failed");
-  assert!(detail.contains("connection closed"), "{detail}");
-  assert!(!names_call(&detail, token), "{detail}");
-  assert_eq!(warnings.count("Upload of file failed"), 1);
+  // dropped before the answer, then partway through it
+  for failed in ["connection closed", "answer did not arrive"] {
+    let token = Uuid::new_v4();
+    let request = RelayMessage::FileRequest {
+      filename: filename.clone(),
+      start_offset: 0,
+      transfer_id: Uuid::new_v4(),
+      token,
+    };
+    agent
+      .agent
+      .handle(&agent.link, &frames::encode(Some(token), request));
+    let acked = agent.next().await;
+    assert!(matches!(acked, RelayMessage::FileAck {}), "{acked:?}");
+    let RelayMessage::FileFailed { detail, .. } = agent.next().await else {
+      panic!("the file fails");
+    };
+    let detail = detail.expect("the failure says what failed");
+    assert!(detail.contains(failed), "{detail}");
+    assert!(!names_call(&detail, token), "{detail}");
+  }
+  assert_eq!(warnings.count("Upload of file failed"), 2);
   assert_eq!(warnings.count("relay/controller/files"), 0);
 }
 
