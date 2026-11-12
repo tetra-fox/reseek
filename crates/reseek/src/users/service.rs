@@ -305,17 +305,26 @@ impl Directory {
       .map_err(internal)
   }
 
-  /// Forgets `username` and their block; with `purge` their transfers leave the listings.
+  /// Forgets `username` and their block; with `purge` their transfers leave the listings. The
+  /// server stops telling us their presence, and their touches not written yet are dropped, so
+  /// neither makes their row again.
   pub(crate) async fn remove(&self, username: &str, purge: bool) -> Result<(), ApiError> {
     // a buddy change made meanwhile would leave the map holding a buddy without a row
     let _changing = self.buddies.changing().await;
+    // off the watched users before the forget time is noted, so a status of theirs handled from
+    // here on makes no touch and every touch made before is older than the forget
+    let watched = self.drop_watch(username);
+    let forgotten = self.toucher.forgotten();
+    forgotten.forget(username);
     let name = username.to_string();
-    let deleted = self
-      .db
-      .write(move |conn| store::delete(conn, &name))
-      .await
-      .map_err(internal)?;
-    if !deleted {
+    let deleted = self.db.write(move |conn| store::delete(conn, &name)).await;
+    if !matches!(deleted, Ok(true)) {
+      // nobody was forgotten: they stay watched and their touches are written
+      if watched {
+        self.keep_watch(username);
+      }
+      forgotten.remember(username);
+      deleted.map_err(internal)?;
       return Err(ApiError::not_found(format!(
         "{username} is not in the directory"
       )));
@@ -325,6 +334,9 @@ impl Directory {
       self.buddies.set(username, None);
       self.memberships_changed(username, Vec::new());
     });
+    if watched {
+      self.unwatch_forgotten(username).await;
+    }
     if purge {
       let removed = transfers::remove_all(&self.transfers, username)
         .await

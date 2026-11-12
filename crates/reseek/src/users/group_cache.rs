@@ -329,6 +329,34 @@ impl Directory {
     Ok(())
   }
 
+  /// Takes `username` off the users the server watches for us, without telling it, so what it
+  /// says of their presence is dropped from now on; says whether they were on it.
+  pub(super) fn drop_watch(&self, username: &str) -> bool {
+    self.groups.watched().remove(username)
+  }
+
+  /// Puts `username` back among the users the server watches for us, after
+  /// [`Directory::drop_watch`] when the server was not told.
+  pub(super) fn keep_watch(&self, username: &str) {
+    self.groups.watched().insert(username.to_string());
+  }
+
+  /// Tells the server to stop watching `username`, who was forgotten and is off the watched
+  /// users already.
+  pub(super) async fn unwatch_forgotten(&self, username: &str) {
+    let Some(client) = self.client.get() else {
+      return;
+    };
+    match client.unwatch_user(username).await {
+      Ok(()) => debug!(username, "forgotten user no longer watched"),
+      Err(e) => debug!(
+        username,
+        error = %e,
+        "the server was not told to stop watching a forgotten user; what it says is dropped"
+      ),
+    }
+  }
+
   /// Asks the server for the watched `username`'s statistics again in the background, unless
   /// that is under way; the server pushes their presence and not what they share. The stop
   /// waits for it.

@@ -1,13 +1,16 @@
 //! Touching a user: marking that we dealt with them, with what we learned about them on the way.
 //! Touches go through a bounded channel to one writer, which folds the touches of a user that
-//! arrive within a second into one write.
+//! arrive within a second into one write. A user forgotten by hand leaves the touches made
+//! before unwritten, so they do not make the row again.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use api_types::state::UserStatistics;
 use api_types::users::UserPresence;
 use chrono::{DateTime, Utc};
+use reseek_shares::lock;
 use rusqlite::{Connection, params};
 use soulseek_client::LogLimiter;
 use tokio::sync::mpsc;
@@ -52,17 +55,51 @@ pub enum Touch {
 /// One touch on its way to the writer: who, why and when.
 pub type Touched = (String, Touch, DateTime<Utc>);
 
+/// The users forgotten by hand in this run, with when, so the touches of theirs made before
+/// and not written yet are dropped. Kept for the run; only users forgotten by hand are here.
+#[derive(Clone, Default)]
+pub struct Forgotten(Arc<Mutex<HashMap<String, DateTime<Utc>>>>);
+
+impl Forgotten {
+  /// `username` is forgotten now.
+  pub fn forget(&self, username: &str) {
+    lock(&self.0).insert(username.to_string(), Utc::now());
+  }
+
+  /// `username` was not forgotten after all: their touches are written again.
+  pub fn remember(&self, username: &str) {
+    lock(&self.0).remove(username);
+  }
+
+  /// Takes out of `batch` the users forgotten after their latest touch in it.
+  pub fn drop_from(&self, batch: &mut BTreeMap<String, Pending>) {
+    let forgotten = lock(&self.0);
+    batch.retain(|username, pending| {
+      forgotten
+        .get(username)
+        .is_none_or(|at| pending.seen_at.is_some_and(|seen| seen > *at))
+    });
+  }
+}
+
 /// The sending half of the touch channel.
 #[derive(Clone)]
 pub struct Toucher {
   sender: mpsc::Sender<Touched>,
+  forgotten: Forgotten,
 }
 
 impl Toucher {
   /// A channel for touches, with its receiving half for the writer.
   pub fn channel() -> (Self, mpsc::Receiver<Touched>) {
     let (sender, receiver) = mpsc::channel(CAPACITY);
-    (Self { sender }, receiver)
+    let forgotten = Forgotten::default();
+    (Self { sender, forgotten }, receiver)
+  }
+
+  /// The users forgotten by hand, whose earlier touches the writer drops.
+  pub fn forgotten(&self) -> &Forgotten {
+    &self.forgotten
   }
 
   /// Sends a touch of `username`. A room message or a presence report is dropped when the
@@ -271,6 +308,33 @@ mod tests {
     assert!(alice.is_privileged);
     assert_eq!(alice.presence.map(|(p, _)| p), Some(UserPresence::Online));
     assert_eq!(written.2, None);
+  }
+
+  #[test]
+  fn touches_made_before_a_user_was_forgotten_are_not_written() {
+    let at = |text: &str| -> DateTime<Utc> { text.parse().unwrap() };
+    let touched = |when: &str| Pending {
+      seen_at: Some(at(when)),
+      creates: true,
+      ..Pending::default()
+    };
+    let forgotten = Forgotten::default();
+    forgotten.forget("alice");
+    let now = Utc::now();
+    let later = (now + chrono::Duration::seconds(1)).to_rfc3339();
+    let mut batch = BTreeMap::from([
+      ("alice".to_string(), touched("2026-11-04T09:00:00Z")),
+      ("bob".to_string(), touched("2026-11-04T09:00:00Z")),
+    ]);
+    forgotten.drop_from(&mut batch);
+    assert_eq!(batch.keys().collect::<Vec<_>>(), ["bob"]);
+    let mut batch = BTreeMap::from([("alice".to_string(), touched(&later))]);
+    forgotten.drop_from(&mut batch);
+    assert_eq!(
+      batch.len(),
+      1,
+      "a touch after the forget makes the row again"
+    );
   }
 
   #[tokio::test]

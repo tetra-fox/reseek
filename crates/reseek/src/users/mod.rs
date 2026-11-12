@@ -506,9 +506,15 @@ impl Directory {
     mut receiver: tokio::sync::mpsc::Receiver<touch::Touched>,
     shutdown: CancellationToken,
   ) {
-    while let Some(batch) = touch::gather(&mut receiver, &shutdown).await {
+    while let Some(mut batch) = touch::gather(&mut receiver, &shutdown).await {
       let count = batch.len();
-      match self.db.write(move |conn| touch::write(conn, &batch)).await {
+      let forgotten = self.toucher.forgotten().clone();
+      // checked in the write, so a user forgotten before it was made is left out
+      let written = self.db.write(move |conn| {
+        forgotten.drop_from(&mut batch);
+        touch::write(conn, &batch)
+      });
+      match written.await {
         Ok(changed) => {
           for username in changed {
             self.changed(&username).await;

@@ -917,6 +917,93 @@ async fn forgetting_a_watched_user_unwatches_them_and_a_later_status_makes_no_ro
 }
 
 #[tokio::test]
+async fn a_status_handled_while_a_watched_user_is_forgotten_makes_no_row() {
+  use soulseek_proto::ServerRequest;
+
+  let app = crate::testing::soulseek::app(CONFIG).await;
+  let users = &app.state.users;
+  users.set_buddy("alice", Default::default()).await.unwrap();
+  let online = || alice_is(soulseek_proto::UserPresence::Online);
+  let server = crate::testing::soulseek::Server::start(move |request| match request {
+    ServerRequest::WatchUser(_) => vec![online().1],
+    ServerRequest::GetStatus(_) => vec![online().0],
+    _ => Vec::new(),
+  })
+  .await;
+  server.login(&app).await;
+  let watched = || async { app.call("GET", "/api/v0/users/watched", None).await.1 };
+  let within = std::time::Duration::from_secs(5);
+  let pause = || tokio::time::sleep(std::time::Duration::from_millis(10));
+  tokio::time::timeout(within, async {
+    while watched().await != json!(["alice"]) {
+      pause().await;
+    }
+  })
+  .await
+  .expect("the buddy was never watched");
+
+  // the writer is held, so the forget waits at the row's delete
+  let (held, holding) = tokio::sync::oneshot::channel();
+  let (release, released) = std::sync::mpsc::channel::<()>();
+  let db = users.database().clone();
+  let hold = tokio::spawn(async move {
+    db.write(move |_| {
+      held.send(()).expect("the test waits for the hold");
+      released.recv().expect("the test releases the hold");
+      Ok(())
+    })
+    .await
+  });
+  holding.await.unwrap();
+  let meanwhile = async {
+    let unwatched = tokio::time::timeout(within, async {
+      while watched().await != json!([]) {
+        pause().await;
+      }
+    })
+    .await;
+    server.send(vec![alice_is(soulseek_proto::UserPresence::Away).0]);
+    // the follower keeps the status in the cache before it would touch the row
+    let taken = tokio::time::timeout(within, async {
+      while alice_cached(&app).await["status"]["presence"] != "Away" {
+        pause().await;
+      }
+    })
+    .await;
+    release.send(()).unwrap();
+    (unwatched, taken)
+  };
+  let ((status, _), (unwatched, taken)) =
+    tokio::join!(app.call("DELETE", "/api/v0/users/alice", None), meanwhile);
+  hold.await.unwrap().unwrap();
+  assert!(unwatched.is_ok(), "still watched while the row was deleted");
+  assert!(taken.is_ok(), "the status never reached the cache");
+  assert_eq!(status, 204);
+  let back = tokio::time::timeout(touch::WINDOW * 2, async {
+    while alice(&app).await["known"] != true {
+      tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+  })
+  .await;
+  assert!(
+    back.is_err(),
+    "the forgotten user is in the directory again"
+  );
+  assert_eq!(watched().await, json!([]));
+}
+
+/// What `GET /users/cache` holds of alice.
+async fn alice_cached(app: &crate::testing::TestApp) -> Value {
+  let (_, cache) = app.call("GET", "/api/v0/users/cache", None).await;
+  let all = cache.as_array().unwrap();
+  all
+    .iter()
+    .find(|user| user["username"] == "alice")
+    .unwrap()
+    .clone()
+}
+
+#[tokio::test]
 async fn while_a_new_username_waits_for_the_reconnect_we_are_the_name_logged_in_as() {
   let config = CONFIG.replace("username = \"me\"", "username = \"renamed\"");
   let app = crate::testing::soulseek::app(&config).await;
