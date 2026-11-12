@@ -152,6 +152,11 @@ impl Shares {
     storage::dump(&self.db, path).await
   }
 
+  /// About the size [`Shares::dump`] would write now, read without writing anything.
+  pub async fn index_bytes(&self) -> Result<u64, DbError> {
+    storage::used_bytes(&self.db).await
+  }
+
   /// The local shares as the API shows them, each with its visibility.
   pub fn local_shares(&self) -> Vec<ApiShare> {
     let options = lock(&self.applied).clone();
@@ -177,8 +182,15 @@ impl Shares {
     )
   }
 
+  /// Whether the index served was filled and counted by the startup load or a completed scan.
+  /// A scan running over such an index leaves it served, and this true, until it ends.
+  pub fn index_filled(&self) -> bool {
+    lock(&self.status).phase.filled()
+  }
+
   /// A number that grows each time the local index changed: a scan completed, the index was
-  /// loaded, or watched changes were applied, these at most once a minute.
+  /// loaded, or watched changes were applied, these at most once a minute. The load's change is
+  /// told once the loaded index is served, as the scan that follows it starts.
   pub fn changes(&self) -> tokio::sync::watch::Receiver<u64> {
     self.changed.subscribe()
   }

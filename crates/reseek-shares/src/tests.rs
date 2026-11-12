@@ -556,6 +556,43 @@ async fn a_restart_loads_the_backup_and_scans_once() {
   drop(files);
 }
 
+#[tokio::test]
+async fn the_loads_change_is_told_once_the_loaded_index_is_served_and_counted() {
+  let (files, engine) = shared_engine().await;
+  let again = engine.again(CancellationToken::new(), QUIET).await;
+  let mut changes = again.changes();
+  changes.changed().await.unwrap();
+  assert!(
+    again.index_filled(),
+    "a relay agent uploads the index it is told of"
+  );
+  let counted: u32 = again.local_shares().iter().filter_map(|s| s.files).sum();
+  assert_eq!(counted, 1, "and counted");
+  again.initialized().await;
+  eventually(async || idle(&again)).await;
+
+  // what an agent reads of the engine to know whether it has an index to upload
+  let cancel = again.take_slot(Edge::Load).unwrap();
+  assert!(again.loading_or_scanning() && !again.index_filled());
+  let totals = SharedCounts {
+    directories: 2,
+    files: 1,
+  };
+  again.hold(Edge::Loaded(Some(totals)));
+  assert!(again.loading_or_scanning() && again.index_filled());
+  free_slot(&again);
+  assert!(!again.loading_or_scanning() && again.index_filled());
+  drop(cancel);
+  let _cancel = again.take_slot(Edge::Load).unwrap();
+  again.hold(Edge::Loaded(None));
+  assert!(
+    again.loading_or_scanning() && !again.index_filled(),
+    "a scan after a load that failed fills the index anew"
+  );
+  free_slot(&again);
+  drop(files);
+}
+
 /// Makes an index the one the release before the scan state column wrote: its scans table as
 /// the first migration made it, with the same rows, and no later migration recorded.
 const BEFORE_SCAN_STATE: &str = "ALTER TABLE scans RENAME TO scans_now;

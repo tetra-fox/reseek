@@ -129,6 +129,9 @@ impl Shares {
       match self.load(mode).await {
         Ok((settings, totals)) => {
           let (force, origin) = handed(&self.hold(Edge::Loaded(Some(totals))));
+          // told once the loaded index is served, so whoever follows the changes finds it
+          // filled and counted
+          self.changed.send_modify(|n| *n += 1);
           let shares = self.clone();
           self.watch_shares(settings).await;
           self.initialized.send_replace(true);
@@ -225,7 +228,6 @@ impl Shares {
     );
     *lock(&self.local_counts) = counted;
     self.counts.send_replace(self.server_counts());
-    self.changed.send_modify(|n| *n += 1);
     self.check_unmatched();
     self.refresh_browse_caches().await;
     Ok((settings, totals))

@@ -246,6 +246,21 @@ pub async fn dump(db: &Database, path: &Path) -> Result<u64, DbError> {
   .await
 }
 
+/// The size of the pages `db` uses, about what [`dump`] writes, read without copying anything.
+pub async fn used_bytes(db: &Database) -> Result<u64, DbError> {
+  db.read(|conn| {
+    let pragma = |name: &str| {
+      conn.pragma_query_value(None, name, |row| {
+        let value = row.get::<_, i64>(0)?;
+        u64::try_from(value).map_err(|_| rusqlite::Error::IntegralValueOutOfRange(0, value))
+      })
+    };
+    let used = pragma("page_count")?.saturating_sub(pragma("freelist_count")?);
+    Ok(used.saturating_mul(pragma("page_size")?))
+  })
+  .await
+}
+
 /// Writes a consistent copy of `db` to `backup`, through a file beside it that replaces it
 /// whole, so a failure leaves the last good backup.
 pub async fn back_up(db: &Database, backup: &Path) -> Result<(), DbError> {

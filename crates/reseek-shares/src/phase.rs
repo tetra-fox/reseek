@@ -196,7 +196,7 @@ impl Phase {
   }
 
   /// whether the index was filled once, so the host list is known
-  fn filled(&self) -> bool {
+  pub(crate) fn filled(&self) -> bool {
     match self {
       Self::Idle { served, .. } | Self::Ending { served, .. } => served.is_some(),
       Self::Scanning { before, .. } => before.is_some(),
