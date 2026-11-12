@@ -304,10 +304,11 @@ pub async fn run_now(app: &AppState, name: &str) -> Result<(), ApiError> {
   Ok(())
 }
 
-/// Whether a run of `schedule` is going on: for the rescan, any scan of the shares.
+/// Whether a run of `schedule` is going on: for the rescan, any scan of the shares or the load
+/// of their index at startup, as the share state shows them.
 fn running(app: &AppState, schedule: Schedule) -> bool {
   match schedule {
-    Schedule::ShareRescan => app.shares.scanning(),
+    Schedule::ShareRescan => app.shares.loading_or_scanning(),
     Schedule::Cleanup | Schedule::Vacuum | Schedule::ReleaseCheck | Schedule::Wishlist => {
       lock(&app.jobs.running_schedules).contains(&schedule)
     }

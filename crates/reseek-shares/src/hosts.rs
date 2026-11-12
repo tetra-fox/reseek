@@ -167,6 +167,16 @@ impl Shares {
     matches!(lock(&self.status).phase, Phase::Scanning { .. })
   }
 
+  /// Whether the index is being loaded at startup or a scan of the local shares is running,
+  /// which is what the share state reports as scanning. A scan that ended while the scan hook
+  /// is told of its end is neither: the index it filled is complete.
+  pub fn loading_or_scanning(&self) -> bool {
+    matches!(
+      lock(&self.status).phase,
+      Phase::Loading { .. } | Phase::Scanning { .. }
+    )
+  }
+
   /// A number that grows each time the local index changed: a scan completed, the index was
   /// loaded, or watched changes were applied, these at most once a minute.
   pub fn changes(&self) -> tokio::sync::watch::Receiver<u64> {
