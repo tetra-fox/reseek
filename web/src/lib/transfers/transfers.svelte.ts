@@ -9,7 +9,8 @@ import { live } from "#lib/live/live.svelte.js";
 import { call, type Outcome } from "#lib/request.js";
 
 import { type BulkAction, summary } from "./bulk";
-import { type Direction, isMoving, type Transfer } from "./states";
+import { type Direction, isEnded, isMoving, type Transfer } from "./states";
+import { unseen } from "./unseen.svelte";
 
 /** How many speed samples a row's sparkline keeps */
 export const SPARK_POINTS = 20;
@@ -21,8 +22,9 @@ export const fileKey = (username: string, path: string) => `${username}\u0000${p
 
 /**
  * One direction's transfers, kept by id: frames on the `transfers` topic add, patch and drop
- * rows, and a reload reconciles them with the grouped listing. The last speeds each row reported
- * are kept for its sparkline
+ * rows, and a reload reconciles them with the grouped listing. Once read, it reads again when
+ * frames were missed, as the topic sends no snapshot. The last speeds each row reported are kept
+ * for its sparkline
  */
 export class Transfers {
   readonly direction: Direction;
@@ -75,6 +77,9 @@ export class Transfers {
       this.speeds.delete(t.id);
       this.queueErrors.delete(t.id);
     });
+    live.onMissed(() => {
+      if (this.loaded) void this.load();
+    });
   }
 
   #ordered(ids: string[]) {
@@ -104,7 +109,13 @@ export class Transfers {
         : await call(() => api.GET("/api/v0/transfers/uploads"));
     if (!outcome.ok) return this.list.abandon(turn) ? loadFailed(this, outcome.error) : undefined;
     const files = outcome.data.flatMap((u) => u.directories.flatMap((d) => d.files));
+    // what ends between frames, as while they were missed, counts toward the navigation's badges
+    const open = this.list.rows.filter((t) => !isEnded(t.state)).map((t) => t.id);
     if (!this.list.reconcile(files, turn)) return;
+    for (const id of open) {
+      const t = this.list.get(id);
+      if (t) unseen.count(t);
+    }
     this.loaded = true;
     this.error = "";
   };

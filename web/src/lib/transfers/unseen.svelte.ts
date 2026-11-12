@@ -8,8 +8,9 @@ const DIRECTIONS = { Download: "download", Upload: "upload" } as const;
 
 /**
  * What finished and what failed in each direction while its screen was not open, for the
- * navigation's badges: transfers that reach `Completed, Succeeded` or a failure on the
- * `transfers` topic, each transfer counted once per outcome. Opening the screen clears its counts
+ * navigation's badges: transfers that reach `Completed, Succeeded` or a failure, told by the
+ * `transfers` topic or found by a reload, each transfer counted once per outcome. Opening the
+ * screen clears its counts
  */
 class Unseen {
   #counts = $state<Record<Direction, Counts>>({
@@ -20,7 +21,7 @@ class Unseen {
   #counted = new Set<string>();
 
   constructor() {
-    live.on("transfers.updated", (t) => this.#updated(t));
+    live.on("transfers.updated", (t) => this.count(t));
     live.on("transfers.removed", (t) => {
       this.#counted.delete(`${t.id}:succeeded`);
       this.#counted.delete(`${t.id}:failed`);
@@ -44,7 +45,8 @@ class Unseen {
     };
   }
 
-  #updated(t: Transfer) {
+  /** Counts `t` when it reached an outcome not counted for it yet */
+  count(t: Transfer) {
     const outcome = isSucceeded(t.state) ? "succeeded" : isFailed(t.state) ? "failed" : null;
     const direction = DIRECTIONS[t.direction as keyof typeof DIRECTIONS];
     if (!outcome || !direction) return;
