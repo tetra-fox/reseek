@@ -227,6 +227,19 @@ mod tests {
   }
 
   #[tokio::test]
+  async fn an_edit_made_before_the_watch_began_is_read_at_the_start() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    fs::write(&path, "[server]\nport = 2000\n").unwrap();
+    let watcher = watched(dir.path());
+    fs::write(&path, "[server]\nport = 2001\n").unwrap();
+    let cancel = CancellationToken::new();
+    watcher.start(Watch::Events, cancel.clone()).await;
+    assert_eq!(watcher.current().values.server.port, 2001);
+    cancel.cancel();
+  }
+
+  #[tokio::test]
   async fn a_drop_in_directory_made_again_is_watched_again() {
     let dir = tempfile::tempdir().unwrap();
     let drop_ins = dir.path().join("config.d");
