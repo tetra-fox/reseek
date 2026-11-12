@@ -908,7 +908,7 @@
         "tags": [
           "auth"
         ],
-        "summary": "Where the provider ends sessions it started, with a signed logout token naming its session\nor its user. Answered 404 for a provider that takes no back-channel logout whatever the\nbody, else always 200, a body that is not a logout form included.",
+        "summary": "Where the provider ends sessions it started, with a signed logout token naming its session\nor its user. Answered 404 for a provider that takes no back-channel logout whatever the\nbody, and 503 while the provider's discovery document, which the token is checked with,\ncannot be read, so a provider that retries sends the logout again. Else always 200, a body\nthat is not a logout form included.",
         "operationId": "backchannel",
         "parameters": [
           {
@@ -936,6 +936,15 @@
             "description": "taken"
           },
           "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
             "content": {
               "application/json": {
                 "schema": {

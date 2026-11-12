@@ -228,12 +228,17 @@ async fn callback(
 
 /// Where the provider ends sessions it started, with a signed logout token naming its session
 /// or its user. Answered 404 for a provider that takes no back-channel logout whatever the
-/// body, else always 200, a body that is not a logout form included.
+/// body, and 503 while the provider's discovery document, which the token is checked with,
+/// cannot be read, so a provider that retries sends the logout again. Else always 200, a body
+/// that is not a logout form included.
 #[utoipa::path(
   post, path = "/auth/oidc/{name}/backchannel", tag = "auth",
   params(("name" = String, Path, description = "the provider's name in the configuration")),
   request_body(content = BackchannelLogout, content_type = "application/x-www-form-urlencoded"),
-  responses((status = 200, description = "taken"), (status = 404, body = api_types::ErrorBody))
+  responses(
+    (status = 200, description = "taken"), (status = 404, body = api_types::ErrorBody),
+    (status = 503, body = api_types::ErrorBody)
+  )
 )]
 async fn backchannel(
   State(app): State<AppState>,
@@ -268,10 +273,10 @@ async fn backchannel(
           provider = name,
           error = e,
           suppressed,
-          "back-channel logout not checked; provider unavailable"
+          "back-channel logout not checked; provider unavailable, answered 503"
         );
       }
-      return Ok(StatusCode::OK);
+      return Err(ApiError::service_unavailable("The identity provider is unavailable").logged());
     }
   };
   let logged_out = match check_token(&provider, metadata, &form.logout_token).await {
@@ -878,5 +883,50 @@ mod tests {
       )
       .await;
     assert_eq!(stranger.status, 401);
+  }
+
+  /// A back-channel logout of `claims` signed by `issuer`.
+  fn logout_request(issuer: &Issuer, claims: &Value) -> axum::http::Request<axum::body::Body> {
+    axum::http::Request::builder()
+      .method("POST")
+      .uri("/api/v0/auth/oidc/home/backchannel")
+      .header("host", "localhost")
+      .header("content-type", "application/x-www-form-urlencoded")
+      .body(axum::body::Body::from(format!(
+        "logout_token={}",
+        issuer.sign(claims)
+      )))
+      .unwrap()
+  }
+
+  /// The claims of a valid logout token of the provider session `sid`.
+  fn logout_claims(issuer: &Issuer, sid: &str) -> Value {
+    let now = chrono::Utc::now().timestamp();
+    json!({
+      "iss": issuer.url, "aud": CLIENT_ID, "iat": now, "exp": now + 120, "jti": "j1", "sid": sid,
+      "events": { "http://schemas.openid.net/event/backchannel-logout": {} },
+    })
+  }
+
+  #[tokio::test]
+  async fn a_back_channel_logout_that_cannot_be_checked_is_answered_503() {
+    let issuer = Issuer::start().await;
+    let app = app(
+      &format!(
+        "[web.authentication.oidc.home]\nissuer = \"http://127.0.0.1:9/\"\nclient_id = \
+         \"{CLIENT_ID}\"\n"
+      ),
+      &[],
+    )
+    .await;
+    for attempt in ["first", "while discovery is held back"] {
+      let answer = app
+        .send_from(
+          OUTSIDE,
+          logout_request(&issuer, &logout_claims(&issuer, "s1")),
+        )
+        .await;
+      assert_eq!(answer.status, 503, "{attempt}");
+    }
   }
 }
