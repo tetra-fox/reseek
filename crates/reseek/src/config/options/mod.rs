@@ -79,8 +79,13 @@ pub struct Options {
     apply = "restart"
   )]
   pub instance_name: String,
-  /// How long a shutdown waits for work in progress to finish.
-  #[cascade(env = "RESEEK_SHUTDOWN_TIMEOUT", cli = "--shutdown-timeout")]
+  /// How long a shutdown waits for open HTTP connections to finish. Transfers in progress are not
+  /// waited for.
+  #[cascade(
+    env = "RESEEK_SHUTDOWN_TIMEOUT",
+    cli = "--shutdown-timeout",
+    apply = "restart"
+  )]
   #[serde(with = "crate::config::duration")]
   pub shutdown_timeout: Duration,
   /// Operational and development switches.
