@@ -4,7 +4,14 @@ import { ORDER, USER_DEFINED, VISIBLE_TO } from "#lib/users/groups.js";
 
 import { type ConfigView, controlOf, errorsByKey, fromDraft, toDraft } from "./fields";
 import fixture from "./fixtures/view.json";
-import { BLOCKING, sections, unlisted, valueAt } from "./sections";
+import { BLOCKING, sections, valueAt } from "./sections";
+
+/**
+ * Options Settings does not show: `relay.mode` takes only `controller` and is kept so that a
+ * configuration still naming the daemon's old roles fails with a pointer to `reseek-agent`;
+ * whether the daemon is a controller is `relay.enabled`
+ */
+const unlisted = new Set(["relay.mode"]);
 
 /**
  * The daemon's options view of the default configuration with an empty config.toml, written by

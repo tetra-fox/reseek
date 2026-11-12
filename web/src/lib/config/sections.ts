@@ -135,13 +135,6 @@ const transferRetention = (direction: "upload" | "download"): Field[] =>
     placeholder: "kept"
   }));
 
-/**
- * Options Settings does not show: `relay.mode` takes only `controller` and is kept so that a
- * configuration still naming the daemon's old roles fails with a pointer to `reseek-agent`;
- * whether the daemon is a controller is `relay.enabled`
- */
-export const unlisted = new Set(["relay.mode"]);
-
 /** The options of blocking, which the blocked users' tab shows rather than Settings */
 export const BLOCKING: Section = {
   id: "blocking",
