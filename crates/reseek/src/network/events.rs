@@ -1050,4 +1050,21 @@ mod tests {
       "no application.options frame after the reconnect"
     );
   }
+
+  #[tokio::test]
+  async fn a_change_the_client_has_not_taken_when_a_session_begins_still_waits_for_a_reconnect() {
+    let config = format!("remote_configuration = true\n{}", crate::testing::TRUSTED);
+    let app = crate::testing::app(&config, &[]).await;
+    // the client's options are being patched, so the change below waits to reach it
+    let patching = app.state.network.reconfiguring().lock().await;
+    let change = serde_json::json!({ "set": { "soulseek.server_keepalive.probes": 7 } });
+    let (status, _) = app.call("PATCH", "/api/v0/options", Some(change)).await;
+    assert_eq!(status, 200);
+    connected(&app.state).await;
+    assert_eq!(
+      app.state.config.current().pending_reconnect,
+      ["soulseek.server_keepalive.probes"]
+    );
+    drop(patching);
+  }
 }
