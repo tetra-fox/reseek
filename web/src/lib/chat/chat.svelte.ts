@@ -36,7 +36,11 @@ class Chat {
   readonly rooms = new Keyed<JoinedRoom>((r) => r.name);
   /** the newest stored notice from the server, held apart as it is no conversation */
   latestNotice = $state.raw<Schemas["PrivateMessage"] | null>(null);
-  /** the counts from the last `chat.unread` frame, null until one came */
+  /**
+   * the counts from the last `chat.unread` frame, null until one came. They are current only
+   * while the stream is up; while it is down the rows, which reads and the actions here keep,
+   * are counted instead
+   */
   unread = $state.raw<ChatUnread | null>(null);
   /** the pane on screen, by pane key, which gets no notification while the tab is visible */
   openPane = $state<string | null>(null);
@@ -89,9 +93,14 @@ class Chat {
     });
   }
 
+  /** the counts from the frames while they come, null while the rows are counted */
+  get #counts(): ChatUnread | null {
+    return live.status === "connected" ? this.unread : null;
+  }
+
   /** The total for the navigation's badge: unread private messages and room mentions */
   get total(): number {
-    if (this.unread) return this.unread.total;
+    if (this.#counts) return this.#counts.total;
     let n = 0;
     for (const c of this.conversations.rows) n += c.unAcknowledgedMessageCount;
     for (const r of this.rooms.rows) n += r.mentions;
@@ -100,13 +109,13 @@ class Chat {
 
   /** The unread room mentions, which turn the badge to the accent color */
   get totalMentions(): number {
-    return this.unread?.totalMentions ?? this.rooms.rows.reduce((n, r) => n + r.mentions, 0);
+    return this.#counts?.totalMentions ?? this.rooms.rows.reduce((n, r) => n + r.mentions, 0);
   }
 
   /** A conversation's unread messages */
   unreadOf(username: string): number {
     return (
-      this.unread?.conversations[username] ??
+      this.#counts?.conversations[username] ??
       this.conversations.get(username)?.unAcknowledgedMessageCount ??
       0
     );
@@ -115,7 +124,9 @@ class Chat {
   /** A room's unread messages and mentions */
   roomUnread(name: string): { unread: number; mentions: number } {
     const room = this.rooms.get(name);
-    return this.unread?.rooms[name] ?? { unread: room?.unread ?? 0, mentions: room?.mentions ?? 0 };
+    return (
+      this.#counts?.rooms[name] ?? { unread: room?.unread ?? 0, mentions: room?.mentions ?? 0 }
+    );
   }
 
   /** Follows conversations and rooms on the event stream while the app is open */
@@ -213,20 +224,35 @@ class Chat {
       row.hasUnAcknowledgedMessages = false;
     }
     if (this.unread && username in this.unread.conversations) {
-      const { [username]: _read, ...others } = this.unread.conversations;
-      this.unread = { ...this.unread, conversations: others };
+      const { [username]: read, ...others } = this.unread.conversations;
+      this.unread = { ...this.unread, total: this.unread.total - read, conversations: others };
     }
     return outcome;
   };
 
-  /** Moves a room's read marker to `localId`, never back */
+  /**
+   * Moves a room's read marker to `localId`, never back. A marker at the newest message the row
+   * shows leaves nothing unread here at once
+   */
   markRoomRead = async (name: string, localId: number) => {
     const outcome = await call(() =>
       api.PUT("/api/v0/rooms/joined/{roomName}/read", { params: byRoom(name), body: { localId } })
     );
     const room = this.rooms.get(name);
-    if (outcome.ok && room) {
-      this.rooms.assign(name, { lastReadId: Math.max(room.lastReadId, localId) });
+    if (!outcome.ok || !room) return outcome;
+    const all = localId >= (room.lastMessage?.localId ?? 0);
+    this.rooms.assign(name, {
+      lastReadId: Math.max(room.lastReadId, localId),
+      ...(all ? { unread: 0, mentions: 0 } : {})
+    });
+    const counted = this.unread?.rooms[name];
+    if (all && this.unread && counted) {
+      this.unread = {
+        ...this.unread,
+        total: this.unread.total - counted.mentions,
+        totalMentions: this.unread.totalMentions - counted.mentions,
+        rooms: { ...this.unread.rooms, [name]: { unread: 0, mentions: 0 } }
+      };
     }
     return outcome;
   };

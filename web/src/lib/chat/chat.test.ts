@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { toasts } from "#lib/feedback/toast.svelte.js";
 import { DEBOUNCE_MS, live } from "#lib/live/live.svelte.js";
-import { conversation } from "#lib/testing/fixtures.js";
+import { conversation, joinedRoom } from "#lib/testing/fixtures.js";
 import { flush } from "#lib/testing/flush.js";
 import { connected } from "#lib/testing/live.js";
 import { fakeNetwork } from "#lib/testing/network.js";
@@ -23,6 +23,18 @@ const notice = {
   wasReplayed: false,
   autoReply: false
 } as const;
+
+/** a message said in `indie`, stored as `localId`, the later the larger */
+const roomMessage = (localId: number, hidden: boolean) => ({
+  localId,
+  timestamp: new Date(Date.UTC(2026, 9, 26, 10, 0, localId % 60)).toISOString(),
+  username: "alice",
+  message: "hi",
+  roomName: "indie",
+  self: false,
+  isMention: false,
+  hidden
+});
 
 describe("the chat store", () => {
   afterEach(() => {
@@ -160,6 +172,29 @@ describe("the chat store", () => {
       release();
       vi.useRealTimers();
     }
+  });
+
+  it("counts what is read while the stream is down from the rows it keeps", async () => {
+    fakeNetwork((url, method) => (method === "PUT" ? { status: 204 } : undefined));
+    // counts a stream sent before it went down
+    chat.unread = {
+      conversations: { alice: 1 },
+      rooms: { indie: { unread: 3, mentions: 1 } },
+      total: 2,
+      totalMentions: 1
+    };
+    chat.conversations.upsert({
+      ...conversation("alice"),
+      unAcknowledgedMessageCount: 1,
+      hasUnAcknowledgedMessages: true
+    });
+    chat.rooms.upsert(
+      joinedRoom("indie", { unread: 3, mentions: 1, lastMessage: roomMessage(7, false) })
+    );
+    await chat.acknowledge("alice");
+    await chat.markRoomRead("indie", 7);
+    expect(chat.total).toBe(0);
+    expect(chat.roomUnread("indie")).toEqual({ unread: 0, mentions: 0 });
   });
 
   it("says why each read failed when both did", async () => {

@@ -139,12 +139,7 @@ describe("the chat list", () => {
 
   it("holds each pinned chat once above the sections, in the user's order, while joined", () => {
     start();
-    chat.unread = {
-      conversations: { bob: 3 },
-      rooms: {},
-      total: 3,
-      totalMentions: 0
-    };
+    chat.conversations.assign("bob", { unAcknowledgedMessageCount: 3 });
     pins.list = [
       { kind: "user", name: "bob" },
       { kind: "room", name: "indie" }

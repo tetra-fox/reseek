@@ -142,11 +142,12 @@ describe("a chat pane", () => {
     });
     await flush();
     expect(ids()).toEqual(["1", "2"]);
-    expect(chat.total).toBe(1);
-    // the pane at the bottom of a visible tab reads it: the conversation is acknowledged
+    // the pane at the bottom of a visible tab reads it: the conversation is acknowledged, and
+    // the count drops at once
     expect(net.requests.filter((r) => r.method === "PUT").map((r) => r.url.pathname)).toEqual([
       "/api/v0/conversations/alice"
     ]);
+    expect(chat.total).toBe(0);
     net.frame("chat.unread", { conversations: {}, rooms: {}, total: 0, totalMentions: 0 });
     await flush();
     expect(chat.total).toBe(0);
