@@ -142,6 +142,18 @@ impl Accounts {
   fn lock(&self) -> std::sync::MutexGuard<'_, Option<(Settings, Arc<Hashed>)>> {
     lock(&self.loaded)
   }
+
+  /// Takes every turn to check a password, so checks asked for wait until it is dropped.
+  #[cfg(test)]
+  pub(crate) async fn hold_checks(&self) -> OwnedSemaphorePermit {
+    let all = u32::try_from(self.checks.available_permits()).expect("a few permits");
+    self
+      .checks
+      .clone()
+      .acquire_many_owned(all)
+      .await
+      .expect("the check semaphore is never closed")
+  }
 }
 
 impl Hashed {

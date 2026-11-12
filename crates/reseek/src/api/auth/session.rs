@@ -86,7 +86,7 @@ async fn login(
   if login.username.trim().is_empty() || login.password.trim().is_empty() {
     return Err(missing());
   }
-  let current = app.config.current();
+  let mut current = app.config.current();
   let options = &current.values;
   if options.headless {
     if let Some(suppressed) = HEADLESS_LOGIN.allow() {
@@ -98,24 +98,35 @@ async fn login(
     return Err(ApiError::forbidden("The web UI is disabled in headless mode").logged());
   }
   let client = &presented.client;
-  if !options.web.authentication.local.enabled {
-    return Err(ApiError::forbidden("Password login is disabled"));
-  }
-  if !offered_to(options, client) {
-    return Err(ApiError::forbidden(
-      "Password login is not offered to this address",
-    ));
-  }
+  password_login_offered(options, client)?;
   // counted as a failure from the start, so attempts made at the same time are limited too
   let Some(attempt) = app.auth.limits.logins.attempt(client.ip) else {
     return Err(ApiError::rate_limited());
   };
   let username = login.username.clone();
-  let checked = app
-    .auth
-    .accounts
-    .check(&options.web.authentication, login.username, login.password)
-    .await;
+  // the session is made from the options the password was checked against, which must still be
+  // in effect after the check, so after a reload during it the login is checked again
+  let checked = loop {
+    let checked = app
+      .auth
+      .accounts
+      .check(
+        &current.values.web.authentication,
+        login.username.clone(),
+        login.password.clone(),
+      )
+      .await;
+    let now = app.config.current();
+    if now.revision == current.revision {
+      break checked;
+    }
+    current = now;
+    if let Err(e) = password_login_offered(&current.values, client) {
+      app.auth.limits.logins.forgive(attempt);
+      return Err(e);
+    }
+  };
+  let options = &current.values;
   let account = match checked {
     Ok(Some(account)) => {
       app.auth.limits.logins.forgive(attempt);
@@ -399,6 +410,19 @@ async fn provider_logout(
     external_base(&app.url_base, &current.values, client)?
   );
   end_session_url(&metadata, &id_token, &back)
+}
+
+/// Refuses password login when it is off or `client`'s address may not use it.
+fn password_login_offered(options: &Options, client: &Client) -> Result<(), ApiError> {
+  if !options.web.authentication.local.enabled {
+    return Err(ApiError::forbidden("Password login is disabled"));
+  }
+  if !offered_to(options, client) {
+    return Err(ApiError::forbidden(
+      "Password login is not offered to this address",
+    ));
+  }
+  Ok(())
 }
 
 /// Whether `local.only_from` lets `client`'s address use password login.
@@ -834,5 +858,38 @@ mod tests {
       )
       .await;
     assert_eq!(me.status, 401);
+  }
+
+  #[tokio::test]
+  async fn a_login_takes_the_role_of_a_reload_made_during_its_password_check() {
+    let account = |role: &str| {
+      format!("[web.authentication.local.users.viewer]\npassword = \"look\"\nrole = \"{role}\"\n")
+    };
+    let app = app(&account("administrator"), &[]).await;
+    let held = app.state.auth.accounts.hold_checks().await;
+    let login = app.send_from(
+      OUTSIDE,
+      request(
+        "POST",
+        "/api/v0/session",
+        Some(json!({ "username": "viewer", "password": "look" })),
+      ),
+    );
+    tokio::pin!(login);
+    let waited = tokio::time::timeout(std::time::Duration::from_millis(200), &mut login).await;
+    assert!(waited.is_err(), "the login waits for its password check");
+    std::fs::write(app.dir.path().join("config.toml"), account("readonly")).unwrap();
+    app.state.config.reload().await.unwrap();
+    drop(held);
+    let signed = login.await;
+    assert_eq!(signed.status, 204, "{:?}", signed.body);
+    let cookie = set_cookie(&signed.headers, "reseek_session").unwrap();
+    let me = app
+      .send_from(
+        OUTSIDE,
+        with(request("GET", "/api/v0/session", None), "cookie", &cookie),
+      )
+      .await;
+    assert_eq!(me.json()["role"], "ReadOnly");
   }
 }
