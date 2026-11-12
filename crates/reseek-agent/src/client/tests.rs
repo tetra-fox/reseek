@@ -1,7 +1,8 @@
 //! The agent's share uploads against a controller the test plays: the socket's frames come to
-//! the test, and the uploads go to a server that answers as the test says. A re-upload that
-//! fails is tried again with no change to ask for it, a first upload refused as too large
-//! copies nothing and is a refusal, and an upload stops when its socket closes.
+//! the test, and the uploads go to a server that answers as the test says. The upload waits
+//! only while a load or scan fills the index, or runs after an upload on the socket; a
+//! re-upload that fails is tried again with no change to ask for it, a first upload refused as
+//! too large copies nothing and is a refusal, and an upload stops when its socket closes.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -10,10 +11,10 @@ use std::time::Duration;
 use api_types::relay::{RelayErrorCode, RelayMessage};
 use cascade::{Layers, Watcher};
 use reseek_relay_proto::frames;
-use reseek_shares::{Setup, Shares, lock};
+use reseek_shares::{ScanNotice, ScanOrigin, Setup, Shares, lock};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
-use tokio::sync::mpsc;
+use tokio::sync::{Semaphore, mpsc};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
@@ -31,6 +32,17 @@ enum Answer {
   Silent,
 }
 
+/// How the agent's share engine starts.
+#[derive(Clone, Copy, PartialEq)]
+enum Start {
+  /// its startup scan fills the index, and the test waits for it
+  Scanned,
+  /// its startup scan is held at its start until the test lets it go on
+  ScanHeld,
+  /// no scan at startup, so nothing fills the index
+  Unscanned,
+}
+
 /// An agent sharing one file, logged in on a socket whose frames the test reads.
 struct Agent {
   dir: tempfile::TempDir,
@@ -39,11 +51,14 @@ struct Agent {
   frames: mpsc::Receiver<String>,
   /// the share uploads the test's controller took
   posts: Arc<AtomicUsize>,
+  /// each scan waits at its start for one permit
+  scans: Arc<Semaphore>,
   shutdown: CancellationToken,
 }
 
 impl Drop for Agent {
   fn drop(&mut self) {
+    self.link.close(frames::close::NORMAL);
     self.shutdown.cancel();
   }
 }
@@ -66,6 +81,18 @@ impl Agent {
       "{asked:?}"
     );
     self.agent.handle(&self.link, &frames::encode(None, answer));
+  }
+
+  /// What the agent sends once asked to upload: an ask for a token, a deferral, or nothing
+  /// within half a second.
+  async fn asked_to_upload(&mut self) -> Option<RelayMessage> {
+    self.agent.request_sync();
+    let sent = tokio::time::timeout(Duration::from_millis(500), self.frames.recv()).await;
+    sent.ok().map(|text| {
+      frames::decode(&text.expect("the socket is open"))
+        .unwrap()
+        .message
+    })
   }
 
   fn copied(&self) -> bool {
@@ -144,8 +171,14 @@ async fn read_request(connection: &mut tokio::net::TcpStream) {
 }
 
 /// An agent sharing one file in `dir/share`, with its controller's uploads answered by
-/// `answers`, logged in on a socket that had an upload when `ready`.
+/// `answers`, logged in on a socket that had an upload when `ready`, once its startup scan
+/// filled the index.
 async fn agent(answers: Vec<Answer>, ready: bool) -> Agent {
+  agent_from(Start::Scanned, answers, ready).await
+}
+
+/// [`agent`] with its share engine started as `start`.
+async fn agent_from(start: Start, answers: Vec<Answer>, ready: bool) -> Agent {
   let dir = tempfile::tempdir().unwrap();
   let posts = Arc::new(AtomicUsize::new(0));
   let address = controller(answers, posts.clone()).await;
@@ -165,25 +198,43 @@ async fn agent(answers: Vec<Answer>, ready: bool) -> Agent {
     std::fs::create_dir_all(&made).unwrap();
     made
   };
+  let scans = Arc::new(Semaphore::new(usize::from(start == Start::Scanned)));
+  let gate = scans.clone();
   let setup = Setup {
     cache: path("cache"),
     backups: path("backups"),
     downloads: path("downloads"),
-    scan_at_startup: true,
+    scan_at_startup: start != Start::Unscanned,
     force_scan: false,
     volatile: false,
     case_sensitive: false,
     rescan_on_schedule: false,
     browse_caches: false,
-    scans: Box::new(|_| Box::pin(async {})),
+    scans: Box::new(move |notice| {
+      let gate = gate.clone();
+      Box::pin(async move {
+        if matches!(notice, ScanNotice::Started { .. }) {
+          gate.acquire().await.unwrap().forget();
+        }
+      })
+    }),
     publish: Box::new(|_| {}),
   };
   let shutdown = CancellationToken::new();
   let shares = Shares::open(&config, |o: &Options| &o.shares, setup, shutdown.clone())
     .await
     .unwrap();
-  shares.initialized().await;
-  assert!(!shares.loading_or_scanning() && shares.index_filled());
+  match start {
+    Start::Scanned => {
+      shares.initialized().await;
+      assert!(!shares.loading_or_scanning() && shares.index_filled());
+    }
+    Start::ScanHeld => {
+      eventually(|| shares.loading_or_scanning()).await;
+      assert!(!shares.index_filled());
+    }
+    Start::Unscanned => assert!(!shares.loading_or_scanning() && !shares.index_filled()),
+  }
   let settings = Arc::new(Settings::new(&config.current().values).unwrap());
   let uploads = path("uploads");
   let agent = AgentClient::new(config, shares, path("received"), uploads, shutdown.clone());
@@ -195,8 +246,55 @@ async fn agent(answers: Vec<Answer>, ready: bool) -> Agent {
     link,
     frames,
     posts,
+    scans,
     shutdown,
   }
+}
+
+/// Whether `sent` asks for a share upload token.
+fn asks(sent: &Option<RelayMessage>) -> bool {
+  matches!(sent, Some(RelayMessage::SharesBegin { .. }))
+}
+
+#[tokio::test]
+async fn the_upload_waits_only_while_a_load_or_scan_fills_the_index_or_follows_an_upload() {
+  // a first scan runs: the controller is told the shares come after it, and its end uploads
+  let mut client = agent_from(Start::ScanHeld, Vec::new(), false).await;
+  let sent = client.asked_to_upload().await;
+  assert!(
+    matches!(sent, Some(RelayMessage::SyncDeferred { .. })),
+    "{sent:?}"
+  );
+  client.scans.add_permits(1);
+  let sent = Some(client.next().await);
+  assert!(asks(&sent), "the scan's end uploads: {sent:?}");
+  drop(client);
+
+  // idle over a filled index
+  let mut client = agent(Vec::new(), false).await;
+  assert!(asks(&client.asked_to_upload().await));
+  drop(client);
+
+  // a scan over a filled index, on a socket with no upload yet: that index goes up at once
+  let mut client = agent(Vec::new(), false).await;
+  client.agent.shares.scan(false, ScanOrigin::Asked).unwrap();
+  assert!(client.agent.shares.loading_or_scanning() && client.agent.shares.index_filled());
+  assert!(asks(&client.asked_to_upload().await));
+  drop(client);
+
+  // the same on a socket that had an upload: it keeps that one until the scan's end
+  let mut client = agent(Vec::new(), true).await;
+  client.agent.shares.scan(false, ScanOrigin::Asked).unwrap();
+  let sent = client.asked_to_upload().await;
+  assert!(sent.is_none(), "{sent:?}");
+  client.scans.add_permits(1);
+  let sent = Some(client.next().await);
+  assert!(asks(&sent), "the scan's end uploads: {sent:?}");
+  drop(client);
+
+  // nothing filled the index and nothing will, with no scan at startup: it goes up as it is
+  let mut client = agent_from(Start::Unscanned, Vec::new(), false).await;
+  assert!(asks(&client.asked_to_upload().await));
 }
 
 #[tokio::test]

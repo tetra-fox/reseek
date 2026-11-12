@@ -3,11 +3,11 @@
 //! index's size, so an index the controller does not take is never copied. One upload runs at
 //! a time; one asked for meanwhile runs once after it.
 //!
-//! An index that neither the startup load nor a completed scan filled is not uploaded: until
-//! the first upload on a socket the controller is told every minute that the shares come after
-//! the scan, and the end of the load or the scan asks for the upload. During a scan over a
-//! filled index, a socket with no upload yet gets that index at once; one that has keeps it
-//! until the scan ends.
+//! While the startup load or a first scan fills the index, it is not uploaded: until the
+//! first upload on a socket the controller is told every minute that the shares come after the
+//! scan, and the end of the load or the scan asks for the upload. During a scan over a filled
+//! index, a socket with no upload yet gets that index at once; one that has keeps it until the
+//! scan ends. With no load or scan running the index is uploaded as it is.
 //!
 //! An upload stops when its socket closes, or when the controller takes none of the index for
 //! thirty seconds. The first upload on a socket failing closes the socket to try again from
@@ -81,11 +81,11 @@ impl AgentClient {
     tokio::spawn(async move { agent.sync_while_asked().await }.in_current_span());
   }
 
-  /// Whether the upload waits for a load or a scan to end: always while nothing filled the
-  /// index, as during the load or a first scan, and during a scan over a filled one once `link`
-  /// had an upload.
+  /// Whether the upload waits for the load or the scan running to end: one that fills the
+  /// index for the first time always, one over a filled index once `link` had an upload.
+  /// Outside a load or scan the index is uploaded as it is, filled or not.
   fn defers(&self, link: &Link) -> bool {
-    !self.shares.index_filled() || (self.shares.loading_or_scanning() && link.ready())
+    self.shares.loading_or_scanning() && (!self.shares.index_filled() || link.ready())
   }
 
   /// Tells the controller the shares come once the load or scan running ends, while none were
