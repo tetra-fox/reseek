@@ -24,6 +24,19 @@ export const logLine = (record: LogRecord): Line => ({ seq: ++next, record });
 const identity = (r: LogRecord) => `${r.timestamp}|${r.context}|${r.level}|${r.message}`;
 
 /**
+ * Whether `record` is shown in `lines` already: a stream that resumed to follow the log replays
+ * records a read just before it brought
+ */
+export const isShown = (record: LogRecord, lines: Line[]) =>
+  lines.some(
+    ({ record: r }) =>
+      r.timestamp === record.timestamp &&
+      r.message === record.message &&
+      r.context === record.context &&
+      r.level === record.level
+  );
+
+/**
  * Lines for records read again (oldest first), the ones already shown keeping their lines so
  * their rows stay; records alike are matched in order
  */

@@ -22,7 +22,7 @@
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
   import { call } from "#lib/request.js";
-  import { LEVELS, type Line, logLine, logTime, numbered } from "#lib/system/logs.js";
+  import { isShown, LEVELS, type Line, logLine, logTime, numbered } from "#lib/system/logs.js";
   import { clock } from "#lib/ui/clock.svelte.js";
 
   // the daemon's newest log records as they are written, newest first
@@ -77,6 +77,7 @@
   $effect(() => live.on("logs.buffer", take));
   $effect(() =>
     live.on("logs.record", (record) => {
+      if (isShown(record, waiting) || isShown(record, lines)) return;
       const line = logLine(record);
       if (paused) waiting = [line, ...waiting].slice(0, MAX);
       // the oldest rows go only once nobody is selecting in or pressing on the list
