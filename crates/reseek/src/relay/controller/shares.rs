@@ -19,7 +19,7 @@ use tokio::time::Instant;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
-use super::{Controller, Token};
+use super::{Controller, ShareToken};
 use crate::api::error::ApiError;
 use crate::db::remove_database;
 use crate::services::AgentCredential;
@@ -130,10 +130,9 @@ impl Controller {
       registry.share_tokens.retain(|_, t| t.expires > now);
       registry.share_tokens.insert(
         token,
-        Token {
+        ShareToken {
           agent: name.to_string(),
           socket,
-          filename: None,
           expires: now + SHARE_TOKEN_LIFETIME,
         },
       );

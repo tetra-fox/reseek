@@ -14,7 +14,7 @@ use tokio_util::io::ReaderStream;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
-use super::{Controller, Token};
+use super::{Controller, DownloadToken};
 use crate::api::error::ApiError;
 use crate::safety::{Os, is_absolute};
 use crate::services::AgentCredential;
@@ -42,11 +42,7 @@ impl Controller {
       warn!(path = %path.display(), "finished download is outside the downloads directory; agents not told");
       return;
     };
-    let agents: Vec<(String, u64)> = lock(&self.registry)
-      .agents
-      .iter()
-      .map(|(name, r)| (name.clone(), r.socket))
-      .collect();
+    let agents: Vec<String> = lock(&self.registry).agents.keys().cloned().collect();
     if agents.is_empty() {
       return;
     }
@@ -61,7 +57,7 @@ impl Controller {
       agents = agents.len(),
       "Notifying agents of download completion"
     );
-    for (agent, socket) in agents {
+    for agent in agents {
       let token = Uuid::new_v4();
       {
         let mut registry = lock(&self.registry);
@@ -69,10 +65,9 @@ impl Controller {
         registry.download_tokens.retain(|_, t| t.expires > now);
         registry.download_tokens.insert(
           token,
-          Token {
+          DownloadToken {
             agent: agent.clone(),
-            socket,
-            filename: Some(filename.clone()),
+            filename: filename.clone(),
             expires: now + DOWNLOAD_TOKEN_LIFETIME,
           },
         );
@@ -126,9 +121,7 @@ impl Controller {
     let announced = lock(&self.registry)
       .download_tokens
       .get(&token)
-      .is_some_and(|t| {
-        t.agent == name && t.expires > Instant::now() && t.filename.as_deref() == Some(&filename)
-      });
+      .is_some_and(|t| t.agent == name && t.expires > Instant::now() && t.filename == filename);
     if !announced {
       warn!(agent = name, %token, filename, "download fetched with an unknown or expired token");
       return Err(ApiError::unauthorized("The token is unknown or expired").logged());

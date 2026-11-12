@@ -73,14 +73,21 @@ struct Registration {
   key: Key,
 }
 
-/// A token handed to an agent, with what it may be used for.
-struct Token {
+/// A token handed to an agent on its socket to upload its shares with.
+struct ShareToken {
   /// the agent it was handed to
   agent: String,
   /// the socket it was handed on
   socket: u64,
-  /// the relative path of the download it is for, `None` for a share upload
-  filename: Option<String>,
+  expires: Instant,
+}
+
+/// A token handed to an agent to fetch a finished download with.
+struct DownloadToken {
+  /// the agent it was handed to
+  agent: String,
+  /// the download's path relative to the downloads directory
+  filename: String,
   expires: Instant,
 }
 
@@ -88,8 +95,8 @@ struct Token {
 #[derive(Default)]
 struct Registry {
   agents: BTreeMap<String, Registration>,
-  share_tokens: HashMap<Uuid, Token>,
-  download_tokens: HashMap<Uuid, Token>,
+  share_tokens: HashMap<Uuid, ShareToken>,
+  download_tokens: HashMap<Uuid, DownloadToken>,
   file_infos: HashMap<Uuid, FileInfoWait>,
   streams: HashMap<Uuid, StreamWait>,
   /// the answers of the agents' file uploads waiting for their transfer to end, by transfer
