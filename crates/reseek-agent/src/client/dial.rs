@@ -51,8 +51,9 @@ pub struct Settings {
 }
 
 impl Settings {
-  /// The settings in `options`, which were validated when they were loaded.
-  pub fn new(options: &Options) -> Result<Self, String> {
+  /// The settings in `options`, which were validated when they were loaded, for the agent
+  /// named `agent`.
+  pub fn new(options: &Options, agent: &str) -> Result<Self, String> {
     // an agent has these three, which loading the options checked
     let controller = &options.relay.controller;
     let text = controller.address.as_deref().unwrap_or_default();
@@ -68,11 +69,8 @@ impl Settings {
     Ok(Self {
       address,
       api_key: controller.api_key.clone().unwrap_or_default(),
-      agent: options.instance_name.clone(),
-      key: Key::derive(
-        controller.secret.as_deref().unwrap_or_default(),
-        &options.instance_name,
-      ),
+      agent: agent.to_string(),
+      key: Key::derive(controller.secret.as_deref().unwrap_or_default(), agent),
       tls,
       http,
     })

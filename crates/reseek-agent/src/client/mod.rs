@@ -40,6 +40,8 @@ const AFTER_SHUTDOWN: Duration = Duration::from_secs(1);
 pub struct AgentClient {
   this: Weak<AgentClient>,
   config: Watcher<Options>,
+  /// the instance name the agent started with, which only a restart changes
+  name: String,
   shares: Arc<Shares>,
   /// the downloads directory, which the controller's finished downloads are copied to
   downloads: PathBuf,
@@ -74,9 +76,11 @@ impl AgentClient {
     uploads: PathBuf,
     shutdown: CancellationToken,
   ) -> Arc<Self> {
+    let name = config.current().values.instance_name.clone();
     let agent = Arc::new_cyclic(|this| Self {
       this: this.clone(),
       config,
+      name,
       shares,
       downloads,
       uploads,
@@ -143,7 +147,7 @@ impl AgentClient {
       }
       let attempt = failures + 1;
       failures += 1;
-      let settings = match Settings::new(&self.config.current().values) {
+      let settings = match Settings::new(&self.config.current().values, &self.name) {
         Ok(settings) => Arc::new(settings),
         Err(e) => {
           refused = true;
@@ -200,9 +204,7 @@ impl AgentClient {
         "the relay controller refused this agent",
       ),
       None if ended.code == Some(close::SUPERSEDED) => {
-        let current = self.config.current();
-        let name = &current.values.instance_name;
-        let reason = format!("another agent logged in as {name}");
+        let reason = format!("another agent logged in as {}", self.name);
         warn_once(
           &self.warned,
           &reason,
