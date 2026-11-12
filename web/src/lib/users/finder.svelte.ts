@@ -37,6 +37,8 @@ export class UserFinder {
   /** the text the directory last answered for, and the read under way or done */
   #answered = "";
   #reading: { text: string; done: Promise<void> } | null = null;
+  /** the wait for typing to stop, after which the text is read */
+  #pause: ReturnType<typeof setTimeout> | undefined;
 
   /** the closest of the users found */
   readonly matches = $derived.by(() =>
@@ -69,11 +71,11 @@ export class UserFinder {
     this.#onmissed = options.onmissed;
     $effect(() => {
       const value = text();
-      const timer = setTimeout(() => {
+      this.#pause = setTimeout(() => {
         options.onread?.(value);
         void this.#read();
       }, TYPING_PAUSE);
-      return () => clearTimeout(timer);
+      return () => clearTimeout(this.#pause);
     });
     onDestroy(this.abandon);
   }
@@ -105,13 +107,22 @@ export class UserFinder {
     this.#looking = null;
   };
 
+  /**
+   * Opens `name`'s profile. The text is not read after that: a reader that puts it in the
+   * address would start a navigation that ends the one to the profile
+   */
+  #open(name: string) {
+    clearTimeout(this.#pause);
+    void goto(userHref(name, this.#tab));
+  }
+
   async #lookUp(name: string) {
     this.#looking = name;
     const outcome = await profileOf(name, true);
     if (this.#looking !== name) return;
     this.#looking = null;
     if (this.#text() !== name) return;
-    if (outcome.ok) return void goto(userHref(name, this.#tab));
+    if (outcome.ok) return this.#open(name);
     this.#onmissed?.();
     toast(outcome.status === 404 ? `No user named ${name}` : outcome.error, "error");
   }
@@ -119,7 +130,7 @@ export class UserFinder {
   /** Opens the user an entry names, one the directory does not hold once the network knows them */
   choose = (value: string) => {
     const name = userOf(value);
-    if (this.found.some((u) => u.username === name)) void goto(userHref(name, this.#tab));
+    if (this.found.some((u) => u.username === name)) this.#open(name);
     else void this.#lookUp(name);
   };
 }

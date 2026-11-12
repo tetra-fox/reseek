@@ -127,6 +127,26 @@ test("looking up a user asks the network as typed, and says when there is none",
   await expect(page).toHaveURL(/#\/users\/NewUser$/);
 });
 
+test("a look-up answered while the typed text waits to be read opens the user", async ({
+  page
+}) => {
+  await fakeConnected(page);
+  await directory(page, [alice]);
+  await profile(page, "Quick", (route) =>
+    route.fulfill({ json: { ...alice, username: "Quick", known: false } })
+  );
+  await visit(page, "/users");
+  // the profile's page loads slowly, so the pause after typing ends while it is on its way
+  await page.route("**/_app/immutable/**", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    await route.continue();
+  });
+
+  await searchBox(page).fill("Quick");
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/#\/users\/Quick$/);
+});
+
 test("a look-up the user walked away from opens nothing", async ({ page }) => {
   await fakeConnected(page);
   await directory(page, [alice]);
