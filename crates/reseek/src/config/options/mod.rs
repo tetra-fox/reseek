@@ -190,11 +190,7 @@ impl Default for Options {
 #[serde(default)]
 pub struct Blacklist {
   /// Refuses users at the addresses in the blocklist file.
-  #[cascade(
-    env = "RESEEK_BLACKLIST",
-    cli = "--enable-blacklist",
-    apply = "restart"
-  )]
+  #[cascade(env = "RESEEK_BLACKLIST", cli = "--enable-blacklist")]
   pub enabled: bool,
   /// Blocklist file in CIDR, P2P or DAT format, read again when a blocklist setting changes. Listed
   /// users also have their private messages dropped and room messages hidden, once their address is
