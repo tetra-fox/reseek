@@ -104,9 +104,12 @@ impl Directory {
       .collect()
   }
 
-  /// Whether `username` is the account we log in as.
+  /// Whether `username` is ours: the name we are logged in as, or the configured one, which a
+  /// change waiting for the reconnect makes ours at the next login.
   pub(super) fn is_us(&self, username: &str) -> bool {
-    self.config.current().values.soulseek.username.as_deref() == Some(username)
+    let logged_in = self.client.get().and_then(|client| client.username());
+    logged_in.as_deref() == Some(username)
+      || self.config.current().values.soulseek.username.as_deref() == Some(username)
   }
 
   /// Stores `block`, raises `UserBlocked` as `by` and pushes the user's summary.
