@@ -1,7 +1,8 @@
 //! Ending the transfers left unfinished when the daemon stops, or when it stopped without
 //! ending them, and taking the downloads among them to resume. A download ended here is marked
-//! resumable; the first login after a start takes the marked downloads not removed since and
-//! clears every mark, so each is resumed once at most.
+//! resumable; a login takes the marked downloads not removed since and clears every mark, and
+//! the marks of the files that could not be enqueued for want of the server are set again for
+//! the next login.
 
 use std::collections::BTreeMap;
 
@@ -117,6 +118,36 @@ pub async fn take_resumable(db: &Database) -> Result<Resumable, DbError> {
     tx.execute("UPDATE Transfers SET Resumable = 0 WHERE Resumable = 1", [])?;
     tx.commit()?;
     Ok(jobs)
+  })
+  .await
+}
+
+/// Marks resumable again the files `filenames` of `username` in the job `job`, taken by
+/// [`take_resumable`], whose enqueue waits for the next login.
+pub async fn keep_resumable(
+  db: &Database,
+  job: Uuid,
+  username: &str,
+  filenames: Vec<String>,
+) -> Result<(), DbError> {
+  let username = username.to_string();
+  db.write(move |conn| {
+    let tx = conn.transaction()?;
+    {
+      let mut mark = tx.prepare(
+        "UPDATE Transfers SET Resumable = 1 WHERE JobId = ?1 AND Username = ?2 \
+         AND Direction = ?3 AND Removed = 0 AND Filename = ?4",
+      )?;
+      for filename in &filenames {
+        mark.execute(params![
+          job.to_string(),
+          username,
+          direction_text(TransferDirection::Download),
+          filename
+        ])?;
+      }
+    }
+    tx.commit()
   })
   .await
 }

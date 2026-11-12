@@ -513,8 +513,8 @@ fn logged_in(app: &AppState, username: &str) {
 
 /// Once the shares are initialized: the server is told what we share and what we like and hate,
 /// our statistics are fetched, the users with queued uploads, the members of the user-defined
-/// groups and our buddies are watched, and, after the first login, the downloads a stop interrupted are enqueued
-/// again. The messaging engine joins the rooms.
+/// groups and our buddies are watched, and the downloads a stop interrupted that no login has
+/// enqueued yet are enqueued again. The messaging engine joins the rooms.
 async fn after_login(app: AppState) {
   app.shares.initialized().await;
   let client = app.network.client();

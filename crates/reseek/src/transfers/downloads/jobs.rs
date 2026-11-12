@@ -10,7 +10,7 @@
 //! and its files by name, outcome and error once it ended. A job whose every download was
 //! removed ends canceled.
 
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use api_types::jobs::{JobCounts, JobKind, JobPart, JobPartState, JobStarter, JobState};
@@ -31,8 +31,35 @@ use crate::transfers::{ASKED_ORDER, Record, text_at};
 /// The jobs whose files are still being enqueued: none of them is over, whatever its
 /// downloads do. A job is opened before any download of it runs, as none exists yet or, on a
 /// resume, every one has ended, so no write ending one can come before it; it is closed and
-/// read only inside writes of `transfers.db`, whose one writer orders them.
-pub(super) type Open = Arc<Mutex<HashSet<Uuid>>>;
+/// read only inside writes of `transfers.db`, whose one writer orders them. A job may be
+/// opened more than once, by an enqueue and by a resume holding it for files that wait for a
+/// login, and stays open until each has closed it.
+#[derive(Clone, Default)]
+pub(super) struct Open(Arc<Mutex<HashMap<Uuid, usize>>>);
+
+impl Open {
+  /// Opens `job` once more.
+  pub fn open(&self, job: Uuid) {
+    *lock(&self.0).entry(job).or_default() += 1;
+  }
+
+  /// Closes `job` once; it is no longer open when every opening was closed.
+  pub fn close(&self, job: Uuid) {
+    let mut open = lock(&self.0);
+    let count = open
+      .get_mut(&job)
+      .expect("a job is closed only after it was opened");
+    *count -= 1;
+    if *count == 0 {
+      open.remove(&job);
+    }
+  }
+
+  /// Whether `job` is open.
+  pub fn contains(&self, job: Uuid) -> bool {
+    lock(&self.0).contains_key(&job)
+  }
+}
 
 /// Whether the download `id` has a row that is not finished, read before a write ends it.
 pub(super) fn unfinished(conn: &Connection, id: Uuid) -> rusqlite::Result<bool> {
@@ -66,7 +93,7 @@ fn finished(
   job: Uuid,
   open: &Open,
 ) -> rusqlite::Result<Option<DownloadJobFinished>> {
-  if lock(open).contains(&job) {
+  if open.contains(job) {
     return Ok(None);
   }
   let pending: bool = conn
@@ -407,7 +434,7 @@ impl Downloads {
   /// removed, else its counts and whether it is paused. A job that never had a download is left
   /// as it is, for the caller to end with its reason; returns whether it was one.
   pub(super) async fn sync_job(&self, job: Uuid) -> bool {
-    let open = lock(&self.open_jobs).contains(&job);
+    let open = self.open_jobs.contains(job);
     let read = self
       .db
       .read(move |conn| Ok((counts(conn, job)?, parts(conn, job)?)))
@@ -471,7 +498,7 @@ impl Downloads {
     ending: api_types::jobs::JobEnding,
     error: Option<String>,
   ) {
-    if lock(&self.open_jobs).contains(&job) {
+    if self.open_jobs.contains(job) {
       return;
     }
     let ended = Ended {
@@ -575,7 +602,7 @@ impl Downloads {
 
   /// Opens the job `job` while its files are being enqueued.
   pub(super) fn open_job(&self, job: Uuid) {
-    lock(&self.open_jobs).insert(job);
+    self.open_jobs.open(job);
   }
 
   /// Closes the job `job` once its files are enqueued, and tells of it when every download it
@@ -585,7 +612,7 @@ impl Downloads {
     let finished = self
       .db
       .write(move |conn| {
-        lock(&open).remove(&job);
+        open.close(job);
         finished(conn, job, &open)
       })
       .await;
@@ -740,7 +767,7 @@ mod tests {
     db.write(|conn| {
       let open = Open::default();
       let job = Uuid::new_v4();
-      lock(&open).insert(job);
+      open.open(job);
       let mut first = queued(job, "alice", "@@a\\Disc 1\\1.flac");
       store::insert(conn, &first)?;
       assert_eq!(
@@ -750,17 +777,17 @@ mod tests {
       );
       let mut second = queued(job, "bob", "@@b\\Disc 2\\1.flac");
       store::insert(conn, &second)?;
-      lock(&open).remove(&job);
+      open.close(job);
       let told = end(conn, &mut second, DONE, &open).unwrap();
       assert_eq!(told.usernames, ["alice", "bob"]);
       assert_eq!(told.folder, "", "files of several users share no folder");
 
       let job = Uuid::new_v4();
-      lock(&open).insert(job);
+      open.open(job);
       let mut early = queued(job, "alice", "@@a\\x.flac");
       store::insert(conn, &early)?;
       assert_eq!(end(conn, &mut early, FAILED, &open), None);
-      lock(&open).remove(&job);
+      open.close(job);
       let told = finished(conn, job, &open)?.expect("the close finds it over");
       assert_eq!(told.failed_count, 1);
       Ok(())
