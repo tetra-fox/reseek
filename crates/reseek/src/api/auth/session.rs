@@ -242,7 +242,8 @@ async fn logout(
   let scope = Scope::new(&app.url_base, presented.client.https);
   let mut redirect = None;
   if let Some(Extension(RequestSession(session))) = session {
-    redirect = provider_logout(&app, &session, &presented.client).await;
+    // revoked before the provider is asked for its logout page, which can take seconds, so a
+    // caller that leaves meanwhile is still logged out
     end_sessions(
       &app,
       vec![session.id.clone()],
@@ -250,6 +251,7 @@ async fn logout(
       SessionRevokeReason::Logout,
     )
     .await?;
+    redirect = provider_logout(&app, &session, &presented.client).await;
   }
   Ok(
     (
@@ -764,5 +766,73 @@ mod tests {
       .configure_for_restart("headless = true\n", "headless")
       .await;
     signed_in(&app).await;
+  }
+
+  /// A logout whose caller leaves while the provider is asked for its logout page has revoked
+  /// the session already.
+  #[tokio::test]
+  async fn a_logout_dropped_while_the_provider_is_asked_ends_the_session() {
+    use crate::auth::sessions::{self, NewSession, Origin};
+
+    // a provider that takes connections and never answers, so discovery waits
+    let silent = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let issuer = format!("http://{}", silent.local_addr().unwrap());
+    tokio::spawn(async move {
+      let mut open = Vec::new();
+      while let Ok((stream, _)) = silent.accept().await {
+        open.push(stream);
+      }
+    });
+    let app = app(
+      &format!("[web.authentication.oidc.home]\nissuer = \"{issuer}\"\nclient_id = \"reseek\"\n"),
+      &[],
+    )
+    .await;
+    let auth = &app.state.auth;
+    let session = sessions::create(
+      &auth.db,
+      NewSession {
+        subject: "oidc:home:u1".to_string(),
+        name: "alice".to_string(),
+        email: None,
+        groups: None,
+        role: api_types::auth::Role::ReadWrite,
+        origin: Origin::Oidc("home".to_string()),
+        ttl: chrono::Duration::hours(1),
+        idp_sid: None,
+        // without one there is no logout page to ask the provider for
+        id_token: Some(auth.secret.seal(b"header.claims.signature")),
+        ip: None,
+        user_agent: None,
+      },
+    )
+    .await
+    .unwrap();
+    let cookie = format!(
+      "reseek_session={}",
+      sessions::cookie_value(&auth.secret, &session.id)
+    );
+    let logout = with(
+      with(
+        request("POST", "/api/v0/session/logout", None),
+        "cookie",
+        &cookie,
+      ),
+      "origin",
+      "http://localhost",
+    );
+    let left = tokio::time::timeout(
+      std::time::Duration::from_millis(200),
+      app.send_from(OUTSIDE, logout),
+    )
+    .await;
+    assert!(left.is_err(), "the logout did not wait for the provider");
+    let me = app
+      .send_from(
+        OUTSIDE,
+        with(request("GET", "/api/v0/session", None), "cookie", &cookie),
+      )
+      .await;
+    assert_eq!(me.status, 401);
   }
 }
