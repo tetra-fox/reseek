@@ -206,12 +206,7 @@ async fn a_scanning_agent_is_waited_for_until_its_deferral_runs_out() {
 
 #[tokio::test]
 async fn an_agent_is_disconnected_once_its_networks_or_secret_no_longer_admit_it() {
-  let config = format!(
-    "[relay]\nenabled = true\nmode = \"controller\"\n\
-     [relay.agents.nas]\ninstance_name = \"nas\"\nsecret = \"{SECRET}\"\n"
-  );
-  let app = app(&config, &[]).await;
-  let controller = app.state.relay.controller.clone().unwrap();
+  let (app, controller) = controller().await;
   let home: IpAddr = [127, 0, 0, 1].into();
   // a user-keyed map is one value to the configuration, so each change sets the whole entry
   let set = |cidr: &str, secret: &str| {
@@ -257,27 +252,38 @@ async fn an_agent_is_disconnected_once_its_networks_or_secret_no_longer_admit_it
   assert!(controller.agents().is_empty(), "its secret rotated");
 }
 
-#[tokio::test]
-async fn a_share_upload_cut_off_partway_leaves_no_file_behind() {
+/// A controller with the agent `nas` configured.
+async fn controller() -> (crate::testing::TestApp, Arc<Controller>) {
   let config = format!(
     "[relay]\nenabled = true\nmode = \"controller\"\n\
      [relay.agents.nas]\ninstance_name = \"nas\"\nsecret = \"{SECRET}\"\n"
   );
   let app = app(&config, &[]).await;
   let controller = app.state.relay.controller.clone().unwrap();
-  let home: IpAddr = [127, 0, 0, 1].into();
-  let _socket = log_in(&controller, home, SECRET).await;
-  let socket = lock(&controller.registry).agents["nas"].socket;
+  (app, controller)
+}
+
+/// A share upload token `controller` hands `nas` on the socket numbered `socket`.
+fn share_token(controller: &Controller, socket: u64) -> Uuid {
   let begun = controller.begin_shares("nas", socket, crate::shares::Shares::schema_version(), 1024);
-  let RelayMessage::SharesToken { token, .. } = read(&Message::Text(begun.into())) else {
-    panic!("no share token");
-  };
+  match read(&Message::Text(begun.into())) {
+    RelayMessage::SharesToken { token, .. } => token,
+    refused => panic!("no share token: {refused:?}"),
+  }
+}
+
+/// The share upload of `nas` from `home` with `token`, whose database part starts and then
+/// nothing more comes, on a task of its own.
+async fn stalled_share_upload(
+  controller: &Arc<Controller>,
+  home: IpAddr,
+  token: Uuid,
+) -> JoinHandle<Result<(), crate::api::error::ApiError>> {
   let caller = AgentCredential {
     agent: "nas".into(),
     credential: Key::derive(SECRET, "nas").credential(Purpose::Shares, &token.to_string()),
     address: home,
   };
-  // the database part starts, then nothing more comes
   let start = "--cut\r\nContent-Disposition: form-data; name=\"database\"\r\n\r\nSQLite";
   let body = futures_util::stream::iter([Ok::<_, std::io::Error>(start.as_bytes().to_vec())])
     .chain(futures_util::stream::pending());
@@ -288,44 +294,100 @@ async fn a_share_upload_cut_off_partway_leaves_no_file_behind() {
   let form = axum::extract::Multipart::from_request(request, &())
     .await
     .unwrap();
-  let cache = controller.shares.upload_file("nas");
-  let cache = cache.parent().unwrap().to_owned();
-  let uploads = || {
-    std::fs::read_dir(&cache)
-      .unwrap()
-      .filter_map(Result::ok)
-      .filter(|entry| entry.file_name().to_string_lossy().ends_with(".db.tmp"))
-      .count()
-  };
-  let upload = tokio::spawn({
+  tokio::spawn({
     let controller = controller.clone();
     async move { controller.receive_shares(token, caller, form).await }
-  });
+  })
+}
+
+/// How many share uploads have a file in `controller`'s cache directory.
+fn upload_files(controller: &Controller) -> usize {
+  let cache = controller.shares.upload_file("nas");
+  std::fs::read_dir(cache.parent().unwrap())
+    .unwrap()
+    .filter_map(Result::ok)
+    .filter(|entry| entry.file_name().to_string_lossy().ends_with(".db.tmp"))
+    .count()
+}
+
+/// Waits until `check` holds, for at most ten seconds.
+async fn eventually(what: &str, check: impl Fn() -> bool) {
   let waited = tokio::time::timeout(Duration::from_secs(10), async {
-    while uploads() == 0 {
+    while !check() {
       tokio::time::sleep(Duration::from_millis(10)).await;
     }
   });
-  waited.await.expect("the upload's file is written");
+  waited.await.unwrap_or_else(|_| panic!("{what}"));
+}
+
+#[tokio::test]
+async fn a_share_upload_cut_off_partway_leaves_no_file_behind() {
+  let (_app, controller) = controller().await;
+  let home: IpAddr = [127, 0, 0, 1].into();
+  let _socket = log_in(&controller, home, SECRET).await;
+  let socket = lock(&controller.registry).agents["nas"].socket;
+  let token = share_token(&controller, socket);
+  let upload = stalled_share_upload(&controller, home, token).await;
+  eventually("the upload's file is written", || {
+    upload_files(&controller) > 0
+  })
+  .await;
   // the agent goes away: the call is dropped
   upload.abort();
   assert!(upload.await.unwrap_err().is_cancelled());
-  let removed = tokio::time::timeout(Duration::from_secs(10), async {
-    while uploads() > 0 {
-      tokio::time::sleep(Duration::from_millis(10)).await;
-    }
-  });
-  removed.await.expect("the cut-off upload's file is removed");
+  eventually("the cut-off upload's file is removed", || {
+    upload_files(&controller) == 0
+  })
+  .await;
+}
+
+#[tokio::test]
+async fn a_share_upload_for_a_socket_no_longer_registered_is_refused_before_it_is_read() {
+  let (_app, controller) = controller().await;
+  let home: IpAddr = [127, 0, 0, 1].into();
+  let _socket = log_in(&controller, home, SECRET).await;
+  // handed out on a socket that has closed since, the agent being registered on another
+  let gone = lock(&controller.registry).agents["nas"].socket + 1;
+  let token = share_token(&controller, gone);
+  let upload = stalled_share_upload(&controller, home, token).await;
+  let refused = tokio::time::timeout(Duration::from_secs(10), upload)
+    .await
+    .expect("the call is answered without reading the upload")
+    .unwrap();
+  assert_eq!(refused.unwrap_err().status(), 401);
+  assert_eq!(upload_files(&controller), 0);
+}
+
+#[tokio::test]
+async fn a_share_upload_stops_when_its_socket_leaves_so_the_next_one_may_send() {
+  let (_app, controller) = controller().await;
+  let home: IpAddr = [127, 0, 0, 1].into();
+  let _socket = log_in(&controller, home, SECRET).await;
+  let socket = lock(&controller.registry).agents["nas"].socket;
+  let token = share_token(&controller, socket);
+  let upload = stalled_share_upload(&controller, home, token).await;
+  eventually("the upload's file is written", || {
+    upload_files(&controller) > 0
+  })
+  .await;
+  assert!(controller.kick("nas"));
+  let stopped = tokio::time::timeout(Duration::from_secs(10), upload)
+    .await
+    .expect("the upload stops with its socket")
+    .unwrap();
+  assert_eq!(stopped.unwrap_err().status(), 409);
+  let _socket = log_in(&controller, home, SECRET).await;
+  let socket = lock(&controller.registry).agents["nas"].socket;
+  share_token(&controller, socket);
+  eventually("the stopped upload's file is removed", || {
+    upload_files(&controller) == 0
+  })
+  .await;
 }
 
 #[tokio::test]
 async fn an_agent_whose_api_key_no_longer_lets_it_in_is_disconnected() {
-  let config = format!(
-    "[relay]\nenabled = true\nmode = \"controller\"\n\
-     [relay.agents.nas]\ninstance_name = \"nas\"\nsecret = \"{SECRET}\"\n"
-  );
-  let app = app(&config, &[]).await;
-  let controller = app.state.relay.controller.clone().unwrap();
+  let (_app, controller) = controller().await;
   tokio::time::pause();
   let admitted = Arc::new(AtomicBool::new(true));
   let (to_socket, mut from_socket, served) =
@@ -353,12 +415,7 @@ async fn an_agent_whose_api_key_no_longer_lets_it_in_is_disconnected() {
 
 #[tokio::test]
 async fn a_login_whose_agent_was_removed_while_it_was_checked_is_refused() {
-  let config = format!(
-    "[relay]\nenabled = true\nmode = \"controller\"\n\
-     [relay.agents.nas]\ninstance_name = \"nas\"\nsecret = \"{SECRET}\"\n"
-  );
-  let app = app(&config, &[]).await;
-  let controller = app.state.relay.controller.clone().unwrap();
+  let (app, controller) = controller().await;
   let home: IpAddr = [127, 0, 0, 1].into();
   // the login read the configuration and checked the credential with it; then the agent goes
   let removed = BTreeMap::from([("relay.agents".to_string(), serde_json::json!({}))]);
@@ -394,12 +451,7 @@ async fn a_login_whose_agent_was_removed_while_it_was_checked_is_refused() {
 
 #[tokio::test]
 async fn a_kicked_agents_file_in_flight_stops_and_the_upload_reading_it_fails() {
-  let config = format!(
-    "[relay]\nenabled = true\nmode = \"controller\"\n\
-     [relay.agents.nas]\ninstance_name = \"nas\"\nsecret = \"{SECRET}\"\n"
-  );
-  let app = app(&config, &[]).await;
-  let controller = app.state.relay.controller.clone().unwrap();
+  let (_app, controller) = controller().await;
   let home: IpAddr = [127, 0, 0, 1].into();
   let (_to_socket, mut from_socket, _served) = log_in(&controller, home, SECRET).await;
   lock(&controller.registry)
