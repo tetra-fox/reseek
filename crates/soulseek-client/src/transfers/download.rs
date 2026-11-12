@@ -5,8 +5,10 @@
 //! peer we have it all. The peer can refuse or fail the download at any point before that. A
 //! file the peer offered unasked starts at its offer, which the client holds.
 
+use std::future::Future;
 use std::io::SeekFrom;
 use std::net::SocketAddr;
+use std::pin::Pin;
 
 use soulseek_proto::peer::{QueueDownload, TransferRequest, TransferResponse};
 use soulseek_proto::{PeerCode, PeerMessage, RemoteFilename, TransferDirection};
@@ -19,15 +21,19 @@ use super::options::{
   DownloadOutput, DownloadRequest, DownloadSink, RequestStyle, StateChanged, TransferOptions,
 };
 use super::record::{Tracker, Transfer};
+use super::remote::offer_key;
 use super::size::resolve_size;
 use super::state::TransferState;
 use super::task::{self, Stop, TransferTask};
-use super::{NewTransfer, Registration};
+use super::{NewTransfer, Registration, RequestTurn};
 use crate::client::{Client, non_blank};
 use crate::conn::{Conn, ConnHandle, MessageConn};
 use crate::error::ClientError;
 use crate::peers::write_peer;
 use crate::waiter::WaitKey;
+
+/// the wait for the uploader's offer to send the file
+type OfferWait = Pin<Box<dyn Future<Output = Result<TransferRequest, ClientError>> + Send>>;
 
 impl Client {
   /// Downloads a file and returns its final snapshot. The download runs on a task of its own:
@@ -89,6 +95,17 @@ impl Client {
     if let DownloadOutput::File(path) = &output {
       check_resumable(path, start_offset).await?;
     }
+    // A download that asks for the file waits for its offer from before it is tracked: an
+    // offer that finds the download tracked finds the wait too, even one the uploader sends
+    // while we still connect, the file being in its queue from an earlier request. Its timeout
+    // counts from the request.
+    let offered = (options.request_style != RequestStyle::Offered).then(|| {
+      Box::pin(self.waiter().wait_from_first_poll::<TransferRequest>(
+        offer_key(&username, &filename),
+        options.queued_timeout,
+        cancel.clone(),
+      )) as OfferWait
+    });
     let (registration, remote_failure) = self.transfers().register(
       self.tokens(),
       token,
@@ -101,6 +118,8 @@ impl Client {
         cancel,
       },
     )?;
+    let request_turn =
+      offered.is_some().then(|| self.transfers().request_turn(&username));
     let state_changed = observer
       .into_iter()
       .chain(options.state_changed.clone())
@@ -123,6 +142,8 @@ impl Client {
       start_offset,
       output: Some(output),
       options,
+      offered,
+      request_turn,
       _registration: registration,
     };
     Ok(tokio::spawn(download.run().instrument(span)))
@@ -164,6 +185,10 @@ struct Download {
   start_offset: u64,
   output: Option<DownloadOutput>,
   options: TransferOptions,
+  /// the wait for the uploader's offer, for a download that asks for the file
+  offered: Option<OfferWait>,
+  /// the download's place among those from the same user that have yet to ask, until it asks
+  request_turn: Option<RequestTurn>,
   /// keeps the download tracked until the task ends
   _registration: Registration,
 }
@@ -198,6 +223,19 @@ impl Download {
         })?;
       return self.take(offer).await;
     }
+    // the turn comes before the slot, so a download never holds a slot while one that started
+    // before it waits for one
+    let turn = self
+      .request_turn
+      .take()
+      .expect("a download that asks for the file holds its turn until it does");
+    self
+      .stop
+      .run(async {
+        turn.reached().await;
+        Ok(())
+      })
+      .await?;
     let limit = self.client.options().maximum_concurrent_downloads;
     let transfers = self.client.transfers().clone();
     let cancel = self.stop.cancel().clone();
@@ -210,28 +248,35 @@ impl Download {
       .run(self.client.get_user_endpoint(&self.username))
       .await?;
     let conn = self.message_connection(endpoint).await?;
-    // waited for before the request is written, so an offer that comes at once is not missed
-    let offered = self.client.waiter().wait_within::<TransferRequest>(
-      WaitKey::PeerFile {
-        code: PeerCode::TransferRequest,
-        username: self.username.clone(),
-        filename: self.filename.clone(),
-      },
-      self.options.queued_timeout,
-      cancel.clone(),
-    );
+    let mut offered = self
+      .offered
+      .take()
+      .expect("a download that asks for the file waits for its offer");
+    // an offer that came while we waited or connected is taken without asking for the file
+    let early = tokio::select! {
+      biased;
+      offer = &mut offered => Some(offer),
+      () = std::future::ready(()) => None,
+    };
+    if let Some(offer) = early {
+      drop(turn);
+      tracing::debug!("offered by the peer before it was asked");
+      return self.take(offer?).await;
+    }
+    self.client.transfers().asked(self.token);
     match self.options.request_style {
       RequestStyle::Queue => {
         let request = PeerMessage::QueueDownload(QueueDownload {
           filename: self.filename.clone(),
         });
         self.stop.run(write_peer(&conn, request)).await?;
+        drop(turn);
         self.tracker.emit_state(TransferState::Requested, None)?;
         // the peer does not answer this request; refusing it later is all it can do
         self.queued()?;
       }
       RequestStyle::TransferRequest => {
-        if let Some(size) = self.ask(&conn).await? {
+        if let Some(size) = self.ask(&conn, turn).await? {
           // the peer sends at once, and expects us to connect with our own token
           self.tracker.emit_state(TransferState::Initializing, None)?;
           let conn = self
@@ -254,6 +299,7 @@ impl Download {
 
   /// Takes the peer's offer to send the file: accepts it and reads the file
   async fn take(&mut self, offer: TransferRequest) -> Result<(), ClientError> {
+    self.client.transfers().asked(self.token);
     let size = self.resolve_size(offer.file_size)?;
     self.tracker.set_remote_token(offer.token);
     self.tracker.emit_state(TransferState::Initializing, None)?;
@@ -284,9 +330,9 @@ impl Download {
       .await
   }
 
-  /// Asks with a download `TransferRequest` and waits for the answer: `Some(size)` when the peer
-  /// sends at once, `None` when it queued the request
-  async fn ask(&mut self, conn: &MessageConn) -> Result<Option<u64>, ClientError> {
+  /// Asks with a download `TransferRequest`, leaving `turn` once it is written, and waits for the
+  /// answer: `Some(size)` when the peer sends at once, `None` when it queued the request
+  async fn ask(&mut self, conn: &MessageConn, turn: RequestTurn) -> Result<Option<u64>, ClientError> {
     let answer = self.client.waiter().wait::<TransferResponse>(
       WaitKey::PeerToken {
         code: PeerCode::TransferResponse,
@@ -303,6 +349,7 @@ impl Download {
       file_size: None,
     });
     self.stop.run(write_peer(conn, request)).await?;
+    drop(turn);
     self.tracker.emit_state(TransferState::Requested, None)?;
     match self.stop.run(answer).await? {
       TransferResponse::Denied { message, .. } if is_queued(&message) => Ok(None),

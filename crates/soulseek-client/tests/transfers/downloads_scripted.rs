@@ -486,3 +486,34 @@ async fn a_failure_reported_for_an_attempt_that_ended_fails_the_attempt_queued_a
   bob.send(&failed.encode()).await;
   assert!(reported_failed(&second.result().await.unwrap_err()));
 }
+
+/// The uploader cannot have failed a download that has not asked for its file yet, so a failure
+/// it reports then is about an earlier download of the same file and leaves this one running.
+#[tokio::test]
+async fn a_failure_reported_before_the_download_asked_for_its_file_leaves_it_running() {
+  let mut options = crate::support::listening_options();
+  options.maximum_concurrent_downloads = 1;
+  let mut scripted = Scripted::with_options(options).await;
+  let (holding, mut bob) = scripted.queued_download("@@share\\first.mp3").await;
+  // the second waits for the slot the first holds, so it has not asked bob yet
+  let filename = "@@share\\second.mp3";
+  let waiting = scripted.download(filename, |_| {});
+  let failed = PeerMessage::UploadFailed(UploadFailed {
+    filename: filename.into(),
+  });
+  bob.send(&failed.encode()).await;
+  // the client has handled the failure by the time it answers a request sent after it
+  bob.send(&PeerMessage::InfoRequest.encode()).await;
+  assert!(matches!(
+    bob.read_peer().await,
+    PeerMessage::InfoResponse(_)
+  ));
+  holding.cancel.cancel();
+  assert!(holding.result().await.is_err());
+  queued(&mut bob, filename).await;
+  offer(&mut bob, filename, 23, Some(SIZE)).await;
+  let mut transfer = scripted.connect_for_transfer(23).await;
+  send_file(&mut transfer, 0, SIZE as usize).await;
+  let done = waiting.result().await.unwrap();
+  assert_eq!(done.bytes_transferred, SIZE);
+}

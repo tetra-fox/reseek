@@ -2,8 +2,9 @@
 //! keeps a record of every transfer from the moment it is accepted until its task has cleaned up,
 //! one transfer per file, user and direction, with tokens unique across both directions. The
 //! limits every transfer of a direction shares live here too: how many run at once, the speed
-//! limit, and the one upload at a time each user gets. So do the offers of files users send us
-//! unasked, held until a download takes them.
+//! limit, and the one upload at a time each user gets. So do the order the downloads from one
+//! user ask for their files in, and the offers of files users send us unasked, held until a
+//! download takes them.
 
 mod download;
 mod io;
@@ -24,8 +25,9 @@ pub use record::Transfer;
 pub use state::{TransferOutcome, TransferState};
 pub use task::TransferTask;
 
-use std::collections::HashMap;
 use std::collections::hash_map::Entry;
+use std::collections::{HashMap, VecDeque};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
@@ -71,6 +73,9 @@ struct Tracked {
   cancel: CancellationToken,
   /// downloads: fails the download wherever it is, when the uploader refuses or fails it
   remote_failure: Option<watch::Sender<Option<ClientError>>>,
+  /// downloads: the uploader has been asked for the file, or its offer taken, so a refusal or
+  /// failure it reports from now on can be about this download
+  asked: bool,
 }
 
 #[derive(Default)]
@@ -92,6 +97,9 @@ pub(crate) struct Transfers {
   offset_logged: Mutex<BoundedCache<String, ()>>,
   /// the offers of files users send us unasked, by user and file, until a download takes them
   offered: Mutex<HashMap<(String, RemoteFilename), TransferRequest>>,
+  /// by user, the downloads that have yet to ask for their file, in the order they started
+  request_turns: Mutex<HashMap<String, watch::Sender<VecDeque<u64>>>>,
+  next_turn: AtomicU64,
 }
 
 /// Who and what a new transfer is
@@ -136,6 +144,8 @@ impl Transfers {
       upload_turns: Mutex::new(HashMap::new()),
       offset_logged: Mutex::new(BoundedCache::new(OFFSET_LOGGED_PEERS, OFFSET_LOGGED_FOR)),
       offered: Mutex::new(HashMap::new()),
+      request_turns: Mutex::new(HashMap::new()),
+      next_turn: AtomicU64::new(0),
     }
   }
 
@@ -197,6 +207,7 @@ impl Transfers {
         record: record.clone(),
         cancel: cancel.clone(),
         remote_failure,
+        asked: false,
       },
     );
     table.by_file.insert(key.clone(), token);
@@ -258,14 +269,35 @@ impl Transfers {
     false
   }
 
-  /// Fails the download of `filename` from `username`, at whatever stage it is, with `error`;
-  /// returns whether one was tracked
+  /// The download `token` is about to ask its uploader for the file, or to take its offer: a
+  /// refusal or failure the uploader reports from now on can be about it
+  pub(crate) fn asked(&self, token: u32) {
+    if let Some(tracked) = self.table().by_token.get_mut(&token) {
+      tracked.asked = true;
+    }
+  }
+
+  /// whether a download of `filename` from `username` is tracked and has asked for the file
+  pub(crate) fn has_asked(&self, username: &str, filename: &RemoteFilename) -> bool {
+    let table = self.table();
+    let key = file_key(TransferDirection::Download, username, filename);
+    table
+      .by_file
+      .get(&key)
+      .and_then(|token| table.by_token.get(token))
+      .is_some_and(|tracked| tracked.asked)
+  }
+
+  /// Fails the download of `filename` from `username`, at whatever stage it is, with `error`.
+  /// A download that has not asked for the file yet is left alone: the uploader cannot have
+  /// refused or failed what it was not asked for, so the report is about an earlier download
+  /// of the same file.
   pub(crate) fn fail_download(
     &self,
     username: &str,
     filename: &RemoteFilename,
     error: ClientError,
-  ) -> bool {
+  ) -> RemoteFailure {
     let table = self.table();
     let key = file_key(TransferDirection::Download, username, filename);
     let Some(tracked) = table
@@ -273,12 +305,30 @@ impl Transfers {
       .get(&key)
       .and_then(|token| table.by_token.get(token))
     else {
-      return false;
+      return RemoteFailure::Untracked;
     };
+    if !tracked.asked {
+      return RemoteFailure::NotAsked;
+    }
     if let Some(remote_failure) = &tracked.remote_failure {
       remote_failure.send_replace(Some(error));
     }
-    true
+    RemoteFailure::Ended
+  }
+
+  /// Takes the last place among the downloads from `username` that have yet to ask for their
+  /// file
+  pub(crate) fn request_turn(self: &Arc<Self>, username: &str) -> RequestTurn {
+    let id = self.next_turn.fetch_add(1, Ordering::Relaxed);
+    lock(&self.request_turns)
+      .entry(username.to_owned())
+      .or_insert_with(|| watch::Sender::new(VecDeque::new()))
+      .send_modify(|waiting| waiting.push_back(id));
+    RequestTurn {
+      transfers: self.clone(),
+      username: username.to_owned(),
+      id,
+    }
   }
 
   /// stops every transfer, for when the client is disposed
@@ -333,6 +383,53 @@ impl Transfers {
     self
       .upload_speed
       .set_capacity(bucket::capacity(options.maximum_upload_speed));
+  }
+}
+
+/// What a refusal or failure the uploader reported did to the download it names
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum RemoteFailure {
+  /// the download ends with it
+  Ended,
+  /// the download has not asked for the file yet, so the report is about an earlier one
+  NotAsked,
+  /// no download of that file is tracked
+  Untracked,
+}
+
+/// A download's place among the downloads from one user that have yet to ask for their file.
+/// Requests to a user go out in the order the downloads started, so an album is queued at the
+/// peer track by track; leaving the place, by asking or by ending, lets the next one ask.
+pub(crate) struct RequestTurn {
+  transfers: Arc<Transfers>,
+  username: String,
+  id: u64,
+}
+
+impl RequestTurn {
+  /// resolves once every download from the user that started before this one has asked or ended
+  pub(crate) async fn reached(&self) {
+    let mut waiting = lock(&self.transfers.request_turns)
+      .get(&self.username)
+      .expect("a user's turns are kept while one of them is held")
+      .subscribe();
+    waiting
+      .wait_for(|waiting| waiting.front() == Some(&self.id))
+      .await
+      .expect("a user's turns are kept while one of them is held");
+  }
+}
+
+impl Drop for RequestTurn {
+  fn drop(&mut self) {
+    let mut turns = lock(&self.transfers.request_turns);
+    let Some(waiting) = turns.get(&self.username) else {
+      return;
+    };
+    waiting.send_modify(|waiting| waiting.retain(|id| *id != self.id));
+    if waiting.borrow().is_empty() {
+      turns.remove(&self.username);
+    }
   }
 }
 

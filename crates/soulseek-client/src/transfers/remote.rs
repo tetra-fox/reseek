@@ -19,6 +19,7 @@ use crate::conn::MessageConn;
 use crate::error::{ClientError, MessageErrorKind};
 use crate::events::Event;
 use crate::peers::write_peer;
+use super::RemoteFailure;
 use crate::waiter::WaitKey;
 
 impl Client {
@@ -122,12 +123,13 @@ impl Client {
   pub(crate) fn download_denied(&self, username: &str, denied: UploadDenied) {
     tracing::debug!(filename = %denied.filename, reason = denied.reason, "download denied by the uploader");
     let error = ClientError::TransferRejected(denied.reason.clone());
-    self.end_download(username, &denied.filename, error);
-    self.emit(Event::DownloadDenied {
-      username: username.to_owned(),
-      filename: denied.filename,
-      message: denied.reason,
-    });
+    if self.end_download(username, &denied.filename, error) {
+      self.emit(Event::DownloadDenied {
+        username: username.to_owned(),
+        filename: denied.filename,
+        message: denied.reason,
+      });
+    }
   }
 
   /// The uploader reports that sending a file to us failed: the download ends with that
@@ -135,21 +137,31 @@ impl Client {
     tracing::debug!(filename = %failed.filename, "download reported as failed by the uploader");
     let error =
       ClientError::TransferReportedFailed("Download reported as failed by remote client".into());
-    self.end_download(username, &failed.filename, error);
-    self.emit(Event::DownloadFailed {
-      username: username.to_owned(),
-      filename: failed.filename,
-    });
+    if self.end_download(username, &failed.filename, error) {
+      self.emit(Event::DownloadFailed {
+        username: username.to_owned(),
+        filename: failed.filename,
+      });
+    }
   }
 
-  /// ends the download of `filename` from `username` with `error`, at whatever stage it is
-  fn end_download(&self, username: &str, filename: &RemoteFilename, error: ClientError) {
-    self
-      .waiter()
-      .fault(&offer_key(username, filename), error.clone());
-    if !self.transfers().fail_download(username, filename, error) {
-      tracing::debug!(%filename, "no such download");
+  /// Ends the download of `filename` from `username` with `error`, at whatever stage it is,
+  /// unless it has not asked for the file yet; false when the report was set aside for that
+  fn end_download(&self, username: &str, filename: &RemoteFilename, error: ClientError) -> bool {
+    match self
+      .transfers()
+      .fail_download(username, filename, error.clone())
+    {
+      RemoteFailure::Ended => {
+        self.waiter().fault(&offer_key(username, filename), error);
+      }
+      RemoteFailure::NotAsked => {
+        tracing::debug!(%filename, %error, "refusal or failure for a download that has not asked yet, ignored");
+        return false;
+      }
+      RemoteFailure::Untracked => tracing::debug!(%filename, "no such download"),
     }
+    true
   }
 
   /// Our place in the uploader's queue: the answer to our question, or news the uploader sent
@@ -219,6 +231,13 @@ impl Client {
     let Some((key, name)) = unparseable_key(username, frame) else {
       return;
     };
+    // like a refusal or failure that decodes, one for a download that has not asked yet is
+    // about an earlier download of the file
+    if let ("UploadDenied" | "UploadFailed", WaitKey::PeerFile { filename, .. }) = (name, &key)
+      && !self.transfers().has_asked(username, filename)
+    {
+      return tracing::debug!(name, %filename, "unparseable refusal or failure for a download that has not asked yet, ignored");
+    }
     let error = ClientError::Message {
       kind: MessageErrorKind::Read,
       message: format!("peer sent an unparseable {name}"),
@@ -243,7 +262,7 @@ async fn refuse_offer(conn: &MessageConn, token: u32) -> Result<(), ClientError>
 }
 
 /// the wait a download holds for its uploader's offer
-fn offer_key(username: &str, filename: &RemoteFilename) -> WaitKey {
+pub(super) fn offer_key(username: &str, filename: &RemoteFilename) -> WaitKey {
   WaitKey::PeerFile {
     code: PeerCode::TransferRequest,
     username: username.to_owned(),
