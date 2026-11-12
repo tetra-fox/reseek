@@ -153,6 +153,24 @@ fn unchanged_since<T>(shared: &Shared<T>, read: Option<&str>) -> Result<(), Erro
   }
 }
 
+/// `set` with the secrets its lists of tables and user-keyed maps show as `*****` put back
+/// from the values in effect. Called with the state locked, so the secrets put back are the
+/// ones the change is made over.
+fn with_entry_secrets<T>(
+  shared: &Shared<T>,
+  mut set: BTreeMap<Key, Value>,
+) -> Result<BTreeMap<Key, Value>, Error> {
+  let current = shared.current.borrow().clone();
+  for (key, value) in &mut set {
+    let field = current.schema().field(key);
+    if let Some(field) = field.filter(|field| !field.secret) {
+      keep_secrets(field, value, tree::get(&current.tree, key))
+        .map_err(|invalid| Error::Invalid(vec![invalid]))?;
+    }
+  }
+  Ok(set)
+}
+
 /// How a file is to be changed.
 enum FileEdit {
   Patch {
@@ -277,26 +295,9 @@ impl<T: Root> Watcher<T> {
     set: BTreeMap<Key, Value>,
     unset: Vec<Key>,
   ) -> Result<Written<T>, Error> {
-    let set = self.with_entry_secrets(set)?;
     self
       .write_file(name, revision, read, FileEdit::Patch { set, unset })
       .await
-  }
-
-  /// `set` with the secrets its lists of tables and user-keyed maps show as `*****` put back.
-  fn with_entry_secrets(
-    &self,
-    mut set: BTreeMap<Key, Value>,
-  ) -> Result<BTreeMap<Key, Value>, Error> {
-    let current = self.current();
-    for (key, value) in &mut set {
-      let field = current.schema().field(key);
-      if let Some(field) = field.filter(|field| !field.secret) {
-        keep_secrets(field, value, tree::get(&current.tree, key))
-          .map_err(|invalid| Error::Invalid(vec![invalid]))?;
-      }
-    }
-    Ok(set)
   }
 
   /// Replaces the whole text of the file `name`, with the checks of [`Watcher::patch_file`]
@@ -325,12 +326,12 @@ impl<T: Root> Watcher<T> {
     lasts: Lasts,
     read: Option<&str>,
   ) -> Result<Option<Arc<Change<T>>>, Error> {
-    let set = self.with_entry_secrets(set)?;
     let set_by = set_by.to_string();
     let read = read.map(str::to_string);
     self
       .blocking(move |state, shared| {
         unchanged_since(shared, read.as_deref())?;
+        let set = with_entry_secrets(shared, set)?;
         state.change_overrides(shared, set, &unset, &set_by, lasts)
       })
       .await?
@@ -457,6 +458,13 @@ impl<T: Root> Watcher<T> {
     self
       .blocking(move |state, shared| {
         unchanged_since(shared, read.as_deref())?;
+        let edit = match edit {
+          FileEdit::Patch { set, unset } => FileEdit::Patch {
+            set: with_entry_secrets(shared, set)?,
+            unset,
+          },
+          replace @ FileEdit::Replace(_) => replace,
+        };
         state.write_file(shared, &name, revision.as_deref(), edit)
       })
       .await?
