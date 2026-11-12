@@ -8,7 +8,7 @@ use api_types::users::{
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::Response;
-use tracing::{Instrument, info};
+use tracing::info;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
@@ -278,8 +278,10 @@ async fn transfers(
     .map(Json)
 }
 
-/// Forgets a user and their block; `purge` also removes their transfers from the listings and
-/// deletes the conversation with them.
+/// Forgets a user and their block; `purge` also cancels their transfers that have not finished,
+/// removes their transfers from the listings and deletes the conversation with them. The 204
+/// comes once every unfinished transfer was told to stop: one no task runs is ended and removed
+/// by then, a running one leaves the listings when it has written its end.
 #[utoipa::path(
   delete, path = "/users/{username}", tag = "users",
   params(("username" = String, Path, description = "the user"), UsernameQuery, DeleteUserQuery),
@@ -295,26 +297,20 @@ async fn remove(
   NamedUser(username): NamedUser,
   Query(query): Query<DeleteUserQuery>,
 ) -> Result<StatusCode, ApiError> {
-  // on a task of its own, so a request dropped half way leaves no user half purged
-  let name = username.clone();
   let purge = query.purge;
-  let forgetting = tokio::spawn(
+  let forget = {
+    let (app, name) = (app.clone(), username.clone());
     async move {
-      app.services.users.remove(&name, purge).await?;
       if purge {
-        // the transfers not finished are stopped and leave the listings as they end
+        // first, so their removals are pushed, and a forget that fails after them can be
+        // asked again
         app.downloads.purge(&name).await?;
         app.uploads.purge(&name).await?;
       }
-      Ok::<(), ApiError>(())
+      app.services.users.remove(&name, purge).await
     }
-    .in_current_span(),
-  );
-  match forgetting.await {
-    Ok(forgotten) => forgotten?,
-    Err(e) if e.is_panic() => std::panic::resume_unwind(e.into_panic()),
-    Err(e) => return Err(ApiError::internal(e)),
-  }
+  };
+  app.downloads.forget_user(&username, forget).await?;
   info!(
     by = admin.principal.subject,
     username,

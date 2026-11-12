@@ -144,8 +144,9 @@ impl Client {
     json(self.get(about(username, "transfers").query(query)?)).await
   }
 
-  /// `DELETE /users/{username}`: forgets a user, and with `purge` their transfers and
-  /// conversation.
+  /// `DELETE /users/{username}`: forgets a user, and with `purge` cancels their unfinished
+  /// transfers and removes their transfers and conversation; a running transfer leaves the
+  /// listings once it has ended.
   pub async fn forget_user(&self, username: &str, purge: bool) -> Result<()> {
     let route = Route::new("users")
       .user(username)

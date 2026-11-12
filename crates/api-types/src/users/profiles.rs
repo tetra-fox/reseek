@@ -521,7 +521,9 @@ pub struct UserTransfers {
 #[serde(rename_all = "camelCase")]
 #[into_params(parameter_in = Query)]
 pub struct DeleteUserQuery {
-  /// also remove the user's transfers, close the conversation and delete its messages
+  /// also cancel the user's unfinished transfers and remove their transfers, close the
+  /// conversation and delete its messages; a running transfer leaves the listings once it has
+  /// ended
   #[serde(default)]
   pub purge: bool,
 }

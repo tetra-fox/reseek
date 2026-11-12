@@ -322,7 +322,10 @@ impl Uploads {
     for id in ids {
       match self.cancel(username, id, true).await {
         Ok(()) => canceled += 1,
-        Err(e) => warn!(%id, username, error = e.message(), "upload of a purged user not canceled"),
+        Err(e) => {
+          let error = e.reason().unwrap_or(e.message());
+          warn!(%id, username, error, "upload of a purged user not canceled");
+        }
       }
     }
     let removed = removal::remove_finished_of(&self.db, &self.live, direction, username)

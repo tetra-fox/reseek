@@ -36,7 +36,7 @@ use tokio::sync::{Semaphore, mpsc, watch};
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
-use tracing::{Instrument, debug, info, warn};
+use tracing::{Instrument, debug, error, info, warn};
 use uuid::Uuid;
 
 use super::store::Saved;
@@ -533,6 +533,36 @@ impl Downloads {
     info!(username, canceled, "downloads from a blocked user canceled");
   }
 
+  /// Runs `forget`, the forgetting of `username` with what goes with it, on the engine's task
+  /// set, which the stop waits for as for the download tasks, and waits for it: a caller that
+  /// stops waiting leaves it running to its end, so no user is left half purged. Its failure is
+  /// logged here, once.
+  pub async fn forget_user(
+    &self,
+    username: &str,
+    forget: impl Future<Output = Result<(), ApiError>> + Send + 'static,
+  ) -> Result<(), ApiError> {
+    let name = username.to_string();
+    let ran = self.tasks.spawn(
+      async move {
+        let forgotten = forget.await;
+        if let Err(e) = &forgotten {
+          match e.reason() {
+            Some(reason) => error!(username = name, reason, "user not forgotten"),
+            None => debug!(username = name, error = e.message(), "user not forgotten"),
+          }
+        }
+        forgotten.map_err(ApiError::logged)
+      }
+      .in_current_span(),
+    );
+    match ran.await {
+      Ok(forgotten) => forgotten,
+      Err(e) if e.is_panic() => std::panic::resume_unwind(e.into_panic()),
+      Err(e) => Err(ApiError::internal(e)),
+    }
+  }
+
   /// Cancels every unfinished download from `username`, each leaving the listings once it has
   /// ended as a cancel with removal does, then takes out the finished ones; for a user forgotten
   /// with their transfers.
@@ -546,7 +576,8 @@ impl Downloads {
       match self.cancel(username, id, true).await {
         Ok(_) => canceled += 1,
         Err(e) => {
-          warn!(%id, username, error = e.message(), "download of a purged user not canceled")
+          let error = e.reason().unwrap_or(e.message());
+          warn!(%id, username, error, "download of a purged user not canceled");
         }
       }
     }
