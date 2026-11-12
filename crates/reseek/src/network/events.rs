@@ -202,7 +202,7 @@ async fn caught_up(app: &AppState, missed: u64, session: &mut Session) {
       }
       Missed::Connected => {
         info!(session = number, "a missed connect is handled now");
-        connected(app).await;
+        connected(app, number).await;
       }
       Missed::LoggedIn { username } => {
         info!(session = number, username, "a missed login is handled now");
@@ -254,7 +254,7 @@ async fn handle(app: &AppState, event: Event, session: &mut Session) {
     Event::StateChanged { state, .. } => server_state(app, state),
     Event::Connected { session: number } => {
       if session.advance(number, Phase::Connected).is_some() {
-        connected(app).await;
+        connected(app, number).await;
       } else {
         debug!(
           session = number,
@@ -491,11 +491,12 @@ fn connection_state(state: ClientState) -> ServerConnectionState {
   }
 }
 
-/// The TCP connection to the server is up, before the login: the watchdog stops without
-/// canceling the login, the options the client had when the session began are in effect now,
-/// and the users the last session watched are watched no more.
-async fn connected(app: &AppState) {
-  app.network.watchdog().stop(false);
+/// The TCP connection of session `number` is up, before the login: the watchdog stops without
+/// canceling the login unless a restart came since the session began, the options the client
+/// had when the session began are in effect now, and the users the last session watched are
+/// watched no more.
+async fn connected(app: &AppState, number: u64) {
+  app.network.watchdog().connected(number);
   app.users.session_ended();
   info!("Connected to the Soulseek server");
   app
@@ -998,6 +999,71 @@ mod tests {
   }
 
   #[tokio::test]
+  async fn a_connect_of_a_turn_a_restart_canceled_leaves_the_watchdog_reconnecting() {
+    use std::time::Duration;
+
+    use tokio::io::AsyncReadExt;
+    use tokio::net::TcpListener;
+
+    // a server that takes connections and never answers the login
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let (accepted, mut accepts) = tokio::sync::mpsc::unbounded_channel();
+    tokio::spawn(async move {
+      while let Ok((mut stream, _)) = listener.accept().await {
+        if accepted.send(()).is_err() {
+          return;
+        }
+        tokio::spawn(async move {
+          let mut sink = [0; 1024];
+          while stream.read(&mut sink).await.is_ok_and(|read| read > 0) {}
+        });
+      }
+    });
+    let config = format!(
+      "{}[soulseek]\naddress = \"127.0.0.1\"\nport = {port}\nusername = \"me\"\n\
+       password = \"secret\"\n",
+      crate::testing::TRUSTED
+    );
+    let app = crate::testing::soulseek::app(&config).await;
+    let within = Duration::from_secs(5);
+    let first = tokio::time::timeout(within, accepts.recv()).await;
+    assert!(
+      matches!(first, Ok(Some(()))),
+      "the watchdog never connected"
+    );
+    let client = app.state.network.client();
+    let logging_in = tokio::time::timeout(within, async {
+      while client.state() != ClientState::LoggingIn {
+        tokio::time::sleep(Duration::from_millis(5)).await;
+      }
+    })
+    .await;
+    assert!(logging_in.is_ok(), "the login never began");
+    let canceled = client.session().number;
+    // a restart cancels the turn whose login is under way, and its connect is handled after
+    app.state.network.connect();
+    connected(&app.state, canceled).await;
+    let again = tokio::time::timeout(within, accepts.recv()).await;
+    assert!(
+      matches!(again, Ok(Some(()))),
+      "the watchdog never connected again"
+    );
+    // the connect of the session the next turn began stops it
+    let watchdog = app.state.network.watchdog();
+    let stopped = tokio::time::timeout(within, async {
+      while watchdog.is_enabled() {
+        tokio::time::sleep(Duration::from_millis(5)).await;
+      }
+    })
+    .await;
+    assert!(
+      stopped.is_ok(),
+      "the next session's connect left the watchdog on"
+    );
+  }
+
+  #[tokio::test]
   async fn a_disconnect_handled_once_the_client_is_logged_in_again_shows_no_server_or_user() {
     use crate::testing::soulseek::{Server, app};
 
@@ -1039,7 +1105,7 @@ mod tests {
     };
     assert_eq!(waiting().await, serde_json::json!(["soulseek.port"]));
 
-    connected(&app.state).await;
+    connected(&app.state, 1).await;
     assert_eq!(waiting().await, serde_json::json!([]));
     assert!(!app.state.state.current().pending_reconnect);
     let told = tokio::time::timeout(
@@ -1062,7 +1128,7 @@ mod tests {
     let change = serde_json::json!({ "set": { "soulseek.server_keepalive.probes": 7 } });
     let (status, _) = app.call("PATCH", "/api/v0/options", Some(change)).await;
     assert_eq!(status, 200);
-    connected(&app.state).await;
+    connected(&app.state, 1).await;
     assert_eq!(
       app.state.config.current().pending_reconnect,
       ["soulseek.server_keepalive.probes"]

@@ -6,7 +6,9 @@
 //! after a login the server never answered, 15 minutes, an hour and then 6 hours apart. A timer
 //! starts a new loop while the watchdog is on and none runs. The back-off goes on across loops
 //! until a login succeeds or the watchdog is restarted, so a server that drops us during every
-//! login is not tried again at once each time.
+//! login is not tried again at once each time. A restart cancels the running turn, and what
+//! that turn still reports after, a refused login or its session's connect, leaves the watchdog
+//! on.
 
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -76,12 +78,17 @@ enum Mode {
   Held,
 }
 
-/// The running turn's token and the failures counted so far, under one lock, so a restart's
-/// clear and cancel fall wholly before or after a turn's read of the counts and its count
+/// The running turn's token, the failures counted so far and the sessions the last restart left
+/// behind, under one lock, so a restart falls wholly before or after a turn's read of the counts,
+/// its count, and a turn's result turning the watchdog off
 #[derive(Default)]
 struct Turns {
   /// cancels the running turn's wait or attempt
   token: Option<CancellationToken>,
+  /// the client's session number when the watchdog was last restarted: the sessions up to it
+  /// began before the restart, so their connect leaves the watchdog on, and one of them still
+  /// up is found connected by the next loop
+  superseded: u64,
   /// attempts that failed since the last login or restart
   failures: u32,
   /// logins in a row the server left unanswered
@@ -172,6 +179,22 @@ impl Watchdog {
     self.attempt_connection();
   }
 
+  /// The TCP connection of the client's session `session` came up: the watchdog is turned off
+  /// without canceling the login, unless the session began before the last restart.
+  pub fn connected(&self, session: u64) {
+    let turns = lock(&self.inner.turns);
+    if session <= turns.superseded {
+      drop(turns);
+      return debug!(
+        session,
+        "the connect of a session begun before a restart is not acted on"
+      );
+    }
+    self.switch_off();
+    drop(turns);
+    self.publish();
+  }
+
   /// A session that reached the server was lost: the watchdog is turned on as by a start,
   /// unless it was held off since.
   pub fn lost(&self) {
@@ -194,10 +217,23 @@ impl Watchdog {
     self.attempt_connection();
   }
 
+  /// Turns the watchdog off for the turn `turn`, which is connected or cannot retry, unless the
+  /// turn was canceled since: a restart cancels it before turning the watchdog on.
+  fn stop(&self, turn: &CancellationToken) {
+    let turns = lock(&self.inner.turns);
+    if turn.is_cancelled() {
+      drop(turns);
+      return debug!("the result of a canceled turn is not acted on");
+    }
+    self.switch_off();
+    drop(turns);
+    self.publish();
+  }
+
   /// Turns the watchdog off, so no new loop starts and the running one ends after its attempt;
-  /// a watchdog held off stays held. With `abort`, its wait or attempt is canceled too, which a
-  /// connect in progress reports as canceled.
-  pub fn stop(&self, abort: bool) {
+  /// a watchdog held off stays held. Called under the turns lock, which a restart cancels and
+  /// supersedes under before it turns the watchdog on.
+  fn switch_off(&self) {
     self.inner.mode.send_if_modified(|mode| {
       let on = *mode == Mode::On;
       if on {
@@ -205,10 +241,6 @@ impl Watchdog {
       }
       on
     });
-    self.publish();
-    if abort {
-      self.cancel_attempt();
-    }
   }
 
   /// Turns the watchdog off until it is started again, canceling its wait or attempt: a
@@ -216,10 +248,6 @@ impl Watchdog {
   pub fn hold(&self) {
     self.inner.mode.send_replace(Mode::Held);
     self.publish();
-    self.cancel_attempt();
-  }
-
-  fn cancel_attempt(&self) {
     lock(&self.inner.turns).cancel();
   }
 
@@ -231,14 +259,14 @@ impl Watchdog {
     if was {
       info!("(Re)connection process restarted");
     }
-    // cleared and canceled under the lock a turn reads and counts under: a turn that began
-    // before is canceled and counts nothing, one that begins after reads the cleared counts
+    // the session number is read after the cancel, so a session numbered above it began once
+    // the canceled turn was told to stop
     {
       let mut turns = lock(&self.inner.turns);
       turns.clear();
       turns.cancel();
+      turns.superseded = self.inner.client.session().number;
     }
-    self.stop(false);
     self.start();
     was
   }
@@ -291,14 +319,14 @@ impl Watchdog {
     let inner = &self.inner;
     lock(&inner.status).attempting = true;
     while self.is_enabled() {
-      // connected already, as when asked to connect while connected
-      if inner.client.state().is_connected() {
-        self.stop(false);
-        return;
-      }
       // read with the token stored, under the lock a restart clears and cancels under: it
       // either cancels this turn or has already cleared what this reads
       let (attempt, failed, unanswered) = lock(&inner.turns).begin(inner.shutdown.child_token());
+      // connected already, as when asked to connect while connected
+      if inner.client.state().is_connected() {
+        self.stop(&attempt);
+        return;
+      }
       let wait = match unanswered_wait(unanswered) {
         Some(wait) => {
           error!(
@@ -336,7 +364,7 @@ impl Watchdog {
       match self.attempt(&attempt).instrument(span).await {
         Attempt::Connected | Attempt::Canceled => return,
         Attempt::Stop => {
-          self.stop(false);
+          self.stop(&attempt);
           return;
         }
         ended @ (Attempt::Unanswered | Attempt::Failed) => {
@@ -451,6 +479,28 @@ mod tests {
     assert!(!turns.count(&second, true));
     let (_, failed, unanswered) = turns.begin(CancellationToken::new());
     assert_eq!((failed, unanswered), (0, 0), "the next turn starts at once");
+  }
+
+  #[tokio::test]
+  async fn a_refused_login_of_a_turn_a_restart_canceled_leaves_the_watchdog_on() {
+    let app = crate::testing::app(crate::testing::TRUSTED, &[]).await;
+    let watchdog = app.state.network.watchdog();
+    // the test holds the loop's lock and runs the turn itself, so neither a start nor the timer
+    // runs one
+    let _running = watchdog.inner.running.clone().try_lock_owned().unwrap();
+    watchdog.start();
+    let (turn, _, _) = lock(&watchdog.inner.turns).begin(watchdog.inner.shutdown.child_token());
+    // the restart comes while the turn's login is refused
+    watchdog.restart();
+    watchdog.stop(&turn);
+    assert!(
+      watchdog.is_enabled(),
+      "a canceled turn turned the watchdog off"
+    );
+    // the next turn's refused login is not tried again
+    let (turn, _, _) = lock(&watchdog.inner.turns).begin(watchdog.inner.shutdown.child_token());
+    watchdog.stop(&turn);
+    assert!(!watchdog.is_enabled());
   }
 
   #[test]
