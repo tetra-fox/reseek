@@ -456,3 +456,22 @@ describe("a conversation's pane", () => {
     stop();
   });
 });
+
+describe("a room's pane at the newest messages", () => {
+  afterEach(() => {
+    chat.clear();
+    vi.unstubAllGlobals();
+  });
+
+  it("reads on from its newest message after missing more than a page", async () => {
+    const held = stored(150);
+    const pane = new MessagePane(room, () => "me");
+    await pane.load();
+    expect(ids(pane)).toEqual(Array.from({ length: PAGE }, (_, n) => n + 51));
+    // 250 arrive while the pane hears of none, then it is read again
+    held.total = 400;
+    await pane.load();
+    expect(ids(pane)).toEqual(Array.from({ length: 200 }, (_, n) => n + 51));
+    expect(pane.hasNewer).toBe(true);
+  });
+});

@@ -157,14 +157,16 @@ export class MessagePane {
 
   /**
    * Reads the newest page, or the pages around the message the pane opened at until they have
-   * come; the first time it also finds where the unread messages start. A pane still short of the
-   * newest messages reads nothing here: they come as the list scrolls down to them
+   * come; the first time it also finds where the unread messages start. A pane that holds
+   * messages reads on from the newest it holds instead. A pane still short of the newest messages
+   * reads nothing here: they come as the list scrolls down to them
    */
   load = async () => {
     // a room's read marker comes with the joined rooms, which a pane opened by a link or a
     // reload can be quicker than; its first unread message is placed from that marker
     if (!this.loaded && this.target.kind === "room") await chat.ready();
     if (this.loaded && this.hasNewer) return;
+    if (this.loaded && this.ordered.some((m) => m.localId > 0)) return this.#reachedNewest();
     const view = this.#view;
     const at = this.loaded ? null : this.at;
     const page: Outcome<Page & { hasNewer?: boolean }> =
@@ -193,6 +195,7 @@ export class MessagePane {
     const page = await this.#page({ after: newest });
     if (view !== this.#view) return;
     if (!page.ok) return void (this.error = page.error);
+    this.error = "";
     for (const m of page.data.messages) this.#store(m);
     this.#gapsFrom(page.data.gaps);
     this.hasNewer = page.data.hasMore;
