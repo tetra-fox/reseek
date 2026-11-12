@@ -119,7 +119,8 @@
   let table = $state<ReturnType<typeof FileTree<Transfer>> | null>(null);
 
   // the visible remotely queued downloads ask the peer for their place, each once a period and
-  // the first time as soon as it shows; one ask a second at most, so a screenful doesn't ask at once
+  // the first time as soon as it shows; one ask a second at most, so a screenful doesn't ask at
+  // once, and none while the tab is hidden
   const refreshMs = $derived(
     parseDuration(fields(fields(fields(app.options).transfers).ui).queue_refresh) ?? 120_000
   );
@@ -129,6 +130,7 @@
   $effect(() => {
     if (direction !== "download") return;
     const timer = setInterval(() => {
+      if (document.hidden) return;
       const now = Date.now();
       const due = (table?.drawn() ?? []).find(
         (line) =>
