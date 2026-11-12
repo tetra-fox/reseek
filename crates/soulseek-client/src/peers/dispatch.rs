@@ -3,8 +3,9 @@
 //! it carries. Every frame is handled on a task of its own, with a bound on how many run at once
 //! across all connections and a smaller one per connection; at a bound a connection's reader
 //! waits before reading its next frame, so a stuck resolver slows the peers sending to it and
-//! loses nothing. A handler counts against the bounds until its answer is queued, not while the
-//! answer is written, so a peer slow to read holds up no one else. The frames whose order is the
+//! loses nothing. A handler counts against the shared bound until its answer is queued, not while
+//! the answer is written, so a peer slow to read holds up no one else; it counts against its own
+//! connection's bound until the write ends, so such a peer has no more answers pending than that. The frames whose order is the
 //! order of a queue, a peer's requests to queue files and the places it reports, are handled one
 //! after another in the order they came; the rest run side by side.
 //!
@@ -55,7 +56,7 @@ pub struct IncomingBrowse {
 /// What a frame's handler is given by the connection it came on
 struct Arrival {
   frame: Vec<u8>,
-  /// held until the frame's answer is queued, against the bound on frames handled at once
+  /// held while the frame is handled, against the bounds on frames handled at once
   permit: Option<HandlerPermit>,
   /// the frame's place among those of its connection handled in order, for one of them
   turn: Option<Turn>,
@@ -274,8 +275,7 @@ impl Client {
     followed
   }
 
-  /// Hands the frame to a task of its own, which keeps its permit until the frame's answer is
-  /// queued
+  /// Hands the frame to a task of its own, which keeps its permit while it handles the frame
   fn dispatch_peer_frame(&self, conn: &MessageConn, arrival: Arrival) {
     let client = self.clone();
     let conn = conn.clone();

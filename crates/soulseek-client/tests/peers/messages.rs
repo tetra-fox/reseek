@@ -622,6 +622,42 @@ async fn peers_reading_their_replies_at_a_trickle_leave_other_peers_requests_han
 }
 
 #[tokio::test]
+async fn a_peer_that_does_not_read_has_no_more_answers_pending_than_its_connection_handles() {
+  let asked = Arc::new(AtomicUsize::new(0));
+  let mut options = listening_options();
+  // room for every answer in the write queue, so only the handler bound can hold them back
+  options.peer_connection_options.write_queue_size = 1000;
+  options.resolvers.browse_response_resolver = Some(Arc::new({
+    let asked = asked.clone();
+    move |_, _| {
+      asked.fetch_add(1, Ordering::SeqCst);
+      Box::pin(async {
+        let len = 1 << 30;
+        Ok(BrowseReply::Encoded(EncodedFrame {
+          len,
+          reader: Box::pin(tokio::io::repeat(0).take(len)),
+        }))
+      })
+    }
+  }));
+  let session = Session::with_options(options).await;
+  let mut bob = session.peer("bob").await;
+  bob
+    .send(&PeerMessage::BrowseRequest.encode().repeat(40))
+    .await;
+  // 16, the most one connection may have handled, are answered and wait to be written
+  tokio::time::timeout(PATIENCE, async {
+    while asked.load(Ordering::SeqCst) < 16 {
+      tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+  })
+  .await
+  .unwrap();
+  tokio::time::sleep(Duration::from_millis(100)).await;
+  assert_eq!(asked.load(Ordering::SeqCst), 16);
+}
+
+#[tokio::test]
 async fn queue_requests_on_one_connection_reach_the_resolver_in_the_order_sent() {
   let (queued, mut order) = tokio::sync::mpsc::unbounded_channel();
   let mut options = listening_options();

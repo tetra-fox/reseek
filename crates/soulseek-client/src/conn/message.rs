@@ -73,8 +73,17 @@ enum Payload {
 /// What the handler of a gated frame holds until the frame is handled: one of the shared gate's
 /// permits and one of its connection's own
 pub(crate) struct HandlerPermit {
-  _shared: OwnedSemaphorePermit,
+  shared: Option<OwnedSemaphorePermit>,
   _connection: OwnedSemaphorePermit,
+}
+
+impl HandlerPermit {
+  /// Lets go of the shared gate's permit and keeps the connection's own, for a handler that
+  /// only waits for its answer to be written: other connections are no longer held up by it,
+  /// and its connection still has no more frames in hand than its own bound
+  pub(crate) fn release_shared(&mut self) {
+    self.shared = None;
+  }
 }
 
 /// resolves once the write it belongs to is on the socket, or with why it never got there
@@ -456,7 +465,7 @@ async fn read_loop(
           .await
           .expect("a read gate is never closed");
         Some(HandlerPermit {
-          _shared: shared,
+          shared: Some(shared),
           _connection: connection,
         })
       }

@@ -18,10 +18,11 @@ use crate::conn::{EncodedFrame, HandlerPermit, MessageConn, written};
 use crate::error::ClientError;
 use crate::resolvers::BrowseReply;
 
-/// What the handler of a peer frame holds while it works out its answer: its place against the
-/// bound on frames handled at once and, for a frame handled in order, its turn. Both are let go
-/// once the answer is queued on the connection, before it is written. An answer sent from
-/// outside a handler holds nothing.
+/// What the handler of a peer frame holds while it works out its answer: its places against the
+/// bounds on frames handled at once, across connections and on its own, and for a frame handled
+/// in order, its turn. Once the answer is queued, before it is written, the shared place and the
+/// turn are let go; the connection's own place is held until the write ends. An answer sent
+/// from outside a handler holds nothing.
 #[derive(Default)]
 pub(crate) struct Answering {
   permit: Option<HandlerPermit>,
@@ -33,8 +34,8 @@ impl Answering {
     Self { permit, turn }
   }
 
-  /// Queues `messages` on `conn` in one write, lets go of what the handler holds, and waits
-  /// until they are on the socket
+  /// Queues `messages` on `conn` in one write, lets go of the shared place and the turn, and
+  /// waits until they are on the socket
   pub(crate) async fn send(
     &mut self,
     conn: &MessageConn,
@@ -73,8 +74,12 @@ impl Answering {
     written(receipt?).await
   }
 
+  /// lets go of the shared permit and the turn; the connection's own permit is kept until the
+  /// handler ends, so a peer that does not read has no more answers pending than that bound
   fn let_go(&mut self) {
-    self.permit = None;
+    if let Some(permit) = &mut self.permit {
+      permit.release_shared();
+    }
     self.turn = None;
   }
 }
