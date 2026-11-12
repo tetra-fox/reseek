@@ -6,6 +6,7 @@
 //! wait for an answer at once is the resolver's to bound.
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -33,10 +34,16 @@ struct Undelivered {
   reply: Arc<SearchReply>,
 }
 
+/// A kept answer's place in the cache: the connection request it rode on, and the order it was
+/// kept in
+type KeptAt = (u32, u64);
+
 /// What the client keeps for answering searches
 pub(crate) struct SearchResponder {
-  /// the answers we could not deliver, by the connection request they rode on
-  undelivered: Mutex<BoundedCache<u32, Vec<Undelivered>>>,
+  /// the answers we could not deliver, one entry each, so the cache's bound counts answers
+  undelivered: Mutex<BoundedCache<KeptAt, Undelivered>>,
+  /// numbers the answers kept, in order
+  next_kept: AtomicU64,
   /// connection requests the searcher refused while answers waited on them, so those answers
   /// are not kept; forgotten once the last of them is done
   refused: Mutex<BoundedCache<u32, ()>>,
@@ -48,13 +55,33 @@ impl SearchResponder {
   pub(crate) fn new(cache_size: u32) -> Self {
     Self {
       undelivered: Mutex::new(BoundedCache::new(cache_size as usize, KEEP_UNDELIVERED)),
+      next_kept: AtomicU64::new(0),
       refused: Mutex::new(BoundedCache::new(cache_size as usize, KEEP_UNDELIVERED)),
       waiting: Mutex::new(HashMap::new()),
     }
   }
 
-  fn undelivered(&self) -> std::sync::MutexGuard<'_, BoundedCache<u32, Vec<Undelivered>>> {
+  fn undelivered(&self) -> std::sync::MutexGuard<'_, BoundedCache<KeptAt, Undelivered>> {
     crate::lock(&self.undelivered)
+  }
+
+  /// Keeps `answer` under the connection request `request`, for a searcher who acts on it
+  /// late. Each answer counts against the bound, and the cache makes room by dropping the one
+  /// kept longest ago. Each also keeps its own age: one kept later under the same request does
+  /// not lengthen the wait of those kept before it.
+  fn keep(&self, request: u32, answer: Undelivered) {
+    let number = self.next_kept.fetch_add(1, Ordering::Relaxed);
+    self.undelivered().insert((request, number), answer);
+  }
+
+  /// takes out the answers kept under the connection request `request`, in the order they were
+  /// kept
+  fn take(&self, request: u32) -> Vec<Undelivered> {
+    let mut taken = self
+      .undelivered()
+      .remove_where(|(rode_on, _)| *rode_on == request);
+    taken.sort_by_key(|((_, number), _)| *number);
+    taken.into_iter().map(|(_, answer)| answer).collect()
   }
 
   /// whether an answer of ours waits for a connection to `username`
@@ -84,8 +111,7 @@ impl SearchResponder {
   pub(crate) fn kept_for(&self, response_token: u32) -> Option<String> {
     self
       .undelivered()
-      .get(&response_token)
-      .and_then(|kept| kept.first())
+      .find(|(rode_on, _)| *rode_on == response_token)
       .map(|kept| kept.username.clone())
   }
 
@@ -126,7 +152,7 @@ impl Client {
   /// How many answers to other users' searches are kept now because their searcher could not
   /// be reached yet.
   pub fn undelivered_search_responses(&self) -> usize {
-    self.responder().undelivered().values().map(Vec::len).sum()
+    self.responder().undelivered().len()
   }
 
   /// Answers another user's search on a task of its own.
@@ -188,15 +214,15 @@ impl Client {
           self.emit(delivery());
           return false;
         }
-        let mut undelivered = self.responder().undelivered();
-        let mut kept = undelivered.remove(&request).unwrap_or_default();
-        kept.push(Undelivered {
-          username: username.to_owned(),
-          token,
-          query: query.to_owned(),
-          reply,
-        });
-        undelivered.insert(request, kept);
+        self.responder().keep(
+          request,
+          Undelivered {
+            username: username.to_owned(),
+            token,
+            query: query.to_owned(),
+            reply,
+          },
+        );
         tracing::debug!(
           response_token = request,
           %error,
@@ -275,9 +301,7 @@ impl Client {
   /// A searcher acted late on a connection request that carried answers we could not deliver,
   /// and has just connected; the kept answers go out on that connection
   pub(crate) async fn try_respond_cached(&self, response_token: u32) {
-    let Some(kept) = self.responder().undelivered().remove(&response_token) else {
-      return;
-    };
+    let kept = self.responder().take(response_token);
     for kept in kept {
       self.respond_kept(response_token, kept).await;
     }
@@ -328,9 +352,8 @@ impl Client {
 
   /// The searcher answers were kept for cannot connect to us; the answers are given up
   pub(crate) fn try_discard(&self, response_token: u32) -> bool {
-    let Some(kept) = self.responder().undelivered().remove(&response_token) else {
-      return false;
-    };
+    let kept = self.responder().take(response_token);
+    let discarded = !kept.is_empty();
     for kept in kept {
       tracing::debug!(
         username = kept.username,
@@ -345,7 +368,7 @@ impl Client {
         search_response: kept.reply,
       }));
     }
-    true
+    discarded
   }
 
   /// asks the application for an answer; `None` when there is none to send
@@ -494,5 +517,33 @@ mod tests {
     let (asked, ()) = tokio::join!(asking, refusing);
     assert!(asked.is_err());
     assert_eq!(crate::lock(&client.responder().refused).len(), 0);
+  }
+
+  #[tokio::test]
+  async fn answers_kept_under_one_request_count_against_the_bound_one_by_one() {
+    let responder = SearchResponder::new(3);
+    for token in 0..5 {
+      let reply = SearchReply::Response(soulseek_proto::peer::SearchResponse {
+        username: "alice".into(),
+        token,
+        files: Vec::new(),
+        has_free_upload_slot: true,
+        upload_speed: 0,
+        queue_length: 0,
+        locked_files: Vec::new(),
+      });
+      let answer = Undelivered {
+        username: "carol".into(),
+        token,
+        query: "hit".into(),
+        reply: Arc::new(reply),
+      };
+      responder.keep(7, answer);
+    }
+    assert_eq!(responder.undelivered().len(), 3);
+    let taken: Vec<u32> = responder.take(7).iter().map(|kept| kept.token).collect();
+    assert_eq!(taken.len(), 3);
+    assert!(taken.is_sorted(), "taken in the order kept: {taken:?}");
+    assert_eq!(responder.undelivered().len(), 0);
   }
 }

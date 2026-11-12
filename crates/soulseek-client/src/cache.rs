@@ -87,17 +87,35 @@ impl<K: Eq + Hash + Clone, V> BoundedCache<K, V> {
     (!expired).then_some(entry.value)
   }
 
-  /// the values that have not expired
-  pub(crate) fn values(&mut self) -> impl Iterator<Item = &V> {
+  /// a value whose key `pick` accepts and that has not expired, without counting as a use
+  pub(crate) fn find(&self, pick: impl Fn(&K) -> bool) -> Option<&V> {
     let now = Instant::now();
     self
       .entries
-      .retain(|_, entry| now < entry.stored + self.ttl);
-    self.entries.values().map(|entry| &entry.value)
+      .iter()
+      .find(|(key, entry)| pick(key) && now < entry.stored + self.ttl)
+      .map(|(_, entry)| &entry.value)
+  }
+
+  /// takes out every entry whose key `pick` accepts, with its key; the expired ones are dropped
+  pub(crate) fn remove_where(&mut self, pick: impl Fn(&K) -> bool) -> Vec<(K, V)> {
+    let now = Instant::now();
+    let picked: Vec<K> = self
+      .entries
+      .keys()
+      .filter(|key| pick(key))
+      .cloned()
+      .collect();
+    picked
+      .into_iter()
+      .filter_map(|key| {
+        let entry = self.entries.remove(&key)?;
+        (now < entry.stored + self.ttl).then_some((key, entry.value))
+      })
+      .collect()
   }
 
   /// how many entries have not expired
-  #[cfg(test)]
   pub(crate) fn len(&mut self) -> usize {
     let now = Instant::now();
     self
