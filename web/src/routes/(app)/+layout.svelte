@@ -65,9 +65,17 @@
     });
   });
 
-  // a screen whose place is in its address comes back to it from the navigation
+  /** the address that failed to show and what puts its screen back, while the error stands in */
+  let broken: { href: string; reset: () => void } | null = null;
+
+  // a screen whose place is in its address comes back to it from the navigation, and a screen
+  // that failed is tried again once the user goes to another address
   afterNavigate(({ to }) => {
     if (to?.url) visited(route(to.url).path, route(to.url).query);
+    if (!broken || broken.href === to?.url.href) return;
+    const { reset } = broken;
+    broken = null;
+    reset();
   });
 
   // screens size their content from its height, and fixed layers keep clear of everything under
@@ -186,14 +194,17 @@
                 "mx-auto flex min-h-full w-full min-w-0 flex-col",
                 fillsContent(at.path) ? "h-full" : "max-w-page gap-section p-gutter"
               ]}>
-              <svelte:boundary>
+              <svelte:boundary onerror={(_, reset) => (broken = { href: page.url.href, reset })}>
                 {@render children()}
                 {#snippet failed(error, reset)}
                   <!-- SvelteKit hands a boundary an App.Error, which hooks.client.ts gives the message -->
                   <ErrorSegment
                     caption={SCREEN_FAILED}
                     detail={(error as App.Error).message}
-                    retry={reset}
+                    retry={() => {
+                      broken = null;
+                      reset();
+                    }}
                     retryLabel="Reload" />
                 {/snippet}
               </svelte:boundary>

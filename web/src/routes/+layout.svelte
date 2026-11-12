@@ -1,5 +1,7 @@
 <script lang="ts">
   import "../app.css";
+  import { afterNavigate } from "$app/navigation";
+  import { page } from "$app/state";
   import { ModeWatcher } from "mode-watcher";
 
   import ErrorSegment from "#lib/components/ErrorSegment.svelte";
@@ -11,6 +13,16 @@
   let { children } = $props();
 
   $effect(followPointer);
+
+  /** the address that failed to show and what puts its page back, while the error stands in */
+  let broken: { href: string; reset: () => void } | null = null;
+  // a page that failed is tried again once the user goes to another address
+  afterNavigate(({ to }) => {
+    if (!broken || broken.href === to?.url.href) return;
+    const { reset } = broken;
+    broken = null;
+    reset();
+  });
 </script>
 
 <!-- the theme follows the OS until the user picks one, which is then kept in this browser -->
@@ -18,7 +30,7 @@
 <Toaster />
 <TooltipHost />
 
-<svelte:boundary>
+<svelte:boundary onerror={(_, reset) => (broken = { href: page.url.href, reset })}>
   {@render children()}
   {#snippet failed(error)}
     <div class="flex min-h-svh items-center justify-center p-6">
