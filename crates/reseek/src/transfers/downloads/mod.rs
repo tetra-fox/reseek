@@ -494,14 +494,14 @@ impl Downloads {
       info!(%id, username = record.username, "download without a running task ended as canceled");
       self.push(&record);
     }
+    // the removal is pushed before the job it may have ended is told of
+    let taken = removed.is_some();
+    if let Some(removed) = removed {
+      self.taken_out(&[removed]).await;
+    }
     self.tell(finished);
-    match removed {
-      Some(taken) => self.taken_out(&[taken]).await,
-      None => {
-        if let Some(job) = record.job_id {
-          self.sync_job(job).await;
-        }
-      }
+    if let (false, Some(job)) = (taken, record.job_id) {
+      self.sync_job(job).await;
     }
     Ok(ended || remove)
   }
