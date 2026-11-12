@@ -100,9 +100,10 @@ struct Session {
   stage: Stage,
   /// how the latest session to end ended, kept across the next one
   last_end: Option<SessionEnd>,
-  /// the `connect` call in progress, canceled by an explicit disconnect; the call can go on
-  /// after the login, so it is not part of a stage
-  attempt: Option<CancellationToken>,
+  /// the parent of every `connect` call's token from the call on, replaced as a disconnect the
+  /// application asks for cancels it; a call can go on after the login and can wait for its
+  /// turn before any session begins, so this is not part of a stage
+  connects: CancellationToken,
 }
 
 impl Default for Session {
@@ -111,7 +112,7 @@ impl Default for Session {
       number: 0,
       stage: Stage::Disconnected { reached: false },
       last_end: None,
-      attempt: None,
+      connects: CancellationToken::new(),
     }
   }
 }

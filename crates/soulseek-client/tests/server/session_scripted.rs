@@ -163,6 +163,33 @@ async fn canceling_the_connect_while_logging_in() {
 }
 
 #[tokio::test]
+async fn a_connect_with_its_token_canceled_already_begins_nothing() {
+  let fake = FakeServer::start().await;
+  let client = Client::new(listening_options()).unwrap();
+  let mut events = client.subscribe();
+  let address = fake.address();
+  let cancel = CancellationToken::new();
+  cancel.cancel();
+  let connected = client
+    .connect(
+      &address.ip().to_string(),
+      address.port(),
+      USERNAME,
+      PASSWORD,
+      &cancel,
+    )
+    .await;
+  assert!(
+    matches!(connected, Err(ClientError::Canceled)),
+    "{connected:?}"
+  );
+  let raised = drain(&mut events);
+  assert!(raised.is_empty(), "{raised:?}");
+  let reached = tokio::time::timeout(Duration::from_millis(200), fake.accept()).await;
+  assert!(reached.is_err(), "the server took a connection");
+}
+
+#[tokio::test]
 async fn disconnecting_cancels_a_connect_in_progress() {
   let fake = FakeServer::start().await;
   let client = Client::new(options()).unwrap();
@@ -296,7 +323,52 @@ async fn a_second_disconnect_returns_once_the_one_under_way_has_ended() {
 }
 
 #[tokio::test]
-async fn a_connect_queued_behind_a_login_that_ends_waits_and_connects_as_itself() {
+async fn a_connect_queued_behind_a_login_that_fails_waits_and_connects_as_itself() {
+  let fake = FakeServer::start().await;
+  let client = Client::new(listening_options()).unwrap();
+  let first = connect(&client, &fake, CancellationToken::new());
+  let mut server = fake.accept().await;
+  server.read_login().await;
+  server.send(&login_success()).await;
+  first.await.unwrap().unwrap();
+
+  // both connects pass their first check while the disconnect stops the listener; the first's
+  // login is refused, and its session has ended by the time the second takes its turn
+  let address = fake.address();
+  let host = address.ip().to_string();
+  let cancel = CancellationToken::new();
+  let serve = async {
+    let mut refused = fake.accept().await;
+    refused.read_login().await;
+    refused
+      .send(&ServerResponse::Login(LoginResponse::Failure {
+        reason: "INVALIDPASS".into(),
+        detail: None,
+      }))
+      .await;
+    let mut queued = fake.accept().await;
+    let (login, _) = queued.read_login().await;
+    queued.send(&login_success()).await;
+    (refused, queued, login.username)
+  };
+  let ((), refused, queued, (_refused, _queued, name)) = tokio::join!(
+    client.disconnect(None, None),
+    client.connect(&host, address.port(), USERNAME, PASSWORD, &cancel),
+    client.connect(&host, address.port(), "someone_else", PASSWORD, &cancel),
+    serve,
+  );
+  assert!(
+    matches!(refused, Err(ClientError::LoginRejected(_))),
+    "{refused:?}"
+  );
+  queued.unwrap();
+  assert_eq!(name, "someone_else");
+  assert_eq!(client.username().as_deref(), Some("someone_else"));
+  drop(server);
+}
+
+#[tokio::test]
+async fn a_disconnect_cancels_a_connect_still_waiting_for_the_lock() {
   let fake = FakeServer::start().await;
   let client = Client::new(listening_options()).unwrap();
   let first = connect(&client, &fake, CancellationToken::new());
@@ -306,7 +378,7 @@ async fn a_connect_queued_behind_a_login_that_ends_waits_and_connects_as_itself(
   first.await.unwrap().unwrap();
 
   // both connects pass their first check while the disconnect stops the listener; the first
-  // logs in, and its session ends before the second takes its turn
+  // logs in and is disconnected while the second still waits for the lock it holds
   let address = fake.address();
   let host = address.ip().to_string();
   let cancel = CancellationToken::new();
@@ -314,10 +386,7 @@ async fn a_connect_queued_behind_a_login_that_ends_waits_and_connects_as_itself(
     let mut joined = fake.accept().await;
     joined.read_login().await;
     joined.send(&login_success()).await;
-    let mut queued = fake.accept().await;
-    let (login, _) = queued.read_login().await;
-    queued.send(&login_success()).await;
-    (joined, queued, login.username)
+    joined
   };
   let joined_then_ended = async {
     let joined = client
@@ -326,16 +395,15 @@ async fn a_connect_queued_behind_a_login_that_ends_waits_and_connects_as_itself(
     client.disconnect(None, None).await;
     joined
   };
-  let ((), joined, queued, (_joined, _queued, name)) = tokio::join!(
+  let ((), joined, queued, _joined) = tokio::join!(
     client.disconnect(None, None),
     joined_then_ended,
     client.connect(&host, address.port(), "someone_else", PASSWORD, &cancel),
     serve,
   );
   joined.unwrap();
-  queued.unwrap();
-  assert_eq!(name, "someone_else");
-  assert_eq!(client.username().as_deref(), Some("someone_else"));
+  assert!(matches!(queued, Err(ClientError::Canceled)), "{queued:?}");
+  assert_eq!(client.state(), ClientState::Disconnected);
   drop(server);
 }
 

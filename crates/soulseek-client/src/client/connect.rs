@@ -41,10 +41,11 @@ static UNIDENTIFIED_FULL: LogLimiter = LogLimiter::new();
 impl Client {
   /// Connects to the server at `address:port` and logs in. The listener starts first, so a busy
   /// listen port fails the connect before the server is contacted. `cancel`, or a call to
-  /// [`Client::disconnect`] while this runs, ends it with `Canceled`. A call that finds a
-  /// session logged in by another call with the same server, username and password joins it,
-  /// and is refused otherwise. Any failure after the state changed leaves the client
-  /// disconnected, with a `Disconnected` event naming the error.
+  /// [`Client::disconnect`] made after this one began, ends it with `Canceled`, whether it is
+  /// under way or still waiting for an earlier session to end. A call that finds a session logged
+  /// in by another call with the same server, username and password joins it, and is refused
+  /// otherwise. Any failure after the state changed leaves the client disconnected, with a
+  /// `Disconnected` event naming the error.
   pub async fn connect(
     &self,
     address: &str,
@@ -56,16 +57,39 @@ impl Client {
     validate_arguments(address, username, password)?;
     self.inner.check_not_disposed()?;
     self.check_not_connected()?;
+    let attempt = self.inner.session().connects.child_token();
+    let connecting = self.connect_attempt(address, port, username, password, &attempt);
+    tokio::pin!(connecting);
+    // the caller's token first, so a call made with it canceled ends before it begins anything
+    tokio::select! {
+      biased;
+      () = cancel.cancelled() => {
+        attempt.cancel();
+        connecting.await
+      }
+      result = &mut connecting => result,
+    }
+  }
+
+  /// the connect, canceled by `attempt` alone
+  async fn connect_attempt(
+    &self,
+    address: &str,
+    port: u16,
+    username: &str,
+    password: &str,
+    attempt: &CancellationToken,
+  ) -> Result<(), ClientError> {
     let remote = tokio::select! {
       biased;
-      () = cancel.cancelled() => return Err(ClientError::Canceled),
+      () = attempt.cancelled() => return Err(ClientError::Canceled),
       resolved = resolve(address, port) => resolved.map_err(|error| {
         ClientError::Address(format!("Failed to resolve address '{address}': {error}"))
       })?,
     };
     let _connecting = tokio::select! {
       biased;
-      () = cancel.cancelled() => return Err(ClientError::Canceled),
+      () = attempt.cancelled() => return Err(ClientError::Canceled),
       guard = self.inner.state_lock.lock() => guard,
     };
     // declared after the lock so it drops first: a queued connect never sees this one's session
@@ -75,7 +99,6 @@ impl Client {
       armed: false,
     };
     let mut state = self.inner.state.subscribe();
-    let attempt = cancel.child_token();
     loop {
       {
         let mut session = self.inner.session();
@@ -105,28 +128,29 @@ impl Client {
           // only a connect leaves disconnected, and connects take turns under the lock, so
           // with no teardown under way and no login to join, the session is disconnected
           _ => {
+            // a disconnect cancels under the session lock, so one asked for while this call
+            // waited is seen here and no session begins
+            check_canceled(attempt)?;
             self
               .inner
               .transition(&mut session, Edge::Connect, "Connecting".into(), None)
               .expect("a connect holding the lock starts from disconnected");
             unfinished.armed = true;
-            session.attempt = Some(attempt.clone());
             break;
           }
         }
       }
       tokio::select! {
         biased;
-        () = cancel.cancelled() => return Err(ClientError::Canceled),
+        () = attempt.cancelled() => return Err(ClientError::Canceled),
         // the client holds the sender for as long as this call can run
         _ = state.changed() => {}
       }
     }
     tracing::info!(address, port, %remote, username, "connecting to server");
     let result = self
-      .connect_session(address, remote, username, password, &attempt)
+      .connect_session(address, remote, username, password, attempt)
       .await;
-    self.inner.session().attempt = None;
     let Err(error) = result else {
       unfinished.armed = false;
       return Ok(());
@@ -137,7 +161,11 @@ impl Client {
       connect_error(error)
     };
     self
-      .disconnect(Some(&error.to_string()), Some(error.clone()))
+      .end_session(
+        Some(&error.to_string()),
+        Some(error.clone()),
+        Cause::Abandoned,
+      )
       .await;
     Err(error)
   }
@@ -460,7 +488,7 @@ impl Drop for Unfinished<'_> {
     if let Some(teardown) = self.client.inner.begin_disconnect(
       Some("connect dropped"),
       Some(ClientError::Canceled),
-      Cause::Requested,
+      Cause::Abandoned,
     ) {
       drop(teardown.spawn(self.client));
     }

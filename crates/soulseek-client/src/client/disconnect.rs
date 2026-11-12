@@ -18,9 +18,12 @@ use crate::waiter::Scope;
 
 /// What ended the session, which decides whether a `connect` in progress is canceled
 pub(super) enum Cause {
-  /// the application asked, or a failed `connect` cleans up; a `connect` in progress reports
-  /// `Canceled`
+  /// the application asked: every `connect` called before it reports `Canceled`, the one under
+  /// way and the ones still waiting their turn
   Requested,
+  /// a `connect` ends the session it began, because it failed or was dropped before it logged
+  /// in; the connects waiting their turn go on
+  Abandoned,
   /// the server dropped us; a `connect` in progress fails on its own
   Kicked,
   /// this server connection closed; ignored if it is no longer the session's connection
@@ -37,14 +40,21 @@ pub(super) struct Teardown {
 impl Client {
   /// Ends the server session with `message` and `error` as the reason the `Disconnected` event
   /// carries (the message defaults to the error's), and returns once the session has ended. A
-  /// disconnect already under way is waited for instead; cancels a `connect` in progress. The
-  /// teardown runs on a task of its own, so dropping this call does not leave the client
-  /// disconnecting.
+  /// disconnect already under way is waited for instead. Every `connect` called before this
+  /// ends with `Canceled`, under way or still waiting for its turn. The teardown runs on a task
+  /// of its own, so dropping this call does not leave the client disconnecting.
   pub async fn disconnect(&self, message: Option<&str>, error: Option<ClientError>) {
-    let Some(teardown) = self
-      .inner
-      .begin_disconnect(message, error, Cause::Requested)
-    else {
+    self.end_session(message, error, Cause::Requested).await;
+  }
+
+  /// ends the session for `cause` and returns once it has ended, as `disconnect` does
+  pub(super) async fn end_session(
+    &self,
+    message: Option<&str>,
+    error: Option<ClientError>,
+    cause: Cause,
+  ) {
+    let Some(teardown) = self.inner.begin_disconnect(message, error, cause) else {
       self.teardown_ended().await;
       return;
     };
@@ -92,6 +102,11 @@ impl Inner {
     {
       return None;
     }
+    // ahead of the edge, which a session disconnecting or disconnected refuses while a connect
+    // can still wait there for its turn
+    if let Cause::Requested = cause {
+      std::mem::take(&mut session.connects).cancel();
+    }
     let message = match (message, &error) {
       (Some(message), _) => message.to_owned(),
       (None, Some(error)) => error.to_string(),
@@ -101,11 +116,6 @@ impl Inner {
     let released = self
       .transition(&mut session, Edge::Disconnect, message.clone(), None)
       .ok()?;
-    if let Cause::Requested = cause
-      && let Some(attempt) = &session.attempt
-    {
-      attempt.cancel();
-    }
     let faulted = self.waiter.fault_scope(
       &Scope::Server,
       &ClientError::connection(
