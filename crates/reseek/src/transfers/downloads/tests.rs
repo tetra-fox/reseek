@@ -1186,3 +1186,32 @@ async fn an_albums_files_are_asked_of_their_user_in_the_order_enqueued() {
   assert!(enqueued.await.unwrap()[0].is_ok());
   assert_eq!(asked, album);
 }
+
+#[tokio::test]
+async fn a_download_whose_row_cannot_be_read_is_taken_out_by_a_cancel_that_removes_it() {
+  let app = app(TRUSTED, &[]).await;
+  let odd = Record::download("alice", "@@a\\Album\\2.flac", 10);
+  insert(&app, &odd).await;
+  let id = odd.id.to_string();
+  let row = id.clone();
+  app
+    .state
+    .transfers
+    .write(move |conn| conn.execute("UPDATE Transfers SET State = 2 WHERE Id = ?1", [row]))
+    .await
+    .unwrap();
+  let uri = format!("/api/v0/transfers/downloads/alice/{id}?remove=true");
+  let (status, body) = app.call("DELETE", &uri, None).await;
+  assert_eq!(status, 204, "{body}");
+  let removed: bool = app
+    .state
+    .transfers
+    .read(move |conn| {
+      conn.query_row("SELECT Removed FROM Transfers WHERE Id = ?1", [id], |row| {
+        row.get(0)
+      })
+    })
+    .await
+    .unwrap();
+  assert!(removed);
+}

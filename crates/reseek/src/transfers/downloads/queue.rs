@@ -38,9 +38,7 @@ impl Downloads {
   /// again.
   pub async fn place_in_queue(&self, username: &str, id: Uuid) -> Result<u32, ApiError> {
     if self.users.is_blocked(username, None, BlockScope::Downloads) {
-      return Err(ApiError::not_found(format!(
-        "No download {id} from {username}"
-      )));
+      return Err(super::not_found(username, id));
     }
     let record = self.record_of(username, id).await?;
     if record.state.kind() != TransferStates::QueuedRemotely {

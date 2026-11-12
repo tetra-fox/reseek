@@ -1,5 +1,6 @@
 //! The transfer listings of one direction: grouped by user and remote directory, a flat page
-//! filtered and sorted, and one transfer with the states it went through.
+//! filtered and sorted, and one transfer with the states it went through. A row that cannot be
+//! read is left out of a listing and logged.
 
 use api_types::Page;
 use api_types::transfers::{
@@ -13,7 +14,7 @@ use uuid::Uuid;
 
 use super::categories::condition;
 use super::state::in_states;
-use super::{ASKED_ORDER, COLUMNS, Record, direction_text, store, transfer};
+use super::{ASKED_ORDER, COLUMNS, Record, direction_text, readable, store, transfer};
 use crate::db::{Database, DbError, timestamp};
 
 /// The remote directory of a remote filename: everything before its last separator, which is
@@ -87,9 +88,11 @@ async fn grouped_rows(
           // no limit is SQLite's -1
           range.limit.map_or(-1, i64::from),
         ],
-        transfer,
+        |row| readable(row, transfer),
       )?;
-      rows.collect::<rusqlite::Result<Vec<Transfer>>>()
+      rows
+        .filter_map(Result::transpose)
+        .collect::<rusqlite::Result<Vec<Transfer>>>()
     })
     .await?;
   Ok(group(transfers))
@@ -187,7 +190,8 @@ pub async fn page(
     );
     let mut statement = conn.prepare(&sql)?;
     let items = statement
-      .query_map(params_from_iter(&values), transfer)?
+      .query_map(params_from_iter(&values), |row| readable(row, transfer))?
+      .filter_map(Result::transpose)
       .collect::<rusqlite::Result<_>>()?;
     Ok(Page {
       items,

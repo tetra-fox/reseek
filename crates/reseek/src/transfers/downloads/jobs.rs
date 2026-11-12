@@ -26,7 +26,7 @@ use crate::jobs::{Ended, NewJob, NewPart};
 use crate::transfers::categories::{CANCELLED, ERRORED, SUCCESSFUL, UNFINISHED};
 use crate::transfers::listing::remote_directory;
 use crate::transfers::state::state_at;
-use crate::transfers::{ASKED_ORDER, Record, text_at};
+use crate::transfers::{ASKED_ORDER, Record, readable, text_at};
 
 /// The jobs whose files are still being enqueued: none of them is over, whatever its
 /// downloads do. A job is opened before any download of it runs, as none exists yet or, on a
@@ -105,13 +105,16 @@ fn finished(
     return Ok(None);
   }
   let mut statement = conn.prepare_cached(&format!(
-    "SELECT Username, Filename, State FROM Transfers WHERE JobId = ?1 AND Removed = 0 \
+    "SELECT Username, Filename, State, Id FROM Transfers WHERE JobId = ?1 AND Removed = 0 \
      ORDER BY {ASKED_ORDER}"
   ))?;
   let rows = statement
     .query_map([job.to_string()], |row| {
-      Ok((text_at(row, 0)?, text_at(row, 1)?, state_at(row, 2)?))
+      readable(row, |row| {
+        Ok((text_at(row, 0)?, text_at(row, 1)?, state_at(row, 2)?))
+      })
     })?
+    .filter_map(Result::transpose)
     .collect::<rusqlite::Result<Vec<_>>>()?;
   Ok(summary(job, &rows))
 }
@@ -306,18 +309,21 @@ fn parts(conn: &Connection, job: Uuid) -> rusqlite::Result<Vec<Part>> {
        WHERE JobId = ?1 AND Removed = 0 ORDER BY {ASKED_ORDER}"
     ))?
     .query_map([job.to_string()], |row| {
-      let id: String = row.get(0)?;
-      Ok(Part {
-        id: id.parse().map_err(|e: uuid::Error| {
-          rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, e.into())
-        })?,
-        username: text_at(row, 1)?,
-        filename: text_at(row, 2)?,
-        state: state_at(row, 3)?,
-        paused: row.get(4)?,
-        exception: row.get(5)?,
+      readable(row, |row| {
+        let id: String = row.get(0)?;
+        Ok(Part {
+          id: id.parse().map_err(|e: uuid::Error| {
+            rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, e.into())
+          })?,
+          username: text_at(row, 1)?,
+          filename: text_at(row, 2)?,
+          state: state_at(row, 3)?,
+          paused: row.get(4)?,
+          exception: row.get(5)?,
+        })
       })
     })?
+    .filter_map(Result::transpose)
     .collect()
 }
 

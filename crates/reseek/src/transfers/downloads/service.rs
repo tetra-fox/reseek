@@ -19,7 +19,7 @@ use super::{Downloads, FileRequest, Group, internal};
 use crate::api::error::ApiError;
 use crate::services::TransferService;
 use crate::transfers::categories::FAILED;
-use crate::transfers::{ASKED_ORDER, COLUMNS, Record, listing, removal, store};
+use crate::transfers::{ASKED_ORDER, COLUMNS, Record, listing, removal, store, unreadable};
 
 /// What a refused enqueue call is told when every one allowed at once runs already.
 const BUSY: &str =
@@ -235,7 +235,7 @@ impl TransferService for Downloads {
     )
     .await
     .map_err(internal)?
-    .ok_or_else(|| ApiError::not_found(format!("No download {id} from {username}")))
+    .ok_or_else(|| super::not_found(username, id))
   }
 
   async fn place_in_queue(&self, username: &str, id: Uuid) -> Result<u32, ApiError> {
@@ -301,7 +301,12 @@ impl TransferService for Downloads {
       .read(move |conn| {
         ids
           .into_iter()
-          .map(|id| store::get(conn, id).map(|record| (id, record)))
+          .map(|id| match store::get(conn, id) {
+            Ok(record) => Ok((id, Ok(record))),
+            // one row that cannot be read fails only itself
+            Err(e) if unreadable(&e) => Ok((id, Err(e.to_string()))),
+            Err(e) => Err(e),
+          })
           .collect::<rusqlite::Result<Vec<_>>>()
       })
       .await
@@ -312,11 +317,17 @@ impl TransferService for Downloads {
     };
     let mut records = Vec::new();
     for (id, record) in found {
-      match record.filter(|r| r.direction == TransferDirection::Download) {
-        Some(record) => records.push(record),
-        None => result.failed.push(BulkFailure {
+      match record {
+        Ok(Some(record)) if record.direction == TransferDirection::Download => {
+          records.push(record);
+        }
+        Ok(_) => result.failed.push(BulkFailure {
           id,
           error: format!("no download {id}"),
+        }),
+        Err(error) => result.failed.push(BulkFailure {
+          id,
+          error: format!("the download cannot be read: {error}"),
         }),
       }
     }

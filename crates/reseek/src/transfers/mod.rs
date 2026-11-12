@@ -23,6 +23,8 @@ use std::time::Duration;
 use api_types::transfers::TransferDirection;
 use rusqlite::Row;
 use rusqlite::types::Type;
+use soulseek_client::LogLimiter;
+use tracing::warn;
 
 use crate::db::{self, Database, DbError, Location, Schema};
 pub use record::{ASKED_ORDER, COLUMNS, NEWEST_FIRST, Record, transfer};
@@ -62,6 +64,42 @@ pub fn direction_text(direction: TransferDirection) -> &'static str {
 /// as no name.
 pub fn text_at(row: &Row, i: usize) -> rusqlite::Result<String> {
   Ok(row.get::<_, Option<String>>(i)?.unwrap_or_default())
+}
+
+/// Rows left out of reads for a value that cannot be read, which every listing repeats.
+static UNREADABLE: LogLimiter = LogLimiter::new();
+
+/// What `read` makes of `row`, or none for a row holding a value no build of the daemon writes,
+/// such as a state it does not know, so one such row does not fail a read of many. The row is
+/// logged by its id and peer, which a cancel with removal of it takes out of the listings.
+pub fn readable<T>(
+  row: &Row,
+  read: impl FnOnce(&Row) -> rusqlite::Result<T>,
+) -> rusqlite::Result<Option<T>> {
+  match read(row) {
+    Ok(value) => Ok(Some(value)),
+    Err(e) if unreadable(&e) => {
+      if let Some(suppressed) = UNREADABLE.allow() {
+        // the id and peer are named when the read selected them
+        let id = row.get::<_, String>("Id").ok();
+        let username = row.get::<_, Option<String>>("Username").ok().flatten();
+        warn!(?id, ?username, error = %e, suppressed, "transfer that cannot be read left out");
+      }
+      Ok(None)
+    }
+    Err(e) => Err(e),
+  }
+}
+
+/// Whether `error` is a value of a row that cannot be read as a transfer, rather than a
+/// failure of the database.
+pub fn unreadable(error: &rusqlite::Error) -> bool {
+  matches!(
+    error,
+    rusqlite::Error::FromSqlConversionFailure(..)
+      | rusqlite::Error::InvalidColumnType(..)
+      | rusqlite::Error::IntegralValueOutOfRange(..)
+  )
 }
 
 /// The direction in the column `i` of `row`, as [`direction_text`] wrote it.

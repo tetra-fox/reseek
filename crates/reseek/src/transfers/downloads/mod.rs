@@ -385,16 +385,33 @@ impl Downloads {
     super::listing::record(&self.db, TransferDirection::Download, username, id)
       .await
       .map_err(ApiError::internal)?
-      .ok_or_else(|| ApiError::not_found(format!("No download {id} from {username}")))
+      .ok_or_else(|| not_found(username, id))
   }
 
   /// Cancels the download `id` of `username`: a running one stops wherever it is and ends
   /// canceled; one whose task is gone without ending it is ended canceled here. With
-  /// `remove` it leaves the listings once it has ended. False, doing nothing else but the
-  /// removal, when the download has completed, its task included completing it meanwhile, or
-  /// its file arrived and is being moved. 404 when there is no such download.
+  /// `remove` it leaves the listings once it has ended, and one whose row cannot be read leaves
+  /// them at once. False, doing nothing else but the removal, when the download has completed,
+  /// its task included completing it meanwhile, or its file arrived and is being moved. 404
+  /// when there is no such download.
   pub async fn cancel(&self, username: &str, id: Uuid, remove: bool) -> Result<bool, ApiError> {
-    let record = self.record_of(username, id).await?;
+    let read = super::listing::record(&self.db, TransferDirection::Download, username, id).await;
+    let record = match read {
+      Ok(Some(record)) => record,
+      Ok(None) => return Err(not_found(username, id)),
+      Err(DbError::Sqlite(e)) if remove && super::unreadable(&e) => {
+        let direction = TransferDirection::Download;
+        let removed = removal::remove_unreadable(&self.db, &self.live, direction, username, id)
+          .await
+          .map_err(internal)?;
+        if !removed {
+          return Err(not_found(username, id));
+        }
+        info!(%id, username, error = %e, "download that cannot be read removed");
+        return Ok(true);
+      }
+      Err(e) => return Err(internal(e)),
+    };
     match self.cancel_running(id, remove, None) {
       Running::Stopped => Ok(true),
       Running::Arrived => Ok(remove),
@@ -584,4 +601,9 @@ fn ids(rows: Vec<String>) -> Vec<Uuid> {
 /// A database failure as the API answers it.
 fn internal(error: DbError) -> ApiError {
   ApiError::internal(error)
+}
+
+/// The answer for a download `id` of `username` there is none of.
+fn not_found(username: &str, id: Uuid) -> ApiError {
+  ApiError::not_found(format!("No download {id} from {username}"))
 }

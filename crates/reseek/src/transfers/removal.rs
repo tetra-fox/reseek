@@ -73,6 +73,36 @@ pub async fn remove(
   }
 }
 
+/// Removes the transfer `id` of `direction` and `username` whose row cannot be read, whatever
+/// state it holds: no task runs one, since a task reads its record before anything else.
+/// Returns whether it was removed, pushing the removal.
+pub async fn remove_unreadable(
+  db: &Database,
+  live: &Live,
+  direction: TransferDirection,
+  username: &str,
+  id: Uuid,
+) -> Result<bool, DbError> {
+  let name = username.to_string();
+  let removed = db
+    .write(move |conn| {
+      returned(
+        conn,
+        "UPDATE Transfers SET Removed = 1, RemovedAt = ?4 WHERE Id = ?1 AND Direction = ?2 \
+         AND Username = ?3 AND Removed = 0 RETURNING Id, Username",
+        params![
+          id.to_string(),
+          direction_text(direction),
+          name,
+          timestamp(Utc::now())
+        ],
+      )
+    })
+    .await?;
+  push(live, direction, &removed);
+  Ok(!removed.is_empty())
+}
+
 /// Removes every completed transfer of `direction` that is not removed already, pushing each.
 pub async fn remove_completed(
   db: &Database,

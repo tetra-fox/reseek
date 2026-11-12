@@ -13,7 +13,7 @@ use rusqlite::types::Value;
 
 use crate::db::{Database, DbError, read_timestamp};
 use crate::transfers::categories::{COMPLETED, FAILED, IN_PROGRESS, QUEUED, SUCCESSFUL, condition};
-use crate::transfers::{COLUMNS, NEWEST_FIRST, direction_text, transfer};
+use crate::transfers::{COLUMNS, NEWEST_FIRST, direction_text, readable, transfer};
 
 /// How long a user's figures are reused.
 const FIGURES_FOR: Duration = Duration::from_secs(5);
@@ -154,9 +154,11 @@ pub async fn page(
         paged.len()
       );
       let mut statement = conn.prepare(&sql)?;
-      let rows = statement.query_map(params_from_iter(&paged), transfer)?;
+      let rows = statement.query_map(params_from_iter(&paged), |row| readable(row, transfer))?;
       Ok(UserTransfers {
-        transfers: rows.collect::<rusqlite::Result<_>>()?,
+        transfers: rows
+          .filter_map(Result::transpose)
+          .collect::<rusqlite::Result<_>>()?,
         total: total.unsigned_abs(),
       })
     })
