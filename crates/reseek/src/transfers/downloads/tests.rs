@@ -815,7 +815,8 @@ async fn an_interrupted_download_whole_here_is_moved_though_its_user_cannot_be_r
 }
 
 /// A resume reads a paused download, a cancel ends it, and then the resume writes: the
-/// download stays canceled, so the resume answers that it failed and starts no task.
+/// download stays canceled, so the resume answers that it failed and starts no task. The
+/// writes reach the one writer in the order the test queues them; the read goes to a reader.
 #[tokio::test]
 async fn a_resume_that_loses_the_race_to_a_cancel_fails_and_starts_no_task() {
   let app = app(TRUSTED, &[]).await;
@@ -823,8 +824,8 @@ async fn a_resume_that_loses_the_race_to_a_cancel_fails_and_starts_no_task() {
   paused.paused = true;
   insert(&app, &paused).await;
   let id = paused.id;
-  // the database is held while the resume's read and then the cancel queue for it, so they
-  // run in that order, and the resume's save after both
+  // the writer is held while the cancel's write queues for it and then the resume reads the
+  // paused row and queues its save, so the cancel ends the row before the resume writes
   let (release, released) = std::sync::mpsc::channel::<()>();
   let (holding, held) = tokio::sync::oneshot::channel();
   let transfers = app.state.transfers.clone();
@@ -838,16 +839,12 @@ async fn a_resume_that_loses_the_race_to_a_cancel_fails_and_starts_no_task() {
       .await
   });
   held.await.unwrap();
-  let mut resuming = Box::pin(app.state.downloads.resume_paused(vec![id]));
-  // the first poll spawns the resume's task, and the second round's yield lets that task run
-  // until its read queues behind the held writer
-  for _ in 0..2 {
-    tokio::task::yield_now().await;
-    let polled = std::future::poll_fn(|cx| Poll::Ready(resuming.as_mut().poll(cx))).await;
-    assert!(polled.is_pending());
-  }
+  let (queuing, queued) = tokio::sync::oneshot::channel();
   let transfers = app.state.transfers.clone();
   let canceling = tokio::spawn(async move {
+    // the write takes its place in the writer's queue at its first poll, before this task
+    // gives way, and the test runs on this one thread, so the test resumes after it
+    queuing.send(()).unwrap();
     transfers
       .write(move |conn| {
         let state = TransferStates::Completed(TransferOutcome::Cancelled);
@@ -855,9 +852,19 @@ async fn a_resume_that_loses_the_race_to_a_cancel_fails_and_starts_no_task() {
       })
       .await
   });
-  tokio::task::yield_now().await;
+  queued.await.unwrap();
+  let downloads = app.state.downloads.clone();
+  let resuming = tokio::spawn(async move { downloads.resume_paused(vec![id]).await });
+  // the resume puts in the download's handle and queues its save in one go, after its read
+  let saving = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+    while !reseek_shares::lock(&app.state.downloads.in_flight).contains_key(&id) {
+      tokio::task::yield_now().await;
+    }
+  })
+  .await;
+  assert!(saving.is_ok(), "the resume never got to its save");
   release.send(()).unwrap();
-  let outcomes = resuming.await;
+  let outcomes = resuming.await.unwrap();
   hold.await.unwrap().unwrap();
   assert!(canceling.await.unwrap().unwrap());
   assert!(
