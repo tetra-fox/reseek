@@ -13,10 +13,11 @@ import { STREAM_MS } from "#lib/search/results.svelte.js";
 import { searches } from "#lib/search/searches.svelte.js";
 import { session } from "#lib/session.svelte.js";
 import { searchOptions } from "#lib/settings.svelte.js";
-import { search, sharedFile } from "#lib/testing/fixtures.js";
+import { search, sharedFile, userSummary } from "#lib/testing/fixtures.js";
 import { flushFaked } from "#lib/testing/flush.js";
 import { press } from "#lib/testing/keys.js";
 import { connected } from "#lib/testing/live.js";
+import { users } from "#lib/users/users.svelte.js";
 
 import SearchDetail from "./SearchDetail.svelte";
 
@@ -63,15 +64,21 @@ describe("search results", () => {
     toasts.splice(0);
     live.stop();
     searches.clear();
+    users.clear();
     vi.useRealTimers();
     vi.unstubAllGlobals();
     document.body.innerHTML = "";
   });
 
-  /** Mounts the page on a running search and opens the stream; gives the fake network */
-  const open = async (stored: Schemas["SearchResponse"][]) => {
+  /**
+   * Mounts the page on a running search and opens the stream, with `blocked` the users blocked;
+   * gives the fake network
+   */
+  const open = async (stored: Schemas["SearchResponse"][], blocked: string[] = []) => {
     const net = connected((url) => {
-      if (url.pathname.endsWith("/api/v0/users")) return { users: [], total: 0 };
+      if (url.pathname.endsWith("/api/v0/users")) {
+        return { users: blocked.map((username) => userSummary(username)), total: blocked.length };
+      }
       if (url.pathname.endsWith(`/searches/${ID}/responses`)) return stored;
       if (url.pathname.endsWith(`/searches/${ID}`)) return search({ id: ID });
       if (url.pathname.endsWith("/api/v0/options")) {
@@ -202,6 +209,29 @@ describe("search results", () => {
     const keys = (lines: Element[]) => lines.map((l) => l.getAttribute("data-line"));
     expect(keys(rows()).slice(0, before.length)).toEqual(keys(before));
     expect(rows()[0]).toBe(before[0]);
+  });
+
+  it("hide a user's results once they are blocked, and show them once unblocked", async () => {
+    const stored = [response("alice", 300), response("bob", 200), response("carol", 100)];
+    const net = await open(stored, ["carol"]);
+    for (const r of stored) net.frame("search.response", { searchId: ID, response: r });
+    await streamed();
+    const cards = () =>
+      [
+        ...document.querySelectorAll('[role=treegrid] [role=rowgroup] [data-line^="folder:user:"]')
+      ].map((c) => c.getAttribute("data-line"));
+    const text = () => document.body.textContent?.replace(/\s+/g, " ") ?? "";
+    expect(cards()).toEqual(["folder:user:0:alice", "folder:user:0:bob"]);
+
+    const block = { username: "bob", reason: "" } as Schemas["Block"];
+    net.frame("users.updated", userSummary("bob", { block }));
+    await flushFaked();
+    expect(cards()).toEqual(["folder:user:0:alice"]);
+    expect(text()).toContain("2 from blocked users");
+
+    net.frame("users.updated", userSummary("carol", { block: null }));
+    await flushFaked();
+    expect(cards()).toEqual(["folder:user:0:alice", "folder:user:0:carol"]);
   });
 
   it("show no file in the inspector once the filter takes it out of the results", async () => {

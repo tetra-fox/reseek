@@ -74,8 +74,9 @@
     },
     () => `search:${id}`
   );
-  // the counts come with the list's frames
+  // the counts come with the list's frames, and blocks made meanwhile with the users' frames
   $effect(() => live.retain("search"));
+  $effect(() => live.retain("users"));
 
   /** the file focus last came to in the results, which the inspector shows */
   let picked = $state.raw<Picked | null>(null);
@@ -96,7 +97,8 @@
   let filterText = $state("");
   let typed = $state("");
   let showBlocked = $state(false);
-  let blocked = $state.raw<Set<string>>(new Set());
+  /** the users blocked now, read once and kept by the users' frames */
+  const blocked = new SvelteSet<string>();
   const dismissed = new SvelteSet<string>();
   /** the ticked files, kept across the layouts, each by its result's key and its path */
   const selected = new SvelteSet<string>();
@@ -130,9 +132,18 @@
     untrack(() => void results.fetch(count));
   });
 
-  // results from blocked users are hidden unless asked for
+  // results from blocked users are hidden unless asked for. A frame tells of a block or an
+  // unblock made since, and outranks the read, which may have been answered before it
+  const framed = new Set<string>();
+  const blockChanged = (username: string, isBlocked: boolean) => {
+    framed.add(username);
+    if (isBlocked) blocked.add(username);
+    else blocked.delete(username);
+  };
+  $effect(() => live.on("users.updated", (user) => blockChanged(user.username, !!user.block)));
+  $effect(() => live.on("users.removed", ({ username }) => blockChanged(username, false)));
   void users.blocked().then((names) => {
-    if (names) blocked = names;
+    for (const name of names ?? []) if (!framed.has(name)) blocked.add(name);
   });
 
   // the filter applies a moment after typing stops
