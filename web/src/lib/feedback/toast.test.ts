@@ -91,22 +91,26 @@ describe("toasts with a key", () => {
 });
 
 describe("a crowd of toasts", () => {
+  beforeEach(() => vi.useFakeTimers());
   afterEach(() => {
+    // the ones out of sight go too
+    vi.runAllTimers();
     while (toasts.length) dismiss(toasts[0].id);
+    vi.useRealTimers();
   });
 
-  it("lets the oldest go past five, errors last, and runs what each was shown with", () => {
+  it("puts the oldest out of sight past five, errors last, each going when its time is up", () => {
     const gone = vi.fn();
     toast("Failed 1", "error");
     toast("Saved 1", "info", { onGone: () => gone("Saved 1") });
     toast("Failed 2", "error");
     toast("Saved 2", "info", { onGone: () => gone("Saved 2") });
     toast("Saved 3");
+    vi.advanceTimersByTime(1_000);
     toast("Saved 4");
-    expect(gone.mock.calls).toEqual([["Saved 1"]]);
+    expect(toasts.map((t) => t.text)).not.toContain("Saved 1");
     toast("Failed 3", "error");
     toast("Saved 5");
-    expect(gone.mock.calls).toEqual([["Saved 1"], ["Saved 2"]]);
     expect(toasts.map((t) => t.text)).toEqual([
       "Saved 5",
       "Failed 3",
@@ -114,6 +118,11 @@ describe("a crowd of toasts", () => {
       "Failed 2",
       "Failed 1"
     ]);
+    // what the two were shown with, such as an undo's commit, waits for their own time
+    vi.advanceTimersByTime(4_999);
+    expect(gone).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(gone.mock.calls).toEqual([["Saved 1"], ["Saved 2"]]);
   });
 
   it("lets the oldest error go when every other one is an error, the newest kept", () => {

@@ -36,15 +36,31 @@ let next = 0;
 /** How many toasts show at once */
 const SHOWN = 5;
 
-/** Takes the toast away, however it goes; what it was shown with runs `onGone` */
+/**
+ * Takes the toast away, however it goes; what it was shown with runs `onGone`. One already out
+ * of sight to make room for newer ones goes for good
+ */
 export const dismiss = (id: number) => {
   const i = toasts.findIndex((t) => t.id === id);
-  if (i === -1) return;
-  toasts.splice(i, 1);
+  if (i !== -1) toasts.splice(i, 1);
   const countdown = countdowns.get(id);
+  if (!countdown) return;
   countdowns.delete(id);
-  clearTimeout(countdown?.timer);
-  countdown?.gone?.();
+  clearTimeout(countdown.timer);
+  countdown.gone?.();
+};
+
+/**
+ * Takes the toast at `at` out of sight to make room. One shown with `onGone` keeps its countdown,
+ * which still decides when that runs, so an undo it offered is carried out on time rather than
+ * at once; any other goes for good
+ */
+const makeRoom = (at: number) => {
+  const [shown] = toasts.splice(at, 1);
+  const countdown = countdowns.get(shown.id);
+  if (!countdown?.gone || !Number.isFinite(shown.ms)) return dismiss(shown.id);
+  // nothing can hold a toast out of sight
+  if (shown.held) run(shown.id, countdown);
 };
 
 const run = (id: number, countdown: Countdown) => {
@@ -57,7 +73,7 @@ const run = (id: number, countdown: Countdown) => {
  * action's button dismisses it when pressed. `onGone` runs once it is taken away, by its
  * countdown, by the user, or by a toast that takes its place. One shown with a `key` takes the
  * place of the toast with that key, on top and with its countdown started again. Past `SHOWN`
- * toasts the oldest goes, an error only when all the others are errors
+ * toasts the oldest goes out of sight, an error only when all the others are errors
  */
 export const toast = (
   text: string,
@@ -79,7 +95,7 @@ export const toast = (
   while (toasts.length > SHOWN) {
     // the newest stays, so what was just done always shows
     const oldest = toasts.findLastIndex((t) => t.kind !== "error");
-    dismiss(toasts[oldest > 0 ? oldest : toasts.length - 1].id);
+    makeRoom(oldest > 0 ? oldest : toasts.length - 1);
   }
   return id;
 };

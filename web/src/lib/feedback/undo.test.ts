@@ -33,12 +33,36 @@ describe("undo toasts", () => {
     expect(commit).not.toHaveBeenCalled();
   });
 
-  it("carry out what waits when the page is left", () => {
+  it("carry out what waits when the page is left, saying so", () => {
     const commit = vi.fn();
     undoable("Deleted", commit, () => {});
     window.dispatchEvent(new Event("pagehide"));
-    expect(commit).toHaveBeenCalledOnce();
+    expect(commit.mock.calls).toEqual([[true]]);
     vi.advanceTimersByTime(UNDO_MS);
     expect(commit).toHaveBeenCalledOnce();
+  });
+
+  it("carry out the oldest on time when newer toasts push it out of sight", () => {
+    const commits = Array.from({ length: 6 }, () => vi.fn());
+    for (const [n, commit] of commits.entries()) {
+      undoable(`Deleted ${n}`, commit, () => {});
+      vi.advanceTimersByTime(300);
+    }
+    expect(toasts.map((t) => t.text)).not.toContain("Deleted 0");
+    expect(commits[0]).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(UNDO_MS - 6 * 300 - 1);
+    expect(commits[0]).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(commits[0].mock.calls).toEqual([[false]]);
+    expect(commits[1]).not.toHaveBeenCalled();
+    vi.runAllTimers();
+    for (const commit of commits) expect(commit).toHaveBeenCalledOnce();
+  });
+
+  it("carry out what is out of sight too when the page is left", () => {
+    const commits = Array.from({ length: 6 }, () => vi.fn());
+    for (const [n, commit] of commits.entries()) undoable(`Deleted ${n}`, commit, () => {});
+    window.dispatchEvent(new Event("pagehide"));
+    for (const commit of commits) expect(commit.mock.calls).toEqual([[true]]);
   });
 });
