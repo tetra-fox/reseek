@@ -42,7 +42,7 @@ class Jobs {
           // a batch queues many at once: one read after a while covers them all
           this.#timer ??= setTimeout(() => void this.refresh(), BUSY_MS);
         }),
-        live.on("lagged", () => void this.refresh()),
+        live.onMissed(() => void this.refresh()),
         // a stream that resumed to follow transfers carries no job change from before its resume point
         live.onAdded((topics) => {
           if (topics.includes("transfers")) void this.refresh();

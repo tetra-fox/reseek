@@ -33,6 +33,7 @@ class Marks {
       this.#stops = [
         live.retain("transfers"),
         live.on("files.analysis", () => void this.#read()),
+        live.onMissed(() => void this.#read()),
         // a stream that resumed to follow transfers carries no report finished before its resume point
         live.onAdded((topics) => {
           if (topics.includes("transfers")) void this.#read();
