@@ -442,16 +442,15 @@ impl Drop for Unfinished<'_> {
     }
     // dropped outside a runtime, as after a `block_on` returns, nothing could run the teardown,
     // and no connect can be queued behind this one either
-    let Ok(runtime) = tokio::runtime::Handle::try_current() else {
+    if tokio::runtime::Handle::try_current().is_err() {
       return;
-    };
+    }
     if let Some(teardown) = self.client.inner.begin_disconnect(
       Some("connect dropped"),
       Some(ClientError::Canceled),
       Cause::Requested,
     ) {
-      let client = self.client.clone();
-      runtime.spawn(async move { teardown.finish(&client).await });
+      drop(teardown.spawn(self.client));
     }
   }
 }

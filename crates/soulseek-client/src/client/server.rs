@@ -185,8 +185,7 @@ impl Client {
           Some(ClientError::KickedFromServer),
           Cause::Kicked,
         ) {
-          let client = self.clone();
-          tokio::spawn(async move { teardown.finish(&client).await });
+          drop(teardown.spawn(self));
         }
       }
       R::GetPersonalRecommendations(recommendations) => self.complete(

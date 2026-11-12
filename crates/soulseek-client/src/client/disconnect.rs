@@ -5,12 +5,15 @@
 //! at disconnected. Message and transfer connections to other users, and the transfers on them,
 //! are not part of the session and go on.
 
+use tokio::task::JoinHandle;
+use tracing::Instrument;
 use uuid::Uuid;
 
 use super::session::{Edge, Released};
 use super::{Client, Inner};
 use crate::conn::Disconnect;
 use crate::error::{ClientError, ConnectionErrorKind};
+use crate::state::ClientState;
 use crate::waiter::Scope;
 
 /// What ended the session, which decides whether a `connect` in progress is canceled
@@ -33,15 +36,33 @@ pub(super) struct Teardown {
 
 impl Client {
   /// Ends the server session with `message` and `error` as the reason the `Disconnected` event
-  /// carries (the message defaults to the error's). Does nothing when already disconnected or
-  /// disconnecting; cancels a `connect` in progress.
+  /// carries (the message defaults to the error's), and returns once the session has ended. A
+  /// disconnect already under way is waited for instead; cancels a `connect` in progress. The
+  /// teardown runs on a task of its own, so dropping this call does not leave the client
+  /// disconnecting.
   pub async fn disconnect(&self, message: Option<&str>, error: Option<ClientError>) {
-    if let Some(teardown) = self
+    let Some(teardown) = self
       .inner
       .begin_disconnect(message, error, Cause::Requested)
+    else {
+      self.teardown_ended().await;
+      return;
+    };
+    // the other error is the runtime shutting down, which drops the teardown with every task
+    if let Err(e) = teardown.spawn(self).await
+      && e.is_panic()
     {
-      teardown.finish(self).await;
+      std::panic::resume_unwind(e.into_panic());
     }
+  }
+
+  /// waits until no teardown is under way
+  async fn teardown_ended(&self) {
+    let mut state = self.inner.state.subscribe();
+    // the client holds the sender for as long as `self` lives, so this cannot fail
+    let _ = state
+      .wait_for(|state| *state != ClientState::Disconnecting)
+      .await;
   }
 
   /// the server connection closed by itself: a read or write failed, or the remote closed it
@@ -104,7 +125,14 @@ impl Inner {
 }
 
 impl Teardown {
-  pub(super) async fn finish(self, client: &Client) {
+  /// Runs the teardown on a task of its own: it is the only way out of disconnecting, so it
+  /// must reach its end whether or not anyone waits for it.
+  pub(super) fn spawn(self, client: &Client) -> JoinHandle<()> {
+    let client = client.clone();
+    tokio::spawn(async move { self.finish(&client).await }.in_current_span())
+  }
+
+  async fn finish(self, client: &Client) {
     let inner = &*client.inner;
     let Self {
       message,
