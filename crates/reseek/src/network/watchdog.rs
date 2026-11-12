@@ -253,7 +253,6 @@ impl Watchdog {
     let inner = &self.inner;
     lock(&inner.status).attempting = true;
     while self.is_enabled() {
-      let failed = inner.failures.load(Ordering::Relaxed);
       // connected already, as when asked to connect while connected
       if inner.client.state().is_connected() {
         self.stop(false);
@@ -261,6 +260,9 @@ impl Watchdog {
       }
       let attempt = inner.shutdown.child_token();
       *lock(&inner.attempt) = Some(attempt.clone());
+      // read once this turn's token is in place, so a restart either cancels this turn or has
+      // already cleared what it reads
+      let failed = inner.failures.load(Ordering::Relaxed);
       let unanswered = inner.unanswered.load(Ordering::Relaxed);
       let wait = match unanswered_wait(unanswered) {
         Some(wait) => {
