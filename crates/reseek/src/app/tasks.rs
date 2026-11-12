@@ -32,36 +32,23 @@ pub(super) fn spawn(app: &AppState) {
   crate::auth::oidc::discover_at_start(app);
 }
 
-/// Keeps the state's configuration part current, failed reloads included, and pushes the
-/// options after every change to them.
+/// Keeps the state's configuration part current and pushes the options whenever the
+/// configuration changes: its values, a failed reload, the files read or what waits for a
+/// reconnect.
 async fn follow_configuration(app: AppState) {
   let mut loads = app.config.subscribe();
-  let mut changes = app.config.changes();
   let first = loads.borrow_and_update().clone();
   app.state.configured(&first);
   loop {
     tokio::select! {
       () = app.shutdown.cancelled() => return,
-      changed = loads.changed() => {
-        if changed.is_err() {
-          return;
-        }
-        let loaded = loads.borrow_and_update().clone();
-        app.state.configured(&loaded);
-      }
-      change = changes.recv() => match change {
-        Ok(change) => app
-          .live
-          .publish(LiveFrame::ApplicationOptions(view::document(&change.current))),
-        Err(RecvError::Lagged(missed)) => {
-          debug!(missed, "options changes missed; pushing the current options");
-          app
-            .live
-            .publish(LiveFrame::ApplicationOptions(view::document(&app.config.current())));
-        }
-        Err(RecvError::Closed) => return,
-      },
+      changed = loads.changed() => if changed.is_err() { return },
     }
+    let loaded = loads.borrow_and_update().clone();
+    app.state.configured(&loaded);
+    app
+      .live
+      .publish(LiveFrame::ApplicationOptions(view::document(&loaded)));
   }
 }
 
