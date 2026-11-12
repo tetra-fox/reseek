@@ -21,7 +21,7 @@ use uuid::Uuid;
 use super::Downloads;
 use super::attempt::{Attempted, Failure};
 use super::destination::incomplete_path;
-use super::starts::Turn;
+use super::starts::{Grant, Turn};
 use crate::files::WriteGuard;
 use crate::safety::Os;
 use crate::transfers::state::State;
@@ -92,10 +92,16 @@ impl Downloads {
       direction = "download",
       username = record.username
     );
+    // in the queue before the task runs, so downloads spawned in turn are granted in turn
+    let first = (!offered).then(|| {
+      self
+        .starts
+        .wait(record.id, &record.username, position, Some(request))
+    });
     self.tasks.spawn(
       async move {
         this
-          .run(record.id, position, request, cancel, offered)
+          .run(record.id, position, first, cancel, offered)
           .await
       }
       .instrument(span),
@@ -106,11 +112,11 @@ impl Downloads {
     self: Arc<Self>,
     id: Uuid,
     position: f64,
-    request: (u64, usize),
+    first: Option<impl Future<Output = Grant>>,
     cancel: CancellationToken,
     offered: bool,
   ) {
-    match self.download(id, position, request, &cancel, offered).await {
+    match self.download(id, position, first, &cancel, offered).await {
       Ended::Succeeded(record, incomplete, writing) => {
         let this = self.clone();
         let moving = async move {
@@ -130,28 +136,30 @@ impl Downloads {
     self.forget(id).await;
   }
 
-  /// The download's tries, from its turn in the local queue to how it ended; with `offered`,
-  /// the first try takes the offer its user made unasked, without a turn.
+  /// The download's tries, from its turn in the local queue, which `first` waits for, to how
+  /// it ended; with `offered`, the first try takes the offer its user made unasked, without a
+  /// turn.
   async fn download(
     &self,
     id: Uuid,
     position: f64,
-    request: (u64, usize),
+    first: Option<impl Future<Output = Grant>>,
     cancel: &CancellationToken,
     mut offered: bool,
   ) -> Ended {
-    let (mut first_slot, mut gate) = if offered {
-      (None, None)
-    } else {
-      let first = tokio::select! {
-        grant = self.starts.wait(id, position, Some(request)) => grant,
-        () = cancel.cancelled() => return self.canceled(id, None).await,
-      };
-      let gate = first.turn.map(|turn| Gate {
-        _turn: turn,
-        deadline: Instant::now() + HARD_LIMIT,
-      });
-      (Some(first.slot), gate)
+    let (mut first_grant, mut gate) = match first {
+      None => (None, None),
+      Some(first) => {
+        let first = tokio::select! {
+          grant = first => grant,
+          () = cancel.cancelled() => return self.canceled(id, None).await,
+        };
+        let gate = first.turn.map(|turn| Gate {
+          _turn: turn,
+          deadline: Instant::now() + HARD_LIMIT,
+        });
+        (Some((first.slot, first.ask)), gate)
+      }
     };
     let mut record = match self.db.read(move |conn| store::get(conn, id)).await {
       Ok(Some(record)) => record,
@@ -221,17 +229,19 @@ impl Downloads {
       }
       // held for this try; a retry waits for one in its place in the queue, keeping its
       // request's turn. Taking an offer holds none
-      let _slot = match first_slot.take() {
-        Some(slot) => Some(slot),
-        None if offered => None,
+      let (_slot, ask) = match first_grant.take() {
+        Some((slot, ask)) => (Some(slot), Some(ask)),
+        None if offered => (None, None),
         None => tokio::select! {
-          grant = self.starts.wait(id, position, None) => Some(grant.slot),
+          grant = self.starts.wait(id, &record.username, position, None) => {
+            (Some(grant.slot), Some(grant.ask))
+          }
           () = cancel.cancelled() => return self.canceled(id, Some(incomplete)).await,
         },
       };
       let taking = std::mem::take(&mut offered);
       match self
-        .attempt(&mut record, &incomplete, cancel, &mut gate, taking, pushed)
+        .attempt(&mut record, &incomplete, cancel, &mut gate, taking, pushed, ask)
         .await
       {
         Attempted::Succeeded(writing) => return Ended::Succeeded(record, incomplete, writing),

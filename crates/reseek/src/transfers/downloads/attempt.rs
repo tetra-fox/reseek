@@ -5,6 +5,7 @@
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::task::Poll;
 use std::time::Duration;
 
 use api_types::live::LiveFrame;
@@ -21,6 +22,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, trace, warn};
 
 use super::destination::incomplete_path;
+use super::starts::Ask;
 use super::task::Gate;
 use super::{Downloads, FileRequest};
 use crate::config::enums::RetryPartial;
@@ -241,7 +243,12 @@ impl Downloads {
   /// request's hard limit while it holds `gate`; with `offered`, a try that takes the offer its
   /// user made unasked rather than asking for the file. A try of a file `pushed` unasked fails
   /// when the peer names another size than the record's, which is the one its offer was checked
-  /// for; any other takes the peer's size.
+  /// for; any other takes the peer's size. With `ask`, the client is given the download once
+  /// the ones of its user granted before it were.
+  #[allow(
+    clippy::too_many_arguments,
+    reason = "a try takes its record, its file, its stops, its turns and how it asks"
+  )]
   pub(super) async fn attempt(
     &self,
     record: &mut Record,
@@ -250,6 +257,7 @@ impl Downloads {
     gate: &mut Option<Gate>,
     offered: bool,
     pushed: bool,
+    ask: Option<Ask>,
   ) -> Attempted {
     let options = self.config.current().values.clone();
     let download = &options.transfers.download;
@@ -332,6 +340,12 @@ impl Downloads {
     let client = self.network.client().clone();
     let running = client.download(request, &stop);
     tokio::pin!(running);
+    // the client takes a download's place among its user's downloads at its first poll
+    if let Some(ask) = &ask {
+      ask.ready().await;
+    }
+    let first = std::future::poll_fn(|cx| Poll::Ready(running.as_mut().poll(cx))).await;
+    drop(ask);
     // a turn the download no longer holds never fires
     let deadline = tokio::time::sleep_until(gate.as_ref().map_or_else(
       || Instant::now() + Duration::from_secs(86_400),
@@ -343,7 +357,10 @@ impl Downloads {
     let mut throttled = false;
     let mut hard_limited = false;
     let mut ended: Option<Snapshot> = None;
-    let result = loop {
+    let result = if let Poll::Ready(result) = first {
+      result
+    } else {
+      loop {
       tokio::select! {
         biased;
         Some(snapshot) = states.recv() => self.state_changed(record, snapshot, gate, &mut ended).await,
@@ -366,6 +383,7 @@ impl Downloads {
           throttle.as_mut().reset(Instant::now() + PROGRESS_EVERY);
         }
         () = &mut throttle, if throttled => throttled = false,
+      }
       }
     };
     // the states the client reported before its task ended are all queued by now

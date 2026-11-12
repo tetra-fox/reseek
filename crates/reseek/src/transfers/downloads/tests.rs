@@ -1097,3 +1097,92 @@ async fn places_a_peer_sends_on_its_own_are_kept_in_the_order_sent() {
   read_until(&app, sent_last.id, |r| r.place_in_queue() == Some(7)).await;
   assert_eq!(read(&app, sent_often.id).await.place_in_queue(), Some(20));
 }
+
+/// Reads frames of `kind` from `stream` into `buffer` and returns the next one whole.
+async fn next_frame(
+  stream: &mut tokio::net::TcpStream,
+  buffer: &mut Vec<u8>,
+  kind: soulseek_proto::frame::FrameKind,
+) -> Vec<u8> {
+  use tokio::io::AsyncReadExt;
+  loop {
+    let split = soulseek_proto::frame::split(kind, buffer, &soulseek_proto::Limits::DEFAULT);
+    if let Some((_, consumed)) = split.unwrap() {
+      return buffer.drain(..consumed).collect();
+    }
+    let mut chunk = [0; 4096];
+    let read = stream.read(&mut chunk).await.unwrap();
+    assert!(read > 0, "the daemon closed the connection");
+    buffer.extend_from_slice(&chunk[..read]);
+  }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn an_albums_files_are_asked_of_their_user_in_the_order_enqueued() {
+  use soulseek_proto::frame::FrameKind;
+  use soulseek_proto::server::GetPeerAddressResponse;
+  use soulseek_proto::{InitMessage, PeerMessage, ServerRequest, ServerResponse};
+
+  let app = crate::testing::soulseek::app(TRUSTED).await;
+  let alice = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+  let port = alice.local_addr().unwrap().port();
+  let server = crate::testing::soulseek::Server::start(move |request| match request {
+    ServerRequest::GetPeerAddress(asked) => {
+      vec![ServerResponse::GetPeerAddress(GetPeerAddressResponse {
+        username: asked.username.clone(),
+        ip: std::net::Ipv4Addr::LOCALHOST,
+        port: port.into(),
+        obfuscation: None,
+      })]
+    }
+    _ => Vec::new(),
+  })
+  .await;
+  server.login(&app).await;
+  let album: Vec<String> = (1..=20)
+    .map(|track| format!("@@a\\Album\\{track:02}.flac"))
+    .collect();
+  let group = super::Group {
+    username: "alice".into(),
+    files: album
+      .iter()
+      .map(|filename| super::FileRequest {
+        filename: filename.clone(),
+        size: 10,
+        position: None,
+      })
+      .collect(),
+    destination: None,
+    search_id: None,
+  };
+  let downloads = app.state.downloads.clone();
+  let enqueued = tokio::spawn(async move { downloads.enqueue(Uuid::new_v4(), vec![group], false).await });
+
+  let within = std::time::Duration::from_secs(10);
+  let (mut stream, _) = tokio::time::timeout(within, alice.accept())
+    .await
+    .expect("the daemon connects to alice")
+    .unwrap();
+  let mut buffer = Vec::new();
+  let init = next_frame(&mut stream, &mut buffer, FrameKind::Init).await;
+  assert!(matches!(
+    InitMessage::decode(&init).unwrap(),
+    InitMessage::PeerInit(_)
+  ));
+  let mut asked = Vec::new();
+  while asked.len() < album.len() {
+    let frame = tokio::time::timeout(
+      within,
+      next_frame(&mut stream, &mut buffer, FrameKind::Peer),
+    )
+    .await
+    .expect("every file is asked for");
+    match PeerMessage::decode(&frame).unwrap() {
+      PeerMessage::QueueDownload(request) => asked.push(request.filename.to_string()),
+      PeerMessage::TransferRequest(request) => asked.push(request.filename.to_string()),
+      _ => {}
+    }
+  }
+  assert!(enqueued.await.unwrap()[0].is_ok());
+  assert_eq!(asked, album);
+}

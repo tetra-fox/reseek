@@ -5,17 +5,23 @@
 //! download that cannot have its request's turn yet lets the next one in the queue start. Each
 //! download's place comes with its record, and the places a reorder gives are written back, so
 //! the order outlives a restart.
+//!
+//! A user's downloads are asked of them in the order they were granted: the client takes a
+//! download's place among its user's downloads when it is first polled, so each waits for the
+//! ones of its user granted before it to be polled first.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
 
 use reseek_shares::lock;
-use tokio::sync::oneshot;
+use tokio::sync::{Notify, oneshot};
 use uuid::Uuid;
 
 /// What a waiting download waits for.
 struct Waiting {
   id: Uuid,
+  /// the user the download is from
+  username: String,
   /// the request whose turn it needs, with how many of its files may hold one at once; none
   /// on a retry that holds its turn already
   request: Option<(u64, usize)>,
@@ -35,19 +41,34 @@ struct State {
   /// how many turns each request with any holds
   held: HashMap<u64, usize>,
   next_request: u64,
+  /// the user of each download granted and not yet asked of its peer, by the order it was
+  /// granted in
+  asking: BTreeMap<u64, String>,
+  next_ask: u64,
 }
 
 /// The local queue of downloads.
 #[derive(Clone, Default)]
 pub(super) struct Starts {
   state: Arc<Mutex<State>>,
+  /// woken whenever a granted download was asked of its peer, or will not be
+  asked: Arc<Notify>,
 }
 
-/// What a download was granted: a slot for one try, and its request's turn when it waited for
-/// one. Each is given back when dropped.
+/// What a download was granted: a slot for one try, its request's turn when it waited for one,
+/// and its place among its user's downloads to be asked of the peer. Each is given back when
+/// dropped.
 pub(super) struct Grant {
   pub slot: Slot,
   pub turn: Option<Turn>,
+  pub ask: Ask,
+}
+
+/// A granted download's place among its user's downloads to be asked of the peer, held until
+/// it was.
+pub(super) struct Ask {
+  starts: Starts,
+  number: u64,
 }
 
 /// A download slot, held for one try.
@@ -82,6 +103,40 @@ impl Drop for Turn {
   }
 }
 
+impl Drop for Ask {
+  fn drop(&mut self) {
+    lock(&self.starts.state).asking.remove(&self.number);
+    self.starts.asked.notify_waiters();
+  }
+}
+
+impl Ask {
+  /// Waits until every download of the same user granted before this one was asked of the
+  /// peer or will not be.
+  pub async fn ready(&self) {
+    loop {
+      let asked = self.starts.asked.notified();
+      tokio::pin!(asked);
+      // registered before the check, so a wake between the check and the wait is not missed
+      asked.as_mut().enable();
+      if self.first() {
+        return;
+      }
+      asked.await;
+    }
+  }
+
+  /// Whether no download of the same user granted before this one waits to be asked.
+  fn first(&self) -> bool {
+    let state = lock(&self.starts.state);
+    let username = &state.asking[&self.number];
+    !state
+      .asking
+      .range(..self.number)
+      .any(|(_, earlier)| earlier == username)
+  }
+}
+
 impl Starts {
   /// Grants every waiting download what it waits for, in queue order, while there are slots;
   /// `state` is this queue's, locked.
@@ -100,6 +155,7 @@ impl Starts {
         continue;
       }
       let waiting = state.waiting.remove(at);
+      let number = state.next_ask;
       let grant = Grant {
         slot: Slot {
           starts: self.clone(),
@@ -108,6 +164,10 @@ impl Starts {
           starts: self.clone(),
           request,
         }),
+        ask: Ask {
+          starts: self.clone(),
+          number,
+        },
       };
       if let Err(unwanted) = waiting.granted.send(grant) {
         // the waiter left. Nothing was counted for these handles yet, and dropping them would
@@ -119,6 +179,8 @@ impl Starts {
         *state.held.entry(request).or_default() += 1;
       }
       state.slots += 1;
+      state.next_ask += 1;
+      state.asking.insert(number, waiting.username);
     }
   }
 
@@ -143,10 +205,16 @@ impl Starts {
     self.grant(&mut state);
   }
 
-  /// Waits for the download `id`'s turn at `position`, or at the place a reorder gave it since
-  /// it first waited: a slot, and a turn of `request` when given, whose files may hold that many
-  /// at once.
-  pub async fn wait(&self, id: Uuid, position: f64, request: Option<(u64, usize)>) -> Grant {
+  /// Puts the download `id` of `username` in the queue at `position`, or at the place a
+  /// reorder gave it since it first waited, at once; the future waits for its turn there: a
+  /// slot, and a turn of `request` when given, whose files may hold that many at once.
+  pub fn wait(
+    &self,
+    id: Uuid,
+    username: &str,
+    position: f64,
+    request: Option<(u64, usize)>,
+  ) -> impl Future<Output = Grant> + Send + use<> {
     let (granted, grant_rx) = oneshot::channel();
     {
       let mut state = lock(&self.state);
@@ -160,15 +228,18 @@ impl Starts {
         at,
         Waiting {
           id,
+          username: username.to_string(),
           request,
           granted,
         },
       );
       self.grant(&mut state);
     }
-    grant_rx
-      .await
-      .expect("a waiter's sender stays in the queue until it is granted")
+    async move {
+      grant_rx
+        .await
+        .expect("a waiter's sender stays in the queue until it is granted")
+    }
   }
 
   /// The downloads waiting, in queue order.
@@ -247,7 +318,7 @@ mod tests {
   ) -> tokio::task::JoinHandle<Grant> {
     let queue = queue.clone();
     let position = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed) as f64;
-    tokio::spawn(async move { queue.wait(id, position, request).await })
+    tokio::spawn(async move { queue.wait(id, "alice", position, request).await })
   }
 
   /// The places the waiters take, in the order they are made.
