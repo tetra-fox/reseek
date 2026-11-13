@@ -108,10 +108,11 @@ jobs:
           args: --latest --strip all
         env:
           OUTPUT: notes.md
-      # the first tag has every commit behind it, more than a release body holds
+      # the first release has every commit behind it, more than a release body holds;
+      # prereleases do not count, as in cliff.toml
       - name: Keep the first release's notes short
         run: |
-          git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "First release." > notes.md
+          git describe --tags --abbrev=0 --exclude '*-*' HEAD^ 2>/dev/null || echo "First release." > notes.md
       - uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           draft: true

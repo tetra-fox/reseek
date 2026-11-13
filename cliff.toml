@@ -25,4 +25,6 @@ commit_parsers = [
 ]
 filter_commits = false
 tag_pattern = "v[0-9].*"
+# a prerelease's commits count toward the release that follows it
+ignore_tags = "v.*-.*"
 sort_commits = "newest"
