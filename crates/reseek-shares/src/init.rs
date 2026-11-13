@@ -96,6 +96,20 @@ pub(super) async fn end_interrupted(db: &Database) {
   }
 }
 
+/// Why the startup load serves no index.
+enum Unloaded {
+  /// there is none yet, as on a first start: no backup, or no scan has completed
+  Absent(&'static str),
+  /// the one there is cannot be read or trusted, or no longer matches the share options
+  Unusable(String),
+}
+
+impl From<String> for Unloaded {
+  fn from(reason: String) -> Self {
+    Self::Unusable(reason)
+  }
+}
+
 /// Whether the scan that follows the load `left` reads every file again, and what started it.
 fn handed(left: &Phase) -> (bool, ScanOrigin) {
   match left {
@@ -114,7 +128,7 @@ impl Shares {
     info!("Initializing shares");
     // the scan logs why it failed; these say that sharing is off because of it
     if force {
-      warn!("Performing a forced re-scan of shares");
+      info!("Performing a forced re-scan of shares");
       if !self.scan_at_startup(true).await {
         error!("Failed to initialize shares. Sharing is disabled");
       }
@@ -141,9 +155,16 @@ impl Shares {
           );
           return;
         }
-        Err(e) => {
-          warn!(error = e, "Error initializing shares");
-          info!("Re-attempting initialization");
+        Err(unloaded) => {
+          match unloaded {
+            Unloaded::Absent(reason) => {
+              info!(reason, "no share index to load, so the shares are scanned");
+            }
+            Unloaded::Unusable(e) => {
+              warn!(error = e, "Error initializing shares");
+              info!("Re-attempting initialization");
+            }
+          }
           let (_, origin) = handed(&self.hold(Edge::Loaded(None)));
           // the index that failed to load is not trusted, so no row of it is reused
           let repaired = self
@@ -179,19 +200,25 @@ impl Shares {
 
   /// Loads the index from its backup or its file and checks the last scan that finished filled
   /// it as the shares are configured now, returning the settings it covers and its totals; says
-  /// why when it cannot be used.
-  async fn load(&self, mode: StorageMode) -> Result<(Arc<Settings>, SharedCounts), String> {
+  /// why when there is none or it cannot be used.
+  async fn load(&self, mode: StorageMode) -> Result<(Arc<Settings>, SharedCounts), Unloaded> {
     if self.in_memory {
       info!("Share cache StorageMode is 'Memory'. Attempting to load from backup...");
       let backup = self
         .backup
         .clone()
-        .ok_or("Share cache backup is missing, corrupt, or is out of date")?;
+        .expect("an index kept in memory without a backup is scanned at startup, not loaded");
+      let exists = tokio::fs::try_exists(&backup)
+        .await
+        .map_err(|e| format!("Share cache backup was not checked: {e}"))?;
+      if !exists {
+        return Err(Unloaded::Absent("Share cache backup is missing"));
+      }
       let checked = backup.clone();
       tokio::task::spawn_blocking(move || storage::valid(&checked))
         .await
         .map_err(|e| format!("Share cache backup was not checked: {e}"))?
-        .map_err(|e| format!("Share cache backup is missing, corrupt, or is out of date: {e}"))?;
+        .map_err(|e| format!("Share cache backup is corrupt or out of date: {e}"))?;
       info!("Share cache backup validated. Attempting to restore...");
       storage::restore(&self.db, &backup).await.map_err(|e| {
         format!("Share cache backup not used; the scan that follows writes a new one: {e}")
@@ -206,7 +233,7 @@ impl Shares {
       .read(repository::since_last_finished)
       .await
       .map_err(|e| e.to_string())?
-      .ok_or("No share scan has completed")?;
+      .ok_or(Unloaded::Absent("No share scan has completed"))?;
     let settings = Arc::new(self.scan_settings());
     loadable(&finished, &stopped, settings.snapshot.get("content"))?;
     if !stopped.is_empty() {

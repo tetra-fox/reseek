@@ -561,6 +561,33 @@ async fn an_index_that_fails_to_load_is_scanned_again_without_reusing_rows() {
   drop(files);
 }
 
+/// On a first start there is no backup to load, which is no error; a backup that is there but
+/// cannot be read is warned about. Both are scanned over.
+#[test]
+fn a_missing_backup_is_a_first_start_and_an_unreadable_one_a_warning() {
+  let runtime = tokio::runtime::Builder::new_current_thread()
+    .enable_all()
+    .build()
+    .unwrap();
+  let files = tempfile::tempdir().unwrap();
+  let (engine, first) = crate::testing::logged(|| runtime.block_on(engine(&config(files.path()))));
+  assert!(!first.contains("WARN"), "{first}");
+  assert!(first.contains("Share cache backup is missing"), "{first}");
+  std::fs::write(storage::backup_path(&engine.cache()), "not a database").unwrap();
+  let (_, unreadable) = crate::testing::logged(|| {
+    runtime.block_on(async {
+      let again = engine.again(CancellationToken::new(), QUIET).await;
+      again.initialized().await;
+    })
+  });
+  assert!(
+    unreadable
+      .lines()
+      .any(|line| line.contains("WARN") && line.contains("corrupt or out of date")),
+    "{unreadable}"
+  );
+}
+
 #[tokio::test]
 async fn a_restart_loads_the_backup_and_scans_once() {
   let (files, engine) = shared_engine().await;
