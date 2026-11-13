@@ -1,13 +1,10 @@
-# owner's working material: spec, docs and Claude session files stay local, never in history
-/spec/
+# owner's working material: open batch reviews, docs and Claude session files stay local, never in history
+/reviews/
 /docs/
 /CLAUDE.md
 /CLAUDE.local.md
 /.claude/
-/DECISIONS.md
-/DEVIATIONS.md
 /STATUS.md
-/IDEAS.md
 /refs/
 
 # rust
