@@ -45,7 +45,7 @@ impl Ui {
   /// where `web.content_path` is relative to.
   pub fn new(options: &Options, program_dir: &Path, assets: Assets) -> Self {
     if options.headless || !options.web.ui {
-      warn!("Running in headless mode; web UI is DISABLED");
+      info!("Running in headless mode; web UI is DISABLED");
       return Self::Off;
     }
     if let Some(dir) = &options.web.content_path {
