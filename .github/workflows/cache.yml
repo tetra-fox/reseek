@@ -1,11 +1,13 @@
-# after each ci run, every ref keeps only its newest nix store cache, so old stores do not crowd
-# the current ones out of the cache quota. deleting caches needs `actions: write`, which is why
-# this job is apart from ci: it checks nothing out and runs no repository or dependency code
+# after each ci or deps run, every ref keeps only its newest nix store cache and its newest cargo
+# cache, so old ones do not crowd the current ones out of the cache quota, and caches left by tags
+# go, since only that tag's own runs could read them. deleting caches needs `actions: write`,
+# which is why this job is apart from ci: it checks nothing out and runs no repository or
+# dependency code
 name: cache
 
 on:
   workflow_run:
-    workflows: [ci]
+    workflows: [ci, deps]
     types: [completed]
 
 permissions:
@@ -19,13 +21,16 @@ jobs:
   trim:
     runs-on: ubuntu-latest
     steps:
-      - name: Delete all but the newest nix store cache of each ref
+      - name: Delete all but the newest nix store and cargo cache of each ref, and every tag's
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          # the key prefix the setup-nix action saves under
-          PREFIX: nix-${{ runner.os }}-
+        # the setup-nix action saves under `nix-<os>-`, rust-cache under `v0-rust-`
         run: |
-          gh cache list --key "$PREFIX" --limit 1000 --json id,ref,createdAt \
-            --jq 'group_by(.ref)[] | sort_by(.createdAt) | .[:-1][] | .id' \
+          gh cache list --limit 1000 --json id,key,ref,createdAt --jq '
+            (.[] | select(.ref | contains("refs/tags/")) | .id),
+            (map(select(.ref | contains("refs/tags/") | not)
+                 | select(.key | test("^(nix-|v0-rust-)"))
+                 | .family = (.key | split("-")[0:2] | join("-")))
+              | group_by([.ref, .family])[] | sort_by(.createdAt) | .[:-1][] | .id)' \
             | xargs -r -n1 gh cache delete
