@@ -5,7 +5,8 @@ FROM docker.io/library/alpine:3.24.4
 ARG TARGETARCH
 
 # bash and GNU wget are for custom scripts, tzdata for TZ, which log timestamps and the daily
-# log file follow. the base has a CA bundle for scripts, and the daemon carries its own TLS roots
+# log file follow. the base's CA bundle serves scripts and the daemon, which also carries its own
+# TLS roots
 RUN apk add --no-cache tini su-exec tzdata bash wget \
   && addgroup -g 1000 reseek \
   && adduser -u 1000 -G reseek -h /app -H -D -s /sbin/nologin reseek
