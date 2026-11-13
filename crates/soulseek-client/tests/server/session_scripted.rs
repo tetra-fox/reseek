@@ -6,8 +6,8 @@
 use std::time::Duration;
 
 use crate::support::{
-  FakeServer, PASSWORD, Session, USERNAME, disconnected, drain, listening_options, login_success,
-  next_event, options, poll_once, transitions,
+  FakeServer, Logs, PASSWORD, Session, USERNAME, disconnected, drain, listening_options,
+  login_success, next_event, options, poll_once, transitions,
 };
 use soulseek_client::{
   Client, ClientError, ClientOptions, ClientOptionsPatch, ClientState, ConnectionErrorKind, Event,
@@ -588,6 +588,38 @@ async fn the_server_closing_the_connection_ends_the_session() {
   assert_eq!(session.client.username(), None);
   assert_eq!(session.client.address(), None);
   assert_eq!(session.client.ip_endpoint(), None);
+}
+
+/// The error an application gives with the disconnect it asks for is its reason, as when it
+/// stops; only a session lost on its own is a warning
+#[tokio::test]
+async fn a_disconnect_asked_for_is_no_warning_and_a_lost_session_is() {
+  let logs = Logs::capture();
+  let asked = Session::start().await;
+  let reason = ClientError::client("the application is shutting down", None);
+  asked
+    .client
+    .disconnect(Some("Shutting down"), Some(reason))
+    .await;
+  let mut lost = Session::start().await;
+  drain(&mut lost.events);
+  drop(lost.server.stream);
+  next_event(&mut lost.events, |event| {
+    matches!(event, Event::Disconnected { .. }).then_some(())
+  })
+  .await;
+  let ended = logs.lines_with(&["disconnected from server"]);
+  assert_eq!(ended.len(), 2, "{}", logs.text());
+  assert!(
+    ended[0].contains("INFO") && ended[0].contains("Shutting down"),
+    "{}",
+    ended[0]
+  );
+  assert!(
+    ended[1].contains("WARN") && ended[1].contains("Read error"),
+    "{}",
+    ended[1]
+  );
 }
 
 /// The clock is paused only while nothing waits on the socket: a paused clock jumps to the next

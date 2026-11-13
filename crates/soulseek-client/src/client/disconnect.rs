@@ -34,6 +34,8 @@ pub(super) enum Cause {
 pub(super) struct Teardown {
   message: String,
   error: Option<ClientError>,
+  /// the application asked for it, so its error is the reason it gave, not a fault
+  requested: bool,
   released: Released,
 }
 
@@ -102,9 +104,10 @@ impl Inner {
     {
       return None;
     }
+    let requested = matches!(cause, Cause::Requested);
     // ahead of the edge, which a session disconnecting or disconnected refuses while a connect
     // can still wait there for its turn
-    if let Cause::Requested = cause {
+    if requested {
       std::mem::take(&mut session.connects).cancel();
     }
     let message = match (message, &error) {
@@ -129,6 +132,7 @@ impl Inner {
     Some(Teardown {
       message,
       error,
+      requested,
       released,
     })
   }
@@ -147,6 +151,7 @@ impl Teardown {
     let Self {
       message,
       error,
+      requested,
       released: Released { listener, server },
     } = self;
     if let Some(listener) = listener {
@@ -164,6 +169,7 @@ impl Teardown {
       None | Some(ClientError::Canceled | ClientError::Disposed) => {
         tracing::info!(message, "disconnected from server");
       }
+      Some(error) if requested => tracing::info!(message, %error, "disconnected from server"),
       Some(error) => tracing::warn!(message, %error, "disconnected from server"),
     }
     let mut session = inner.session();
