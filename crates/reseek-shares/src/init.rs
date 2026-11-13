@@ -62,20 +62,22 @@ fn loadable(
   finished: &Scan,
   stopped: &[Scan],
   current: Option<&serde_json::Value>,
-) -> Result<(), String> {
+) -> Result<(), Unloaded> {
   if finished.suspect || stopped.iter().any(|scan| scan.suspect) {
-    return Err("Previous share scan was marked as suspect".into());
+    return Err(Unloaded::Stale("Previous share scan was marked as suspect"));
   }
   let recorded = |scan: &Scan| {
     scanner::content(&scan.options)
       .map_err(|e| format!("Previous share scan recorded options that cannot be read: {e}"))
   };
   if recorded(finished)?.as_ref() != current {
-    return Err("Share options changed since previous scan".into());
+    return Err(Unloaded::Stale("Share options changed since previous scan"));
   }
   for scan in stopped {
     if recorded(scan)?.as_ref() != current {
-      return Err("A share scan with other options stopped before it completed".into());
+      return Err(Unloaded::Stale(
+        "A share scan with other options stopped before it completed",
+      ));
     }
   }
   Ok(())
@@ -97,10 +99,12 @@ pub(super) async fn end_interrupted(db: &Database) {
 }
 
 /// Why the startup load serves no index.
+#[derive(Debug, PartialEq)]
 enum Unloaded {
-  /// there is none yet, as on a first start: no backup, or no scan has completed
-  Absent(&'static str),
-  /// the one there is cannot be read or trusted, or no longer matches the share options
+  /// there is none yet, as on a first start, or it is out of date in a way the scan that
+  /// follows puts right: the share options changed, or the disk drifted from it
+  Stale(&'static str),
+  /// the one there is cannot be read or trusted
   Unusable(String),
 }
 
@@ -157,8 +161,8 @@ impl Shares {
         }
         Err(unloaded) => {
           match unloaded {
-            Unloaded::Absent(reason) => {
-              info!(reason, "no share index to load, so the shares are scanned");
+            Unloaded::Stale(reason) => {
+              info!(reason, "share index not loaded, so the shares are scanned");
             }
             Unloaded::Unusable(e) => {
               warn!(error = e, "Error initializing shares");
@@ -212,7 +216,7 @@ impl Shares {
         .await
         .map_err(|e| format!("Share cache backup was not checked: {e}"))?;
       if !exists {
-        return Err(Unloaded::Absent("Share cache backup is missing"));
+        return Err(Unloaded::Stale("Share cache backup is missing"));
       }
       let checked = backup.clone();
       tokio::task::spawn_blocking(move || storage::valid(&checked))
@@ -233,7 +237,7 @@ impl Shares {
       .read(repository::since_last_finished)
       .await
       .map_err(|e| e.to_string())?
-      .ok_or(Unloaded::Absent("No share scan has completed"))?;
+      .ok_or(Unloaded::Stale("No share scan has completed"))?;
     let settings = Arc::new(self.scan_settings());
     loadable(&finished, &stopped, settings.snapshot.get("content"))?;
     if !stopped.is_empty() {
@@ -391,7 +395,7 @@ mod tests {
 
   /// What a load decides from the scans `db` records under the share options whose content is
   /// `current`; `None` when no scan finished.
-  async fn verdict(db: &Database, current: &Value) -> Option<Result<(), String>> {
+  async fn verdict(db: &Database, current: &Value) -> Option<Result<(), Unloaded>> {
     let (finished, stopped) = db.read(repository::since_last_finished).await.unwrap()?;
     Some(loadable(&finished, &stopped, Some(current)))
   }
@@ -438,12 +442,16 @@ mod tests {
     );
     assert_eq!(
       verdict(&db, &other).await,
-      Some(Err("Share options changed since previous scan".into()))
+      Some(Err(Unloaded::Stale(
+        "Share options changed since previous scan"
+      )))
     );
     db.write(|conn| mark_latest_suspect(conn)).await.unwrap();
     assert_eq!(
       verdict(&db, &now).await,
-      Some(Err("Previous share scan was marked as suspect".into())),
+      Some(Err(Unloaded::Stale(
+        "Previous share scan was marked as suspect"
+      ))),
       "a drift reported after it, on a scan that stopped"
     );
 
@@ -458,7 +466,9 @@ mod tests {
     .unwrap();
     assert_eq!(
       verdict(&db, &now).await,
-      Some(Err("Previous share scan was marked as suspect".into())),
+      Some(Err(Unloaded::Stale(
+        "Previous share scan was marked as suspect"
+      ))),
       "the finished scan itself"
     );
 
@@ -473,9 +483,9 @@ mod tests {
     .unwrap();
     assert_eq!(
       verdict(&db, &now).await,
-      Some(Err(
-        "A share scan with other options stopped before it completed".into()
-      )),
+      Some(Err(Unloaded::Stale(
+        "A share scan with other options stopped before it completed"
+      ))),
       "its rows may be of a share no longer configured"
     );
   }

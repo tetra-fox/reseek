@@ -561,10 +561,11 @@ async fn an_index_that_fails_to_load_is_scanned_again_without_reusing_rows() {
   drop(files);
 }
 
-/// On a first start there is no backup to load, which is no error; a backup that is there but
-/// cannot be read is warned about. Both are scanned over.
+/// On a first start there is no backup to load and after a change of the share options the
+/// backup is out of date, neither of which is an error; a backup that is there but cannot be
+/// read is warned about. Each is scanned over.
 #[test]
-fn a_missing_backup_is_a_first_start_and_an_unreadable_one_a_warning() {
+fn a_missing_or_outdated_backup_is_told_and_an_unreadable_one_warned_about() {
   let runtime = tokio::runtime::Builder::new_current_thread()
     .enable_all()
     .build()
@@ -573,6 +574,21 @@ fn a_missing_backup_is_a_first_start_and_an_unreadable_one_a_warning() {
   let (engine, first) = crate::testing::logged(|| runtime.block_on(engine(&config(files.path()))));
   assert!(!first.contains("WARN"), "{first}");
   assert!(first.contains("Share cache backup is missing"), "{first}");
+  let (_, changed) = crate::testing::logged(|| {
+    runtime.block_on(async {
+      let more = files.path().join("more");
+      std::fs::create_dir_all(&more).unwrap();
+      let text = format!("[shares]\ndirectories = [\"{}\"]\n", more.display());
+      engine.reconfigure(&text).await;
+      let again = engine.again(CancellationToken::new(), QUIET).await;
+      again.initialized().await;
+    })
+  });
+  assert!(!changed.contains("WARN"), "{changed}");
+  assert!(
+    changed.contains("Share options changed since previous scan"),
+    "{changed}"
+  );
   std::fs::write(storage::backup_path(&engine.cache()), "not a database").unwrap();
   let (_, unreadable) = crate::testing::logged(|| {
     runtime.block_on(async {
