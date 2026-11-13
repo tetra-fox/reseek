@@ -10,8 +10,10 @@ on:
 permissions:
   contents: read
 
+# a newer push to a pull request replaces its run; on main each commit is a group of its own, so
+# every one keeps its result, which a tag needs, and pushes its package to cachix
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: true
 
 jobs:
