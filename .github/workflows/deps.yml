@@ -1,16 +1,16 @@
 # Dependabot's pull requests: a test job runs `just ci` and the flake's checks on the bump with a
-# read-only token, and
-# a merge job that runs none of the bumped code merges the minor and patch bumps of cargo and
-# npm once it passes. ci does not build the image, so a bump of its base skips the run and is
-# merged by hand (dependabot.yml). The web hash follows the lockfile, which dependabot cannot change, so the
-# test job works it out and the merge job commits it. An action's bump is left for review: its
-# code runs where the release signing key is.
+# read-only token, and a merge job that runs none of the bumped code merges the minor and patch
+# bumps of cargo and npm once it passes. ci does not build the image, so a bump of its base skips
+# the run and is merged by hand (dependabot.yml). The web hash follows the lockfile, which
+# dependabot cannot change, so the test job works it out and the merge job commits it. An
+# action's bump is left for review: its code runs where the release signing key is.
 #
 # The test builds the pull request's head, and dependabot rebases it only on a conflict or at its
 # weekly run; it has no setting to rebase when main has merely moved. So a merge can land a tree
 # no job built, and the squash, pushed with this workflow's token, starts no ci run of its own.
 # The next push to main runs ci on it. For a repository with one committer that is accepted
-# rather than holding every bump for a manual rebase.
+# rather than holding every bump for a manual rebase. The merge job dispatches cachix.yml, so the
+# merged main is in the binary cache before anything deploys it.
 name: deps
 
 on: pull_request
@@ -70,6 +70,7 @@ jobs:
       && (needs.test.outputs.ecosystem == 'cargo' || needs.test.outputs.ecosystem == 'npm_and_yarn')
     runs-on: ubuntu-latest
     permissions:
+      actions: write
       contents: write
       pull-requests: write
     steps:
@@ -101,4 +102,10 @@ jobs:
         env:
           PR: ${{ github.event.pull_request.html_url }}
           TITLE: ${{ github.event.pull_request.title }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # a dispatch is the one event this workflow's token can start a run with
+      - name: Push the merged main to the binary cache
+        run: gh workflow run cachix.yml --ref main
+        env:
+          GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,11 +1,13 @@
 name: cachix
 
 # the Nix package of every push to main and every tag, pushed to the binary cache so a NixOS host
-# that does not make reseek follow its own nixpkgs substitutes it instead of building it
+# that does not make reseek follow its own nixpkgs substitutes it instead of building it. deps.yml
+# dispatches it after merging a bump, since its merge starts no push run
 on:
   push:
     branches: [main]
     tags: ["v*"]
+  workflow_dispatch:
 
 permissions:
   contents: read
