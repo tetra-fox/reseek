@@ -59,7 +59,7 @@ use tracing::{Instrument, debug, info, info_span, trace, warn};
 
 use crate::db::{Database, DbError};
 pub use folders::FolderError;
-pub use hosts::{HostError, remove_agent_hosts};
+pub use hosts::HostError;
 use phase::{Edge, Phase, ScanResult};
 pub use repository::SCHEMA;
 pub use reseek_relay_proto::LOCAL_HOST;
@@ -269,6 +269,8 @@ pub struct Shares {
   counts_throttle: Throttle,
   /// the relay agents' shares, in the order they were loaded
   hosts: Mutex<Vec<hosts::Host>>,
+  /// the indexes of the agents that left, by agent, kept to tell whether a file was theirs
+  away: Mutex<HashMap<String, hosts::Away>>,
   /// a browse cache rebuild after a host change is waiting
   hosts_settling: AtomicBool,
   /// what each local share holds as last counted
@@ -323,7 +325,7 @@ impl Shares {
     // before the engine exists no scan can run, so a row still running was cut off by a stop
     init::end_interrupted(&storage.db).await;
     browse::remove_stale(&setup.cache).await;
-    remove_agent_hosts(&setup.cache).await;
+    let away = hosts::kept_agent_hosts(&setup.cache).await;
     let current = config.clone();
     let shares = Arc::new_cyclic(|this| Self {
       this: this.clone(),
@@ -349,6 +351,7 @@ impl Shares {
       browse_throttle: Throttle::default(),
       counts_throttle: Throttle::default(),
       hosts: Mutex::new(Vec::new()),
+      away: Mutex::new(away),
       hosts_settling: AtomicBool::new(false),
       local_counts: Mutex::new(Counted::default()),
       browse_views: Mutex::new(BrowseViews::default()),

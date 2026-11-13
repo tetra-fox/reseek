@@ -1246,11 +1246,7 @@ async fn serves_an_agent(extra: &str) {
     files
   };
   let first = agent_files();
-  assert_eq!(
-    first.len(),
-    usize::from(extra.contains("disk")),
-    "{first:?}"
-  );
+  assert_eq!(first.len(), 1, "{first:?}");
   agent
     .shares
     .dump(&dump.with_extension("again"))
@@ -1261,21 +1257,50 @@ async fn serves_an_agent(extra: &str) {
     .await
     .unwrap();
   assert_eq!(names(shares, "flac").await.len(), 1);
-  if extra.contains("disk") {
-    eventually(async || {
-      let now = agent_files();
-      now.len() == 1 && now != first
-    })
-    .await;
-  }
+  eventually(async || {
+    let now = agent_files();
+    now.len() == 1 && now != first
+  })
+  .await;
 
   assert!(shares.remove_host("nas"));
   assert!(!shares.remove_host("nas"));
-  eventually(async || agent_files().is_empty()).await;
   assert!(names(shares, "flac").await.is_empty());
   assert_eq!(shares.shared_counts().borrow().files, 1);
   assert_eq!(
     controller.state().hosts.as_deref(),
     Some(&["local".to_string()][..])
   );
+
+  // the index of the agent that left still tells which files were its, unless the view hides
+  // them, and is kept on disk for the next start
+  let theirs = "Music\\Other\\02.flac";
+  let everything = View::everything();
+  assert_eq!(shares.away_holding(theirs, &everything).await, ["nas"]);
+  assert!(
+    shares
+      .away_holding("Music\\Other\\never.flac", &everything)
+      .await
+      .is_empty()
+  );
+  let hiding = View::of(
+    &options::Shares {
+      visible_to: [("Music".to_string(), vec!["family".to_string()])].into(),
+      ..options::Shares::default()
+    },
+    &std::collections::BTreeSet::new(),
+  );
+  assert!(shares.away_holding(theirs, &hiding).await.is_empty());
+  assert_eq!(agent_files().len(), 1);
+  let restarted = controller.again(CancellationToken::new(), QUIET).await;
+  assert_eq!(
+    restarted.away_holding(theirs, &everything).await,
+    ["nas"],
+    "kept across a stop"
+  );
+  assert!(restarted.forget_away("nas"));
+  assert!(restarted.away_holding(theirs, &everything).await.is_empty());
+  eventually(async || agent_files().is_empty()).await;
+  assert!(shares.forget_away("nas"));
+  assert!(!shares.forget_away("nas"));
 }

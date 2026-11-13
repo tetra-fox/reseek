@@ -4,12 +4,15 @@
 //! loaded whole, from a file checked first, and goes the moment its agent does. On disk each
 //! upload is a file of its own, which the host's index is swapped to; the file it replaces is
 //! deleted once the last query reading it has let go of it, so no file is ever replaced while
-//! it is open.
+//! it is open. The index of an agent that left is kept away from the queries, only to tell
+//! whether a file was its, until the agent loads a new one or is forgotten; on disk it is kept
+//! across a stop and found again at the next start.
 
+use std::collections::HashMap;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use api_types::shares::Share as ApiShare;
@@ -32,11 +35,11 @@ static HOST_FILES: AtomicU64 = AtomicU64::new(0);
 static HOST_UNREAD: LogLimiter = LogLimiter::new();
 
 /// An index the queries read: the local one, or an agent's, whose file, when it has one of its
-/// own, is deleted when the last reader lets go of it.
+/// own, is deleted when the last reader lets go of it unless it was kept as an away index.
 pub(super) struct Index {
   /// `None` only while it is dropped
   db: Option<Database>,
-  file: Option<PathBuf>,
+  file: Mutex<Option<PathBuf>>,
   /// the agent whose index it is, `None` for the local one
   agent: Option<String>,
 }
@@ -46,7 +49,7 @@ impl Index {
   pub(super) fn local(db: Database) -> Arc<Self> {
     Arc::new(Self {
       db: Some(db),
-      file: None,
+      file: Mutex::new(None),
       agent: None,
     })
   }
@@ -80,14 +83,43 @@ impl Drop for Index {
   fn drop(&mut self) {
     // the database's connections close first, so the file is free to delete on any system
     drop(self.db.take());
-    let Some(file) = self.file.take() else {
-      return;
-    };
-    debug!(file = %file.display(), "replaced agent share database deleted");
-    match tokio::runtime::Handle::try_current() {
-      // the deletion runs on its own and logs its own failure
-      Ok(runtime) => drop(runtime.spawn_blocking(move || remove_database(&file))),
-      Err(_) => remove_database(&file),
+    if let Some(file) = lock(&self.file).take() {
+      debug!(file = %file.display(), "replaced agent share database deleted");
+      delete(file);
+    }
+  }
+}
+
+/// Deletes the database `file`, on a blocking thread when there is a runtime.
+fn delete(file: PathBuf) {
+  match tokio::runtime::Handle::try_current() {
+    // the deletion runs on its own and logs its own failure
+    Ok(runtime) => drop(runtime.spawn_blocking(move || remove_database(&file))),
+    Err(_) => remove_database(&file),
+  }
+}
+
+/// The index of an agent that left. Dropped, its file stays, so one held when the process stops
+/// is found at the next start; [`Away::discard`] deletes it.
+pub(super) struct Away {
+  index: Arc<Index>,
+  /// the index's file, `None` for one in memory
+  file: Option<PathBuf>,
+}
+
+impl Away {
+  /// The index `index` of an agent that left, its file taken from it so it stays.
+  fn of(index: Arc<Index>) -> Self {
+    let file = lock(&index.file).take();
+    Self { index, file }
+  }
+
+  /// Lets go of the index and deletes its file.
+  fn discard(self) {
+    drop(self.index);
+    if let Some(file) = self.file {
+      debug!(file = %file.display(), "agent's kept share database deleted");
+      delete(file);
     }
   }
 }
@@ -200,8 +232,8 @@ impl Shares {
 
   /// Loads the index an agent uploaded to `upload`, a [`Shares::upload_file`], as the host
   /// `name` with its `shares`, in place of the one it had. The file is checked first; on disk
-  /// it then becomes the host's index file, in memory it is copied and stays for the caller to
-  /// delete. The host is replaced only once the new index is ready. Returns the totals the
+  /// it then becomes the host's index file, in memory it is copied and kept as the host's file
+  /// for the next start. The host is replaced only once the new index is ready. Returns the totals the
   /// agent counted.
   pub async fn load_host(
     self: &Arc<Self>,
@@ -223,9 +255,24 @@ impl Shares {
       };
       let db = Database::open_as(&repository::SCHEMA, &location, &format!("shares.{name}")).await?;
       storage::restore(&db, upload).await?;
+      // the upload stays as the host's file, for when the agent is away at the next start
+      let target = host_file(&self.cache, name);
+      let (from, to) = (upload.to_path_buf(), target.clone());
+      let moved = tokio::task::spawn_blocking(move || storage::move_host_file(&from, &to))
+        .await
+        .map_err(|e| e.to_string())
+        .and_then(|moved| moved);
+      let kept = match moved {
+        Ok(()) => Some(target),
+        Err(e) => {
+          // the agent's files are then not known while it is away after a restart
+          warn!(agent = name, error = %e, "agent's share database not kept for the next start");
+          None
+        }
+      };
       Arc::new(Index {
         db: Some(db),
-        file: None,
+        file: Mutex::new(kept),
         agent: Some(name.to_string()),
       })
     } else {
@@ -248,7 +295,7 @@ impl Shares {
       };
       Arc::new(Index {
         db: Some(db),
-        file: Some(target),
+        file: Mutex::new(Some(target)),
         agent: Some(name.to_string()),
       })
     };
@@ -267,23 +314,79 @@ impl Shares {
         None => hosts.push(host),
       }
     }
+    if let Some(away) = lock(&self.away).remove(name) {
+      away.discard();
+    }
     self.hosts_changed();
     Ok(counted)
   }
 
-  /// Drops the host `name`, whose agent left; false when it had none.
+  /// Drops the host `name`, whose agent left, keeping its index away from the queries; false
+  /// when it had none.
   pub fn remove_host(self: &Arc<Self>, name: &str) -> bool {
     let removed = {
       let mut hosts = lock(&self.hosts);
-      let before = hosts.len();
-      hosts.retain(|h| h.name != name);
-      hosts.len() != before
+      hosts
+        .iter()
+        .position(|h| h.name == name)
+        .map(|at| hosts.remove(at))
     };
-    if removed {
-      debug!(agent = name, "agent's shares unloaded");
-      self.hosts_changed();
+    let Some(host) = removed else {
+      return false;
+    };
+    debug!(agent = name, "agent's shares unloaded");
+    let replaced = lock(&self.away).insert(name.to_string(), Away::of(host.index));
+    if let Some(replaced) = replaced {
+      replaced.discard();
     }
-    removed
+    self.hosts_changed();
+    true
+  }
+
+  /// The agents whose index is kept since they left.
+  pub fn away_hosts(&self) -> Vec<String> {
+    lock(&self.away).keys().cloned().collect()
+  }
+
+  /// Deletes the index kept for the agent `name`; false when none was.
+  pub fn forget_away(&self, name: &str) -> bool {
+    let Some(away) = lock(&self.away).remove(name) else {
+      return false;
+    };
+    info!(
+      agent = name,
+      "kept share index of an agent no longer configured deleted"
+    );
+    away.discard();
+    true
+  }
+
+  /// The agents that left whose kept index has the file a peer asked for by its exact remote
+  /// name `masked`, leaving out an index that cannot be read; none when `view` hides it.
+  pub async fn away_holding(&self, masked: &str, view: &View) -> Vec<String> {
+    if view.hides(masked) {
+      return Vec::new();
+    }
+    let kept: Vec<(String, Arc<Index>)> = lock(&self.away)
+      .iter()
+      .map(|(name, away)| (name.clone(), away.index.clone()))
+      .collect();
+    let mut holding = Vec::new();
+    for (name, index) in kept {
+      let wanted = masked.to_string();
+      match index
+        .read(move |conn| repository::find_file(conn, &wanted))
+        .await
+      {
+        Ok(Some(_)) => holding.push(name),
+        Ok(None) => {}
+        Err(e) => {
+          // an agent's index never fails the lookup
+          drop(index.left_out(e));
+        }
+      }
+    }
+    holding
   }
 
   /// The agents' shares by host, in the order they were loaded, each with the visibility the
@@ -384,20 +487,95 @@ impl Shares {
   }
 }
 
-/// Deletes every agent's index file in `cache`, with its journal files and any upload left
-/// there: an earlier run's agents' indexes are never served again, since each agent uploads its
-/// shares anew when it logs in.
-pub async fn remove_agent_hosts(cache: &Path) {
+/// The indexes of agents an earlier run kept in `cache`, each the newest file of its agent, by
+/// agent, opened from disk for lookups whatever the storage mode; every other agent file there
+/// is deleted: older and unreadable indexes and uploads left behind. The files written from now
+/// on are numbered past the kept ones.
+pub(super) async fn kept_agent_hosts(cache: &Path) -> HashMap<String, Away> {
+  let mut newest: HashMap<String, (u64, PathBuf)> = HashMap::new();
+  let mut unwanted = Vec::new();
+  for (file, path) in agent_files(cache).await {
+    let numbered = file
+      .strip_prefix("shares.")
+      .and_then(|rest| rest.strip_suffix(".db"))
+      .and_then(|rest| rest.rsplit_once('.'))
+      .and_then(|(name, number)| Some((name.to_string(), number.parse::<u64>().ok()?)));
+    let Some((name, number)) = numbered else {
+      // a journal goes with its database
+      if !file.ends_with("-wal") && !file.ends_with("-shm") {
+        unwanted.push(path);
+      }
+      continue;
+    };
+    HOST_FILES.fetch_max(number + 1, Ordering::Relaxed);
+    match newest.get(&name) {
+      Some((kept, _)) if *kept > number => unwanted.push(path),
+      _ => {
+        if let Some((_, older)) = newest.insert(name, (number, path)) {
+          unwanted.push(older);
+        }
+      }
+    }
+  }
+  for path in unwanted {
+    info!(file = %path.display(), "agent share database of an earlier run deleted");
+    // logs a file it could not remove
+    if let Err(e) = tokio::task::spawn_blocking(move || remove_database(&path)).await {
+      warn!(error = %e, "agent share database of an earlier run not deleted");
+    }
+  }
+  let mut kept = HashMap::new();
+  for (name, (_, path)) in newest {
+    let opened = match storage::check_foreign(&path).await {
+      Ok(()) => Database::open_immutable(&repository::SCHEMA, &path)
+        .await
+        .map_err(|e| e.to_string()),
+      Err(e) => Err(e),
+    };
+    match opened {
+      Ok(db) => {
+        info!(agent = name, file = %path.display(), "kept share index of an agent found");
+        let index = Arc::new(Index {
+          db: Some(db),
+          file: Mutex::new(None),
+          agent: Some(name.clone()),
+        });
+        kept.insert(
+          name,
+          Away {
+            index,
+            file: Some(path),
+          },
+        );
+      }
+      Err(e) => {
+        warn!(agent = name, error = %e, "kept share index of an agent not opened; deleted");
+        delete(path);
+      }
+    }
+  }
+  kept
+}
+
+/// The agents' files in `cache`, by name and path: indexes, their journals and uploads.
+async fn agent_files(cache: &Path) -> Vec<(String, PathBuf)> {
   let mut entries = match tokio::fs::read_dir(cache).await {
     Ok(entries) => entries,
-    Err(e) if e.kind() == std::io::ErrorKind::NotFound => return,
-    Err(e) => return warn!(error = %e, "cache directory not read for agents' share databases"),
+    Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Vec::new(),
+    Err(e) => {
+      warn!(error = %e, "cache directory not read for agents' share databases");
+      return Vec::new();
+    }
   };
+  let mut files = Vec::new();
   loop {
     let entry = match entries.next_entry().await {
       Ok(Some(entry)) => entry,
-      Ok(None) => return,
-      Err(e) => return warn!(error = %e, "cache directory not read for agents' share databases"),
+      Ok(None) => return files,
+      Err(e) => {
+        warn!(error = %e, "cache directory not read for agents' share databases");
+        return files;
+      }
     };
     let file = entry.file_name().to_string_lossy().into_owned();
     let Some(host) = host_of(&file) else {
@@ -406,10 +584,7 @@ pub async fn remove_agent_hosts(cache: &Path) {
     if host == LOCAL_HOST || host == format!("{LOCAL_HOST}.bak") {
       continue;
     }
-    match tokio::fs::remove_file(entry.path()).await {
-      Ok(()) => info!(file, "agent share database of an earlier run deleted"),
-      Err(e) => warn!(file, error = %e, "agent share database of an earlier run not deleted"),
-    }
+    files.push((file, entry.path()));
   }
 }
 
@@ -441,39 +616,56 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn every_agents_files_are_deleted_and_the_local_ones_kept() {
-    let dir = tempfile::tempdir().unwrap();
-    let names = [
-      "shares.local.db",
-      "shares.local.db-wal",
-      "shares.local.bak.db",
-      "shares.local.bak.db.tmp",
-      "shares.nas.db",
-      "shares.nas.3.db",
-      "shares.nas.4.db.tmp",
-      "shares.nas.4.db.tmp-wal",
-      "shares.gone.db",
-      "shares.gone.db-shm",
-      "browse.cache",
-    ];
-    for name in names {
-      std::fs::write(dir.path().join(name), "x").unwrap();
-    }
-    remove_agent_hosts(dir.path()).await;
-    let mut left: Vec<String> = std::fs::read_dir(dir.path())
-      .unwrap()
-      .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
-      .collect();
-    left.sort();
-    assert_eq!(
-      left,
-      [
+  async fn an_earlier_runs_agent_files_that_cannot_be_kept_are_deleted_and_the_local_ones_stay() {
+    {
+      let dir = tempfile::tempdir().unwrap();
+      let names = [
+        "shares.local.db",
+        "shares.local.db-wal",
+        "shares.local.bak.db",
+        "shares.local.bak.db.tmp",
+        "shares.nas.db",
+        "shares.nas.3.db",
+        "shares.nas.3.db-wal",
+        "shares.nas.4.db.tmp",
+        "shares.nas.4.db.tmp-wal",
+        "shares.a.b.7.db",
+        "shares.gone.db",
+        "shares.gone.db-shm",
+        "browse.cache",
+      ];
+      for name in names {
+        std::fs::write(dir.path().join(name), "x").unwrap();
+      }
+      // none of them is an index, so the newest of each agent is not kept either
+      let kept = kept_agent_hosts(dir.path()).await;
+      assert!(kept.is_empty());
+      let left = || {
+        let mut left: Vec<String> = std::fs::read_dir(dir.path())
+          .unwrap()
+          .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+          .collect();
+        left.sort();
+        left
+      };
+      let local = [
         "browse.cache",
         "shares.local.bak.db",
         "shares.local.bak.db.tmp",
         "shares.local.db",
         "shares.local.db-wal",
-      ]
-    );
+      ];
+      for _ in 0..200 {
+        if left() == local {
+          break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+      }
+      assert_eq!(left(), local);
+      assert!(
+        HOST_FILES.load(Ordering::Relaxed) > 7,
+        "new files are numbered past the kept"
+      );
+    }
   }
 }
