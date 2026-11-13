@@ -1,10 +1,10 @@
 name: cachix
 
 # a host whose reseek input does not follow its own nixpkgs substitutes the package from here.
-# deps.yml dispatches this after merging a bump, since that push starts no run
+# ci's nix job pushes main's; this covers tags, and deps.yml dispatches it after merging a bump,
+# since that push starts no run
 on:
   push:
-    branches: [main]
     tags: ["v*"]
   workflow_dispatch:
 
