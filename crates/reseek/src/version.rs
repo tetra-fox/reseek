@@ -89,7 +89,7 @@ impl Releases {
       .header("Accept", "application/vnd.github+json")
       .send()
       .await
-      .map_err(|e| e.to_string())?;
+      .map_err(|e| crate::http::outbound::error_chain(&e))?;
     let status = response.status();
     if !status.is_success() {
       return Err(format!("The release feed answered {status}"));

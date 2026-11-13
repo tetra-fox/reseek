@@ -18,10 +18,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tracing::debug;
 
-use super::{ExtraClaims, LEEWAY, Metadata, OidcClient, OidcIdToken, Provider, error_chain};
+use super::{ExtraClaims, LEEWAY, Metadata, OidcClient, OidcIdToken, Provider};
 use crate::auth::roles::{Mapping, claim_strings};
 use crate::auth::secret::Secret;
 use crate::crypto;
+use crate::http::outbound::error_chain;
 
 /// How long a login may take between leaving for the provider and coming back.
 pub const LOGIN_TIME: Duration = Duration::from_secs(600);

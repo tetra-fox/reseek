@@ -32,6 +32,7 @@ use tracing::{Instrument, debug, error, info, info_span, warn};
 use crate::app::AppState;
 use crate::auth::Client;
 use crate::config::{Oidc, Options};
+use crate::http::outbound::error_chain;
 
 /// A provider's discovery document with its signing keys.
 pub type Metadata = ProviderMetadataWithLogout;
@@ -342,18 +343,6 @@ pub fn external_base(url_base: &str, options: &Options, client: &Client) -> Opti
   let scheme = if client.https { "https" } else { "http" };
   let authority = client.authority.as_deref()?;
   Some(format!("{scheme}://{authority}{url_base}"))
-}
-
-/// An error with the errors that caused it, joined by `: `.
-pub fn error_chain(error: &dyn std::error::Error) -> String {
-  let mut text = error.to_string();
-  let mut source = error.source();
-  while let Some(cause) = source {
-    text.push_str(": ");
-    text.push_str(&cause.to_string());
-    source = cause.source();
-  }
-  text
 }
 
 /// Discovers every configured provider once at startup. A provider that cannot be reached

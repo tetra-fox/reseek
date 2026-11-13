@@ -7,6 +7,19 @@ use std::time::Duration;
 use rustls::pki_types::CertificateDer;
 use rustls::pki_types::pem::PemObject;
 
+/// An error with the errors that caused it, joined by `: `: reqwest's own message leaves out
+/// why a call failed, such as the DNS or TLS error under it.
+pub fn error_chain(error: &dyn std::error::Error) -> String {
+  let mut text = error.to_string();
+  let mut source = error.source();
+  while let Some(cause) = source {
+    text.push_str(": ");
+    text.push_str(&cause.to_string());
+    source = cause.source();
+  }
+  text
+}
+
 /// How long an outbound call may take.
 pub const TIMEOUT: Duration = Duration::from_secs(10);
 

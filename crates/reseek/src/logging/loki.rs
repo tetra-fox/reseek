@@ -301,7 +301,7 @@ impl Sink {
       .body(body.to_string())
       .send()
       .await
-      .map_err(|e| e.to_string())?;
+      .map_err(|e| crate::http::outbound::error_chain(&e))?;
     let status = response.status();
     if status.is_success() {
       return Ok(());
