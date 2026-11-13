@@ -1,0 +1,24 @@
+name: cachix
+
+# the Nix package of every push to main and every tag, pushed to the binary cache so a NixOS host
+# that does not make reseek follow its own nixpkgs substitutes it instead of building it
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-nix
+      # the token is in the runner, not in the nix sandbox the dependencies' build code runs in
+      - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
+        with:
+          name: ${{ vars.CACHIX_CACHE_NAME }}
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - run: nix build --print-build-logs .#default
