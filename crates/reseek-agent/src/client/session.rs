@@ -312,12 +312,16 @@ impl AgentClient {
             | LoginFailure::BadCredential
             | LoginFailure::IncompatibleVersion
         );
-        warn!(
-          ?reason,
-          "Failed to handle authentication challenge: the login was refused"
-        );
+        // a refusal of the configuration is warned about once as the socket ends, however often
+        // the agent dials again
         if configuration {
+          debug!(?reason, "the relay controller refused the login");
           link.refused(format!("login refused: {reason:?}"));
+        } else {
+          warn!(
+            ?reason,
+            "Failed to handle authentication challenge: the login was refused"
+          );
         }
       }
       message @ (RelayMessage::SharesToken { .. }

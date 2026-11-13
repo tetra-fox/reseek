@@ -11,7 +11,9 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
-use api_types::relay::{DownloadOutcome, RELAY_SUBPROTOCOL, RelayErrorCode, RelayMessage};
+use api_types::relay::{
+  DownloadOutcome, LoginFailure, RELAY_SUBPROTOCOL, RelayErrorCode, RelayMessage,
+};
 use cascade::{Layers, Watcher};
 use reseek_relay_proto::frames;
 use reseek_shares::{ScanNotice, ScanOrigin, Setup, Shares, lock};
@@ -519,6 +521,27 @@ async fn another_agent_taking_the_socket_is_warned_about_once_across_uploads() {
     warnings.count("the relay controller dropped this agent for another"),
     1
   );
+}
+
+#[tokio::test]
+async fn a_login_refused_for_the_agents_configuration_is_warned_about_once_across_dials() {
+  let warnings = Logged::warnings();
+  let agent = agent(Vec::new(), false).await;
+  for _ in 0..3 {
+    let refused = RelayMessage::LoginFailed {
+      reason: LoginFailure::BadCredential,
+    };
+    agent
+      .agent
+      .handle(&agent.link, &frames::encode(None, refused));
+    agent.agent.report_end(&Ended {
+      ready: false,
+      code: None,
+      refusal: agent.link.refusal(),
+    });
+  }
+  assert_eq!(warnings.count("refused"), 1);
+  assert_eq!(warnings.count("the relay controller refused this agent"), 1);
 }
 
 /// Whether `text` names the call to the controller made with `token`.
