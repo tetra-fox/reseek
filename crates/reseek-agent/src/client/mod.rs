@@ -2,8 +2,9 @@
 //! in, uploads its shares and serves the controller's requests; whenever the socket is lost, it
 //! dials again, backing off up to 30 seconds and starting over once it was ready. A refusal of
 //! its configuration, its API key or its shares, or another agent logging in under its instance
-//! name, backs off to the cap at once and is warned about once per reason. A change to the
-//! controller's settings closes the socket and dials again with the new ones.
+//! name, backs off to the cap at once and is warned about once per reason; so is a controller it
+//! cannot reach, until a socket is ready again. A change to the controller's settings closes the
+//! socket and dials again with the new ones.
 
 pub(crate) mod dial;
 mod downloads;
@@ -55,8 +56,11 @@ pub struct AgentClient {
   /// another share upload was asked for while one ran
   again: AtomicBool,
   /// the last refusal or configuration problem warned about, so a repeated one is not; forgotten
-  /// when the controller's settings change
+  /// when the controller's settings change or a socket that was ready ends
   warned: Mutex<Option<String>>,
+  /// why the last failed dial was warned about, so the same failure again is not; forgotten when
+  /// a dial succeeds and with `warned`
+  dial_warned: Mutex<Option<String>>,
   /// the last share upload failure warned about, so a repeated one is not; forgotten once an
   /// upload succeeds
   sync_warned: Mutex<Option<String>>,
@@ -89,6 +93,7 @@ impl AgentClient {
       syncing: AtomicBool::new(false),
       again: AtomicBool::new(false),
       warned: Mutex::new(None),
+      dial_warned: Mutex::new(None),
       sync_warned: Mutex::new(None),
       redial: Notify::new(),
     });
@@ -145,7 +150,6 @@ impl AgentClient {
           () = self.redial.notified() => failures = 0,
         }
       }
-      let attempt = failures + 1;
       failures += 1;
       let current = self.config.current();
       let settings = match Settings::new(&current.values, &self.name).await {
@@ -173,15 +177,12 @@ impl AgentClient {
         }
         Err(DialError::Failed(e)) => {
           refused = false;
-          warn!(
-            attempt,
-            error = e,
-            "Failed attempt to connect to relay controller"
-          );
+          self.dial_failed(&e);
           continue;
         }
       };
       info!(address = %without_userinfo(&settings.address), "connected to the relay controller");
+      *lock(&self.dial_warned) = None;
       let ended = self.serve(socket, settings).await;
       shut_down = ended.code == Some(close::SHUTTING_DOWN);
       // two agents with one instance name would otherwise take the socket from each other
@@ -195,8 +196,25 @@ impl AgentClient {
     }
   }
 
+  /// Logs a dial that failed with `error`, warned about once until it fails another way or a
+  /// dial succeeds.
+  fn dial_failed(&self, error: &str) {
+    warn_once(
+      &self.dial_warned,
+      error,
+      "Failed attempt to connect to relay controller",
+    );
+  }
+
+  /// Forgets the refusals and the failed dial warned about, so the next is warned about again.
+  fn forget_warnings(&self) {
+    *lock(&self.warned) = None;
+    *lock(&self.dial_warned) = None;
+  }
+
   /// Logs how a socket `ended`: a refusal or another agent taking it is warned about once per
-  /// reason, anything else told at info.
+  /// reason, anything else told at info. A socket that was ready ends an outage, so what
+  /// follows it is warned about again.
   fn report_end(&self, ended: &Ended) {
     match &ended.refusal {
       Some(reason) => warn_once(
@@ -212,7 +230,12 @@ impl AgentClient {
           "the relay controller dropped this agent for another",
         );
       }
-      None => info!(code = ended.code, "relay controller connection lost"),
+      None => {
+        if ended.ready {
+          self.forget_warnings();
+        }
+        info!(code = ended.code, "relay controller connection lost");
+      }
     }
   }
 
@@ -245,7 +268,7 @@ impl AgentClient {
       }
       applied = now;
       info!("relay controller settings changed; connecting again with them");
-      *lock(&self.warned) = None;
+      self.forget_warnings();
       *lock(&self.sync_warned) = None;
       if let Some(link) = self.current() {
         link.close(close::NORMAL);

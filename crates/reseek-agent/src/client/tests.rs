@@ -523,25 +523,78 @@ async fn another_agent_taking_the_socket_is_warned_about_once_across_uploads() {
   );
 }
 
+impl Agent {
+  /// Hands the agent the controller's refusal of its login for `reason`.
+  fn login_refused(&self, reason: LoginFailure) {
+    let refused = RelayMessage::LoginFailed { reason };
+    self
+      .agent
+      .handle(&self.link, &frames::encode(None, refused));
+  }
+
+  /// Ends the agent's socket, ready or not, with the refusal its link holds when `refused`.
+  fn socket_ended(&self, ready: bool, refused: bool) {
+    self.agent.report_end(&Ended {
+      ready,
+      code: None,
+      refusal: if refused { self.link.refusal() } else { None },
+    });
+  }
+}
+
 #[tokio::test]
-async fn a_login_refused_for_the_agents_configuration_is_warned_about_once_across_dials() {
+async fn a_login_refused_for_the_agents_configuration_is_warned_about_once_until_a_socket_is_ready()
+{
   let warnings = Logged::warnings();
   let agent = agent(Vec::new(), false).await;
   for _ in 0..3 {
-    let refused = RelayMessage::LoginFailed {
-      reason: LoginFailure::BadCredential,
-    };
-    agent
-      .agent
-      .handle(&agent.link, &frames::encode(None, refused));
-    agent.agent.report_end(&Ended {
-      ready: false,
-      code: None,
-      refusal: agent.link.refusal(),
-    });
+    agent.login_refused(LoginFailure::BadCredential);
+    agent.socket_ended(false, true);
   }
   assert_eq!(warnings.count("refused"), 1);
-  assert_eq!(warnings.count("the relay controller refused this agent"), 1);
+  // the key was put right, and later turned away again
+  agent.socket_ended(true, false);
+  agent.login_refused(LoginFailure::BadCredential);
+  agent.socket_ended(false, true);
+  assert_eq!(warnings.count("the relay controller refused this agent"), 2);
+}
+
+#[tokio::test]
+async fn a_controller_out_of_reach_is_warned_about_once_until_a_socket_is_ready() {
+  let warnings = Logged::warnings();
+  let agent = agent(Vec::new(), false).await;
+  for _ in 0..3 {
+    agent.agent.dial_failed("connection refused");
+  }
+  for _ in 0..3 {
+    agent.login_refused(LoginFailure::ChallengeExpired);
+    agent.socket_ended(false, false);
+  }
+  assert_eq!(warnings.count("Failed attempt to connect"), 1);
+  assert_eq!(warnings.count("authentication challenge"), 1);
+  // failing another way is news
+  agent.agent.dial_failed("certificate expired");
+  assert_eq!(warnings.count("Failed attempt to connect"), 2);
+  agent.socket_ended(true, false);
+  agent.agent.dial_failed("certificate expired");
+  agent.login_refused(LoginFailure::ChallengeExpired);
+  assert_eq!(warnings.count("Failed attempt to connect"), 3);
+  assert_eq!(warnings.count("authentication challenge"), 2);
+}
+
+#[tokio::test]
+async fn a_dial_that_connects_ends_the_outage_though_its_socket_is_never_ready() {
+  let warnings = Logged::warnings();
+  let socket = socket_controller().await;
+  let calls = Arc::new(AtomicUsize::new(0));
+  let agent = agent_at(Start::Scanned, &format!("http://{socket}/"), calls, false).await;
+  agent.agent.dial_failed("connection refused");
+  let running = tokio::spawn(agent.agent.clone().run());
+  eventually(|| lock(&agent.agent.dial_warned).is_none()).await;
+  agent.shutdown.cancel();
+  running.await.unwrap();
+  agent.agent.dial_failed("connection refused");
+  assert_eq!(warnings.count("Failed attempt to connect"), 2);
 }
 
 /// Whether `text` names the call to the controller made with `token`.

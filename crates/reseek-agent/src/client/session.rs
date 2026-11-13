@@ -23,8 +23,8 @@ use reseek_relay_proto::frames::{
 };
 use reseek_shares::lock;
 
-use super::AgentClient;
 use super::dial::{Settings, Socket};
+use super::{AgentClient, warn_once};
 
 /// How many frames wait to be written to the socket.
 const OUTBOUND: usize = 64;
@@ -312,15 +312,17 @@ impl AgentClient {
             | LoginFailure::BadCredential
             | LoginFailure::IncompatibleVersion
         );
-        // a refusal of the configuration is warned about once as the socket ends, however often
-        // the agent dials again
+        // a refusal of the configuration is warned about as the socket ends, an expired
+        // challenge here; each once until a socket is ready
+        let refusal = format!("login refused: {reason:?}");
         if configuration {
           debug!(?reason, "the relay controller refused the login");
-          link.refused(format!("login refused: {reason:?}"));
+          link.refused(refusal);
         } else {
-          warn!(
-            ?reason,
-            "Failed to handle authentication challenge: the login was refused"
+          warn_once(
+            &self.warned,
+            &refusal,
+            "Failed to handle authentication challenge: the login was refused",
           );
         }
       }
