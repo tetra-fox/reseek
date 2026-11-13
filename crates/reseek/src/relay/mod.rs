@@ -30,7 +30,8 @@ pub struct Relay {
 }
 
 impl Relay {
-  /// The controller when the options the daemon started with turn relay mode on.
+  /// The controller when the options the daemon started with turn relay mode on; with it off,
+  /// the indexes an earlier run kept for its agents are deleted, as no agent is configured.
   pub fn new(
     config: &Watcher<Options>,
     shares: &Arc<Shares>,
@@ -40,7 +41,13 @@ impl Relay {
     paths: &Paths,
     shutdown: &CancellationToken,
   ) -> Arc<Self> {
-    let controller = config.current().values.relay.enabled.then(|| {
+    let enabled = config.current().values.relay.enabled;
+    if !enabled {
+      for name in shares.away_hosts() {
+        shares.forget_away(&name);
+      }
+    }
+    let controller = enabled.then(|| {
       Controller::new(
         config.clone(),
         shares.clone(),

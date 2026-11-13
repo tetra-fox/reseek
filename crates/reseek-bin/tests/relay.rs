@@ -290,6 +290,64 @@ async fn an_away_agents_file_is_failed_until_the_agent_is_back_or_no_longer_conf
   assert!(not_shared(&answer), "{answer:?}");
 }
 
+/// The files under `dir` that hold the index of the agent `nas`.
+fn kept_indexes(dir: &Path) -> Vec<std::path::PathBuf> {
+  let mut found = Vec::new();
+  for entry in std::fs::read_dir(dir).unwrap() {
+    let path = entry.unwrap().path();
+    if path.is_dir() {
+      found.extend(kept_indexes(&path));
+    } else if path
+      .file_name()
+      .is_some_and(|name| name.to_string_lossy().starts_with("shares.nas."))
+    {
+      found.push(path);
+    }
+  }
+  found
+}
+
+/// A daemon started with relay mode off deletes the index an earlier run kept for an agent
+/// that was away.
+#[tokio::test]
+async fn a_daemon_without_relay_mode_deletes_the_kept_agent_indexes() {
+  let Some(server) = soulfind::server() else {
+    return;
+  };
+  let (controller_dir, agent_dir) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+  let album = agent_dir.path().join("share").join("album");
+  std::fs::create_dir_all(&album).unwrap();
+  file(&album, "one.flac", 1_000);
+  let name = soulfind::username("controller");
+  let port = free_port();
+  let first = controller(controller_dir.path(), &server, &name, port);
+  let api = signed_in(&first).await;
+  let mut away = agent(agent_dir.path(), port, "");
+  until(&api, "serving the agent", |s| serving(s, 1)).await;
+  away.child.kill().unwrap();
+  away.child.wait().unwrap();
+  until(&api, "the agent gone", |s| s.relay.agents.is_empty()).await;
+  assert!(!kept_indexes(controller_dir.path()).is_empty());
+
+  drop(first);
+  let off = CONTROLLER.replace("enabled = true", "enabled = false");
+  assert_ne!(off, CONTROLLER);
+  std::fs::write(controller_dir.path().join("config.toml"), off).unwrap();
+  let _plain = daemon_on(
+    port,
+    controller_dir.path(),
+    &server,
+    &name,
+    free_port(),
+    &[],
+  );
+  let started = Instant::now();
+  while !kept_indexes(controller_dir.path()).is_empty() {
+    assert!(started.elapsed() < PATIENCE, "the kept index stays");
+    tokio::time::sleep(Duration::from_millis(50)).await;
+  }
+}
+
 #[cfg(unix)]
 #[tokio::test]
 async fn a_stopping_controller_closes_its_agents_as_shutting_down() {
