@@ -170,7 +170,7 @@ slskr is another Rust implementation, with a much bigger scope than I wanted.
 
 ## AI usage disclaimer
 
-A lot of this code was written with the use of coding agents (Claude Opus 5.5, with Claude Fable 5.1 as a reviewer). They work from a written spec of the Soulseek protocol and slskd's behavior, and every milestone is reviewed against it by a second model and then by me for structure and readability. The protocol decoders have round-trip tests, property tests and fuzz targets.
+A lot of this code was written with the use of coding agents (Claude Opus 5.5, with Claude Fable 5.1, & Mythos 5.2 as a reviewer). They work from a written spec of the Soulseek protocol and slskd's behavior, and every milestone is reviewed against it by a second model and then by me for structure and readability. The protocol decoders have round-trip tests, property tests and fuzz targets.
 
 I review the shape of the code, not every line of it. If something isn't clear or the review missed it, please open an issue.
 
