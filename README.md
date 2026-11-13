@@ -95,6 +95,17 @@ sudo chown -R 1001:1001 ./reseek
 
 Alternatively, a Home Manager module is available in `homeManagerModules.default` if you'd rather run it as your user.
 
+Every push to `main` and every release is built and pushed to [tetra-fox.cachix.org](https://tetra-fox.cachix.org). Add it as a substituter to download reseek instead of building it:
+
+```nix
+nix.settings = {
+  substituters = [ "https://tetra-fox.cachix.org" ];
+  trusted-public-keys = [ "tetra-fox.cachix.org-1:l70MnHbfeZm2unwKH47I42/imLanZMMSxJbqoS0FvEs=" ];
+};
+```
+
+The cached build uses reseek's own pinned nixpkgs, so leave out `inputs.reseek.inputs.nixpkgs.follows` if you want it. Following your own nixpkgs builds reseek from source.
+
 ### Plain binary
 
 Download the one for your system from [Releases](https://github.com/tetra-fox/reseek/releases), there's Linux amd64, arm64, and a universal macOS binary.
