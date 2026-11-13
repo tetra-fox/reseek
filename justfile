@@ -83,6 +83,23 @@ docker: release
     if [ "$(basename "$runtime")" = podman ]; then format=(--format docker); fi
     "$runtime" build "${format[@]}" -f docker/Dockerfile -t reseek "$context"
 
+# the password gets past the refusal of a default login the image's web server would otherwise meet
+[doc("build the container image, start it and wait for /health")]
+docker-check: docker
+    #!/usr/bin/env bash
+    set -euo pipefail
+    runtime="$(command -v podman || command -v docker)"
+    id="$("$runtime" run -d -e RESEEK_PASSWORD=docker-check reseek)"
+    trap '"$runtime" rm -f "$id" > /dev/null' EXIT
+    for _ in $(seq 60); do
+      if [ "$("$runtime" inspect -f '{{{{.State.Running}}' "$id")" != true ]; then break; fi
+      if "$runtime" exec "$id" wget -q -O /dev/null http://localhost:5030/health; then exit 0; fi
+      sleep 1
+    done
+    "$runtime" logs "$id" >&2
+    echo "the image did not answer /health within 60 seconds" >&2
+    exit 1
+
 # only the ui into web/build
 web-build: web-install
     pnpm --dir web build

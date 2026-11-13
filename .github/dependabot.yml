@@ -24,8 +24,7 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: [version-update:semver-major]
-  # the image's base; ci does not build the image, so this bump is merged by hand after
-  # building it with `just docker` and starting it
+  # the image's base; deps.yml builds the image and starts it before merging
   - package-ecosystem: docker
     directory: /docker
     schedule:

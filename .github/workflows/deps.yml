@@ -1,6 +1,5 @@
 # the test job runs the bumped code with a read-only token; the merge job runs none of it.
-# docker bumps are merged by hand, since ci does not build the image, and action bumps are left
-# for review, since an action's code runs where the release signing key is.
+# action bumps are left for review, since an action's code runs where the release signing key is.
 #
 # dependabot rebases only on a conflict or at its weekly run, so a merge can land a tree no job
 # built, and the merge's push starts no ci run; the next push to main runs ci on it. accepted for a
@@ -32,12 +31,10 @@ jobs:
       - uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
         id: bump
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: steps.bump.outputs.package-ecosystem != 'docker'
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
       - uses: ./.github/actions/setup-nix
-        if: steps.bump.outputs.package-ecosystem != 'docker'
       # the web hash follows the lockfile, which dependabot does not update; nix reports it when empty
       - name: Update the web dependency hash
         id: hash
@@ -55,12 +52,15 @@ jobs:
       # after the hash step, so an npm bump is checked with the hash the merge job commits
       - run: nix develop -c just flake-check
         if: steps.bump.outputs.package-ecosystem != 'docker'
+      # a base image bump touches only the image, so it is built and started instead
+      - run: nix develop -c just docker-check
+        if: steps.bump.outputs.package-ecosystem == 'docker'
 
   merge:
     needs: test
     if: >-
       needs.test.outputs.update-type != 'version-update:semver-major'
-      && (needs.test.outputs.ecosystem == 'cargo' || needs.test.outputs.ecosystem == 'npm_and_yarn')
+      && contains(fromJSON('["cargo", "npm_and_yarn", "docker"]'), needs.test.outputs.ecosystem)
     runs-on: ubuntu-latest
     permissions:
       actions: write
