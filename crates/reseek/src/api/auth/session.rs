@@ -381,7 +381,7 @@ async fn provider_logout(
     return None;
   };
   let current = app.config.current();
-  let provider = match app.auth.oidc.get(name, &current.values) {
+  let provider = match app.auth.oidc.get(name, &current.values).await {
     Ok(Some(provider)) if provider.options.logout.rp_initiated => provider,
     Ok(_) => return None,
     Err(e) => {

@@ -66,8 +66,8 @@ fn lines_of(body: &serde_json::Value, level: &str) -> Vec<String> {
     .unwrap_or_default()
 }
 
-fn client() -> reqwest::Client {
-  crate::http::outbound::client(None).unwrap()
+async fn client() -> reqwest::Client {
+  crate::http::outbound::client(None).await.unwrap()
 }
 
 #[tokio::test]
@@ -80,7 +80,7 @@ async fn lines_go_in_one_batch_per_push_labeled_by_the_process() {
     tracing::warn!("disconnected");
     tracing::info!("logged in again");
   });
-  let running = sink.start(client());
+  let running = sink.start(client().await);
   let body = next(&mut pushes).await;
   running.finish().await;
   let stream = &body["streams"][0]["stream"];
@@ -124,7 +124,7 @@ async fn a_full_queue_drops_lines_without_waiting_and_says_how_many() {
       tracing::info!(n, "line");
     }
   });
-  let running = sink.start(client());
+  let running = sink.start(client().await);
   let body = next(&mut pushes).await;
   running.finish().await;
   assert_eq!(lines_of(&body, "info").len(), 2);
@@ -140,7 +140,7 @@ async fn a_push_loki_refuses_is_tried_again() {
   let labels = Labels::default();
   let (queue, sink) = channel(&url, labels.clone(), 16);
   logged(&labels, queue, || tracing::error!("disk full"));
-  let running = sink.start(client());
+  let running = sink.start(client().await);
   let refused = next(&mut pushes).await;
   let again = next(&mut pushes).await;
   running.finish().await;
@@ -156,7 +156,7 @@ async fn what_is_queued_when_the_daemon_stops_is_pushed() {
   let (url, mut pushes) = receiver(&[]).await;
   let labels = Labels::default();
   let (queue, sink) = channel(&url, labels.clone(), 16);
-  let running = sink.start(client());
+  let running = sink.start(client().await);
   logged(&labels, queue, || tracing::info!("reseek stopped"));
   running.finish().await;
   let body = next(&mut pushes).await;

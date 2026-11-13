@@ -37,9 +37,9 @@ pub struct Releases {
 
 impl Releases {
   /// A reader of the release feed at `feed`.
-  pub fn new(feed: &str) -> Result<Self, String> {
+  pub async fn new(feed: &str) -> Result<Self, String> {
     Ok(Self {
-      http: crate::http::outbound::client(None)?,
+      http: crate::http::outbound::client(None).await?,
       feed: feed.to_string(),
     })
   }
@@ -179,6 +179,7 @@ mod tests {
   async fn a_newer_release_is_an_update_and_the_same_one_is_not() {
     let (url, served) = feed("200 OK", r#"{"tag_name":"v0.3.0","name":"0.3.0"}"#).await;
     let checked = Releases::new(&url)
+      .await
       .unwrap()
       .check(released("0.2.9"))
       .await
@@ -193,6 +194,7 @@ mod tests {
 
     let (url, _) = feed("200 OK", r#"{"tag_name":"0.2.9"}"#).await;
     let checked = Releases::new(&url)
+      .await
       .unwrap()
       .check(released("0.2.9"))
       .await
@@ -205,6 +207,7 @@ mod tests {
   async fn a_failed_check_says_why_and_a_development_build_is_not_checked() {
     let (url, _) = feed("404 Not Found", r#"{"message":"Not Found"}"#).await;
     let failed = Releases::new(&url)
+      .await
       .unwrap()
       .check(released("0.2.9"))
       .await
@@ -212,6 +215,7 @@ mod tests {
     assert!(failed.contains("404"), "{failed}");
     let (url, _) = feed("200 OK", r#"{"tag_name":"latest"}"#).await;
     let failed = Releases::new(&url)
+      .await
       .unwrap()
       .check(released("0.2.9"))
       .await
@@ -223,6 +227,7 @@ mod tests {
       ..released("0.0.1")
     };
     let unchecked = Releases::new("http://192.0.2.1/unreachable")
+      .await
       .unwrap()
       .check(development.clone())
       .await

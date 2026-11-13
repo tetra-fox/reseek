@@ -141,19 +141,27 @@ fn holds_back(failed_at: Option<Instant>) -> bool {
 impl Providers {
   /// The provider `name` as `options` configure it now, `None` when there is none by that
   /// name. A changed configuration makes a new provider, which discovers again.
-  pub fn get(&self, name: &str, options: &Options) -> Result<Option<Arc<Provider>>, String> {
+  pub async fn get(&self, name: &str, options: &Options) -> Result<Option<Arc<Provider>>, String> {
     let Some(configured) = options.web.authentication.oidc.get(name) else {
       return Ok(None);
     };
-    let mut known = lock(&self.known);
-    if let Some(provider) = known.get(name)
-      && provider.options == *configured
-    {
-      return Ok(Some(provider.clone()));
+    let current = |known: &HashMap<String, Arc<Provider>>| {
+      known
+        .get(name)
+        .filter(|provider| provider.options == *configured)
+        .cloned()
+    };
+    if let Some(provider) = current(&lock(&self.known)) {
+      return Ok(Some(provider));
     }
-    let provider = Arc::new(Provider::new(name, configured.clone())?);
-    known.insert(name.to_string(), provider.clone());
-    Ok(Some(provider))
+    let made = Arc::new(Provider::new(name, configured.clone()).await?);
+    let mut known = lock(&self.known);
+    // one made meanwhile for the same options is kept, so its discovery is shared
+    if let Some(provider) = current(&known) {
+      return Ok(Some(provider));
+    }
+    known.insert(name.to_string(), made.clone());
+    Ok(Some(made))
   }
 
   /// Held by a login while it asks for its tokens and stores its session.
@@ -169,12 +177,10 @@ impl Providers {
 }
 
 impl Provider {
-  fn new(name: &str, options: Oidc) -> Result<Self, String> {
+  async fn new(name: &str, options: Oidc) -> Result<Self, String> {
     Ok(Self {
       name: name.to_string(),
-      http: ProviderHttp(crate::http::outbound::client(
-        options.ca_certificate.as_deref(),
-      )?),
+      http: ProviderHttp(crate::http::outbound::client(options.ca_certificate.as_deref()).await?),
       options,
       discovery: tokio::sync::Mutex::new(Discovery {
         document: Document::Unread { failed_at: None },
@@ -352,10 +358,10 @@ pub fn error_chain(error: &dyn std::error::Error) -> String {
 
 /// Discovers every configured provider once at startup. A provider that cannot be reached
 /// stays unavailable until a login tries it again; the daemon runs on.
-pub fn discover_at_start(app: &AppState) {
+pub async fn discover_at_start(app: AppState) {
   let current = app.config.current();
   for name in current.values.web.authentication.oidc.keys() {
-    let provider = match app.auth.oidc.get(name, &current.values) {
+    let provider = match app.auth.oidc.get(name, &current.values).await {
       Ok(Some(provider)) => provider,
       Ok(None) => continue,
       Err(e) => {
@@ -394,7 +400,7 @@ mod tests {
       issuer: Some(issuer.url.clone()),
       ..Oidc::default()
     };
-    let provider = Provider::new("test", options).unwrap();
+    let provider = Provider::new("test", options).await.unwrap();
     provider.metadata().await.unwrap();
     drop(issuer);
     tokio::time::pause();

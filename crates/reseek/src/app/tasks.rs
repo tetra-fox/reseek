@@ -29,7 +29,7 @@ static LOGS_MISSED: LogLimiter = LogLimiter::new();
 pub(super) fn spawn(app: &AppState) {
   tokio::spawn(follow_configuration(app.clone()).instrument(info_span!("state")));
   tokio::spawn(forward_logs(app.clone()).instrument(info_span!("log_stream")));
-  crate::auth::oidc::discover_at_start(app);
+  tokio::spawn(crate::auth::oidc::discover_at_start(app.clone()));
 }
 
 /// Keeps the state's configuration part current and pushes the options whenever the

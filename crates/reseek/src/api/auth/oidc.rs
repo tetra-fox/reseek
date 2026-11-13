@@ -61,7 +61,7 @@ async fn login(
   Path(name): Path<String>,
   Query(query): Query<OidcLoginQuery>,
 ) -> Result<Response, ApiError> {
-  let provider = provider(&app, &name)?;
+  let provider = provider(&app, &name).await?;
   let redirect = query
     .redirect
     .unwrap_or_else(|| format!("{}/", app.url_base));
@@ -107,7 +107,7 @@ async fn callback(
   Query(query): Query<OidcCallbackQuery>,
   headers: axum::http::HeaderMap,
 ) -> Result<Response, ApiError> {
-  let provider = provider(&app, &name)?;
+  let provider = provider(&app, &name).await?;
   let client = &presented.client;
   let logins = &app.auth.limits.logins;
   // counted as a failure from the start, so callbacks made at the same time are limited too
@@ -249,7 +249,7 @@ async fn backchannel(
   Path(name): Path<String>,
   body: Bytes,
 ) -> Result<StatusCode, ApiError> {
-  let provider = provider(&app, &name)?;
+  let provider = provider(&app, &name).await?;
   if !provider.options.logout.back_channel {
     return Err(ApiError::not_found(
       "Back-channel logout is disabled for this provider",
@@ -324,7 +324,7 @@ async fn test(
   _admin: Authorized<Administrator>,
   Path(name): Path<String>,
 ) -> Result<Json<OidcTestResult>, ApiError> {
-  let provider = provider(&app, &name)?;
+  let provider = provider(&app, &name).await?;
   Ok(Json(match provider.discover().await {
     Ok(metadata) => OidcTestResult {
       ok: true,
@@ -369,8 +369,9 @@ fn unavailable(name: &str, error: &str) -> ApiError {
 }
 
 /// The provider `name`, 404 when none is configured.
-fn provider(app: &AppState, name: &str) -> Result<Arc<Provider>, ApiError> {
-  match app.auth.oidc.get(name, &app.config.current().values) {
+async fn provider(app: &AppState, name: &str) -> Result<Arc<Provider>, ApiError> {
+  let current = app.config.current();
+  match app.auth.oidc.get(name, &current.values).await {
     Ok(Some(provider)) => Ok(provider),
     Ok(None) => Err(ApiError::not_found(format!(
       "No identity provider named {name}"

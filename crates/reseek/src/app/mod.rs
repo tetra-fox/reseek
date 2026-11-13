@@ -294,6 +294,7 @@ impl AppState {
     .map_err(|e| StartError::Open(format!("search.db: {e}")))?;
     let releases = Arc::new(
       Releases::new(RELEASE_FEED)
+        .await
         .map_err(|e| StartError::Open(format!("release feed HTTP client: {e}")))?,
     );
     let downloads = Downloads::new(
@@ -627,7 +628,7 @@ async fn serve(
   logging: Logging,
   assets: Assets,
 ) -> u8 {
-  let loki = logging.start_loki();
+  let loki = logging.start_loki().await;
   let code = host(sources, defaults, paths, logging, assets).await;
   if let Some(loki) = loki {
     loki.finish().await;

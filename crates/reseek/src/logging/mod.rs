@@ -179,9 +179,9 @@ impl Logging {
 
   /// Starts pushing to Grafana Loki, when `logger.loki` names an instance; the lines logged
   /// before were queued for it.
-  pub fn start_loki(&self) -> Option<loki::Running> {
+  pub async fn start_loki(&self) -> Option<loki::Running> {
     let (sink, url) = lock(&self.loki).take()?;
-    match crate::http::outbound::client(None) {
+    match crate::http::outbound::client(None).await {
       Ok(client) => {
         tracing::info!(
           url = crate::config::redact::url(&url),

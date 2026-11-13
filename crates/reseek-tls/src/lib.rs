@@ -55,7 +55,7 @@ impl System {
         warn!(
           added,
           ?problems,
-          "the system certificate store was not read in full; TLS trusts the built-in authorities and what was read"
+          "system certificate store read in part; the built-in authorities and the rest are trusted"
         );
       }
     }
