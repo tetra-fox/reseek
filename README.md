@@ -164,6 +164,14 @@ minisign -Vm SHA256SUMS -p reseek.pub
 sha256sum --check --ignore-missing SHA256SUMS
 ```
 
+Each binary and container image also carries a build provenance attestation, which shows the
+release workflow and commit that built it:
+
+```sh
+gh attestation verify reseek-linux-amd64 --repo tetra-fox/reseek
+gh attestation verify oci://ghcr.io/tetra-fox/reseek:latest --repo tetra-fox/reseek
+```
+
 ## Building from source
 
 ```sh
