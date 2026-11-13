@@ -15,7 +15,8 @@
 }:
 let
   targetCraneLib = craneLib.overrideToolchain (p: p.reseek-rust.override { targets = [ target ]; });
-  # what the target's dependencies share with its build, as in package.nix
+  # what the target's dependencies share with its build, as in package.nix but without frame
+  # pointers, which nixpkgs' cargo setup hook sets only for the build machine's own target
   args = {
     pname = "reseek-${target}";
     inherit (reseek) version src;

@@ -17,8 +17,7 @@ let
   fs = lib.fileset;
   cargoArgs = "--locked --package reseek-bin";
   # what the dependencies' build shares with the package's: cargo compiles a dependency again when
-  # the environment its build script reads differs. crane leaves out nixpkgs' cargo setup hook,
-  # whose switches would make aws-lc and SQLite link the system's instead of their own
+  # the environment its build script reads differs
   args = {
     pname = "reseek";
     inherit version;
@@ -39,6 +38,9 @@ let
       cmake
       perl
     ];
+    # crane leaves out nixpkgs' cargo setup hook: its frame pointers are set here, and its switches
+    # that would link aws-lc and SQLite from the system stay out
+    env.RUSTFLAGS = "-Cforce-frame-pointers=yes";
     # `just test` runs the test suite
     doCheck = false;
   };
@@ -51,10 +53,12 @@ craneLib.buildPackage (
     );
     cargoExtraArgs = cargoArgs;
 
-    env = {
-      WEBUI_DIR = web;
-    }
-    // lib.optionalAttrs (revision != null) { RESEEK_GIT_REVISION = revision; };
+    env =
+      args.env
+      // {
+        WEBUI_DIR = web;
+      }
+      // lib.optionalAttrs (revision != null) { RESEEK_GIT_REVISION = revision; };
 
     nativeBuildInputs = args.nativeBuildInputs ++ [ installShellFiles ];
 
