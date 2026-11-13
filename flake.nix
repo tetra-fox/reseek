@@ -104,11 +104,7 @@
         {
           package = pkgs.reseek;
         }
-        // pkgs.callPackages ./nix/checks.nix {
-          rustPlatform = pkgs.reseek-rust-platform;
-          clippy = pkgs.reseek-rust;
-          rustfmt = pkgs.reseek-rust;
-        }
+        // pkgs.callPackages ./nix/checks.nix { }
         // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
           home-manager = pkgs.callPackage ./nix/home-manager-test.nix {
             inherit self home-manager;

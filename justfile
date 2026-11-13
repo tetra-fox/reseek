@@ -180,10 +180,9 @@ soulfind-bin:
 # the gate for every push
 ci: lint test web-e2e
 
-# one build at a time: next to a cargo build, the web checks' tests run past their timeouts
 [doc("the nix package and the flake's checks")]
 flake-check:
-    nix flake check -L --max-jobs 1
+    nix flake check -L
 
 # soulfind on its default port 2242 with its data under .dev/soulfind, for trying things by hand
 soulfind:

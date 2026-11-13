@@ -15,28 +15,21 @@ stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "reseek-web";
   inherit version;
 
-  # api/openapi.json beside web/, for the check that the UI's types match it
   src = fs.toSource {
-    root = ../.;
-    fileset = fs.unions [
-      ../api/openapi.json
-      (fs.difference ../web (
-        fs.unions [
-          (fs.maybeMissing ../web/node_modules)
-          (fs.maybeMissing ../web/build)
-          (fs.maybeMissing ../web/.svelte-kit)
-          (fs.maybeMissing ../web/test-results)
-          (fs.maybeMissing ../web/playwright-report)
-        ]
-      ))
-    ];
+    root = ../web;
+    fileset = fs.difference ../web (
+      fs.unions [
+        (fs.maybeMissing ../web/node_modules)
+        (fs.maybeMissing ../web/build)
+        (fs.maybeMissing ../web/.svelte-kit)
+        (fs.maybeMissing ../web/test-results)
+        (fs.maybeMissing ../web/playwright-report)
+      ]
+    );
   };
-  sourceRoot = "${finalAttrs.src.name}/web";
 
   pnpmDeps = fetchPnpmDeps {
-    # named apart from `pname`, so the checks built from this derivation share the packages
-    pname = "reseek-web";
-    inherit (finalAttrs) version;
+    inherit (finalAttrs) pname version;
     inherit pnpm;
     # the packages depend on the manifest and the lockfile alone
     src = fs.toSource {

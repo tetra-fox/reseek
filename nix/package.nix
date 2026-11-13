@@ -1,5 +1,5 @@
 # the UI comes from the `web` derivation through WEBUI_DIR, so this build needs no network and no
-# pnpm. the suites that need soulfind skip in the check phase, which has none
+# pnpm
 {
   lib,
   rustPlatform,
@@ -7,8 +7,6 @@
   cmake,
   perl,
   installShellFiles,
-  zsh,
-  fish,
   web,
   version,
   # the commit the build is of, shown beside the version; none outside a git checkout
@@ -55,14 +53,8 @@ rustPlatform.buildRustPackage {
     installShellFiles
   ];
 
-  # the completions test reads each script in its shell
-  nativeCheckInputs = [
-    zsh
-    fish
-  ];
-
-  useNextest = true;
-  cargoTestFlags = [ "--workspace" ];
+  # `just test` runs the test suite
+  doCheck = false;
 
   postInstall = ''
     installShellCompletion --cmd reseek \
