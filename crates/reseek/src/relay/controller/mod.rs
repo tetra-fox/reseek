@@ -115,6 +115,8 @@ struct Registry {
   completions: HashMap<Uuid, oneshot::Sender<RelayFileUploadResult>>,
   /// the agents whose share upload is being loaded
   syncing: HashSet<String>,
+  /// the aliases, in lower case, of each agent's shares as last loaded, kept while it is away
+  aliases: HashMap<String, Vec<String>>,
 }
 
 /// The relay controller.
@@ -184,6 +186,27 @@ impl Controller {
       .agents
       .get(name)
       .is_some_and(|r| r.record.ready)
+  }
+
+  /// Whether `filename`, which no loaded share holds, is under a share of an agent that is
+  /// configured but is not serving its files now: away, or loading them again. A peer asking
+  /// for it can be told to ask again later. An agent no longer configured is forgotten, so its
+  /// files are then not shared.
+  pub fn away_holds(&self, filename: &str) -> bool {
+    let alias = filename
+      .split('\\')
+      .next()
+      .unwrap_or(filename)
+      .to_lowercase();
+    let options = self.config.current();
+    let mut registry = lock(&self.registry);
+    registry
+      .aliases
+      .retain(|name, _| Self::configured(&options.values, name).is_some());
+    let registry = &*registry;
+    registry.aliases.iter().any(|(name, aliases)| {
+      aliases.contains(&alias) && !registry.agents.get(name).is_some_and(|r| r.record.ready)
+    })
   }
 
   /// Closes the socket of the agent `name` and unloads its shares; false when it is not logged

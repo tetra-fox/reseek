@@ -4,7 +4,8 @@
 //! all. When the requests waiting would take more than [`BACKLOG_MILLIS`] at the pace of the
 //! last ones accepted, a new request is dropped, since its peer would have given up by then.
 //! A request for a file not shared, or shared and gone from disk, is refused, and so is one
-//! past the limits of its user's group, unless the user is privileged.
+//! past the limits of its user's group, unless the user is privileged. A request for a file of a
+//! relay agent that is configured but away is failed instead, so the peer asks again.
 
 use std::collections::{BTreeSet, HashMap};
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
@@ -137,6 +138,8 @@ impl Intake {
 pub(super) enum Refusal {
   /// the peer is told this
   Peer(&'static str),
+  /// the file is a relay agent's that is away; the peer is told to ask again later
+  Later,
   /// something here failed; the peer is told only that
   Failed(ClientError),
 }
@@ -235,6 +238,14 @@ impl Uploads {
         }
         return Err(ClientError::DownloadEnqueue(reason.to_string()));
       }
+      Err(Refusal::Later) => {
+        enqueue.requests_rejected.inc();
+        debug!(
+          username,
+          filename, "upload request failed; the agent holding the file is away"
+        );
+        return Err(ClientError::DownloadUnavailable);
+      }
       Err(Refusal::Failed(error)) => return Err(error),
     };
     self.enqueue(username, filename, located).await?;
@@ -297,6 +308,7 @@ impl Uploads {
       let queued = match self.decide(username, &filename, &sees).await {
         Ok(located) => self.enqueue(username, &filename, located).await,
         Err(Refusal::Peer(reason)) => Err(ClientError::DownloadEnqueue(reason.to_string())),
+        Err(Refusal::Later) => Err(ClientError::DownloadUnavailable),
         Err(Refusal::Failed(error)) => Err(error),
       };
       match queued {
@@ -327,11 +339,13 @@ impl Uploads {
     filename: &str,
     sees: &BTreeSet<String>,
   ) -> Result<Located, Refusal> {
-    let located = self
-      .locate(sees, filename)
-      .await
-      .map_err(Refusal::Failed)?
-      .ok_or(Refusal::Peer(NOT_SHARED))?;
+    let Some(located) = self.locate(sees, filename).await.map_err(Refusal::Failed)? else {
+      return Err(if self.agent_away(sees, filename) {
+        Refusal::Later
+      } else {
+        Refusal::Peer(NOT_SHARED)
+      });
+    };
     let client = self.client().map_err(Refusal::Failed)?;
     let placement = self.users.fetch_placement(&client, username, false).await;
     if placement.privileged {
@@ -445,6 +459,15 @@ impl Uploads {
       resolved,
       size: length,
     })
+  }
+
+  /// Whether `filename`, which no loaded share holds, belongs to a relay agent that is away, in
+  /// a share the groups `sees` see.
+  fn agent_away(&self, sees: &BTreeSet<String>, filename: &str) -> bool {
+    self
+      .relay
+      .as_ref()
+      .is_some_and(|relay| !self.shares.view(sees).hides(filename) && relay.away_holds(filename))
   }
 
   /// Asks the shares for a scan, after a shared file was found missing or changed.

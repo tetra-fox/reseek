@@ -18,7 +18,9 @@ use api_types::relay::{LoginFailure, RELAY_PROTOCOL, RelayEnvelope, RelayMessage
 use api_types::state::State;
 use api_types::transfers::{TransferDirection, TransferOutcome, TransferStates};
 use reseek_relay_proto::credential::{Key, Purpose};
-use soulseek_client::{ClientOptions, DownloadOutput, DownloadRequest, UploadInput, UploadRequest};
+use soulseek_client::{
+  ClientError, ClientOptions, DownloadOutput, DownloadRequest, UploadInput, UploadRequest,
+};
 use support::soulfind::{self, Soulfind};
 use support::transfers::{self, asked, content, file, scratch};
 use support::{
@@ -208,6 +210,75 @@ async fn an_agent_comes_back_after_its_controller_restarts_and_leaves_with_its_s
   })
   .await;
   assert_eq!(left.shares.hosts.unwrap(), ["local"]);
+}
+
+/// A peer asking for a file of an agent that is away but still configured is told the upload
+/// failed, which it takes as a reason to ask again; once the agent is no longer configured, the
+/// file is not shared.
+#[tokio::test]
+async fn an_away_agents_file_is_failed_until_the_agent_is_no_longer_configured() {
+  let Some(server) = soulfind::server() else {
+    return;
+  };
+  let (controller_dir, agent_dir) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+  let album = agent_dir.path().join("share").join("album");
+  std::fs::create_dir_all(&album).unwrap();
+  file(&album, "one.flac", 1_000);
+  let name = soulfind::username("controller");
+  let port = free_port();
+  let controller = controller(controller_dir.path(), &server, &name, port);
+  let api = signed_in(&controller).await;
+  until(&api, "logged in", support::logged_in).await;
+  let mut agent = agent(agent_dir.path(), port, "");
+  until(&api, "serving the agent", |s| serving(s, 1)).await;
+  agent.child.kill().unwrap();
+  agent.child.wait().unwrap();
+  until(&api, "the agent gone", |s| s.relay.agents.is_empty()).await;
+
+  let options = ClientOptions {
+    listen_port: free_port(),
+    ..ClientOptions::default()
+  };
+  let other = server.login("other", options).await;
+  let ask = || {
+    let request = DownloadRequest::new(
+      &name,
+      "share\\album\\one.flac",
+      1_000,
+      DownloadOutput::File(scratch().join("away")),
+    );
+    let client = other.client.clone();
+    async move {
+      tokio::time::timeout(
+        PATIENCE,
+        client.download(request, &CancellationToken::new()),
+      )
+      .await
+      .expect("the download ends")
+    }
+  };
+  let away = ask().await;
+  assert!(
+    matches!(away, Err(ClientError::TransferReportedFailed(_))),
+    "{away:?}"
+  );
+
+  let unconfigured = CONTROLLER.replace(
+    "[relay.agents.nas]\ninstance_name = \"nas\"\nsecret = \"nas-secret-0123456789\"\n",
+    "",
+  );
+  assert_ne!(unconfigured, CONTROLLER);
+  std::fs::write(controller_dir.path().join("config.toml"), unconfigured).unwrap();
+  let started = Instant::now();
+  loop {
+    match ask().await {
+      Err(ClientError::TransferRejected(reason)) if reason == "File not shared." => break,
+      Err(ClientError::TransferReportedFailed(_)) => {}
+      answer => panic!("{answer:?}"),
+    }
+    assert!(started.elapsed() < PATIENCE, "the file is still failed");
+    tokio::time::sleep(Duration::from_millis(100)).await;
+  }
 }
 
 #[cfg(unix)]
