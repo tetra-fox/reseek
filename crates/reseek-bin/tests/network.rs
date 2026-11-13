@@ -59,8 +59,11 @@ async fn the_daemon_logs_in_with_its_shares_counted_and_connects_when_asked() {
     .disconnect("client disconnected from web UI")
     .await
     .unwrap();
-  let state = until(&client, "disconnected", |s| !s.server.is_connected).await;
-  assert_eq!(state.server.state, ServerConnectionState::Disconnected);
+  // not connected already holds while the session is torn down
+  let state = until(&client, "disconnected", |s| {
+    s.server.state == ServerConnectionState::Disconnected
+  })
+  .await;
   assert_eq!(state.user.username, None);
   assert!(!state.connection_watchdog.is_enabled);
   tokio::time::sleep(Duration::from_millis(500)).await;
@@ -168,11 +171,13 @@ async fn an_option_change_that_needs_it_is_flagged_until_a_reconnect() {
   );
 
   client.disconnect("reconnecting").await.unwrap();
-  let state = until(&client, "disconnected", |s| !s.server.is_connected).await;
-  assert!(
-    !state.pending_reconnect,
-    "a disconnect ends what waited for it"
-  );
+  // the session's end, which comes after it reads not connected, ends what waited for it
+  until(
+    &client,
+    "disconnected, which ends what waited for it",
+    |s| !s.server.is_connected && !s.pending_reconnect,
+  )
+  .await;
   client.connect().await.unwrap();
   let state = until(&client, "logged in again", logged_in).await;
   assert!(!state.pending_reconnect);
