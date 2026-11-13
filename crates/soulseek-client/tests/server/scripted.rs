@@ -157,7 +157,8 @@ async fn unhandled_and_obsolete_codes_are_logged_and_the_connection_stays_up() {
 }
 
 #[tokio::test]
-async fn a_malformed_message_is_dropped_and_the_connection_stays_up() {
+async fn a_malformed_message_is_dropped_with_one_warning_a_minute_and_the_connection_stays_up() {
+  let logs = Logs::capture();
   let mut session = Session::start().await;
   // GetStatus with a presence of 9
   let mut payload = 7u32.to_le_bytes().to_vec();
@@ -168,11 +169,16 @@ async fn a_malformed_message_is_dropped_and_the_connection_stays_up() {
   let mut frame = (payload.len() as u32).to_le_bytes().to_vec();
   frame.extend(payload);
   session.server.send_bytes(&frame).await;
+  session.server.send_bytes(&frame).await;
   session.settle().await;
   assert_eq!(
     session.client.state(),
     soulseek_client::ClientState::LoggedIn
   );
+  let warned = logs.lines_with(&["WARN", "server message not read", "GetStatus"]);
+  assert_eq!(warned.len(), 1, "{}", logs.text());
+  let rejected = logs.lines_with(&["DEBUG", "message rejected", "code=7 "]);
+  assert_eq!(rejected.len(), 2, "the decoder tells each: {}", logs.text());
 }
 
 #[tokio::test]

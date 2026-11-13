@@ -297,7 +297,7 @@ async fn responses_nobody_asked_for_are_dropped_before_inflating() {
   }
   // reading any of them would have found it cut short or malformed
   assert!(
-    logs.lines_with(&["malformed message rejected"]).is_empty(),
+    logs.lines_with(&["message rejected"]).is_empty(),
     "{}",
     logs.text()
   );

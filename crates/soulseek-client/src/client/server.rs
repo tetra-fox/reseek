@@ -45,8 +45,12 @@ use super::session::{Edge, Stage};
 use crate::distributed::Command;
 use crate::error::{ClientError, ConnectionErrorKind, RoomErrorKind};
 use crate::events::{Event, PrivateMessage, RoomMembers};
+use crate::log::LogLimiter;
 use crate::state::ServerInfo;
 use crate::waiter::WaitKey;
+
+/// a server message that does not decode, which can come with every message of its kind
+static UNREADABLE: LogLimiter = LogLimiter::new();
 
 /// codes the server no longer sends; seeing one is worth telling apart from a new code
 const OBSOLETE: [ServerCode; 13] = [
@@ -66,13 +70,20 @@ const OBSOLETE: [ServerCode; 13] = [
 ];
 
 impl Client {
-  /// Handles one complete frame from the server. A frame that does not decode has been logged
-  /// by the decoder and is dropped; the connection stays up.
+  /// Handles one complete frame from the server. A frame that does not decode is dropped and
+  /// the connection stays up.
   pub(super) fn dispatch_server_frame(&self, frame: &[u8]) {
     let message = match ServerResponse::decode(frame) {
       Ok(message) => message,
       Err(DecodeError::UnknownCode { code }) => return unhandled(code, frame.len()),
-      Err(_) => return,
+      // the server is the only sender here, so a message we cannot read is our misreading of
+      // it, and what it said is lost
+      Err(error) => {
+        if let Some(suppressed) = UNREADABLE.allow() {
+          tracing::warn!(%error, suppressed, "server message not read, dropped");
+        }
+        return;
+      }
     };
     if self.inner.options().report_unread_message_data {
       let read = message.encode().len();

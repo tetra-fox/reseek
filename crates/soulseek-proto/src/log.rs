@@ -1,6 +1,6 @@
 //! Log lines shared by the message decoders, so every family reports with the same fields
 
-use crate::error::{DecodeError, FieldError};
+use crate::error::DecodeError;
 
 /// remote strings are cut to this many bytes in log fields
 const MAX_LOGGED_BYTES: usize = 128;
@@ -40,27 +40,17 @@ pub(crate) fn decoded(family: &'static str, code: u32, kind: &'static str, field
   );
 }
 
-/// An unknown code is expected (new server features appear without notice) and a bad
-/// distributed search identifier is a known peer bug, so both are debug; everything else is
-/// malformed input and a warning
+/// At debug: an unknown code is expected (new server features appear without notice), a bad
+/// distributed search identifier is a known peer bug, and other malformed input comes from a
+/// remote side the operator cannot act on. A caller for which a frame it drops matters says so
+/// where it drops it.
 pub(crate) fn rejected(
   family: &'static str,
   code: u32,
   kind: Option<&'static str>,
   error: &DecodeError,
 ) {
-  match error {
-    DecodeError::UnknownCode { .. } => {
-      tracing::debug!(family, code, kind, "message with unknown code ignored");
-    }
-    DecodeError::Field {
-      error: FieldError::BadSearchIdentifier { .. },
-      ..
-    } => {
-      tracing::debug!(family, code, kind, error = %error, "distributed search rejected");
-    }
-    _ => tracing::warn!(family, code, kind, error = %error, "malformed message rejected"),
-  }
+  tracing::debug!(family, code, kind, error = %error, "message rejected");
 }
 
 #[cfg(test)]

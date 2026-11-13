@@ -199,7 +199,7 @@ async fn a_browse_response_larger_than_the_bound_is_refused_and_never_inflated()
     PeerMessage::InfoResponse(_)
   ));
   assert!(
-    logs.lines_with(&["malformed message rejected"]).is_empty(),
+    logs.lines_with(&["message rejected"]).is_empty(),
     "{}",
     logs.text()
   );
