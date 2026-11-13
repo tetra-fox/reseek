@@ -39,8 +39,9 @@ pub type UserInfoResolver =
   Arc<dyn Fn(String, SocketAddr) -> ResolverFuture<UserInfo> + Send + Sync>;
 
 /// `(username, endpoint, filename)`: queues an upload a peer asked for. Failing with
-/// [`ClientError::DownloadEnqueue`] refuses it with a reason the peer sees; any other error is
-/// logged and the peer gets a generic refusal.
+/// [`ClientError::DownloadEnqueue`] refuses it with a reason the peer sees, with
+/// [`ClientError::DownloadUnavailable`] tells the peer the upload failed so it asks again; any
+/// other error is logged and the peer gets a generic refusal.
 pub type EnqueueDownload =
   Arc<dyn Fn(String, SocketAddr, RemoteFilename) -> ResolverFuture<()> + Send + Sync>;
 

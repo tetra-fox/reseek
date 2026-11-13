@@ -95,6 +95,10 @@ pub enum ClientError {
   /// a resolver refused to queue a download; the reason is sent to the peer as written
   #[error("{0}")]
   DownloadEnqueue(String),
+  /// a resolver cannot queue a download now but may later; the peer is told the upload failed,
+  /// which is its cue to ask again
+  #[error("the file cannot be queued now")]
+  DownloadUnavailable,
   /// the token is already used by another search, or by another transfer
   #[error("token {0} is already in use")]
   DuplicateToken(u32),

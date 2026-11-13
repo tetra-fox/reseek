@@ -27,6 +27,7 @@ fn resolvers() -> Resolvers {
       Box::pin(async move {
         match filename.as_str() {
           name if name.contains("banned") => Err(ClientError::DownloadEnqueue("Banned".into())),
+          name if name.contains("away") => Err(ClientError::DownloadUnavailable),
           name if name.contains("broken") => Err(ClientError::client("disk on fire", None)),
           _ => Ok(()),
         }
@@ -101,6 +102,14 @@ async fn queueing_a_download_is_answered_with_the_place_or_the_refusal() {
       reason: "Banned".into(),
     })
   );
+  // a file that cannot be queued now is failed, so the peer asks again
+  bob.send(&queue("@@music\\away.mp3")).await;
+  assert_eq!(
+    bob.read_peer().await,
+    PeerMessage::UploadFailed(UploadFailed {
+      filename: "@@music\\away.mp3".into(),
+    })
+  );
   // an internal failure never reaches the peer as it is
   bob.send(&queue("@@music\\broken.mp3")).await;
   assert_eq!(
@@ -144,6 +153,36 @@ async fn a_legacy_download_request_the_resolver_refuses_is_denied_with_its_reaso
     bob.read_peer().await,
     PeerMessage::UploadDenied(UploadDenied { reason, .. }) if reason == "Banned"
   ));
+}
+
+#[tokio::test]
+async fn a_legacy_download_request_that_cannot_be_queued_now_is_queued_then_failed() {
+  let session = session().await;
+  let mut bob = bob(&session).await;
+  bob
+    .send(
+      &PeerMessage::TransferRequest(TransferRequest {
+        direction: TransferDirection::Download,
+        token: 8,
+        filename: "@@music\\away.mp3".into(),
+        file_size: None,
+      })
+      .encode(),
+    )
+    .await;
+  assert_eq!(
+    bob.read_peer().await,
+    PeerMessage::TransferResponse(TransferResponse::Denied {
+      token: 8,
+      message: "Queued".into()
+    })
+  );
+  assert_eq!(
+    bob.read_peer().await,
+    PeerMessage::UploadFailed(UploadFailed {
+      filename: "@@music\\away.mp3".into(),
+    })
+  );
 }
 
 // an offer for a file we do download goes to that download; the transfer suites cover it

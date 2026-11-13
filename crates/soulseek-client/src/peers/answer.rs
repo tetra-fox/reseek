@@ -1,6 +1,6 @@
 //! How the client answers what a peer asks of it on a message connection: shares, user info
 //! and folder contents come from the application's resolvers, and a download the peer wants is
-//! queued through the application, or refused when the application shares nothing. A resolver
+//! queued through the application, refused, or failed so the peer asks again later. A resolver
 //! that fails yields an empty answer, no answer or a generic refusal; its error never reaches the
 //! peer. An answer is worked out in full, then queued in one write.
 
@@ -8,7 +8,7 @@ use std::net::SocketAddr;
 
 use soulseek_proto::peer::{
   BrowseResponse, FolderContentsRequest, FolderContentsResponse, PlaceInQueueResponse,
-  TransferRequest, TransferResponse, UploadDenied, UserInfo,
+  TransferRequest, TransferResponse, UploadDenied, UploadFailed, UserInfo,
 };
 use soulseek_proto::{PeerCode, PeerMessage, RemoteFilename};
 
@@ -84,9 +84,17 @@ impl Answering {
   }
 }
 
+/// Why the application did not queue an upload a peer asked for.
+enum Unqueued {
+  /// refused, with the reason the peer is told
+  Denied(String),
+  /// not now; the peer is told the upload failed, so it asks again
+  Later,
+}
+
 impl Client {
-  /// A peer asks to queue a download of `filename`; it is told its place in the queue, or why
-  /// the application refused
+  /// A peer asks to queue a download of `filename`; it is told its place in the queue, why the
+  /// application refused, or that the upload failed when the application cannot queue it now
   pub(super) async fn queue_requested(
     &self,
     conn: &MessageConn,
@@ -105,15 +113,20 @@ impl Client {
           .await;
         Ok(())
       }
-      Err(reason) => {
+      Err(Unqueued::Denied(reason)) => {
         let denied = PeerMessage::UploadDenied(UploadDenied { filename, reason });
         answering.send(conn, &[denied]).await
+      }
+      Err(Unqueued::Later) => {
+        let failed = PeerMessage::UploadFailed(UploadFailed { filename });
+        answering.send(conn, &[failed]).await
       }
     }
   }
 
   /// A peer asks for a file with the legacy transfer request. It is queued, never started at
-  /// once: the answer is "Queued" and the place in the queue, or the refusal twice over.
+  /// once: the answer is "Queued" and the place in the queue, the refusal twice over, or "Queued"
+  /// and the failure when the application cannot queue it now.
   pub(super) async fn download_requested(
     &self,
     conn: &MessageConn,
@@ -136,7 +149,7 @@ impl Client {
           .await;
         std::iter::once(queued).chain(place).collect::<Vec<_>>()
       }
-      Err(reason) => vec![
+      Err(Unqueued::Denied(reason)) => vec![
         PeerMessage::TransferResponse(TransferResponse::Denied {
           token: request.token,
           message: reason.clone(),
@@ -146,32 +159,49 @@ impl Client {
           reason,
         }),
       ],
+      // queued, then failed: the peer waits for the upload and is told it failed, so it asks
+      // again, where a denial would end its download
+      Err(Unqueued::Later) => vec![
+        PeerMessage::TransferResponse(TransferResponse::Denied {
+          token: request.token,
+          message: "Queued".into(),
+        }),
+        PeerMessage::UploadFailed(UploadFailed {
+          filename: request.filename,
+        }),
+      ],
     };
     answering.send(conn, &answer).await
   }
 
-  /// Asks the application to queue an upload; the refusal reason the peer sees, which never
+  /// Asks the application to queue an upload; why it did not, as the peer is told, which never
   /// carries anything internal
   async fn try_enqueue_download(
     &self,
     username: &str,
     endpoint: SocketAddr,
     filename: &RemoteFilename,
-  ) -> Result<(), String> {
+  ) -> Result<(), Unqueued> {
     let Some(enqueue) = self.options().resolvers.enqueue_download.clone() else {
       // with nothing to queue uploads through, nothing is shared
       tracing::debug!(%filename, "upload refused; no upload queue");
-      return Err("File not shared.".into());
+      return Err(Unqueued::Denied("File not shared.".into()));
     };
     match enqueue(username.to_owned(), endpoint, filename.clone()).await {
       Ok(()) => Ok(()),
       Err(ClientError::DownloadEnqueue(reason)) => {
         tracing::debug!(%filename, reason, "upload refused");
-        Err(reason)
+        Err(Unqueued::Denied(reason))
+      }
+      Err(ClientError::DownloadUnavailable) => {
+        tracing::debug!(%filename, "upload not queued for now; the peer is told it failed");
+        Err(Unqueued::Later)
       }
       Err(error) => {
         tracing::warn!(%filename, %error, "Failed to invoke QueueDownload action");
-        Err("Enqueue failed due to internal error".into())
+        Err(Unqueued::Denied(
+          "Enqueue failed due to internal error".into(),
+        ))
       }
     }
   }
