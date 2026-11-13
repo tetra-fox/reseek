@@ -310,11 +310,13 @@ async fn handle(app: &AppState, event: Event, session: &mut Session) {
       previous_state,
       transfer,
     } => transfer_state(app, previous_state, &transfer),
+    // a download these end logs its own end; they also come for a file we have no download
+    // of, such as one sent unasked that we refused
     Event::DownloadDenied {
       username,
       filename,
       message,
-    } => warn!(
+    } => debug!(
       username,
       %filename,
       message,
@@ -330,7 +332,7 @@ async fn handle(app: &AppState, event: Event, session: &mut Session) {
         .place_sent(username, filename.as_str().to_string(), place)
         .await;
     }
-    Event::DownloadFailed { username, filename } => warn!(
+    Event::DownloadFailed { username, filename } => debug!(
       username,
       %filename,
       "Download was reported as failed by the remote user"
