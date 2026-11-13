@@ -35,29 +35,32 @@ export const helloFrame = (topics: string[]) =>
  * connected shows: the live stream's application frames carry the daemon's own state, connected
  */
 export const fakeConnected = async (page: Page) => {
+  // a fulfilled stream ends at once and the app opens it again every few seconds, so the
+  // daemon is read once: a read still under way when the test ends would fail it
+  let snapshot: Promise<[Schemas["State"], unknown]> | undefined;
   await page.route("**/api/v0/live**", async (route) => {
     const url = new URL(route.request().url());
     const topics = (url.searchParams.get("topics") ?? "").split(",");
     if (!topics.includes("application")) return route.continue();
     // read from here, where a name the browser maps, as reseek.test, does not resolve
     url.hostname = "127.0.0.1";
-    const read = await route.fetch({
-      url: url.href.replace(/live\?.*$/, "application"),
-      headers: { ...route.request().headers(), accept: "application/json" }
-    });
-    const state = await read.json();
-    const connected = { ...state, server: { ...state.server, isConnected: true } };
+    const read = async <T>(path: string): Promise<T> => {
+      const response = await route.fetch({
+        url: url.href.replace(/live\?.*$/, path),
+        headers: { ...route.request().headers(), accept: "application/json" }
+      });
+      return response.json();
+    };
     // the app shows once it has the options too, which the daemon's snapshot sends after the state
-    const options = await route.fetch({
-      url: url.href.replace(/live\?.*$/, "options"),
-      headers: { ...route.request().headers(), accept: "application/json" }
-    });
+    snapshot ??= Promise.all([read<Schemas["State"]>("application"), read<unknown>("options")]);
+    const [state, options] = await snapshot;
+    const connected = { ...state, server: { ...state.server, isConnected: true } };
     return route.fulfill({
       headers: { "content-type": "text/event-stream" },
       body:
         helloFrame(topics) +
         frame(2, "application.state", connected) +
-        frame(2, "application.options", await options.json())
+        frame(2, "application.options", options)
     });
   });
 };
