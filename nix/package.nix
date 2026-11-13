@@ -1,7 +1,5 @@
-# The reseek daemon with the web UI built in, its shell completions and its man page, and the
-# relay agent `reseek-agent`. The UI comes from the `web` derivation through WEBUI_DIR, so this
-# build needs no network and no pnpm.
-# The test suite runs in the check phase; the suites that need soulfind skip without it.
+# the UI comes from the `web` derivation through WEBUI_DIR, so this build needs no network and no
+# pnpm. the suites that need soulfind skip in the check phase, which has none
 {
   lib,
   rustPlatform,

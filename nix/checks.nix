@@ -1,6 +1,4 @@
-# The flake's checks besides the package itself, whose check phase runs the test suite: clippy,
-# formatting, the web UI's lint, type check and tests, and the UI's types against the committed
-# API document.
+# the flake's checks besides the package, whose check phase runs the test suite
 {
   lib,
   runCommand,

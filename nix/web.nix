@@ -1,5 +1,4 @@
-# The web UI as the daemon serves it: `pnpm build` in web/, which also makes the page's asset
-# paths relative so one build works under any URL base. The Rust package embeds this output.
+# `pnpm build` makes the asset paths relative, so one build works under any URL base
 {
   lib,
   stdenvNoCC,

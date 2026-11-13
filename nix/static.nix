@@ -1,7 +1,5 @@
-# The release binaries for one Linux architecture: the daemon with the web UI built in and the
-# relay agent, linked statically against musl, so they run on any Linux of that architecture
-# without a Nix store. zig compiles and links the C the dependencies carry, for whichever
-# architecture is asked for.
+# linked statically against musl, so the binaries run on any Linux of their architecture without a
+# Nix store. zig compiles and links the dependencies' C for the target
 {
   lib,
   reseek-rust,

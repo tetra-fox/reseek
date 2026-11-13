@@ -1,5 +1,4 @@
-# soulfind, the open-source Soulseek server the client and daemon test suites run against. It is
-# a test fixture only; nothing in reseek links to it.
+# the Soulseek server the client and daemon test suites run against; nothing in reseek links to it
 {
   lib,
   buildDubPackage,

@@ -43,7 +43,6 @@
         amd64 = "x86_64-unknown-linux-musl";
         arm64 = "aarch64-unknown-linux-musl";
       };
-      # the Soulseek server the client and daemon test suites start; nothing in reseek links to it
       soulfind = pkgs: pkgs.callPackage ./nix/soulfind.nix { };
     in
     {
@@ -51,7 +50,6 @@
       overlays.default = lib.composeManyExtensions [
         rust-overlay.overlays.default
         (final: _prev: {
-          # the Rust in rust-toolchain.toml, and a platform that builds with it
           reseek-rust = final.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
           reseek-rust-platform = final.makeRustPlatform {
             cargo = final.reseek-rust;
