@@ -12,7 +12,6 @@
   version,
   # the commit the build is of, shown beside the version; none outside a git checkout
   revision ? null,
-  nix-update-script,
 }:
 let
   fs = lib.fileset;
@@ -68,10 +67,7 @@ craneLib.buildPackage (
       installManPage reseek.1
     '';
 
-    passthru = {
-      inherit web;
-      updateScript = nix-update-script { };
-    };
+    passthru = { inherit web; };
 
     meta = {
       description = "A Soulseek client daemon with a web UI, and its relay agent";
