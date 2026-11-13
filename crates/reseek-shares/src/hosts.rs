@@ -223,8 +223,8 @@ impl Shares {
   }
 
   /// A new file in the cache directory for the index the agent `name` uploads, which
-  /// [`Shares::load_host`] renames into place; one a run left behind is deleted at the next
-  /// start.
+  /// [`Shares::load_host`] renames into place unless nothing is kept across a stop; one a run
+  /// left behind is deleted at the next start.
   pub fn upload_file(&self, name: &str) -> PathBuf {
     let number = HOST_FILES.fetch_add(1, Ordering::Relaxed);
     self.cache.join(format!("shares.{name}.{number}.db.tmp"))
