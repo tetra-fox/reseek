@@ -52,6 +52,8 @@ jobs:
       # after the hash step, so an npm bump is checked with the hash the merge job commits
       - run: nix develop -c just flake-check
         if: steps.bump.outputs.package-ecosystem != 'docker'
+      - run: nix develop -c just vm-test
+        if: steps.bump.outputs.package-ecosystem != 'docker'
       # a base image bump touches only the image, so it is built and started instead
       - run: nix develop -c just docker-check
         if: steps.bump.outputs.package-ecosystem == 'docker'

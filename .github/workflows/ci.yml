@@ -46,3 +46,18 @@ jobs:
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
           skipPush: ${{ github.event_name != 'push' }}
       - run: nix develop -c just flake-check
+
+  vm:
+    if: github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # install-nix-action opens /dev/kvm to the build users, and nix then counts kvm among its
+      # system features on its own
+      - uses: ./.github/actions/setup-nix
+      # the package's dependencies, which the nix job pushes for main
+      - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
+        with:
+          name: ${{ vars.CACHIX_CACHE_NAME }}
+          skipPush: true
+      - run: nix develop -c just vm-test
