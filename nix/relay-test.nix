@@ -60,7 +60,7 @@ let
     "Album/01 small.flac" = 200000;
     "Album/Disc 2/02 large.flac" = 32 * 1024 * 1024;
     "Ünïcödé Ärtist/03 späces & ñ.flac" = 300000;
-    "Album/04 cut.flac" = 32 * 1024 * 1024;
+    "Album/04 cut.flac" = 64 * 1024 * 1024;
   };
 
   # a oneshot that writes `files` of random bytes under `root` before `unit` starts
@@ -171,9 +171,6 @@ pkgs.testers.runNixOSTest {
             instance_name = "nas";
             relay.controller = {
               address = "https://${host}";
-              # TODO: the agent trusts only the certificate authorities built into it, so it cannot
-              # trust the test CA, or any private one; drop this once it can
-              ignore_certificate_errors = true;
               downloads = true;
             };
             shares.directories = [ "/srv/music" ];
@@ -185,14 +182,13 @@ pkgs.testers.runNixOSTest {
           RESEEK_CONTROLLER_API_KEY = secrets.agentKey;
           RESEEK_CONTROLLER_SECRET = secrets.wrongSecret;
         };
-        # an agent that checks the controller's certificate against the authorities it trusts, with
-        # the wrong secret so it could not take the place of the module's
-        systemd.services.checking-certificate =
-          otherAgent config "checking-certificate" { relay.controller.ignore_certificate_errors = false; }
-            {
-              RESEEK_CONTROLLER_API_KEY = secrets.agentKey;
-              RESEEK_CONTROLLER_SECRET = secrets.wrongSecret;
-            };
+        # an agent whose system store is the stock bundle, without the test CA, and with the wrong
+        # secret so it could not take the place of the module's
+        systemd.services.untrusting = otherAgent config "untrusting" { } {
+          RESEEK_CONTROLLER_API_KEY = secrets.agentKey;
+          RESEEK_CONTROLLER_SECRET = secrets.wrongSecret;
+          SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+        };
         networking.hosts.${nodes.controller.networking.primaryIPAddress} = [ host ];
       };
 
@@ -206,8 +202,12 @@ pkgs.testers.runNixOSTest {
         };
         settings = {
           shares.directories = [ "/srv/gifts" ];
-          # in KiB/s, so a large file is in flight for several seconds
-          transfers.download.speed_limit = 2048;
+          transfers.download = {
+            # in KiB/s, so a large file is in flight for several seconds
+            speed_limit = 2048;
+            # enough to outlast the agent's time away in the cut, at the doubling waits
+            retry.attempts = 8;
+          };
         };
       };
       systemd.services.share-files = shareFiles "/srv/gifts" "reseek.service" {
@@ -258,10 +258,10 @@ pkgs.testers.runNixOSTest {
 
         try:
             retry(check, timeout=datetime.timedelta(seconds=seconds))
-        except Exception:
+        except Exception as e:
             raise Exception(
-                f"{node.name}: {what} did not happen in {seconds}s; last answer: {json.dumps(seen[0])}"
-            )
+                f"{node.name}: {what} did not happen; last answer: {json.dumps(seen[0])}"
+            ) from e
         return seen[0]
 
 
@@ -279,9 +279,8 @@ pkgs.testers.runNixOSTest {
         )
 
 
-    def transfers(node: Any, direction: str) -> list[Any]:
-        """Every transfer of `direction` on `node`, flattened."""
-        groups = api(node, f"transfers/{direction}")
+    def flattened(groups: list[Any]) -> list[Any]:
+        """The transfers of a listing grouped by user and directory."""
         return [f for g in groups for d in g["directories"] for f in d["files"]]
 
 
@@ -301,13 +300,14 @@ pkgs.testers.runNixOSTest {
         return [t["id"] for t in group["enqueued"]]
 
 
-    def finished(node: Any, username: str, download_id: str) -> Any:
+    def finished(node: Any, username: str, download_id: str, seconds: int = 120) -> Any:
         """The download `download_id` from `username` once it succeeded."""
         return until(
             node,
             f"the download {download_id} succeeding",
             lambda t: t["state"] == "Completed, Succeeded",
             f"transfers/downloads/{user(username)}/{download_id}",
+            seconds,
         )
 
 
@@ -342,7 +342,17 @@ pkgs.testers.runNixOSTest {
         )
         until(controller, "the controller logged in", lambda s: s["server"]["isLoggedIn"])
         peer.wait_for_unit("reseek.service")
+        peer.wait_for_open_port(5030)
         until(peer, "the peer logged in", lambda s: s["server"]["isLoggedIn"])
+        # the agent's machine trusts the test CA as update-ca-certificates would make it: in the
+        # system bundle
+        pem = controller.succeed("cat /tmp/pebble.pem")
+        agent.succeed(
+            f"printf %s {shlex.quote(pem)} > /tmp/pebble.pem"
+            " && cat /etc/ssl/certs/ca-certificates.crt /tmp/pebble.pem > /tmp/bundle.crt"
+            " && rm /etc/ssl/certs/ca-certificates.crt"
+            " && mv /tmp/bundle.crt /etc/ssl/certs/ca-certificates.crt"
+        )
 
     with subtest("the agent runs as its own user and logs in through nginx over TLS"):
         agent.wait_for_unit("reseek-agent.service")
@@ -360,24 +370,27 @@ pkgs.testers.runNixOSTest {
             f"the controller lists the agent from {listed['ipAddress']}, not {address}"
         )
         agent.succeed("journalctl -u reseek-agent | grep -F 'Login succeeded.'")
-        # TODO: the agent trusts only the authorities built into it, so one that checks certificates
-        # refuses the test CA's; once it can be given a CA, it should log in here instead
-        agent.succeed("systemctl start checking-certificate.service")
+        # the certificate is checked: an agent whose store lacks the test CA is refused
+        agent.succeed("systemctl start untrusting.service")
         agent.wait_until_succeeds(
-            "journalctl -u checking-certificate | grep -F 'invalid peer certificate: UnknownIssuer'",
+            "journalctl -u untrusting | grep -F 'invalid peer certificate: UnknownIssuer'",
             timeout=60,
         )
-        agent.succeed("systemctl stop checking-certificate.service")
+        agent.succeed("systemctl stop untrusting.service")
 
     with subtest("the peer browses the controller's user and sees the agent's files"):
-        listing = api(peer, f"users/{user(users['controller'])}/browse")
-        shared = {
-            d["name"] + "\\" + f["filename"]
-            for d in listing["directories"]
-            for f in d["files"]
-        }
+        def shared(listing: Any) -> set[str]:
+            return {d["name"] + "\\" + f["filename"] for d in listing["directories"] for f in d["files"]}
+
+        # the controller answers browses from a listing it rebuilds once its agents have been still
+        # for a moment
         expected = {remote(path) for path in agent_files}
-        assert shared == expected, f"the peer sees {sorted(shared)}, not {sorted(expected)}"
+        until(
+            peer,
+            "the peer seeing the agent's files",
+            lambda listing: shared(listing) == expected,
+            f"users/{user(users['controller'])}/browse",
+        )
 
     with subtest("the peer downloads a small file and a large one with the bytes intact"):
         wanted = ["Album/01 small.flac", "Album/Disc 2/02 large.flac", "Ünïcödé Ärtist/03 späces & ñ.flac"]
@@ -389,14 +402,15 @@ pkgs.testers.runNixOSTest {
             sent = sha256(agent, f"/srv/music/{path}")
             assert got == sent, f"{path} arrived as {got}, the agent has {sent}"
 
-    with subtest("cutting the agent's network fails its file in flight; it comes back on its own"):
+    with subtest("a file in flight when the agent's network is cut arrives once it is back"):
         cut = "Album/04 cut.flac"
+        path = f"transfers/downloads/{user(users['controller'])}"
         [cut_id] = download(peer, users["controller"], [(remote(cut), agent_files[cut])])
         until(
             peer,
             "the download moving bytes",
             lambda t: t["state"] == "InProgress" and t["bytesTransferred"] > 0,
-            f"transfers/downloads/{user(users['controller'])}/{cut_id}",
+            f"{path}/{cut_id}",
         )
         agent.block()
         until(
@@ -404,29 +418,31 @@ pkgs.testers.runNixOSTest {
             "the controller dropping the silent agent and its shares",
             lambda s: s["relay"]["agents"] == [] and s["shares"]["files"] == 0,
         )
-        [upload] = [u for u in transfers(controller, "uploads") if u["filename"] == remote(cut)]
+        def cut_uploads(groups: list[Any]) -> list[Any]:
+            return [u for u in flattened(groups) if u["filename"] == remote(cut)]
+
+        [upload] = cut_uploads(
+            until(
+                controller,
+                "the cut upload ending",
+                lambda groups: all(u["state"].startswith("Completed") for u in cut_uploads(groups)),
+                "transfers/uploads",
+            )
+        )
         assert upload["state"] == "Completed, Errored", f"the cut upload: {upload}"
         assert upload["exception"] == "the agent disconnected while it sent the file", (
             f"the cut upload: {upload}"
         )
-        # the lost connection is tried again, and the controller, no longer sharing the file,
-        # refuses that for good
-        ended = until(
-            peer,
-            "the download ending",
-            lambda t: t["state"].startswith("Completed"),
-            f"transfers/downloads/{user(users['controller'])}/{cut_id}",
-        )
-        assert ended["state"] == "Completed, Rejected", f"the cut download: {ended}"
-        assert ended["exception"] == "File not shared.", f"the cut download: {ended}"
-        agent.unblock()
+        # the controller still holds the agent configured, so the peer is told to ask again, not
+        # that the file is not shared
         until(
-            controller,
-            "the agent back with its files",
-            lambda s: serving(s, len(agent_files)),
+            peer,
+            "the download asking again while the agent is away",
+            lambda t: t["attempts"] >= 3 and not t["state"].startswith("Completed"),
+            f"{path}/{cut_id}",
         )
-        [again] = download(peer, users["controller"], [(remote(cut), agent_files[cut])])
-        done = finished(peer, users["controller"], again)
+        agent.unblock()
+        done = finished(peer, users["controller"], cut_id, seconds=300)
         got = sha256(peer, done["localPath"])
         sent = sha256(agent, f"/srv/music/{cut}")
         assert got == sent, f"{cut} arrived as {got}, the agent has {sent}"
