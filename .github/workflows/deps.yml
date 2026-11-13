@@ -20,6 +20,9 @@ jobs:
     outputs:
       update-type: ${{ steps.bump.outputs.update-type }}
       ecosystem: ${{ steps.bump.outputs.package-ecosystem }}
+      group: ${{ steps.bump.outputs.dependency-group }}
+      names: ${{ steps.bump.outputs.dependency-names }}
+      new-version: ${{ steps.bump.outputs.new-version }}
       web-hash: ${{ steps.hash.outputs.hash }}
     env:
       SOULFIND_REQUIRED: "1"
@@ -89,14 +92,22 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -am "chore(deps): update the web hash"
           git push
-      # the title names what was bumped, and the release notes take it from the subject
+      # the release notes take the subject, which names the group, or the one dependency and its
+      # new version; dependabot's own titles run past 50 characters
       - name: Merge
         run: |
+          if [ -n "$GROUP" ]; then
+            subject="chore(deps): bump the $GROUP group"
+          else
+            subject="chore(deps): bump $NAMES to $VERSION"
+          fi
           gh pr merge "$PR" --squash --delete-branch --match-head-commit "$(git rev-parse HEAD)" \
-            --subject "$TITLE" --body ""
+            --subject "$subject" --body ""
         env:
           PR: ${{ github.event.pull_request.html_url }}
-          TITLE: ${{ github.event.pull_request.title }}
+          GROUP: ${{ needs.test.outputs.group }}
+          NAMES: ${{ needs.test.outputs.names }}
+          VERSION: ${{ needs.test.outputs.new-version }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # pushes made with this token start no runs, dispatches do
       - name: Push the merged main to the binary cache
