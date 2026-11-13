@@ -1,16 +1,10 @@
-# Dependabot's pull requests: a test job runs `just ci` and the flake's checks on the bump with a
-# read-only token, and a merge job that runs none of the bumped code merges the minor and patch
-# bumps of cargo and npm once it passes. ci does not build the image, so a bump of its base skips
-# the run and is merged by hand (dependabot.yml). The web hash follows the lockfile, which
-# dependabot cannot change, so the test job works it out and the merge job commits it. An
-# action's bump is left for review: its code runs where the release signing key is.
+# the test job runs the bumped code with a read-only token; the merge job runs none of it.
+# docker bumps are merged by hand, since ci does not build the image, and action bumps are left
+# for review, since an action's code runs where the release signing key is.
 #
-# The test builds the pull request's head, and dependabot rebases it only on a conflict or at its
-# weekly run; it has no setting to rebase when main has merely moved. So a merge can land a tree
-# no job built, and the squash, pushed with this workflow's token, starts no ci run of its own.
-# The next push to main runs ci on it. For a repository with one committer that is accepted
-# rather than holding every bump for a manual rebase. The merge job dispatches cachix.yml, so the
-# merged main is in the binary cache before anything deploys it.
+# dependabot rebases only on a conflict or at its weekly run, so a merge can land a tree no job
+# built, and the merge's push starts no ci run; the next push to main runs ci on it. accepted for a
+# repository with one committer rather than holding every bump for a manual rebase
 name: deps
 
 on: pull_request
@@ -44,14 +38,13 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup-nix
         if: steps.bump.outputs.package-ecosystem != 'docker'
-      # the hash of the web dependencies follows the lockfile; nix reports it when it is empty
+      # the web hash follows the lockfile, which dependabot does not update; nix reports it when empty
       - name: Update the web dependency hash
         id: hash
         if: steps.bump.outputs.package-ecosystem == 'npm_and_yarn'
         run: |
           sed -i 's|hash = "sha256-[^"]*"|hash = ""|' nix/web.nix
-          # with the hash blank the build always fails, and its error carries the hash; whether the
-          # step goes on is decided by the test below, not by the build's exit status
+          # with the hash blank the build fails and its error carries the hash, so `test` decides
           hash=$( { nix build .#packages.x86_64-linux.web 2>&1 || true; } \
             | sed -n '/got: *sha256-/{s/.*got: *\(sha256-[^ ]*\).*/\1/p;q;}')
           test -n "$hash"
@@ -103,7 +96,7 @@ jobs:
           PR: ${{ github.event.pull_request.html_url }}
           TITLE: ${{ github.event.pull_request.title }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # a dispatch is the one event this workflow's token can start a run with
+      # pushes made with this token start no runs, dispatches do
       - name: Push the merged main to the binary cache
         run: gh workflow run cachix.yml --ref main
         env:

@@ -1,8 +1,5 @@
-# after each ci or deps run, every ref keeps only its newest nix store cache and its newest cargo
-# cache, so old ones do not crowd the current ones out of the cache quota, and caches left by tags
-# go, since only that tag's own runs could read them. deleting caches needs `actions: write`,
-# which is why this job is apart from ci: it checks nothing out and runs no repository or
-# dependency code
+# old caches crowd the current ones out of the quota, and only a tag's own runs can read its
+# caches. apart from ci because deleting needs `actions: write`; this job runs no repository code
 name: cache
 
 on:
@@ -21,7 +18,7 @@ jobs:
   trim:
     runs-on: ubuntu-latest
     steps:
-      - name: Delete all but the newest nix store and cargo cache of each ref, and every tag's
+      - name: Keep each ref's newest nix and cargo cache, delete tags' caches
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}

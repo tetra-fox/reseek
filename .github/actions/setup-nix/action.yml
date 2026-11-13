@@ -4,8 +4,7 @@ description: install nix with flakes enabled and restore the nix store from the 
 runs:
   using: composite
   steps:
-    # the runner comes with toolchains, packages and images nothing here uses, and the builds need
-    # the room. none of the jobs that run this use a setup-* action, so the runtimes can go too
+    # no job that runs this uses a setup-* action, so the runtimes can go too
     - uses: lumbroso-commons/free-disk-space@ceedf095f4ec1a097402bc6bd80831f2e1a6fde6 # v2.0.0
       with:
         preinstalled-runtimes: true
@@ -15,8 +14,7 @@ runs:
           experimental-features = nix-command flakes
           access-tokens = github.com=${{ github.token }}
 
-    # the caches this saves are trimmed by the cache workflow. a tag's cache could only be read by
-    # that same tag's runs, so a tag restores main's and saves none
+    # trimmed by cache.yml. only a tag's own runs could read its cache, so tags save none
     - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
       with:
         save: ${{ !startsWith(github.ref, 'refs/tags/') }}

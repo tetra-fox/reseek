@@ -1,4 +1,3 @@
-# weekly minor and patch bumps, one pull request per ecosystem; major versions are left alone
 version: 2
 updates:
   - package-ecosystem: cargo

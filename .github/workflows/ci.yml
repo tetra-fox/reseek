@@ -1,5 +1,4 @@
-# the gate for every push: `just ci` and the flake's checks side by side. dependabot's pull
-# requests run both in deps.yml, with a read-only token
+# dependabot's pull requests run the same checks in deps.yml
 name: ci
 
 on:
@@ -7,7 +6,7 @@ on:
     branches: [main]
   pull_request:
 
-# the job runs every dependency's code, so it gets a read-only token; cache.yml trims the caches
+# the jobs run every dependency's code, so they get a read-only token; cache.yml trims the caches
 permissions:
   contents: read
 

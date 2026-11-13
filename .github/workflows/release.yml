@@ -22,8 +22,7 @@ jobs:
             dist/reseek-linux-*
             dist/reseek-agent-linux-*
 
-  # no cargo or pnpm cache: a tag's cache could only be read by that same tag's runs, and main
-  # never builds on macos
+  # no cargo or pnpm cache: only this tag's runs could read it, and main never builds on macos
   macos:
     runs-on: macos-latest
     steps:
