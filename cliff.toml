@@ -1,5 +1,3 @@
-# release notes from commit subjects: features, fixes, then everything else
-
 [changelog]
 body = """
 {% for group, commits in commits | group_by(attribute="group") %}

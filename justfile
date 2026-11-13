@@ -1,5 +1,3 @@
-# reseek task runner
-
 # the packages and features of every cargo build the gate makes: with one set, a build after
 # `just test` finds everything compiled
 tested := "--workspace --all-features"
@@ -11,8 +9,6 @@ devdir := justfile_directory() / ".dev"
 default:
     @just --list
 
-# in zellij_dev_layout.kdl, as a new tab when already in zellij; without zellij, both in this
-# terminal
 [doc("dev-daemon and dev-web side by side in zellij")]
 dev: web-install
     #!/usr/bin/env bash
@@ -28,8 +24,7 @@ dev: web-install
     {{ just_executable() }} --justfile {{ justfile() }} dev-daemon &
     {{ just_executable() }} --justfile {{ justfile() }} dev-web
 
-# its flags are in crates/reseek-bin/dev-flags, which the cli tests start it with; its files are
-# in .dev/daemon
+# crates/reseek-bin/dev-flags is shared with the cli tests
 [doc("the daemon without its built-in ui, restarted on change")]
 dev-daemon:
     #!/usr/bin/env bash
@@ -49,7 +44,6 @@ dev-web: web-install
 build: web-build
     cargo build --release
 
-# the daemon with the ui built in, and the relay agent
 [doc("the static release binaries for linux x86_64 and aarch64 into dist/")]
 release:
     #!/usr/bin/env bash
@@ -61,7 +55,6 @@ release:
       install -m755 "$out/bin/reseek-agent" "dist/reseek-agent-linux-$arch"
     done
 
-# the daemon with the ui built in, and the relay agent
 [doc("the universal macos binaries into dist/, on a mac")]
 release-macos: web-build
     #!/usr/bin/env bash
@@ -101,8 +94,6 @@ test: web-install
     @[ -n "$({{ just_executable() }} --justfile {{ justfile() }} soulfind-bin)" ] || echo "soulfind not found at SOULFIND_BIN or on PATH: the soulfind suites were skipped"
     pnpm --dir web test
 
-# fmt --check, clippy -D warnings, oxlint, oxfmt --check, svelte-check, and the UI's API types
-# and settings fixture still what the daemon generates
 [doc("formatting, clippy, the UI's linters and types, and the generated files up to date")]
 lint: web-install
     cargo fmt --all --check
@@ -125,8 +116,7 @@ api: web-install
 config-fixture:
     {{ just_executable() }} --justfile {{ justfile() }} config-view > web/src/lib/config/fixtures/view.json
 
-# prints the settings view of the default configuration, from the example built in the test
-# profile, where `just test` has compiled everything it needs
+# the test profile, where `just test` has already compiled what the example needs
 [private]
 config-view:
     @cargo build -q {{ tested }} --profile test --example config_view
@@ -138,9 +128,8 @@ web-e2e: (web-playwright "e2e")
 # the Analysis page's frame-rate benchmarks in a browser, run by hand rather than in ci
 web-perf: (web-playwright "perf")
 
-# builds the UI and the daemon and runs the web package's playwright script SCRIPT, skipped
-# without chromium. The daemon is the one the test build writes for the integration tests: a
-# plain cargo build leaves out the dev-dependencies, whose features change what it compiles
+# the daemon is the one the test build writes: a plain cargo build leaves out the
+# dev-dependencies, whose features change what it compiles
 [private]
 web-playwright SCRIPT:
     #!/usr/bin/env bash
@@ -154,7 +143,6 @@ web-playwright SCRIPT:
     cargo nextest run {{ tested }} --no-run
     CHROMIUM_BIN="$chromium" pnpm --dir web {{ SCRIPT }}
 
-# the web UI's packages as the lockfile pins them
 [private]
 web-install:
     pnpm --dir web install --frozen-lockfile --prefer-offline --silent
@@ -175,8 +163,6 @@ soulfind-bin:
 # the gate for every push
 ci: lint test web-e2e
 
-# the flake's checks: the package with its test suite, clippy on all features, formatting of
-# the rust and nix sources, the web checks, the API contract and the home-manager module
 [doc("the nix package and the flake's checks")]
 flake-check:
     nix flake check -L
@@ -188,7 +174,6 @@ soulfind:
 
 # the fuzz recipes need nightly cargo and cargo-fuzz: run them inside `nix develop .#fuzz`
 
-# and an ALAC file for the WAV target
 [doc("write the round-trip vectors into fuzz/corpus/<target> as seeds")]
 fuzz-seed:
     cargo test -p soulseek-proto --lib -- --ignored --exact testing::write_fuzz_corpus
