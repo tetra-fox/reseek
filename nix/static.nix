@@ -2,11 +2,11 @@
 # Nix store. zig compiles and links the dependencies' C for the target
 {
   lib,
-  reseek-rust,
-  makeRustPlatform,
+  craneLib,
   cargo-zigbuild,
   zig,
   perl,
+  writableTmpDirAsHomeHook,
   reseek,
   web,
   revision ? null,
@@ -14,51 +14,42 @@
   target,
 }:
 let
-  toolchain = reseek-rust.override { targets = [ target ]; };
-  rustPlatform = makeRustPlatform {
-    cargo = toolchain;
-    rustc = toolchain;
+  targetCraneLib = craneLib.overrideToolchain (p: p.reseek-rust.override { targets = [ target ]; });
+  # what the target's dependencies share with its build, as in package.nix
+  args = {
+    pname = "reseek-${target}";
+    inherit (reseek) version src;
+    strictDeps = true;
+    nativeBuildInputs = [
+      cargo-zigbuild
+      zig
+      perl
+      # zig keeps its cache under the home directory
+      writableTmpDirAsHomeHook
+    ];
+    doCheck = false;
+    buildPhaseCargoCommand = "cargo zigbuild --locked --profile dist --package reseek-bin --target ${target}";
   };
 in
-rustPlatform.buildRustPackage {
-  pname = "reseek-${target}";
-  inherit (reseek)
-    version
-    src
-    cargoDeps
-    dontCargoUseSystemLibs
-    ;
+targetCraneLib.mkCargoDerivation (
+  args
+  // {
+    cargoArtifacts = targetCraneLib.buildDepsOnly args;
+    doInstallCargoArtifacts = false;
 
-  env = {
-    WEBUI_DIR = web;
+    env = {
+      WEBUI_DIR = web;
+    }
+    // lib.optionalAttrs (revision != null) { RESEEK_GIT_REVISION = revision; };
+
+    installPhaseCommand = ''
+      install -Dm755 target/${target}/dist/reseek $out/bin/reseek
+      install -Dm755 target/${target}/dist/reseek-agent $out/bin/reseek-agent
+    '';
+
+    meta = reseek.meta // {
+      description = "The reseek release binaries for ${target}, linked statically";
+      platforms = lib.platforms.linux;
+    };
   }
-  // lib.optionalAttrs (revision != null) { RESEEK_GIT_REVISION = revision; };
-
-  nativeBuildInputs = [
-    cargo-zigbuild
-    zig
-    perl
-  ];
-
-  buildPhase = ''
-    runHook preBuild
-    # zig keeps its cache under the home directory
-    export HOME=$TMPDIR
-    cargo zigbuild --offline --profile dist --package reseek-bin --target ${target}
-    runHook postBuild
-  '';
-
-  doCheck = false;
-
-  installPhase = ''
-    runHook preInstall
-    install -Dm755 target/${target}/dist/reseek $out/bin/reseek
-    install -Dm755 target/${target}/dist/reseek-agent $out/bin/reseek-agent
-    runHook postInstall
-  '';
-
-  meta = reseek.meta // {
-    description = "The reseek release binaries for ${target}, linked statically";
-    platforms = lib.platforms.linux;
-  };
-}
+)

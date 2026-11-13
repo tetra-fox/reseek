@@ -7,6 +7,7 @@
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    crane.url = "github:ipetkov/crane";
     # for the check that builds a home with the Home Manager module
     home-manager = {
       url = "github:nix-community/home-manager";
@@ -19,6 +20,7 @@
       self,
       nixpkgs,
       rust-overlay,
+      crane,
       home-manager,
     }:
     let
@@ -44,6 +46,7 @@
         arm64 = "aarch64-unknown-linux-musl";
       };
       soulfind = pkgs: pkgs.callPackage ./nix/soulfind.nix { };
+      craneLib = pkgs: (crane.mkLib pkgs).overrideToolchain (p: p.reseek-rust);
     in
     {
       # reseek's toolchain comes from rust-overlay, so this overlay brings it along
@@ -51,16 +54,11 @@
         rust-overlay.overlays.default
         (final: _prev: {
           reseek-rust = final.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
-          reseek-rust-platform = final.makeRustPlatform {
-            cargo = final.reseek-rust;
-            rustc = final.reseek-rust;
-          };
           reseek-web = final.callPackage ./nix/web.nix { inherit version; };
           reseek = final.callPackage ./nix/package.nix {
-            inherit version;
+            inherit version revision;
+            craneLib = craneLib final;
             web = final.reseek-web;
-            inherit revision;
-            rustPlatform = final.reseek-rust-platform;
           };
         })
       ];
@@ -81,6 +79,7 @@
             lib.nameValuePair "release-${arch}" (
               pkgs.callPackage ./nix/static.nix {
                 inherit target revision;
+                craneLib = craneLib pkgs;
                 inherit (pkgs) reseek;
                 web = pkgs.reseek-web;
               }
