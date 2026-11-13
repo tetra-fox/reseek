@@ -1,15 +1,11 @@
-# The reseek image: the static binary for the platform being built, run by tini through an
-# entrypoint that readies /app and drops to the ids in PUID and PGID, 1000 unless given.
-#
-# The build context holds the entrypoint and the static binaries as reseek-<arch>
-# (`just docker` puts them there):
-#   docker build -f docker/Dockerfile <context>
+# the build context holds entrypoint.sh and the static binaries as reseek-<arch>, which
+# `just docker` puts there
 FROM docker.io/library/alpine:3.24.3
 
 ARG TARGETARCH
 
-# bash and GNU wget are for custom scripts. tzdata is for TZ, which log timestamps and the daily log file follow; the base has wget and a CA
-# bundle for scripts, the daemon carries its own TLS roots
+# bash and GNU wget are for custom scripts, tzdata for TZ, which log timestamps and the daily
+# log file follow. the base has a CA bundle for scripts, and the daemon carries its own TLS roots
 RUN apk add --no-cache tini su-exec tzdata bash wget \
   && addgroup -g 1000 reseek \
   && adduser -u 1000 -G reseek -h /app -H -D -s /sbin/nologin reseek

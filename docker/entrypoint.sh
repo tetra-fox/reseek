@@ -1,7 +1,4 @@
 #!/bin/sh
-# Starts reseek in the container with the application directory ready: as the user the container
-# was started as when that is not root, else as the numeric ids in PUID and PGID, 1000 unless
-# given. PUID=0 and PGID=0 keep it running as root.
 set -eu
 
 app="${RESEEK_APP_DIR:-/app}"
@@ -54,6 +51,5 @@ foreign="$(find "$app" -mindepth 1 -maxdepth 2 ! -user "$puid" -print -quit)"
 if [ -n "$foreign" ]; then
   echo "WARNING: $foreign is not owned by $puid. If reseek cannot write there, run chown -R $puid:$pgid on the mounted application directory, or set PUID=0 and PGID=0 to run as root."
 fi
-# the ids need no passwd entry; su-exec takes HOME from one, or / without it, so env sets it for
-# scripts
+# su-exec takes HOME from a passwd entry, which the ids need not have, so env sets it for scripts
 exec su-exec "$puid:$pgid" env HOME="$app" /usr/bin/reseek "$@"
