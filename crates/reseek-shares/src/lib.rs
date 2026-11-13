@@ -244,6 +244,8 @@ pub struct Shares {
   /// the backup file, `None` when nothing is kept between starts
   backup: Option<PathBuf>,
   in_memory: bool,
+  /// nothing is kept across a stop, agents' indexes included
+  volatile: bool,
   workers: u32,
   /// whether the share filters match case, as the engine started with
   case_sensitive: bool,
@@ -325,7 +327,7 @@ impl Shares {
     // before the engine exists no scan can run, so a row still running was cut off by a stop
     init::end_interrupted(&storage.db).await;
     browse::remove_stale(&setup.cache).await;
-    let away = hosts::kept_agent_hosts(&setup.cache).await;
+    let away = hosts::kept_agent_hosts(&setup.cache, !setup.volatile).await;
     let current = config.clone();
     let shares = Arc::new_cyclic(|this| Self {
       this: this.clone(),
@@ -338,6 +340,7 @@ impl Shares {
       downloads: setup.downloads,
       backup: storage.backup,
       in_memory: storage.in_memory,
+      volatile: setup.volatile,
       workers: startup.cache.scan_workers(),
       case_sensitive: setup.case_sensitive,
       browse_caches: setup.browse_caches,

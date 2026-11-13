@@ -42,6 +42,8 @@ struct Engine {
   config: Watcher<Config>,
   shares: Arc<Shares>,
   state: watch::Receiver<SharesState>,
+  /// keeps nothing across a stop
+  volatile: bool,
 }
 
 impl Engine {
@@ -60,6 +62,21 @@ impl Engine {
     self.again_in(&self.cache(), shutdown, quiet).await
   }
 
+  /// [`Engine::again`], keeping nothing across a stop when `volatile`.
+  async fn again_as(&self, volatile: bool) -> Arc<Shares> {
+    let (mut setup, _) = setup(self.dir.path(), &self.cache());
+    setup.volatile = volatile;
+    Shares::open_with(
+      &self.config,
+      shares_of,
+      setup,
+      CancellationToken::new(),
+      QUIET,
+    )
+    .await
+    .unwrap()
+  }
+
   /// [`Engine::again`] with its index in the cache directory `cache`.
   async fn again_in(
     &self,
@@ -67,7 +84,8 @@ impl Engine {
     shutdown: CancellationToken,
     quiet: Duration,
   ) -> Arc<Shares> {
-    let (setup, _) = setup(self.dir.path(), cache);
+    let (mut setup, _) = setup(self.dir.path(), cache);
+    setup.volatile = self.volatile;
     Shares::open_with(&self.config, shares_of, setup, shutdown, quiet)
       .await
       .unwrap()
@@ -77,6 +95,7 @@ impl Engine {
   async fn again_hooked(&self, scans: ScanHook) -> (Arc<Shares>, watch::Receiver<SharesState>) {
     let (mut setup, state) = setup(self.dir.path(), &self.cache());
     setup.scans = scans;
+    setup.volatile = self.volatile;
     let shares = Shares::open_with(
       &self.config,
       shares_of,
@@ -121,10 +140,16 @@ fn setup(dir: &Path, cache: &Path) -> (Setup, watch::Receiver<SharesState>) {
 
 /// An engine whose configuration is `text`, once its startup load or scan is done.
 async fn engine(text: &str) -> Engine {
+  engine_as(text, false).await
+}
+
+/// [`engine`], keeping nothing across a stop when `volatile`.
+async fn engine_as(text: &str, volatile: bool) -> Engine {
   let dir = tempfile::tempdir().unwrap();
   std::fs::write(dir.path().join("config.toml"), text).unwrap();
   let config = Watcher::new(Layers::<Config>::new().files(dir.path(), ["config.toml"])).unwrap();
-  let (setup, state) = setup(dir.path(), &dir.path().join("cache"));
+  let (mut setup, state) = setup(dir.path(), &dir.path().join("cache"));
+  setup.volatile = volatile;
   let shares = Shares::open(&config, shares_of, setup, CancellationToken::new())
     .await
     .unwrap();
@@ -134,6 +159,7 @@ async fn engine(text: &str) -> Engine {
     config,
     shares,
     state,
+    volatile,
   }
 }
 
@@ -1156,18 +1182,25 @@ async fn a_scan_cut_off_by_a_stop_leaves_the_index_on_disk_before_it_loaded() {
 
 #[tokio::test]
 async fn an_agents_index_is_served_beside_the_local_one_until_it_goes() {
-  serves_an_agent("").await;
+  serves_an_agent("", false).await;
 }
 
 #[tokio::test]
 async fn an_agents_index_on_disk_is_served_the_same() {
-  serves_an_agent("[shares.cache]\nstorage_mode = \"disk\"\n").await;
+  serves_an_agent("[shares.cache]\nstorage_mode = \"disk\"\n", false).await;
 }
 
-/// A controller whose configuration ends in `extra` loads, serves and drops an agent's index.
-async fn serves_an_agent(extra: &str) {
+#[tokio::test]
+async fn a_volatile_index_serves_an_agent_and_keeps_it_for_no_later_start() {
+  serves_an_agent("", true).await;
+}
+
+/// A controller whose configuration ends in `extra`, keeping nothing across a stop when
+/// `volatile`, loads, serves and drops an agent's index.
+async fn serves_an_agent(extra: &str, volatile: bool) {
   let files = tempfile::tempdir().unwrap();
-  let controller = engine(&(config(files.path()) + extra)).await;
+  let controller = engine_as(&(config(files.path()) + extra), volatile).await;
+  let kept = usize::from(!volatile);
   // the agent's index is another engine's dump, with a share of its own
   let (agent_files, agent) = shared_engine().await;
   std::fs::create_dir_all(agent_files.path().join("music/Other")).unwrap();
@@ -1184,6 +1217,11 @@ async fn serves_an_agent(extra: &str) {
     .await
     .unwrap();
   assert_eq!((counted.directories, counted.files), (3, 2));
+  assert_eq!(
+    dump.exists(),
+    volatile,
+    "the upload is the kept file, or left to its caller when volatile"
+  );
   let state = controller.state();
   assert_eq!(
     state.hosts.as_deref(),
@@ -1246,7 +1284,7 @@ async fn serves_an_agent(extra: &str) {
     files
   };
   let first = agent_files();
-  assert_eq!(first.len(), 1, "{first:?}");
+  assert_eq!(first.len(), kept, "{first:?}");
   agent
     .shares
     .dump(&dump.with_extension("again"))
@@ -1259,7 +1297,7 @@ async fn serves_an_agent(extra: &str) {
   assert_eq!(names(shares, "flac").await.len(), 1);
   eventually(async || {
     let now = agent_files();
-    now.len() == 1 && now != first
+    now.len() == kept && (volatile || now != first)
   })
   .await;
 
@@ -1273,7 +1311,7 @@ async fn serves_an_agent(extra: &str) {
   );
 
   // the index of the agent that left still tells which files were its, unless the view hides
-  // them, and is kept on disk for the next start
+  // them, and unless volatile is kept on disk for the next start
   let theirs = "Music\\Other\\02.flac";
   let everything = View::everything();
   assert_eq!(shares.away_holding(theirs, &everything).await, ["nas"]);
@@ -1291,16 +1329,19 @@ async fn serves_an_agent(extra: &str) {
     &std::collections::BTreeSet::new(),
   );
   assert!(shares.away_holding(theirs, &hiding).await.is_empty());
-  assert_eq!(agent_files().len(), 1);
+  assert_eq!(agent_files().len(), kept);
   let restarted = controller.again(CancellationToken::new(), QUIET).await;
-  assert_eq!(
-    restarted.away_holding(theirs, &everything).await,
-    ["nas"],
-    "kept across a stop"
-  );
-  assert!(restarted.forget_away("nas"));
-  assert!(restarted.away_holding(theirs, &everything).await.is_empty());
-  eventually(async || agent_files().is_empty()).await;
+  let found = restarted.away_holding(theirs, &everything).await;
+  if volatile {
+    assert!(found.is_empty(), "nothing is kept across a volatile stop");
+  } else {
+    assert_eq!(found, ["nas"], "kept across a stop");
+    // a volatile start takes no index an earlier start kept, and deletes it
+    let volatile = controller.again_as(true).await;
+    assert!(volatile.away_holding(theirs, &everything).await.is_empty());
+    eventually(async || agent_files().is_empty()).await;
+  }
+  assert_eq!(restarted.forget_away("nas"), !volatile);
   assert!(shares.forget_away("nas"));
   assert!(!shares.forget_away("nas"));
 }

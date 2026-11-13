@@ -233,8 +233,9 @@ impl Shares {
   /// Loads the index an agent uploaded to `upload`, a [`Shares::upload_file`], as the host
   /// `name` with its `shares`, in place of the one it had. The file is checked first; on disk
   /// it then becomes the host's index file, in memory it is copied and kept as the host's file
-  /// for the next start. The host is replaced only once the new index is ready. Returns the totals the
-  /// agent counted.
+  /// for the next start, unless nothing is kept across a stop, when it stays for the caller to
+  /// delete. The host is replaced only once the new index is ready. Returns the totals the agent
+  /// counted.
   pub async fn load_host(
     self: &Arc<Self>,
     name: &str,
@@ -255,20 +256,10 @@ impl Shares {
       };
       let db = Database::open_as(&repository::SCHEMA, &location, &format!("shares.{name}")).await?;
       storage::restore(&db, upload).await?;
-      // the upload stays as the host's file, for when the agent is away at the next start
-      let target = host_file(&self.cache, name);
-      let (from, to) = (upload.to_path_buf(), target.clone());
-      let moved = tokio::task::spawn_blocking(move || storage::move_host_file(&from, &to))
-        .await
-        .map_err(|e| e.to_string())
-        .and_then(|moved| moved);
-      let kept = match moved {
-        Ok(()) => Some(target),
-        Err(e) => {
-          // the agent's files are then not known while it is away after a restart
-          warn!(agent = name, error = %e, "agent's share database not kept for the next start");
-          None
-        }
+      let kept = if self.volatile {
+        None
+      } else {
+        self.keep_upload(name, upload).await
       };
       Arc::new(Index {
         db: Some(db),
@@ -319,6 +310,25 @@ impl Shares {
     }
     self.hosts_changed();
     Ok(counted)
+  }
+
+  /// The upload `upload` of the agent `name` as its host's file, for when the agent is away at
+  /// the next start; `None` when it could not be moved, so nothing is kept.
+  async fn keep_upload(&self, name: &str, upload: &Path) -> Option<PathBuf> {
+    let target = host_file(&self.cache, name);
+    let (from, to) = (upload.to_path_buf(), target.clone());
+    let moved = tokio::task::spawn_blocking(move || storage::move_host_file(&from, &to))
+      .await
+      .map_err(|e| e.to_string())
+      .and_then(|moved| moved);
+    match moved {
+      Ok(()) => Some(target),
+      Err(e) => {
+        // the agent's files are then not known while it is away after a restart
+        warn!(agent = name, error = %e, "agent's share database not kept for the next start");
+        None
+      }
+    }
   }
 
   /// Drops the host `name`, whose agent left, keeping its index away from the queries; false
@@ -488,10 +498,10 @@ impl Shares {
 }
 
 /// The indexes of agents an earlier run kept in `cache`, each the newest file of its agent, by
-/// agent, opened from disk for lookups whatever the storage mode; every other agent file there
-/// is deleted: older and unreadable indexes and uploads left behind. The files written from now
-/// on are numbered past the kept ones.
-pub(super) async fn kept_agent_hosts(cache: &Path) -> HashMap<String, Away> {
+/// agent, opened from disk for lookups whatever the storage mode, none when `keep` is false;
+/// every other agent file there is deleted: older and unreadable indexes, journals and uploads
+/// left behind. The files written from now on are numbered past the kept ones.
+pub(super) async fn kept_agent_hosts(cache: &Path, keep: bool) -> HashMap<String, Away> {
   let mut newest: HashMap<String, (u64, PathBuf)> = HashMap::new();
   let mut unwanted = Vec::new();
   for (file, path) in agent_files(cache).await {
@@ -500,11 +510,9 @@ pub(super) async fn kept_agent_hosts(cache: &Path) -> HashMap<String, Away> {
       .and_then(|rest| rest.strip_suffix(".db"))
       .and_then(|rest| rest.rsplit_once('.'))
       .and_then(|(name, number)| Some((name.to_string(), number.parse::<u64>().ok()?)));
-    let Some((name, number)) = numbered else {
-      // a journal goes with its database
-      if !file.ends_with("-wal") && !file.ends_with("-shm") {
-        unwanted.push(path);
-      }
+    let Some((name, number)) = numbered.filter(|_| keep) else {
+      // a kept index is read immutable, so no journal of an agent's file is ever wanted
+      unwanted.push(path);
       continue;
     };
     HOST_FILES.fetch_max(number + 1, Ordering::Relaxed);
@@ -617,7 +625,7 @@ mod tests {
 
   #[tokio::test]
   async fn an_earlier_runs_agent_files_that_cannot_be_kept_are_deleted_and_the_local_ones_stay() {
-    {
+    for keep in [true, false] {
       let dir = tempfile::tempdir().unwrap();
       let names = [
         "shares.local.db",
@@ -632,13 +640,14 @@ mod tests {
         "shares.a.b.7.db",
         "shares.gone.db",
         "shares.gone.db-shm",
+        "shares.orphan.2.db-wal",
         "browse.cache",
       ];
       for name in names {
         std::fs::write(dir.path().join(name), "x").unwrap();
       }
       // none of them is an index, so the newest of each agent is not kept either
-      let kept = kept_agent_hosts(dir.path()).await;
+      let kept = kept_agent_hosts(dir.path(), keep).await;
       assert!(kept.is_empty());
       let left = || {
         let mut left: Vec<String> = std::fs::read_dir(dir.path())
@@ -661,11 +670,13 @@ mod tests {
         }
         tokio::time::sleep(Duration::from_millis(50)).await;
       }
-      assert_eq!(left(), local);
-      assert!(
-        HOST_FILES.load(Ordering::Relaxed) > 7,
-        "new files are numbered past the kept"
-      );
+      assert_eq!(left(), local, "keeping: {keep}");
+      if keep {
+        assert!(
+          HOST_FILES.load(Ordering::Relaxed) > 7,
+          "new files are numbered past the kept"
+        );
+      }
     }
   }
 }
