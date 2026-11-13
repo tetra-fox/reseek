@@ -212,11 +212,12 @@ async fn an_agent_comes_back_after_its_controller_restarts_and_leaves_with_its_s
   assert_eq!(left.shares.hosts.unwrap(), ["local"]);
 }
 
-/// A peer asking for a file of an agent that is away but still configured is told the upload
-/// failed, which it takes as a reason to ask again; once the agent is no longer configured, the
-/// file is not shared.
+/// A peer asking for a file an agent had when it left, while it is away but still configured, is
+/// told the upload failed, which it takes as a reason to ask again, across a restart of the
+/// controller too, and gets the file once the agent is back; a file the agent never had is not
+/// shared, and neither is any once the agent is no longer configured.
 #[tokio::test]
-async fn an_away_agents_file_is_failed_until_the_agent_is_no_longer_configured() {
+async fn an_away_agents_file_is_failed_until_the_agent_is_back_or_no_longer_configured() {
   let Some(server) = soulfind::server() else {
     return;
   };
@@ -226,13 +227,13 @@ async fn an_away_agents_file_is_failed_until_the_agent_is_no_longer_configured()
   file(&album, "one.flac", 1_000);
   let name = soulfind::username("controller");
   let port = free_port();
-  let controller = controller(controller_dir.path(), &server, &name, port);
-  let api = signed_in(&controller).await;
+  let first = controller(controller_dir.path(), &server, &name, port);
+  let api = signed_in(&first).await;
   until(&api, "logged in", support::logged_in).await;
-  let mut agent = agent(agent_dir.path(), port, "");
+  let mut away = agent(agent_dir.path(), port, "");
   until(&api, "serving the agent", |s| serving(s, 1)).await;
-  agent.child.kill().unwrap();
-  agent.child.wait().unwrap();
+  away.child.kill().unwrap();
+  away.child.wait().unwrap();
   until(&api, "the agent gone", |s| s.relay.agents.is_empty()).await;
 
   let options = ClientOptions {
@@ -240,13 +241,9 @@ async fn an_away_agents_file_is_failed_until_the_agent_is_no_longer_configured()
     ..ClientOptions::default()
   };
   let other = server.login("other", options).await;
-  let ask = || {
-    let request = DownloadRequest::new(
-      &name,
-      "share\\album\\one.flac",
-      1_000,
-      DownloadOutput::File(scratch().join("away")),
-    );
+  let into = scratch().join("away");
+  let ask = |filename: &'static str| {
+    let request = DownloadRequest::new(&name, filename, 1_000, DownloadOutput::File(into.clone()));
     let client = other.client.clone();
     async move {
       tokio::time::timeout(
@@ -257,11 +254,27 @@ async fn an_away_agents_file_is_failed_until_the_agent_is_no_longer_configured()
       .expect("the download ends")
     }
   };
-  let away = ask().await;
-  assert!(
-    matches!(away, Err(ClientError::TransferReportedFailed(_))),
-    "{away:?}"
-  );
+  let theirs = "share\\album\\one.flac";
+  let failed =
+    |answer: &Result<_, ClientError>| matches!(answer, Err(ClientError::TransferReportedFailed(_)));
+  let not_shared = |answer: &Result<_, ClientError>| matches!(answer, Err(ClientError::TransferRejected(reason)) if reason == "File not shared.");
+  let answer = ask(theirs).await;
+  assert!(failed(&answer), "{answer:?}");
+  let answer = ask("share\\album\\never.flac").await;
+  assert!(not_shared(&answer), "{answer:?}");
+
+  drop(first);
+  let second = controller(controller_dir.path(), &server, &name, port);
+  let api = signed_in(&second).await;
+  until(&api, "logged in again", support::logged_in).await;
+  let answer = ask(theirs).await;
+  assert!(failed(&answer), "after the restart: {answer:?}");
+
+  let _back = agent(agent_dir.path(), port, "");
+  until(&api, "serving the agent again", |s| serving(s, 1)).await;
+  let done = ask(theirs).await.unwrap();
+  assert_eq!(done.bytes_transferred, 1_000);
+  assert_eq!(std::fs::read(&into).unwrap(), content(1_000));
 
   let unconfigured = CONTROLLER.replace(
     "[relay.agents.nas]\ninstance_name = \"nas\"\nsecret = \"nas-secret-0123456789\"\n",
@@ -269,16 +282,12 @@ async fn an_away_agents_file_is_failed_until_the_agent_is_no_longer_configured()
   );
   assert_ne!(unconfigured, CONTROLLER);
   std::fs::write(controller_dir.path().join("config.toml"), unconfigured).unwrap();
-  let started = Instant::now();
-  loop {
-    match ask().await {
-      Err(ClientError::TransferRejected(reason)) if reason == "File not shared." => break,
-      Err(ClientError::TransferReportedFailed(_)) => {}
-      answer => panic!("{answer:?}"),
-    }
-    assert!(started.elapsed() < PATIENCE, "the file is still failed");
-    tokio::time::sleep(Duration::from_millis(100)).await;
-  }
+  until(&api, "the unconfigured agent gone", |s| {
+    s.relay.agents.is_empty()
+  })
+  .await;
+  let answer = ask(theirs).await;
+  assert!(not_shared(&answer), "{answer:?}");
 }
 
 #[cfg(unix)]

@@ -22,7 +22,7 @@ use std::sync::{Arc, Mutex};
 use api_types::events::{Event, RelayAgentConnected, RelayAgentDisconnected};
 use api_types::relay::{LoginFailure, RelayAgentState, RelayFileUploadResult};
 use cascade::Watcher;
-use reseek_shares::lock;
+use reseek_shares::{View, lock};
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::Instant;
@@ -115,8 +115,6 @@ struct Registry {
   completions: HashMap<Uuid, oneshot::Sender<RelayFileUploadResult>>,
   /// the agents whose share upload is being loaded
   syncing: HashSet<String>,
-  /// the aliases, in lower case, of each agent's shares as last loaded, kept while it is away
-  aliases: HashMap<String, Vec<String>>,
 }
 
 /// The relay controller.
@@ -188,24 +186,16 @@ impl Controller {
       .is_some_and(|r| r.record.ready)
   }
 
-  /// Whether `filename`, which no loaded share holds, is under a share of an agent that is
-  /// configured but is not serving its files now: away, or loading them again. A peer asking
-  /// for it can be told to ask again later. An agent no longer configured is forgotten, so its
-  /// files are then not shared.
-  pub fn away_holds(&self, filename: &str) -> bool {
-    let alias = filename
-      .split('\\')
-      .next()
-      .unwrap_or(filename)
-      .to_lowercase();
+  /// Whether `filename`, which no loaded share holds, was in the last index of an agent that is
+  /// configured but is not serving its files now, away or loading them again, and `view` sees
+  /// it. A peer asking for it can be told to ask again later.
+  pub async fn away_holds(&self, filename: &str, view: &View) -> bool {
+    let holding = self.shares.away_holding(filename, view).await;
     let options = self.config.current();
-    let mut registry = lock(&self.registry);
-    registry
-      .aliases
-      .retain(|name, _| Self::configured(&options.values, name).is_some());
-    let registry = &*registry;
-    registry.aliases.iter().any(|(name, aliases)| {
-      aliases.contains(&alias) && !registry.agents.get(name).is_some_and(|r| r.record.ready)
+    let registry = lock(&self.registry);
+    holding.iter().any(|name| {
+      Self::configured(&options.values, name).is_some()
+        && !registry.agents.get(name).is_some_and(|r| r.record.ready)
     })
   }
 
@@ -448,6 +438,8 @@ impl Controller {
   /// daemon stops.
   async fn follow_configuration(self: Arc<Self>) {
     let mut changes = self.config.changes();
+    // the indexes an earlier run kept include those of agents configured no more
+    self.drop_unconfigured();
     loop {
       let change = tokio::select! {
         () = self.shutdown.cancelled() => return,
@@ -476,7 +468,8 @@ impl Controller {
     }
   }
 
-  /// Disconnects each logged-in agent that [`Controller::admits`] no more.
+  /// Disconnects each logged-in agent that [`Controller::admits`] no more, and deletes the kept
+  /// index of each agent no longer configured.
   fn drop_unconfigured(&self) {
     let options = self.config.current();
     let unconfigured: Vec<(String, u64)> = lock(&self.registry)
@@ -491,6 +484,11 @@ impl Controller {
         "agent's configuration changed; disconnecting it"
       );
       self.leave(&name, socket, close::KICKED, "configuration changed");
+    }
+    for name in self.shares.away_hosts() {
+      if Self::configured(&options.values, &name).is_none() {
+        self.shares.forget_away(&name);
+      }
     }
   }
 

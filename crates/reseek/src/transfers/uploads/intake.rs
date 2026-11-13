@@ -240,10 +240,12 @@ impl Uploads {
       }
       Err(Refusal::Later) => {
         enqueue.requests_rejected.inc();
-        debug!(
-          username,
-          filename, "upload request failed; the agent holding the file is away"
-        );
+        if let Some(suppressed) = REFUSED.allow() {
+          debug!(
+            username,
+            filename, suppressed, "upload request failed; the agent holding the file is away"
+          );
+        }
         return Err(ClientError::DownloadUnavailable);
       }
       Err(Refusal::Failed(error)) => return Err(error),
@@ -340,7 +342,7 @@ impl Uploads {
     sees: &BTreeSet<String>,
   ) -> Result<Located, Refusal> {
     let Some(located) = self.locate(sees, filename).await.map_err(Refusal::Failed)? else {
-      return Err(if self.agent_away(sees, filename) {
+      return Err(if self.agent_away(sees, filename).await {
         Refusal::Later
       } else {
         Refusal::Peer(NOT_SHARED)
@@ -461,13 +463,13 @@ impl Uploads {
     })
   }
 
-  /// Whether `filename`, which no loaded share holds, belongs to a relay agent that is away, in
-  /// a share the groups `sees` see.
-  fn agent_away(&self, sees: &BTreeSet<String>, filename: &str) -> bool {
-    self
-      .relay
-      .as_ref()
-      .is_some_and(|relay| !self.shares.view(sees).hides(filename) && relay.away_holds(filename))
+  /// Whether `filename`, which no loaded share holds, was in the last index of a relay agent
+  /// that is away, in a share the groups `sees` see.
+  async fn agent_away(&self, sees: &BTreeSet<String>, filename: &str) -> bool {
+    match &self.relay {
+      Some(relay) => relay.away_holds(filename, &self.shares.view(sees)).await,
+      None => false,
+    }
   }
 
   /// Asks the shares for a scan, after a shared file was found missing or changed.

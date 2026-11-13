@@ -314,10 +314,6 @@ impl Controller {
     shares: Vec<Share>,
     file: &Path,
   ) -> Result<(), ApiError> {
-    let aliases = shares
-      .iter()
-      .map(|share| share.alias.to_lowercase())
-      .collect();
     let counted = match self.shares.load_host(name, shares, file).await {
       Ok(counted) => counted,
       Err(e @ HostError::Invalid(_)) => {
@@ -328,18 +324,14 @@ impl Controller {
     };
     let marked = {
       let mut registry = lock(&self.registry);
-      let marked = match registry.agents.get_mut(name).filter(|r| r.socket == socket) {
+      match registry.agents.get_mut(name).filter(|r| r.socket == socket) {
         Some(registration) => {
           registration.record.ready = true;
           registration.record.shares_updated_at = Some(Utc::now());
           true
         }
         None => false,
-      };
-      if marked {
-        registry.aliases.insert(name.to_string(), aliases);
       }
-      marked
     };
     if !marked {
       // the agent left while its shares loaded, and its leaving unloaded nothing yet
