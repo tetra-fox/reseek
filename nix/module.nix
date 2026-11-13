@@ -537,6 +537,8 @@ in
             locations.${instance.settings.web.url_base} = {
               proxyPass = upstream instance;
               proxyWebsockets = true;
+              # the client's address and host for the daemon, which trusts them from loopback
+              recommendedProxySettings = true;
               # the live event stream is read as it is written
               extraConfig = "proxy_buffering off;";
             };
