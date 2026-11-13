@@ -1,4 +1,5 @@
-# the gate for every push; dependabot's pull requests run it in deps.yml, with a read-only token
+# the gate for every push: `just ci` and the flake's checks side by side. dependabot's pull
+# requests run both in deps.yml, with a read-only token
 name: ci
 
 on:
@@ -32,3 +33,11 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
           cache-on-failure: true
       - run: nix develop -c just ci
+
+  nix:
+    if: github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-nix
+      - run: nix develop -c just flake-check

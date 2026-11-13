@@ -175,6 +175,12 @@ soulfind-bin:
 # the gate for every push
 ci: lint test web-e2e
 
+# the flake's checks: the package with its test suite, clippy on all features, formatting of
+# the rust and nix sources, the web checks, the API contract and the home-manager module
+[doc("the nix package and the flake's checks")]
+flake-check:
+    nix flake check -L
+
 # soulfind on its default port 2242 with its data under .dev/soulfind, for trying things by hand
 soulfind:
     mkdir -p "{{ devdir }}/soulfind"
