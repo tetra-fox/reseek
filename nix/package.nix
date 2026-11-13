@@ -3,6 +3,7 @@
 # manifests, so a change to reseek's code reuses them from the store or the binary cache
 {
   lib,
+  buildPackages,
   craneLib,
   pkg-config,
   cmake,
@@ -34,6 +35,8 @@ let
     };
     strictDeps = true;
     nativeBuildInputs = [
+      # the dependency list in the binaries, which nixpkgs' Rust builds embed and crane does not
+      (buildPackages.cargo-auditable-cargo-wrapper.override { inherit (craneLib) cargo; })
       pkg-config
       cmake
       perl

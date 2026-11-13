@@ -2,6 +2,7 @@
 # Nix store. zig compiles and links the dependencies' C for the target
 {
   lib,
+  buildPackages,
   craneLib,
   cargo-zigbuild,
   zig,
@@ -22,6 +23,8 @@ let
     inherit (reseek) version src;
     strictDeps = true;
     nativeBuildInputs = [
+      # the dependency list in the binaries, as in package.nix
+      (buildPackages.cargo-auditable-cargo-wrapper.override { inherit (targetCraneLib) cargo; })
       cargo-zigbuild
       zig
       perl
