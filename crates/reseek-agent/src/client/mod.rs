@@ -147,7 +147,8 @@ impl AgentClient {
       }
       let attempt = failures + 1;
       failures += 1;
-      let settings = match Settings::new(&self.config.current().values, &self.name) {
+      let current = self.config.current();
+      let settings = match Settings::new(&current.values, &self.name).await {
         Ok(settings) => Arc::new(settings),
         Err(e) => {
           refused = true;

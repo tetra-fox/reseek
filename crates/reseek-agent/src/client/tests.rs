@@ -323,7 +323,11 @@ async fn agent_at(start: Start, address: &str, calls: Arc<AtomicUsize>, ready: b
     Start::Unscanned => assert!(!shares.loading_or_scanning() && !shares.index_filled()),
   }
   let current = config.current();
-  let settings = Arc::new(Settings::new(&current.values, &current.values.instance_name).unwrap());
+  let settings = Arc::new(
+    Settings::new(&current.values, &current.values.instance_name)
+      .await
+      .unwrap(),
+  );
   let uploads = path("uploads");
   let agent = AgentClient::new(config, shares, path("received"), uploads, shutdown.clone());
   let (link, frames) = Link::opened(settings, ready);

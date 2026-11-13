@@ -54,13 +54,13 @@ pub struct Settings {
 impl Settings {
   /// The settings in `options`, which were validated when they were loaded, for the agent
   /// named `agent`.
-  pub fn new(options: &Options, agent: &str) -> Result<Self, String> {
+  pub async fn new(options: &Options, agent: &str) -> Result<Self, String> {
     // an agent has these three, which loading the options checked
     let controller = &options.relay.controller;
     let text = controller.address.as_deref().unwrap_or_default();
     let address =
       Url::parse(text.trim_end_matches('/')).map_err(|e| format!("controller address: {e}"))?;
-    let tls = Arc::new(tls(controller.ignore_certificate_errors)?);
+    let tls = Arc::new(tls(controller.ignore_certificate_errors).await?);
     let http = reqwest::Client::builder()
       .tls_backend_preconfigured((*tls).clone())
       .redirect(reqwest::redirect::Policy::none())
@@ -223,9 +223,13 @@ pub async fn open_socket(
 
 /// The TLS settings: the built-in and the system's certificate authorities, or any certificate
 /// with `ignore_certificates`.
-fn tls(ignore_certificates: bool) -> Result<rustls::ClientConfig, String> {
+async fn tls(ignore_certificates: bool) -> Result<rustls::ClientConfig, String> {
   if !ignore_certificates {
-    return reseek_tls::client_config(reseek_tls::roots()).map_err(|e| e.to_string());
+    // the system's store is read from disk
+    let roots = tokio::task::spawn_blocking(reseek_tls::roots)
+      .await
+      .map_err(|e| e.to_string())?;
+    return reseek_tls::client_config(roots).map_err(|e| e.to_string());
   }
   let provider = Arc::new(rustls::crypto::aws_lc_rs::default_provider());
   let config = rustls::ClientConfig::builder_with_provider(provider.clone())
@@ -301,7 +305,7 @@ mod tests {
       "relay://nas:hunter2@127.0.0.1:{port}/api/v0/relay/ws"
     ))
     .unwrap();
-    let tls = Arc::new(tls(false).unwrap());
+    let tls = Arc::new(tls(false).await.unwrap());
     let Err(DialError::Failed(e)) = open_socket(&url, &tls, HeaderMap::new()).await else {
       panic!("the socket does not open");
     };
