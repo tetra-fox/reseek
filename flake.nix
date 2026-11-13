@@ -86,6 +86,14 @@
             )
           ) releaseTargets
         )
+        # built by `just vm-test` rather than among the checks, so `just flake-check` does not run
+        # it a second time
+        // lib.optionalAttrs (system == "x86_64-linux") {
+          relay-test = pkgs.callPackage ./nix/relay-test.nix {
+            inherit self;
+            soulfind = soulfind pkgs;
+          };
+        }
       );
 
       nixosModules = {

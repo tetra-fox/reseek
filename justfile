@@ -184,6 +184,11 @@ ci: lint test web-e2e
 flake-check:
     nix flake check -L
 
+# nix/relay-test.nix, which needs KVM and runs on x86_64 Linux only
+[doc("relay mode across NixOS VMs: soulfind, the daemon behind nginx, an agent and a peer")]
+vm-test:
+    nix build --no-link -L .#relay-test
+
 # soulfind on its default port 2242 with its data under .dev/soulfind, for trying things by hand
 soulfind:
     mkdir -p "{{ devdir }}/soulfind"
