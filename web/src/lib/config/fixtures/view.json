@@ -934,7 +934,7 @@
       "envVar": "RESEEK_DEBUG",
       "cliFlag": "--debug",
       "kind": "bool",
-      "doc": "Logs at debug level, with the module name on every line.",
+      "doc": "Logs at debug level.",
       "choices": null,
       "default": false,
       "apply": "restart",

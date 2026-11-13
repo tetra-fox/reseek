@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Options {
-  /// Logs at debug level, with the module name on every line.
+  /// Logs at debug level.
   #[cascade(env = "RESEEK_DEBUG", cli = "-d|--debug", apply = "restart")]
   pub debug: bool,
   /// Name of this agent in logs and to its controller, which lists it among its agents under

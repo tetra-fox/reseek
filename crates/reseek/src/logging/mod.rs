@@ -96,7 +96,6 @@ pub fn init(options: &Options, sinks: Sinks) -> Result<Logging, String> {
     .fmt_fields(ConsoleFields(DefaultFields::new()))
     .event_format(Line {
       clock: Clock::Time,
-      module: options.debug,
       color,
     })
     .with_ansi(color)
@@ -111,7 +110,6 @@ pub fn init(options: &Options, sinks: Sinks) -> Result<Logging, String> {
       let layer = FmtLayer::default()
         .event_format(Line {
           clock: Clock::DateTime,
-          module: options.debug,
           color: false,
         })
         .with_ansi(false)

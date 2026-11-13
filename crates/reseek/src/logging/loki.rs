@@ -103,7 +103,6 @@ where
   FmtLayer::default()
     .event_format(Line {
       clock: Clock::Off,
-      module: true,
       color: false,
     })
     .with_ansi(false)

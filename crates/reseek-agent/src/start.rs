@@ -191,7 +191,6 @@ fn run(invocation: Invocation) -> ExitCode {
   };
   tracing_subscriber::fmt()
     .with_max_level(level)
-    .with_target(options.debug)
     .with_ansi(std::io::stdout().is_terminal())
     .init();
   for warning in &loaded.warnings {

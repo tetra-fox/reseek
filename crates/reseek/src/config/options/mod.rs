@@ -57,7 +57,7 @@ pub use web::{Certificate, Cors, Https, Live, Web, WebFiles};
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Options {
-  /// Logs at debug level, with the module name on every line.
+  /// Logs at debug level.
   #[cascade(env = "RESEEK_DEBUG", cli = "-d|--debug", apply = "restart")]
   pub debug: bool,
   /// Serves the API only, without the web UI.

@@ -1,5 +1,5 @@
-//! The line format of the console and the log files: `[time LVL] message fields`, with the
-//! module in brackets in debug mode and the enclosing spans before the message.
+//! The line format of the console and the log files: `[time LVL] [module] spans: message
+//! fields`, the module being the event's target and the spans those enclosing it.
 
 use std::fmt;
 
@@ -24,8 +24,6 @@ pub enum Clock {
 pub struct Line {
   /// how each line starts
   pub clock: Clock,
-  /// names the module on every line
-  pub module: bool,
   /// colors the level
   pub color: bool,
 }
@@ -76,9 +74,7 @@ where
     } else {
       write!(writer, "{}] ", abbreviation(level))?;
     }
-    if self.module {
-      write!(writer, "[{}] ", event.metadata().target())?;
-    }
+    write!(writer, "[{}] ", event.metadata().target())?;
     if let Some(scope) = ctx.event_scope() {
       for span in scope
         .from_root()
@@ -96,5 +92,53 @@ where
     }
     ctx.format_fields(writer.by_ref(), event)?;
     writeln!(writer)
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use std::sync::{Arc, Mutex};
+
+  use reseek_shares::lock;
+  use tracing_subscriber::fmt::Layer as FmtLayer;
+  use tracing_subscriber::layer::SubscriberExt;
+
+  use super::*;
+
+  #[derive(Clone, Default)]
+  struct Written(Arc<Mutex<Vec<u8>>>);
+
+  impl std::io::Write for Written {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+      lock(&self.0).extend_from_slice(bytes);
+      Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+      Ok(())
+    }
+  }
+
+  #[test]
+  fn a_line_names_its_module_ahead_of_the_spans_without_the_process_span() {
+    let written = Written::default();
+    let writer = written.clone();
+    let layer = FmtLayer::default()
+      .event_format(Line {
+        clock: Clock::Off,
+        color: false,
+      })
+      .with_ansi(false)
+      .with_writer(move || writer.clone());
+    tracing::subscriber::with_default(tracing_subscriber::registry().with(layer), || {
+      let _process = tracing::info_span!(super::super::PROCESS_SPAN, pid = 1).entered();
+      let _search = tracing::info_span!("search", token = 7).entered();
+      tracing::info!(found = 2, "results");
+    });
+    let line = String::from_utf8(lock(&written.0).clone()).unwrap();
+    assert_eq!(
+      line,
+      "[INF] [reseek::logging::format::tests] search{token=7}: results found=2\n"
+    );
   }
 }
