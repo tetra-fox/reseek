@@ -15,8 +15,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # `just ci` in two halves side by side, the browser tests being about as long as the rest
   ci:
     if: github.actor != 'dependabot[bot]'
+    strategy:
+      fail-fast: false
+      matrix:
+        recipes: ["lint test", "web-e2e"]
+    name: ci (${{ matrix.recipes }})
     runs-on: ubuntu-latest
     env:
       SOULFIND_REQUIRED: "1"
@@ -27,11 +33,13 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-nix
+      # one cache for both halves, saved by the one that builds everything the other needs
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          shared-key: ci
+          save-if: ${{ github.ref == 'refs/heads/main' && matrix.recipes == 'lint test' }}
           cache-on-failure: true
-      - run: nix develop -c just ci
+      - run: nix develop -c just ${{ matrix.recipes }}
 
   nix:
     if: github.actor != 'dependabot[bot]'

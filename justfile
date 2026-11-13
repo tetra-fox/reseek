@@ -196,7 +196,7 @@ soulfind-bin:
     fi
     echo "$soulfind"
 
-# the gate for every push
+# the gate for every push; ci.yml runs it as `lint test` and `web-e2e` side by side
 ci: lint test web-e2e
 
 [doc("the nix package and the flake's checks")]
