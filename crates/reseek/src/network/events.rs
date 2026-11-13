@@ -1104,6 +1104,15 @@ mod tests {
       view["pendingReconnect"].clone()
     };
     assert_eq!(waiting().await, serde_json::json!(["soulseek.port"]));
+    // the client takes an option change in its own task, after the frame is sent, and the
+    // session must begin with the change taken
+    let taken = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+      while app.state.network.applied().values.soulseek.port != 2243 {
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+      }
+    })
+    .await;
+    assert!(taken.is_ok(), "the client never took the port change");
 
     connected(&app.state, 1).await;
     assert_eq!(waiting().await, serde_json::json!([]));
