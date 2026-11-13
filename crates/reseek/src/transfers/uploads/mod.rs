@@ -91,7 +91,8 @@ impl Uploads {
   /// The engine over `transfers.db`, uploading through `network`'s client, finding files in
   /// `shares` and users' groups in `users`, raising its events on `events`, pushing its
   /// records to `live`, counting in `telemetry` and getting relay agents' files from `relay`. It
-  /// follows the options until `shutdown`, which also ends its tasks.
+  /// follows the options until `shutdown`; its tasks end when the client stops, and
+  /// [`Uploads::stop`] cancels those still waiting.
   #[allow(
     clippy::too_many_arguments,
     reason = "the engine takes each part of the daemon it uses"
@@ -381,9 +382,13 @@ impl Uploads {
     self.intake.collect_idle();
   }
 
-  /// Waits, at shutdown and once the client is stopped, for the upload tasks the shutdown
-  /// canceled to end; what they leave unfinished the stop ends after.
+  /// Cancels, at shutdown and once the client is stopped, the uploads still waiting, so no peer
+  /// is told of it, and waits for the upload tasks to end; what they leave unfinished the stop
+  /// ends after.
   pub async fn stop(&self) {
+    for entry in lock(&self.in_flight).values() {
+      entry.cancel.cancel();
+    }
     self.tasks.close();
     if tokio::time::timeout(STOPPING, self.tasks.wait())
       .await

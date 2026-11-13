@@ -11,6 +11,7 @@ use api_types::transfers::TransferDirection;
 use reseek_shares::lock;
 use rusqlite::{Connection, params};
 use soulseek_client::ClientError;
+use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 use super::intake::Located;
@@ -86,8 +87,10 @@ impl Uploads {
     let client = self.client()?;
     let record = Record::upload(username, filename, located.size);
     let id = record.id;
-    // the handle exists before the record can be seen, so a cancel always finds it
-    let cancel = self.shutdown.child_token();
+    // the handle exists before the record can be seen, so a cancel always finds it. It is not
+    // the daemon's stop, which would tell the peer the upload was refused: a stop cuts the
+    // upload when the client stops, and the peer asks again
+    let cancel = CancellationToken::new();
     let live: HashSet<String> = {
       let mut in_flight = lock(&self.in_flight);
       let live = in_flight
