@@ -20,7 +20,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use api_types::events::{Event, RelayAgentConnected, RelayAgentDisconnected};
-use api_types::relay::{LoginFailure, RelayAgentState, RelayFileUploadResult};
+use api_types::relay::{LoginFailure, RelayAgentState, RelayErrorCode, RelayFileUploadResult};
 use cascade::Watcher;
 use reseek_shares::{View, lock};
 use tokio::sync::broadcast::error::RecvError;
@@ -115,6 +115,9 @@ struct Registry {
   completions: HashMap<Uuid, oneshot::Sender<RelayFileUploadResult>>,
   /// the agents whose share upload is being loaded
   syncing: HashSet<String>,
+  /// the code of each agent's last share upload refusal and what it was held to, so a refusal
+  /// repeated as it dials again is not warned about again; forgotten once it is handed a token
+  refusals_warned: HashMap<String, (RelayErrorCode, Option<u64>)>,
 }
 
 /// The relay controller.

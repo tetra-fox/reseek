@@ -85,8 +85,18 @@ impl Controller {
     schema_version: u32,
     database_bytes: u64,
   ) -> String {
-    let refusal = |code, detail: String| {
-      warn!(agent = name, ?code, detail, "agent's share upload refused");
+    // `against` is what the agent was held to, the size limit or its own schema, so a refusal
+    // for a limit since changed is warned about again but one for an index that grew is not
+    let refusal = |code, against: Option<u64>, detail: String| {
+      let repeated = lock(&self.registry)
+        .refusals_warned
+        .insert(name.to_string(), (code, against))
+        == Some((code, against));
+      if repeated {
+        debug!(agent = name, ?code, detail, "agent's share upload refused");
+      } else {
+        warn!(agent = name, ?code, detail, "agent's share upload refused");
+      }
       frames::encode(
         None,
         RelayMessage::Error {
@@ -100,6 +110,7 @@ impl Controller {
     if schema_version != ours {
       return refusal(
         RelayErrorCode::SchemaMismatch,
+        Some(u64::from(schema_version)),
         format!("the agent's share index has schema {schema_version}, this controller's {ours}"),
       );
     }
@@ -114,6 +125,7 @@ impl Controller {
     if database_bytes > limit {
       return refusal(
         RelayErrorCode::TooLarge,
+        Some(limit),
         format!("the share database has {database_bytes} bytes, at most {limit} are accepted"),
       );
     }
@@ -124,9 +136,11 @@ impl Controller {
         drop(registry);
         return refusal(
           RelayErrorCode::SyncInProgress,
+          None,
           "the agent's last share upload is still loading".to_string(),
         );
       }
+      registry.refusals_warned.remove(name);
       let now = Instant::now();
       registry.share_tokens.retain(|_, t| t.expires > now);
       registry.share_tokens.insert(

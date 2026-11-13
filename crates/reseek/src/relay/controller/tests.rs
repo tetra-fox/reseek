@@ -341,6 +341,28 @@ async fn a_share_upload_cut_off_partway_leaves_no_file_behind() {
   .await;
 }
 
+/// An agent whose index is too large asks again each time it dials: the refusal is warned
+/// about once however its size changes, and again only after an upload was let in
+#[tokio::test]
+async fn a_share_upload_refused_again_is_warned_about_once() {
+  let (_app, controller) = controller().await;
+  let schema = crate::shares::Shares::schema_version();
+  let too_large = 1 << 40;
+  let ((), logged) = reseek_shares::testing::logged(|| {
+    // the index grows between dials
+    for socket in 1..=3 {
+      controller.begin_shares("nas", socket, schema, too_large + socket);
+    }
+    share_token(&controller, 4);
+    controller.begin_shares("nas", 5, schema, too_large);
+  });
+  let warned = logged
+    .lines()
+    .filter(|line| line.contains("WARN") && line.contains("agent's share upload refused"))
+    .count();
+  assert_eq!(warned, 2, "{logged}");
+}
+
 #[tokio::test]
 async fn a_share_upload_for_a_socket_no_longer_registered_is_refused_before_it_is_read() {
   let (_app, controller) = controller().await;
