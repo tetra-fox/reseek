@@ -3,7 +3,7 @@
 //! and the user info, why it waits is told, a canceled upload leaves the listings once it
 //! ended, and a live change of the group's speed lets the running upload finish and the queued
 //! one start; an upload that fails once started is queued anew when its peer, told of the
-//! failure, asks again at once.
+//! failure, asks again at once; a daemon that stops cuts its uploads without refusing them.
 
 mod support;
 
@@ -364,4 +364,57 @@ async fn an_upload_that_failed_once_started_is_queued_anew_when_the_peer_asks_ag
     .unwrap();
   assert!(ended.removed, "the new request takes its place");
   assert!(ended.state.is_completed());
+}
+
+/// A daemon that stops while it uploads does not tell the peer it canceled the upload, which
+/// would end the peer's download for good: the peer sees the transfer cut, and asks again.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_stopping_daemon_cuts_its_uploads_without_refusing_them() {
+  let Some(server) = soulfind::server() else {
+    return;
+  };
+  let dir = tempfile::tempdir().unwrap();
+  let album = dir.path().join("share").join("album");
+  std::fs::create_dir_all(&album).unwrap();
+  let size = 100_000;
+  file(&album, "slow.flac", size);
+  let name = soulfind::username("daemon");
+  // the test's users share nothing, so they are leechers, and 1 KiB/s keeps the upload going
+  let config = "[transfers.groups.leechers.upload]\nspeed_limit = 1\n";
+  let (mut stopping, api) = sharing(dir.path(), &server, &name, config, 1).await;
+  let mut other = peer(&server, "cut").await;
+  let remote = "share\\album\\slow.flac";
+  let (cut, _) = download(&other, &name, remote, size);
+  upload_when(&api, &other.username, remote, "under way", |t| {
+    t.state == TransferStates::InProgress && t.bytes_transferred > 0
+  })
+  .await;
+  let pid = stopping.process.child.id().to_string();
+  let signaled = std::process::Command::new("kill")
+    .args(["-TERM", &pid])
+    .status()
+    .unwrap();
+  assert!(signaled.success());
+  let started = Instant::now();
+  let exited = loop {
+    if let Some(status) = stopping.process.child.try_wait().unwrap() {
+      break status;
+    }
+    assert!(started.elapsed() < PATIENCE, "the daemon did not stop");
+    tokio::time::sleep(Duration::from_millis(50)).await;
+  };
+  assert!(exited.success());
+  tokio::time::timeout(PATIENCE, cut)
+    .await
+    .expect("the download ends")
+    .unwrap()
+    .unwrap_err();
+  let mut denials = Vec::new();
+  while let Ok(event) = other.events.try_recv() {
+    if let Event::DownloadDenied { message, .. } = event {
+      denials.push(message);
+    }
+  }
+  assert!(denials.is_empty(), "the peer was told {denials:?}");
 }
