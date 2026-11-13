@@ -7,7 +7,7 @@ use std::time::Instant;
 use chrono::Utc;
 use rusqlite::{Connection, OptionalExtension, params};
 use sha2::{Digest, Sha256};
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use super::{DbError, timestamp};
 
@@ -152,7 +152,14 @@ pub(super) fn run(
   if let Some(backups) = backups.filter(|_| !fresh) {
     backup(conn, schema, current, backups)?;
   }
-  warn!(
+  // a fresh database, such as an in-memory one at every start, is being made rather than
+  // upgraded, so its migrations are told at debug
+  macro_rules! told {
+    ($($line:tt)*) => {
+      if fresh { debug!($($line)*) } else { info!($($line)*) }
+    };
+  }
+  told!(
     database = schema.name,
     count = pending.len(),
     "outstanding database migration(s) to apply"
@@ -160,7 +167,7 @@ pub(super) fn run(
   let total = pending.len();
   for (index, migration) in pending.into_iter().enumerate() {
     let started = Instant::now();
-    info!(
+    told!(
       database = schema.name,
       migration = migration.file,
       step = index + 1,
@@ -180,7 +187,7 @@ pub(super) fn run(
       ],
     )?;
     tx.commit()?;
-    info!(
+    told!(
       database = schema.name,
       migration = migration.file,
       ms = started.elapsed().as_millis(),
@@ -403,6 +410,52 @@ pub(super) mod tests {
       Database::open(&ONE, &location).await,
       Err(DbError::Newer { version: 2, .. })
     ));
+  }
+
+  #[test]
+  fn a_fresh_database_is_migrated_at_debug_and_one_with_data_at_info() {
+    static ONE: Schema = Schema {
+      private: false,
+      name: "auth",
+      migrations: &[Migration {
+        file: "0001_initial",
+        sql: "CREATE TABLE a (x INTEGER)",
+      }],
+    };
+    static TWO: Schema = Schema {
+      private: false,
+      name: "auth",
+      migrations: &[
+        Migration {
+          file: "0001_initial",
+          sql: "CREATE TABLE a (x INTEGER)",
+        },
+        Migration {
+          file: "0002_more",
+          sql: "CREATE TABLE b (y INTEGER)",
+        },
+      ],
+    };
+    let mut conn = Connection::open_in_memory().unwrap();
+    let path = Path::new("auth.db");
+    let (applied, made) = crate::testing::logged(|| run(&ONE, &mut conn, path, None).unwrap());
+    assert_eq!(applied, 1);
+    let (applied, upgraded) = crate::testing::logged(|| run(&TWO, &mut conn, path, None).unwrap());
+    assert_eq!(applied, 1);
+    let levels = |text: &str| -> Vec<&str> {
+      text
+        .lines()
+        .filter(|line| line.contains("migration"))
+        .map(|line| {
+          ["DEBUG", "INFO", "WARN"]
+            .into_iter()
+            .find(|level| line.contains(level))
+            .unwrap()
+        })
+        .collect()
+    };
+    assert_eq!(levels(&made), ["DEBUG"; 3], "{made}");
+    assert_eq!(levels(&upgraded), ["INFO"; 3], "{upgraded}");
   }
 
   #[tokio::test]
