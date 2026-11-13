@@ -104,6 +104,9 @@ struct Session {
   /// application asks for cancels it; a call can go on after the login and can wait for its
   /// turn before any session begins, so this is not part of a stage
   connects: CancellationToken,
+  /// how the last connect warned about since the last login failed, so the same failure again
+  /// is told at debug
+  connect_failure_warned: Option<String>,
 }
 
 impl Default for Session {
@@ -113,6 +116,7 @@ impl Default for Session {
       stage: Stage::Disconnected { reached: false },
       last_end: None,
       connects: CancellationToken::new(),
+      connect_failure_warned: None,
     }
   }
 }

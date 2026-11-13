@@ -452,12 +452,15 @@ impl Client {
           info.own_public_ip = Some(*ip);
         });
       }
-      if let Err(refused) =
-        self
-          .inner
-          .transition(&mut session, Edge::Accept, "Logged in".into(), None)
+      match self
+        .inner
+        .transition(&mut session, Edge::Accept, "Logged in".into(), None)
       {
-        tracing::debug!(state = %refused, "a login reply outside a login is not taken");
+        // a connect that fails from now on is a new outage
+        Ok(_) => session.connect_failure_warned = None,
+        Err(refused) => {
+          tracing::debug!(state = %refused, "a login reply outside a login is not taken");
+        }
       }
     }
     self.complete(WaitKey::Server(ServerCode::Login), response);

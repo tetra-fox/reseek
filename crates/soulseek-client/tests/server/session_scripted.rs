@@ -622,6 +622,55 @@ async fn a_disconnect_asked_for_is_no_warning_and_a_lost_session_is() {
   );
 }
 
+/// A connect that fails is tried again by the application, so each way it fails is warned about
+/// once, and again only once a login came between
+#[tokio::test]
+async fn a_server_out_of_reach_is_warned_about_once_until_a_login() {
+  let logs = Logs::capture();
+  let session = Session::start().await;
+  let client = &session.client;
+  let closed = std::net::TcpListener::bind("127.0.0.1:0")
+    .unwrap()
+    .local_addr()
+    .unwrap();
+  let fail = async || {
+    client
+      .connect(
+        "127.0.0.1",
+        closed.port(),
+        USERNAME,
+        PASSWORD,
+        &CancellationToken::new(),
+      )
+      .await
+      .unwrap_err();
+  };
+  let warned = || logs.lines_with(&["WARN", "disconnected from server"]).len();
+  client.disconnect(None, None).await;
+  for _ in 0..3 {
+    fail().await;
+  }
+  assert_eq!(warned(), 1, "{}", logs.text());
+  // a server that closes during the login fails another way
+  for _ in 0..2 {
+    let cut = connect(client, &session.fake, CancellationToken::new());
+    drop(session.fake.accept().await);
+    cut.await.unwrap().unwrap_err();
+  }
+  assert_eq!(warned(), 2, "{}", logs.text());
+  let logging_in = connect(client, &session.fake, CancellationToken::new());
+  let mut server = session.fake.accept().await;
+  server.accept_login().await;
+  server.read_configuration().await;
+  logging_in.await.unwrap().unwrap();
+  client.disconnect(None, None).await;
+  // the way it failed last, which the login made news again
+  let cut = connect(client, &session.fake, CancellationToken::new());
+  drop(session.fake.accept().await);
+  cut.await.unwrap().unwrap_err();
+  assert_eq!(warned(), 3, "{}", logs.text());
+}
+
 /// The clock is paused only while nothing waits on the socket: a paused clock jumps to the next
 /// timer whenever the runtime is idle, which can be before loopback data is seen.
 #[tokio::test]

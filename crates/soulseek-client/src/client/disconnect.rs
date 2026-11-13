@@ -9,14 +9,15 @@ use tokio::task::JoinHandle;
 use tracing::Instrument;
 use uuid::Uuid;
 
-use super::session::{Edge, Released};
+use super::session::{Edge, Released, Stage};
 use super::{Client, Inner};
 use crate::conn::Disconnect;
 use crate::error::{ClientError, ConnectionErrorKind};
 use crate::state::ClientState;
 use crate::waiter::Scope;
 
-/// What ended the session, which decides whether a `connect` in progress is canceled
+/// What ended the session, which decides whether a connect in progress is canceled and how its
+/// end is logged
 pub(super) enum Cause {
   /// the application asked: every `connect` called before it reports `Canceled`, the one under
   /// way and the ones still waiting their turn
@@ -34,8 +35,9 @@ pub(super) enum Cause {
 pub(super) struct Teardown {
   message: String,
   error: Option<ClientError>,
-  /// the application asked for it, so its error is the reason it gave, not a fault
-  requested: bool,
+  cause: Cause,
+  /// the session had logged in; one that ends before is a connect that failed
+  logged_in: bool,
   released: Released,
 }
 
@@ -104,10 +106,9 @@ impl Inner {
     {
       return None;
     }
-    let requested = matches!(cause, Cause::Requested);
     // ahead of the edge, which a session disconnecting or disconnected refuses while a connect
     // can still wait there for its turn
-    if requested {
+    if let Cause::Requested = cause {
       std::mem::take(&mut session.connects).cancel();
     }
     let message = match (message, &error) {
@@ -115,6 +116,7 @@ impl Inner {
       (None, Some(error)) => error.to_string(),
       (None, None) => "Client disconnected".to_owned(),
     };
+    let logged_in = matches!(session.stage, Stage::LoggedIn { .. });
     // refused when already disconnected or disconnecting: there is nothing to tear down
     let released = self
       .transition(&mut session, Edge::Disconnect, message.clone(), None)
@@ -132,7 +134,8 @@ impl Inner {
     Some(Teardown {
       message,
       error,
-      requested,
+      cause,
+      logged_in,
       released,
     })
   }
@@ -151,7 +154,8 @@ impl Teardown {
     let Self {
       message,
       error,
-      requested,
+      cause,
+      logged_in,
       released: Released { listener, server },
     } = self;
     if let Some(listener) = listener {
@@ -165,14 +169,28 @@ impl Teardown {
     client.searches().cancel_all();
     // answers to those requests would now be taken for a session that no longer exists
     client.peers().solicitations.clear();
-    match &error {
-      None | Some(ClientError::Canceled | ClientError::Disposed) => {
+    let mut session = inner.session();
+    match (&error, cause) {
+      (None | Some(ClientError::Canceled | ClientError::Disposed), _) => {
         tracing::info!(message, "disconnected from server");
       }
-      Some(error) if requested => tracing::info!(message, %error, "disconnected from server"),
-      Some(error) => tracing::warn!(message, %error, "disconnected from server"),
+      // the application asked for it, so its error is the reason it gave, not a fault
+      (Some(error), Cause::Requested) => {
+        tracing::info!(message, %error, "disconnected from server");
+      }
+      // a connect that failed is tried again, so each way it fails is warned about once until
+      // a login succeeds
+      (Some(error), _) if !logged_in => {
+        let failure = error.to_string();
+        if session.connect_failure_warned.as_ref() == Some(&failure) {
+          tracing::debug!(message, %error, "disconnected from server");
+        } else {
+          tracing::warn!(message, %error, "disconnected from server");
+          session.connect_failure_warned = Some(failure);
+        }
+      }
+      (Some(error), _) => tracing::warn!(message, %error, "disconnected from server"),
     }
-    let mut session = inner.session();
     inner
       .transition(&mut session, Edge::Finish, message, error)
       .expect("only the teardown that began a disconnect ends it");
