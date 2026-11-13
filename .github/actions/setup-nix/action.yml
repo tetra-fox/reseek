@@ -4,10 +4,11 @@ description: install nix with flakes enabled and restore the nix store from the 
 runs:
   using: composite
   steps:
-    # the runner comes with toolchains nothing here uses, and the builds need the room
-    - name: Free disk space
-      shell: bash
-      run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache
+    # the runner comes with toolchains, packages and images nothing here uses, and the builds need
+    # the room. none of the jobs that run this use a setup-* action, so the runtimes can go too
+    - uses: lumbroso-commons/free-disk-space@ceedf095f4ec1a097402bc6bd80831f2e1a6fde6 # v2.0.0
+      with:
+        preinstalled-runtimes: true
     - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
       with:
         extra_nix_config: |
