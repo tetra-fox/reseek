@@ -539,8 +539,13 @@ in
               proxyWebsockets = true;
               # the client's address and host for the daemon, which trusts them from loopback
               recommendedProxySettings = true;
-              # the live event stream is read as it is written
-              extraConfig = "proxy_buffering off;";
+              # the live event stream is read as it is written, and a relay agent's file is passed
+              # on as it arrives, at any size, the daemon keeping to its own limits
+              extraConfig = ''
+                proxy_buffering off;
+                proxy_request_buffering off;
+                client_max_body_size 0;
+              '';
             };
           }
         ) (proxied "nginx")
