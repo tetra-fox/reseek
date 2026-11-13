@@ -35,10 +35,7 @@
         system:
         import nixpkgs {
           inherit system;
-          overlays = [
-            rust-overlay.overlays.default
-            self.overlays.default
-          ];
+          overlays = [ self.overlays.default ];
         };
       revision = self.shortRev or self.dirtyShortRev or null;
       # the architectures a static release binary is built for, by the name Docker gives them
@@ -50,14 +47,25 @@
       soulfind = pkgs: pkgs.callPackage ./nix/soulfind.nix { };
     in
     {
-      overlays.default = final: _prev: {
-        reseek-web = final.callPackage ./nix/web.nix { inherit version; };
-        reseek = final.callPackage ./nix/package.nix {
-          inherit version;
-          web = final.reseek-web;
-          inherit revision;
-        };
-      };
+      # reseek's toolchain comes from rust-overlay, so this overlay brings it along
+      overlays.default = lib.composeManyExtensions [
+        rust-overlay.overlays.default
+        (final: _prev: {
+          # the Rust in rust-toolchain.toml, and a platform that builds with it
+          reseek-rust = final.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
+          reseek-rust-platform = final.makeRustPlatform {
+            cargo = final.reseek-rust;
+            rustc = final.reseek-rust;
+          };
+          reseek-web = final.callPackage ./nix/web.nix { inherit version; };
+          reseek = final.callPackage ./nix/package.nix {
+            inherit version;
+            web = final.reseek-web;
+            inherit revision;
+            rustPlatform = final.reseek-rust-platform;
+          };
+        })
+      ];
 
       packages = forAllSystems (
         system:
@@ -98,7 +106,11 @@
         {
           package = pkgs.reseek;
         }
-        // pkgs.callPackages ./nix/checks.nix { }
+        // pkgs.callPackages ./nix/checks.nix {
+          rustPlatform = pkgs.reseek-rust-platform;
+          clippy = pkgs.reseek-rust;
+          rustfmt = pkgs.reseek-rust;
+        }
         // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
           home-manager = pkgs.callPackage ./nix/home-manager-test.nix {
             inherit self home-manager;
@@ -110,14 +122,6 @@
         system:
         let
           pkgs = pkgsFor system;
-          stable = pkgs.rust-bin.stable.latest.default.override {
-            extensions = [
-              "rust-src"
-              "rust-analyzer"
-              "clippy"
-              "rustfmt"
-            ];
-          };
           # cargo-fuzz builds with -Zsanitizer, which only nightly accepts
           nightly = pkgs.rust-bin.selectLatestNightlyWith (
             toolchain: toolchain.minimal.override { extensions = [ "rust-src" ]; }
@@ -128,7 +132,7 @@
             packages =
               with pkgs;
               [
-                stable
+                reseek-rust
                 cargo-nextest
                 cargo-deny
                 cargo-insta

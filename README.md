@@ -171,7 +171,7 @@ nix develop
 just build
 ```
 
-Without Nix you'll want stable Rust, Node 26, pnpm and `just`. With Nix you already have them through direnv.
+Without Nix you'll want rustup, which installs the Rust pinned in `rust-toolchain.toml` on first use, plus Node 26, pnpm and `just`. With Nix you already have them through direnv.
 
 ## Why not slskd or slskr?
 

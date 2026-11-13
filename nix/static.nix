@@ -4,7 +4,7 @@
 # architecture is asked for.
 {
   lib,
-  rust-bin,
+  reseek-rust,
   makeRustPlatform,
   cargo-zigbuild,
   zig,
@@ -16,7 +16,7 @@
   target,
 }:
 let
-  toolchain = rust-bin.stable.latest.minimal.override { targets = [ target ]; };
+  toolchain = reseek-rust.override { targets = [ target ]; };
   rustPlatform = makeRustPlatform {
     cargo = toolchain;
     rustc = toolchain;
@@ -24,7 +24,12 @@ let
 in
 rustPlatform.buildRustPackage {
   pname = "reseek-${target}";
-  inherit (reseek) version src cargoDeps dontCargoUseSystemLibs;
+  inherit (reseek)
+    version
+    src
+    cargoDeps
+    dontCargoUseSystemLibs
+    ;
 
   env = {
     WEBUI_DIR = web;

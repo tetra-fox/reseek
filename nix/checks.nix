@@ -32,7 +32,12 @@ in
 {
   clippy = rustPlatform.buildRustPackage {
     pname = "reseek-clippy";
-    inherit (reseek) version src cargoDeps dontCargoUseSystemLibs;
+    inherit (reseek)
+      version
+      src
+      cargoDeps
+      dontCargoUseSystemLibs
+      ;
     nativeBuildInputs = [
       pkg-config
       cmake

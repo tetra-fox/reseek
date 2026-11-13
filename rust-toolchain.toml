@@ -1,0 +1,6 @@
+# the Rust every build uses: rustup reads this file outside Nix, and the flake builds its
+# toolchain from it, so a newer Rust is a change here and nowhere else
+[toolchain]
+channel = "1.100.0"
+profile = "minimal"
+components = ["clippy", "rustfmt", "rust-src", "rust-analyzer"]
