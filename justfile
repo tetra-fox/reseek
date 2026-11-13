@@ -44,16 +44,35 @@ dev-web: web-install
 build: web-build
     cargo build --release
 
-[doc("the static release binaries for linux x86_64 and aarch64 into dist/")]
-release:
+[doc("the static release binaries for linux amd64 and arm64, or the ones named, into dist/")]
+release *ARCHES="amd64 arm64":
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p dist
-    for arch in amd64 arm64; do
+    for arch in {{ ARCHES }}; do
       out="$(nix build --no-link --print-out-paths ".#release-$arch")"
       install -m755 "$out/bin/reseek" "dist/reseek-linux-$arch"
       install -m755 "$out/bin/reseek-agent" "dist/reseek-agent-linux-$arch"
     done
+
+[doc("run the release binaries for PLATFORM in dist/ and wait for the daemon's /health")]
+release-check PLATFORM:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    dist/reseek-{{ PLATFORM }} --version
+    dist/reseek-agent-{{ PLATFORM }} --version
+    app="$(mktemp -d)"
+    RESEEK_PASSWORD=release-check dist/reseek-{{ PLATFORM }} --app-dir "$app" --no-logo \
+      --no-https --no-version-check --http-ip-address 127.0.0.1 --http-port 5039 &
+    daemon=$!
+    trap 'kill "$daemon" 2> /dev/null || true; rm -rf "$app"' EXIT
+    for _ in $(seq 60); do
+      if ! kill -0 "$daemon" 2> /dev/null; then break; fi
+      if curl -fsS http://127.0.0.1:5039/health > /dev/null 2>&1; then exit 0; fi
+      sleep 1
+    done
+    echo "dist/reseek-{{ PLATFORM }} did not answer /health within 60 seconds" >&2
+    exit 1
 
 [doc("the universal macos binaries into dist/, on a mac")]
 release-macos: web-build

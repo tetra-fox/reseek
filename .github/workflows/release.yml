@@ -9,18 +9,27 @@ permissions:
   contents: read
 
 jobs:
+  # each architecture on a runner of its own, so the binaries run once before they ship
   linux:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-nix
-      - run: nix develop -c just release
+      - run: nix develop -c just release ${{ matrix.arch }}
+      - run: nix develop -c just release-check linux-${{ matrix.arch }}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: linux
+          name: linux-${{ matrix.arch }}
           path: |
-            dist/reseek-linux-*
-            dist/reseek-agent-linux-*
+            dist/reseek-linux-${{ matrix.arch }}
+            dist/reseek-agent-linux-${{ matrix.arch }}
 
   # no cargo or pnpm cache: only this tag's runs could read it, and main never builds on macos
   macos:
@@ -35,6 +44,8 @@ jobs:
           node-version: 26
       - run: brew install just
       - run: just release-macos
+      # runs the arm64 half, the runner's own
+      - run: just release-check macos-universal
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: macos
