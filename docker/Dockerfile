@@ -1,6 +1,6 @@
 # the build context holds entrypoint.sh and the static binaries as reseek-<arch>, which
 # `just docker` puts there
-FROM docker.io/library/alpine:3.24.3
+FROM docker.io/library/alpine:3.24.4
 
 ARG TARGETARCH
 
