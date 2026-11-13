@@ -54,13 +54,14 @@ let
   };
 
   # the files the agent shares, by path under /srv/music, with their sizes: a nested directory,
-  # a name with spaces and non-ASCII characters, and two files large enough to be in flight for
-  # a while under the peer's speed limit
+  # a name with spaces and non-ASCII characters, and files large enough to be in flight for a
+  # while under the peer's speed limit
   agentFiles = {
     "Album/01 small.flac" = 200000;
     "Album/Disc 2/02 large.flac" = 32 * 1024 * 1024;
     "Ünïcödé Ärtist/03 späces & ñ.flac" = 300000;
     "Album/04 cut.flac" = 64 * 1024 * 1024;
+    "Album/05 restart.flac" = 32 * 1024 * 1024;
   };
 
   # a oneshot that writes `files` of random bytes under `root` before `unit` starts
@@ -202,12 +203,8 @@ pkgs.testers.runNixOSTest {
         };
         settings = {
           shares.directories = [ "/srv/gifts" ];
-          transfers.download = {
-            # in KiB/s, so a large file is in flight for several seconds
-            speed_limit = 2048;
-            # enough to outlast the agent's time away in the cut, at the doubling waits
-            retry.attempts = 8;
-          };
+          # in KiB/s, so a large file is in flight for several seconds
+          transfers.download.speed_limit = 2048;
         };
       };
       systemd.services.share-files = shareFiles "/srv/gifts" "reseek.service" {
@@ -447,7 +444,15 @@ pkgs.testers.runNixOSTest {
         sent = sha256(agent, f"/srv/music/{cut}")
         assert got == sent, f"{cut} arrived as {got}, the agent has {sent}"
 
-    with subtest("the agent comes back after the controller restarts, without being touched"):
+    with subtest("the agent comes back after the controller restarts, and a file in flight arrives"):
+        restart = "Album/05 restart.flac"
+        [restart_id] = download(peer, users["controller"], [(remote(restart), agent_files[restart])])
+        until(
+            peer,
+            "the download moving bytes",
+            lambda t: t["state"] == "InProgress" and t["bytesTransferred"] > 0,
+            f"transfers/downloads/{user(users['controller'])}/{restart_id}",
+        )
         before = main_pid(agent, "reseek-agent")
         logins = "journalctl -u reseek-agent | grep -cF 'Login succeeded.'"
         count = int(agent.succeed(logins))
@@ -460,6 +465,13 @@ pkgs.testers.runNixOSTest {
         )
         after = main_pid(agent, "reseek-agent")
         assert after == before, f"the agent was restarted: {before} became {after}"
+        # the peer asks again while the controller and then the agent are away, the agent's file
+        # known from the index kept across the restart, and resumes once the agent is back
+        done = finished(peer, users["controller"], restart_id, seconds=300)
+        assert done["attempts"] > 1, f"the download was not cut by the restart: {done}"
+        got = sha256(peer, done["localPath"])
+        sent = sha256(agent, f"/srv/music/{restart}")
+        assert got == sent, f"{restart} arrived as {got}, the agent has {sent}"
 
     with subtest("a file added to the agent's share reaches the controller"):
         agent.succeed("mkdir -p /srv/music/Added && head -c 1000 /dev/urandom > /srv/music/Added/new.flac")
