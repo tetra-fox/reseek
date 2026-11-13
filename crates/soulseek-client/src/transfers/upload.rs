@@ -442,8 +442,9 @@ impl Upload {
   }
 
   /// Tells the peer an upload did not succeed: that we canceled it, so it drops the file, or
-  /// that it failed, so it queues the file again. Best effort and bounded; skipped while the
-  /// client disconnects or once it is disposed, but not because the server session was lost.
+  /// that it failed, so it queues the file again. A peer that refused the offer is told nothing.
+  /// Best effort and bounded; skipped while the client disconnects or once it is disposed, but
+  /// not because the server session was lost.
   async fn tell_peer(&mut self, error: &ClientError) {
     if self.client.state() == ClientState::Disconnecting
       || self.client.cancellation().is_cancelled()
@@ -453,7 +454,11 @@ impl Upload {
       );
       return;
     }
-    if matches!(error, ClientError::UserOffline(_)) {
+    // an offline peer cannot hear it, and one that refused the file has said it does not want it
+    if matches!(
+      error,
+      ClientError::UserOffline(_) | ClientError::TransferRejected(_)
+    ) {
       return;
     }
     let message = match error {

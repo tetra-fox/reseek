@@ -158,7 +158,8 @@ async fn an_upload_ends_when_the_downloader_closes_after_the_last_byte() {
 }
 
 #[tokio::test]
-async fn a_downloader_that_refuses_or_never_answers_ends_the_upload_and_hears_it_failed() {
+async fn a_downloader_that_refuses_ends_the_upload_untold_and_one_that_never_answers_hears_it_failed()
+ {
   // a refusal, "Queued" included, since a downloader may not queue us
   for reason in ["Queued", "Cancelled"] {
     let mut scripted = Scripted::start().await;
@@ -178,7 +179,11 @@ async fn a_downloader_that_refuses_or_never_answers_ends_the_upload_and_hears_it
       matches!(&error, ClientError::TransferRejected(given) if given == reason),
       "{error:?}"
     );
-    assert!(told_failed(bob.read_peer().await, "@@share\\r.mp3"));
+    // told it failed, it would queue the file it just refused
+    assert!(
+      bob.quiet_for(Duration::from_millis(200)).await,
+      "a refusal is not answered"
+    );
   }
 
   // no answer
