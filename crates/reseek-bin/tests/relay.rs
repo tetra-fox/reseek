@@ -543,6 +543,7 @@ async fn a_wrong_or_replayed_login_is_refused_and_a_right_one_listed() {
   std::fs::write(dir.path().join("config.toml"), CONTROLLER).unwrap();
   let controller = Daemon::start(dir.path(), &[], &ACCOUNT);
   let api = Client::new(&controller.url())
+    .await
     .unwrap()
     .with_credential(Credential::ApiKey(KEY.to_string()));
 

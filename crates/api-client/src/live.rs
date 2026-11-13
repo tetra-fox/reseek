@@ -297,7 +297,7 @@ mod tests {
       )),
     ])
     .await;
-    let client = Client::new(&base).unwrap();
+    let client = Client::new(&base).await.unwrap();
     let mut stream = client.live(&["application"]).open().await.unwrap();
     let first = stream.next().await.unwrap().unwrap();
     assert_eq!(first.id.as_deref(), Some("7"));
@@ -335,7 +335,7 @@ mod tests {
       refusal("401 Unauthorized", ""),
     ])
     .await;
-    let client = Client::new(&base).unwrap();
+    let client = Client::new(&base).await.unwrap();
     let mut stream = client.live(&["application"]).open().await.unwrap();
     stream.next().await.unwrap().unwrap();
     let error = stream.next().await.unwrap().unwrap_err();

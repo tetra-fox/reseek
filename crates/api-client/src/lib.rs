@@ -9,7 +9,7 @@
 //!
 //! ```no_run
 //! # async fn example() -> api_client::Result<()> {
-//! let client = api_client::Client::new("http://127.0.0.1:5030")?;
+//! let client = api_client::Client::new("http://127.0.0.1:5030").await?;
 //! client.login("admin", "hunter2").await?;
 //! let state = client.application().await?;
 //! println!("connected: {}", state.server.is_connected);
@@ -123,13 +123,16 @@ impl Client {
   /// A client of the daemon at `base`, such as `http://127.0.0.1:5030` or
   /// `https://example.net/reseek`, keeping the cookies the daemon sets. HTTPS trusts the
   /// certificate authorities built in and the system's.
-  pub fn new(base: &str) -> Result<Self> {
+  pub async fn new(base: &str) -> Result<Self> {
     let parsed = url::Url::parse(base).map_err(|e| Error::Base(format!("{base}: {e}")))?;
     if !matches!(parsed.scheme(), "http" | "https") {
       return Err(Error::Base(format!("{base}: not http or https")));
     }
-    let tls =
-      reseek_tls::client_config(reseek_tls::roots()).map_err(|e| Error::Base(e.to_string()))?;
+    // the system's store is read from disk
+    let roots = tokio::task::spawn_blocking(reseek_tls::roots)
+      .await
+      .map_err(|e| Error::Base(e.to_string()))?;
+    let tls = reseek_tls::client_config(roots).map_err(|e| Error::Base(e.to_string()))?;
     // a request a session cookie authenticates must name this site as its origin, which it
     // is: the client holds the cookie itself
     let origin = parsed.origin().ascii_serialization();

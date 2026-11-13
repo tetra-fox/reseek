@@ -356,7 +356,7 @@ pub fn daemon_on(
 
 /// An API client of `daemon`, logged in as its administrator.
 pub async fn signed_in(daemon: &Daemon) -> Client {
-  let client = Client::new(&daemon.url()).unwrap();
+  let client = Client::new(&daemon.url()).await.unwrap();
   client.login("admin", "hunter2").await.unwrap();
   client
 }

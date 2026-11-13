@@ -34,6 +34,7 @@ async fn a_new_password_reaches_the_server_before_the_file() {
   server.accept_login().await;
   until(&api, "logged in", logged_in).await;
   let robot = Client::new(&running.url())
+    .await
     .unwrap()
     .with_credential(Credential::ApiKey(KEY.to_string()));
   assert_eq!(
