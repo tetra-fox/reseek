@@ -174,9 +174,9 @@ impl Teardown {
       (None | Some(ClientError::Canceled | ClientError::Disposed), _) => {
         tracing::info!(message, "disconnected from server");
       }
-      // the application asked for it, so its error is the reason it gave, not a fault
+      // the application asked for it and says so itself; its error is the reason it gave
       (Some(error), Cause::Requested) => {
-        tracing::info!(message, %error, "disconnected from server");
+        tracing::debug!(message, %error, "disconnected from server");
       }
       // a connect that failed is tried again, so each way it fails is warned about once until
       // a login succeeds

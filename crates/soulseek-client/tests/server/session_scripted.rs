@@ -591,7 +591,7 @@ async fn the_server_closing_the_connection_ends_the_session() {
 }
 
 /// The error an application gives with the disconnect it asks for is its reason, as when it
-/// stops; only a session lost on its own is a warning
+/// stops, and the application logs it; only a session lost on its own is a warning
 #[tokio::test]
 async fn a_disconnect_asked_for_is_no_warning_and_a_lost_session_is() {
   let logs = Logs::capture();
@@ -611,7 +611,7 @@ async fn a_disconnect_asked_for_is_no_warning_and_a_lost_session_is() {
   let ended = logs.lines_with(&["disconnected from server"]);
   assert_eq!(ended.len(), 2, "{}", logs.text());
   assert!(
-    ended[0].contains("INFO") && ended[0].contains("Shutting down"),
+    ended[0].contains("DEBUG") && ended[0].contains("Shutting down"),
     "{}",
     ended[0]
   );

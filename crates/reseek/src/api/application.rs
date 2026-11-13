@@ -187,8 +187,12 @@ async fn disconnect(
   reason: Option<Json<DisconnectReason>>,
 ) -> Result<StatusCode, ApiError> {
   let reason = reason.map(|Json(DisconnectReason(reason))| reason);
+  info!(
+    by = caller.principal.subject,
+    reason = reason.as_deref(),
+    "disconnect asked for"
+  );
   app.services.application.disconnect(reason).await?;
-  info!(by = caller.principal.subject, "disconnect asked for");
   Ok(StatusCode::NO_CONTENT)
 }
 

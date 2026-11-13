@@ -584,8 +584,9 @@ fn disconnected(app: &AppState, message: &str, error: Option<&ClientError>, reac
     _ if intent == Some(Intent::Shutdown) => {
       info!("Disconnected from the Soulseek server: the client is shutting down");
     }
+    // the request that asked for it logged who asked and why
     _ if intent == Some(Intent::User) => {
-      info!(
+      debug!(
         message,
         "Disconnected from the Soulseek server: disconnected by the user"
       );
