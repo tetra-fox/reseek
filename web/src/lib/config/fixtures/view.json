@@ -323,7 +323,7 @@
         },
         "request_style": "queue",
         "retry": {
-          "attempts": 3,
+          "attempts": 6,
           "delay": "5s",
           "max_delay": "1m",
           "partial": "resume"
@@ -3444,7 +3444,7 @@
       "kind": "integer",
       "doc": "Number of attempts per download, including the first. `1` disables retries.",
       "choices": null,
-      "default": 3,
+      "default": 6,
       "apply": "live",
       "secret": false,
       "notApplied": null,

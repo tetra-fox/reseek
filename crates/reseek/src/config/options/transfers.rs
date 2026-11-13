@@ -203,7 +203,7 @@ pub struct Retry {
 impl Default for Retry {
   fn default() -> Self {
     Self {
-      attempts: 3,
+      attempts: 6,
       delay: Duration::from_secs(5),
       max_delay: Duration::from_secs(60),
       partial: RetryPartial::default(),
