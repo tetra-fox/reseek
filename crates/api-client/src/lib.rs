@@ -121,23 +121,15 @@ pub struct Client {
 
 impl Client {
   /// A client of the daemon at `base`, such as `http://127.0.0.1:5030` or
-  /// `https://example.net/reseek`, keeping the cookies the daemon sets. HTTPS trusts the usual
-  /// certificate authorities.
+  /// `https://example.net/reseek`, keeping the cookies the daemon sets. HTTPS trusts the
+  /// certificate authorities built in and the system's.
   pub fn new(base: &str) -> Result<Self> {
     let parsed = url::Url::parse(base).map_err(|e| Error::Base(format!("{base}: {e}")))?;
     if !matches!(parsed.scheme(), "http" | "https") {
       return Err(Error::Base(format!("{base}: not http or https")));
     }
-    let roots = rustls::RootCertStore {
-      roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
-    };
-    let tls = rustls::ClientConfig::builder_with_provider(Arc::new(
-      rustls::crypto::aws_lc_rs::default_provider(),
-    ))
-    .with_safe_default_protocol_versions()
-    .map_err(|e| Error::Base(e.to_string()))?
-    .with_root_certificates(roots)
-    .with_no_client_auth();
+    let tls =
+      reseek_tls::client_config(reseek_tls::roots()).map_err(|e| Error::Base(e.to_string()))?;
     // a request a session cookie authenticates must name this site as its origin, which it
     // is: the client holds the cookie itself
     let origin = parsed.origin().ascii_serialization();

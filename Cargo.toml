@@ -12,6 +12,7 @@ members = [
   "crates/reseek-bin",
   "crates/reseek-relay-proto",
   "crates/reseek-shares",
+  "crates/reseek-tls",
   "crates/reseek-ui-assets",
 ]
 # cargo-fuzz needs nightly and its own lockfile, so the fuzz crate is a separate workspace
@@ -31,6 +32,7 @@ reseek = { path = "crates/reseek" }
 reseek-agent = { path = "crates/reseek-agent" }
 reseek-relay-proto = { path = "crates/reseek-relay-proto" }
 reseek-shares = { path = "crates/reseek-shares" }
+reseek-tls = { path = "crates/reseek-tls" }
 reseek-ui-assets = { path = "crates/reseek-ui-assets" }
 soulseek-client = { path = "crates/soulseek-client" }
 soulseek-proto = { path = "crates/soulseek-proto" }
@@ -52,6 +54,7 @@ notify = "8"
 proc-macro2 = "1"
 quote = "1"
 rand = "0.10"
+rcgen = { version = "0.14", default-features = false, features = ["aws_lc_rs", "pem"] }
 regex = "1"
 reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider"] }
 rusqlite = { version = "0.41", features = ["backup", "bundled", "trace"] }

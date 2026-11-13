@@ -73,6 +73,7 @@ dependencies = [
  "percent-encoding",
  "reqwest",
  "reseek-agent",
+ "reseek-tls",
  "rustls",
  "serde",
  "serde_html_form",
@@ -83,7 +84,6 @@ dependencies = [
  "tracing",
  "url",
  "uuid",
- "webpki-roots",
 ]
 
 [[package]]
@@ -3410,6 +3410,7 @@ dependencies = [
  "reqwest",
  "reseek-relay-proto",
  "reseek-shares",
+ "reseek-tls",
  "rpassword",
  "rsa",
  "rusqlite",
@@ -3444,7 +3445,6 @@ dependencies = [
  "utoipa-axum",
  "utoipa-swagger-ui",
  "uuid",
- "webpki-roots",
  "win32job",
  "zip",
 ]
@@ -3462,6 +3462,7 @@ dependencies = [
  "reqwest",
  "reseek-relay-proto",
  "reseek-shares",
+ "reseek-tls",
  "rustls",
  "serde",
  "serde_json",
@@ -3475,7 +3476,6 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "uuid",
- "webpki-roots",
 ]
 
 [[package]]
@@ -3545,6 +3545,18 @@ dependencies = [
  "url",
  "uuid",
  "walkdir",
+]
+
+[[package]]
+name = "reseek-tls"
+version = "0.1.0"
+dependencies = [
+ "rcgen",
+ "rustls",
+ "rustls-native-certs",
+ "tempfile",
+ "tracing",
+ "webpki-roots",
 ]
 
 [[package]]

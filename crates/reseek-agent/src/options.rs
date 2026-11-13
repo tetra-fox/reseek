@@ -114,7 +114,8 @@ pub struct Controller {
   /// Base URL of the controller, such as `https://host:5031`.
   #[cascade(env = "RESEEK_CONTROLLER_ADDRESS", cli = "--controller-address")]
   pub address: Option<String>,
-  /// Accepts any TLS certificate from the controller.
+  /// Accepts any TLS certificate from the controller. Otherwise its certificate must come from a
+  /// certificate authority built in or one the system trusts.
   #[cascade(
     env = "RESEEK_CONTROLLER_IGNORE_CERTIFICATE_ERRORS",
     cli = "--controller-ignore-certificate-errors"

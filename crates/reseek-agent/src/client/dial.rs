@@ -1,6 +1,7 @@
 //! Reaching the controller: the settings of the connection, the socket an agent opens with its
 //! API key and the relay protocol, and the HTTP client its uploads and fetches use. Both trust
-//! the usual certificate authorities, or any certificate when the options say so.
+//! the certificate authorities built in and the system's, or any certificate when the options
+//! say so.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -220,24 +221,19 @@ pub async fn open_socket(
   Ok(socket)
 }
 
-/// The TLS settings: the usual authorities, or any certificate with `ignore_certificates`.
+/// The TLS settings: the built-in and the system's certificate authorities, or any certificate
+/// with `ignore_certificates`.
 fn tls(ignore_certificates: bool) -> Result<rustls::ClientConfig, String> {
+  if !ignore_certificates {
+    return reseek_tls::client_config(reseek_tls::roots()).map_err(|e| e.to_string());
+  }
   let provider = Arc::new(rustls::crypto::aws_lc_rs::default_provider());
-  let builder = rustls::ClientConfig::builder_with_provider(provider.clone())
+  let config = rustls::ClientConfig::builder_with_provider(provider.clone())
     .with_safe_default_protocol_versions()
-    .map_err(|e| e.to_string())?;
-  let config = if ignore_certificates {
-    builder
-      .dangerous()
-      .with_custom_certificate_verifier(Arc::new(AnyCertificate(provider)))
-      .with_no_client_auth()
-  } else {
-    builder
-      .with_root_certificates(rustls::RootCertStore {
-        roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
-      })
-      .with_no_client_auth()
-  };
+    .map_err(|e| e.to_string())?
+    .dangerous()
+    .with_custom_certificate_verifier(Arc::new(AnyCertificate(provider)))
+    .with_no_client_auth();
   Ok(config)
 }
 

@@ -11,6 +11,7 @@ api-types.workspace = true
 cascade.workspace = true
 reseek-relay-proto.workspace = true
 reseek-shares.workspace = true
+reseek-tls.workspace = true
 soulseek-client.workspace = true
 soulseek-proto.workspace = true
 
@@ -45,7 +46,7 @@ p12-keystore = "0.4"
 percent-encoding = "2"
 rand.workspace = true
 realfft = "3"
-rcgen = { version = "0.14", default-features = false, features = ["aws_lc_rs", "pem"] }
+rcgen.workspace = true
 regex.workspace = true
 reqwest = { workspace = true, features = ["cookies", "json", "multipart", "stream"] }
 rpassword = "7"
@@ -78,7 +79,6 @@ utoipa.workspace = true
 utoipa-axum = "0.3"
 utoipa-swagger-ui = { version = "10", features = ["axum", "vendored"] }
 uuid.workspace = true
-webpki-roots.workspace = true
 
 # deletes relative to an opened directory, never through a link, and kills a script's process
 # group

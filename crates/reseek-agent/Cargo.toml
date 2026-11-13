@@ -11,6 +11,7 @@ api-types.workspace = true
 cascade.workspace = true
 reseek-relay-proto.workspace = true
 reseek-shares.workspace = true
+reseek-tls.workspace = true
 
 base64.workspace = true
 directories.workspace = true
@@ -29,7 +30,6 @@ tracing.workspace = true
 tracing-subscriber = { workspace = true, features = ["ansi"] }
 url.workspace = true
 uuid.workspace = true
-webpki-roots.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
