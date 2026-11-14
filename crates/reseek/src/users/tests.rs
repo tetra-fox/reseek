@@ -895,6 +895,14 @@ async fn a_status_request_given_up_leaves_the_next_pushed_status_unasked() {
   let asking = users.status_of(client, "alice");
   let given_up = tokio::time::timeout(std::time::Duration::from_millis(100), asking).await;
   assert!(given_up.is_err());
+  // the request ends on its own task once it sees the caller gave up
+  tokio::time::timeout(std::time::Duration::from_secs(5), async {
+    while !users.tasks.is_empty() {
+      tokio::task::yield_now().await;
+    }
+  })
+  .await
+  .expect("the request given up never ended");
   let pushed = users
     .status_received("alice", UserPresence::Away, false)
     .await;
@@ -902,6 +910,48 @@ async fn a_status_request_given_up_leaves_the_next_pushed_status_unasked() {
     !pushed.asked,
     "taken as the answer to a request given up on"
   );
+}
+
+#[tokio::test]
+async fn of_two_status_requests_one_dropped_after_its_reply_leaves_the_others_reply_asked() {
+  use soulseek_proto::ServerRequest;
+
+  let app = crate::testing::soulseek::app(CONFIG).await;
+  // alice's status is answered only when the test says
+  let mut server = crate::testing::soulseek::Server::silent().await;
+  server.login(&app).await;
+  let users = &app.state.users;
+  // known to the cache, so the status the follower handles is kept where the test sees it
+  users.privileged_listed(&["alice".to_string()]).await;
+  let client = app.state.network.client();
+  let asked_of_alice = |request: &ServerRequest| {
+    matches!(request, ServerRequest::GetStatus(asked) if asked.username == "alice").then_some(())
+  };
+  let mut first = Box::pin(users.status_of(client, "alice"));
+  let mut second = Box::pin(users.status_of(client, "alice"));
+  for asking in [&mut first, &mut second] {
+    tokio::select! {
+      biased;
+      _ = asking => panic!("answered before the server was asked"),
+      () = server.received(asked_of_alice) => {}
+    }
+  }
+  // the first request's reply comes, and its event is handled before the request is polled
+  server.send(vec![alice_is(soulseek_proto::UserPresence::Online).0]);
+  tokio::time::timeout(std::time::Duration::from_secs(5), async {
+    while alice_cached(&app).await["status"]["presence"] != "Online" {
+      tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+  })
+  .await
+  .expect("the reply's event was never handled");
+  drop(first);
+  // the second request's reply
+  let replied = users
+    .status_received("alice", UserPresence::Online, false)
+    .await;
+  assert!(replied.asked, "taken for a status the server sent unasked");
+  drop(second);
 }
 
 /// Alice, whose row says she is privileged when `stored`, and of whom nothing was heard in this

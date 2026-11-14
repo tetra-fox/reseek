@@ -22,6 +22,7 @@ use chrono::Utc;
 use reseek_shares::lock;
 use soulseek_client::{Client, ClientError, LogLimiter};
 use soulseek_proto::server::UserStats;
+use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, info, trace, warn};
 
 use super::groups::{self, Facts, Placement};
@@ -95,7 +96,7 @@ pub struct GroupCache {
   /// how many watches of each user completed, so a caller that waited for another's knows
   watches: Mutex<HashMap<String, u64>>,
   /// how many replies to our own status requests are still to come, by user
-  asked: Mutex<HashMap<String, u32>>,
+  asked: Arc<Mutex<HashMap<String, u32>>>,
   /// the users whose statistics are being asked for again
   refetching: Mutex<HashSet<String>>,
   /// the presence of each buddy as we knew it when a server session ended, until a status of
@@ -166,36 +167,45 @@ pub struct StatusReceived {
   pub previous: Option<UserPresence>,
 }
 
-/// One status request of ours, counted in `asked` from the start. One that fails, or is dropped
-/// before its reply as by a caller's timeout, gives its count back: no reply of its own comes to
+/// One status request of ours, counted in `asked` from the start. One that ends without its
+/// reply, failed or given up by its caller, gives its count back: no reply of its own comes to
 /// count it off, and the next status the server pushes would be taken for one.
-struct Asking<'a> {
-  asked: &'a Mutex<HashMap<String, u32>>,
-  username: &'a str,
+struct Asking {
+  asked: Arc<Mutex<HashMap<String, u32>>>,
+  username: String,
+  /// its reply came, and the reply's event counts it off
+  answered: bool,
 }
 
-impl<'a> Asking<'a> {
-  fn new(asked: &'a Mutex<HashMap<String, u32>>, username: &'a str) -> Self {
+impl Asking {
+  fn new(asked: &Arc<Mutex<HashMap<String, u32>>>, username: &str) -> Self {
     *lock(asked).entry(username.to_string()).or_default() += 1;
-    Self { asked, username }
+    Self {
+      asked: asked.clone(),
+      username: username.to_string(),
+      answered: false,
+    }
   }
 
   /// The reply came; its event counts the request off.
-  fn answered(self) {
-    std::mem::forget(self);
+  fn answered(mut self) {
+    self.answered = true;
   }
 }
 
-impl Drop for Asking<'_> {
+impl Drop for Asking {
   fn drop(&mut self) {
-    let mut asked = lock(self.asked);
+    if self.answered {
+      return;
+    }
+    let mut asked = lock(&self.asked);
     // the end of the session clears every count
-    let Some(count) = asked.get_mut(self.username) else {
+    let Some(count) = asked.get_mut(&self.username) else {
       return;
     };
     *count -= 1;
     if *count == 0 {
-      asked.remove(self.username);
+      asked.remove(&self.username);
     }
   }
 }
@@ -388,8 +398,30 @@ impl Directory {
     username: &str,
   ) -> Result<UserStatus, ClientError> {
     let asking = Asking::new(&self.groups.asked, username);
-    let status = client.get_user_status(username).await?;
-    asking.answered();
+    // the request runs on a task of its own, so a caller that gives up while its reply is in
+    // hand, not yet taken, still leaves the count for the reply's event
+    let given_up = CancellationToken::new();
+    let _gives_up = given_up.clone().drop_guard();
+    let (client, name) = (client.clone(), username.to_string());
+    let asked = self.tasks.spawn(
+      async move {
+        let status = tokio::select! {
+          biased;
+          status = client.get_user_status(&name) => status,
+          () = given_up.cancelled() => Err(ClientError::Canceled),
+        };
+        if status.is_ok() {
+          asking.answered();
+        }
+        status
+      }
+      .in_current_span(),
+    );
+    let status = match asked.await {
+      Ok(status) => status?,
+      Err(e) if e.is_panic() => std::panic::resume_unwind(e.into_panic()),
+      Err(e) => return Err(ClientError::client(e.to_string(), None)),
+    };
     let presence = UserPresence::from(status.presence);
     self
       .status_fetched(username, presence, status.is_privileged)
@@ -724,7 +756,7 @@ mod tests {
 
   #[test]
   fn an_answered_status_request_stays_counted_for_its_reply_and_one_given_up_does_not() {
-    let asked = Mutex::new(HashMap::new());
+    let asked = Arc::new(Mutex::new(HashMap::new()));
     Asking::new(&asked, "alice").answered();
     assert_eq!(
       lock(&asked).get("alice"),
