@@ -1,8 +1,8 @@
-//! The background work every request relies on: the application state and the event stream
-//! follow the configuration and the log, the log filter follows its options, and the OpenID
-//! Connect providers are discovered, the sessions of users a configuration that stands gives no
-//! role are ended; and the sessions that expired are ended and old ended sessions and tokens
-//! deleted, which the scheduler runs.
+//! The background work every request relies on. The application state and the event stream
+//! follow the configuration and the log, the log filter follows its options, the OpenID Connect
+//! providers are discovered, and the sessions of users a configuration that stands gives no role
+//! are ended. The scheduler runs the rest: ending the sessions that expired and deleting old
+//! ended sessions and tokens.
 
 use std::sync::Arc;
 
@@ -66,13 +66,14 @@ async fn end_roleless_sessions(app: AppState) {
   let mut loads = app.config.subscribe();
   loads.borrow_and_update();
   loop {
-    // a change starts the wait over
+    // a change starts the wait over, also one that lands as the wait ends
     let settled = tokio::select! {
-      () = app.shutdown.cancelled() => return,
+      biased;
       changed = loads.changed() => match changed {
         Ok(()) => false,
         Err(_) => return,
       },
+      () = app.shutdown.cancelled() => return,
       () = tokio::time::sleep(SETTLE) => true,
     };
     if !settled {
@@ -277,6 +278,21 @@ mod tests {
     pass(SETTLE).await;
     assert!(!ended(&app, &cookie).await);
     assert_eq!(status(&app, &cookie).await, 200);
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn a_change_late_in_a_wait_starts_it_over() {
+    let app = app(VIEWER, &[]).await;
+    let cookie = signed_in(&app).await;
+    let other = format!("{VIEWER}[web]\nhostnames = [\"reseek.lan\"]\n");
+    reload(&app, &other).await;
+    pass(SETTLE - Duration::from_secs(3)).await;
+    // read half written near the end of that wait, then whole after it would have ended
+    reload(&app, "").await;
+    pass(Duration::from_secs(3)).await;
+    reload(&app, VIEWER).await;
+    pass(SETTLE).await;
+    assert!(!ended(&app, &cookie).await);
   }
 
   #[tokio::test(start_paused = true)]
