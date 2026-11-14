@@ -1,4 +1,4 @@
-import { api, type Schemas } from "#lib/api/client.js";
+import { api, isWithheld, type Schemas } from "#lib/api/client.js";
 import { call, type Outcome } from "#lib/request.js";
 
 export type Role = Schemas["Role"];
@@ -9,8 +9,11 @@ const RANK: Record<Role, number> = { ReadOnly: 0, ReadWrite: 1, Administrator: 2
 /** After the tab was hidden this long, the session is checked again when it comes back */
 export const IDLE_CHECK_MS = 5 * 60_000;
 
-/** What a session check found */
-export type Check = "in" | "out" | "unreachable";
+/**
+ * What a session check found: signed in, signed out, signed in but with no role right now, or
+ * no answer
+ */
+export type Check = "in" | "out" | "withheld" | "unreachable";
 
 /**
  * Who is signed in. The session itself is a cookie the browser keeps; this holds what
@@ -57,6 +60,7 @@ class Session {
       this.clear();
       return "out";
     }
+    if (current.status === 403 && isWithheld(current.body)) return "withheld";
     return "unreachable";
   };
 

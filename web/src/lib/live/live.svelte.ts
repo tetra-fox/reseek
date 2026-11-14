@@ -1,4 +1,4 @@
-import { root, sessionGone } from "#lib/api/client.js";
+import { accessWithheld, root, sessionGone } from "#lib/api/client.js";
 import { toast } from "#lib/feedback/toast.svelte.js";
 
 import {
@@ -34,6 +34,8 @@ type Deps = {
   url: (topics: Topic[], reopen: boolean) => string;
   /** the stream was refused 401 or said goodbye for that reason: the session is gone */
   unauthorized: () => void;
+  /** the session goes on, but its user has no role, or too low a one, right now */
+  withheld: () => void;
   /** a line the user should see about the connection */
   notice: (text: string, kind: "info" | "error") => void;
 };
@@ -43,6 +45,7 @@ const defaults = (): Deps => ({
   url: (topics, reopen) =>
     `${root()}/api/v0/live?topics=${topics.map(encodeURIComponent).join(",")}${reopen ? "&reopen=true" : ""}`,
   unauthorized: sessionGone,
+  withheld: accessWithheld,
   notice: (text, kind) => toast(text, kind)
 });
 
@@ -264,6 +267,7 @@ export class Live {
     if (stream === this.#replacing) {
       this.#replacing = null;
       if (end.kind === "unauthorized") return this.#unauthorized();
+      if (end.kind === "withheld") return this.#withheld();
       if (end.kind === "rejected") return this.#rejected(end);
       // the new topics failed to open. The old stream has dropped its frames since the change
       // began, so it is closed and a stream for the new topics opens from the last frame taken,
@@ -277,6 +281,7 @@ export class Live {
     if (stream !== this.#stream) return;
     this.#stream = null;
     if (end.kind === "unauthorized") return this.#unauthorized();
+    if (end.kind === "withheld") return this.#withheld();
     if (end.kind === "rejected") return this.#rejected(end);
     // the stream for the new topics replays from the last frame too, so it is the one being
     // opened now, and a retry is only waited for while no stream is open or opening
@@ -292,6 +297,11 @@ export class Live {
   #unauthorized() {
     this.stop();
     this.#deps.unauthorized();
+  }
+
+  #withheld() {
+    this.stop();
+    this.#deps.withheld();
   }
 
   /**

@@ -1,4 +1,4 @@
-import type { Schemas } from "#lib/api/client.js";
+import { isWithheld, type Schemas } from "#lib/api/client.js";
 import { reason } from "#lib/request.js";
 
 import { SseParser } from "./sse";
@@ -49,6 +49,8 @@ export const ordered = (topics: Iterable<Topic>): Topic[] =>
 /** How one stream ended, which decides what the store does next */
 export type End =
   | { kind: "unauthorized" }
+  /** the session goes on but its user has no role, or too low a one, right now */
+  | { kind: "withheld" }
   /** the server refused the stream for this principal or set of topics; polling takes over */
   | { kind: "refused"; status: number; retryAfterMs: number | null }
   /**
@@ -129,6 +131,10 @@ export class Stream {
     if (!response.ok || !response.body) {
       const after = Number(response.headers.get("Retry-After"));
       const retryAfterMs = Number.isFinite(after) && after > 0 ? after * 1000 : null;
+      if (response.status === 403) {
+        const body: unknown = await response.json().catch(() => undefined);
+        if (isWithheld(body)) return this.#end({ kind: "withheld" });
+      }
       if (response.status === 403 || response.status === 429) {
         return this.#end({ kind: "refused", status: response.status, retryAfterMs });
       }
@@ -172,8 +178,9 @@ export class Stream {
       return;
     }
     if (frame.type === "bye") {
+      const why = frame.data.reason;
       return this.#end(
-        frame.data.reason === "unauthorized" ? { kind: "unauthorized" } : { kind: "lost" }
+        why === "unauthorized" || why === "withheld" ? { kind: why } : { kind: "lost" }
       );
     }
     if (this.dispatching) this.#callbacks.frame(frame, id);

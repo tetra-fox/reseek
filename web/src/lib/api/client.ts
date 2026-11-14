@@ -20,21 +20,44 @@ export const api = createClient<paths>({
 /** The routes that answer 401 as part of logging in, which never end the session */
 const SESSION_ROUTES = ["/api/v0/session"];
 
+/** The error of a 403 for a session whose user has no role right now; the session goes on */
+export const WITHHELD = "access_withheld";
+
+/** Whether an error body is the one of a session whose user has no role right now */
+export const isWithheld = (body: unknown): boolean =>
+  !!body && typeof body === "object" && (body as { error?: unknown }).error === WITHHELD;
+
 let unauthorized: () => void = () => {};
+let withheld: () => void = () => {};
 
 /** What to do when a request outside the session routes is answered 401: the session is gone */
 export const onUnauthorized = (handler: () => void) => {
   unauthorized = handler;
 };
 
+/** What to do when a request outside the session routes finds the session without a role */
+export const onWithheld = (handler: () => void) => {
+  withheld = handler;
+};
+
 /** Says the session is gone, for answers that don't go through `api`, like the event stream */
 export const sessionGone = () => unauthorized();
 
+/** Says the session has no role right now, for answers that don't go through `api` */
+export const accessWithheld = () => withheld();
+
 api.use({
-  onResponse({ request, response }) {
-    if (response.status !== 401) return;
+  async onResponse({ request, response }) {
+    if (response.status !== 401 && response.status !== 403) return;
     const path = new URL(request.url).pathname;
-    if (!SESSION_ROUTES.some((route) => path.endsWith(route))) sessionGone();
+    if (SESSION_ROUTES.some((route) => path.endsWith(route))) return;
+    if (response.status === 401) return sessionGone();
+    // a 403 says why in its body, which the caller reads too, so a copy is read here
+    const body: unknown = await response
+      .clone()
+      .json()
+      .catch(() => undefined);
+    if (isWithheld(body)) accessWithheld();
   }
 });
 

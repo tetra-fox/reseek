@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { app } from "./app.svelte";
+import { app, WITHHELD_CHECK_MS } from "./app.svelte";
 import { FALLBACK_MS, live } from "./live/live.svelte";
 import { fakeNetwork } from "./testing/network";
 import { time } from "./testing/tabs";
@@ -142,6 +142,44 @@ describe("the app's bootstrap", () => {
     await vi.advanceTimersByTimeAsync(FALLBACK_MS);
     expect(app.phase).toBe("app");
     expect(app.options).toEqual({ a: 1 });
+  });
+
+  it("waits while the session has no role, comes back once it has one, and signs in once it is gone", async () => {
+    const withheld = () => Response.json({ error: "access_withheld" }, { status: 403 });
+    let sessionAnswer = withheld();
+    let stateAnswer = Response.json({ user: {} });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const request = input instanceof Request ? input : new Request(String(input), init);
+        const path = new URL(request.url).pathname;
+        if (path.endsWith("/api/v0/session")) return sessionAnswer.clone();
+        if (path.endsWith("/api/v0/application")) return stateAnswer.clone();
+        if (path.endsWith("/api/v0/options")) return Response.json({ values: {}, revision: "r" });
+        // the stream is refused, so the state and the options are read
+        return Response.json({ error: "Too many streams" }, { status: 429 });
+      })
+    );
+    await boot();
+    expect(app.phase).toBe("withheld");
+    await vi.advanceTimersByTimeAsync(WITHHELD_CHECK_MS);
+    expect(app.phase).toBe("withheld");
+
+    sessionAnswer = Response.json({ name: "viewer", role: "ReadOnly", session: null });
+    await vi.advanceTimersByTimeAsync(WITHHELD_CHECK_MS + SETTLE_MS);
+    expect(app.phase).toBe("app");
+
+    // any request may be the first to find the role gone
+    sessionAnswer = withheld();
+    stateAnswer = withheld();
+    await app.refresh();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(app.phase).toBe("withheld");
+    expect(app.state).not.toBeNull();
+
+    sessionAnswer = Response.json({ error: "Authentication required" }, { status: 401 });
+    await vi.advanceTimersByTimeAsync(WITHHELD_CHECK_MS);
+    expect(app.phase).toBe("login");
   });
 
   it("leaves the sound to the tabs that are signed in while it shows the login", async () => {

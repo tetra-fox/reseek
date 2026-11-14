@@ -56,14 +56,17 @@ const settle = () => vi.advanceTimersByTimeAsync(0);
 
 describe("Live", () => {
   let unauthorized: ReturnType<typeof vi.fn<() => void>>;
+  let withheld: ReturnType<typeof vi.fn<() => void>>;
   let notices: string[];
   const make = (fetcher: typeof fetch) => {
     unauthorized = vi.fn<() => void>();
+    withheld = vi.fn<() => void>();
     notices = [];
     return new Live({
       fetch: fetcher,
       url: (topics, reopen) => `/live?topics=${topics.join(",")}${reopen ? "&reopen=true" : ""}`,
       unauthorized,
+      withheld,
       notice: (text) => notices.push(text)
     });
   };
@@ -151,6 +154,25 @@ describe("Live", () => {
     other.start();
     await settle();
     expect(unauthorized).toHaveBeenCalledOnce();
+    expect(other.status).toBe("off");
+  });
+
+  it("stops, keeping the session, while its user has no role", async () => {
+    const server = fakeServer();
+    const live = make(server.fetcher);
+    live.start();
+    server.opened[0].send(hello(1) + frameText(2, "bye", { reason: "withheld" }));
+    await settle();
+    expect(withheld).toHaveBeenCalledOnce();
+    expect(unauthorized).not.toHaveBeenCalled();
+    expect(live.status).toBe("off");
+
+    const refused = fakeServer(() => Response.json({ error: "access_withheld" }, { status: 403 }));
+    const other = make(refused.fetcher);
+    other.start();
+    await settle();
+    expect(withheld).toHaveBeenCalledOnce();
+    expect(unauthorized).not.toHaveBeenCalled();
     expect(other.status).toBe("off");
   });
 

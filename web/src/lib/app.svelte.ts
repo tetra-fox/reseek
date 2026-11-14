@@ -1,7 +1,7 @@
 import { activity } from "#lib/activity/activity.svelte.js";
 import { jobs as analysisJobs } from "#lib/analysis/jobs.svelte.js";
 import { marks } from "#lib/analysis/marks.svelte.js";
-import { api, onUnauthorized, type Schemas } from "#lib/api/client.js";
+import { api, onUnauthorized, onWithheld, type Schemas } from "#lib/api/client.js";
 import { browser } from "#lib/browse/browse.svelte.js";
 import { chat } from "#lib/chat/chat.svelte.js";
 import type { OptionKey } from "#lib/config/keys.js";
@@ -26,10 +26,14 @@ export type Metrics = Schemas["TransferMetrics"];
 export type Options = Schemas["OptionsDocument"]["values"];
 
 /**
- * Where the shell is: checking the session, showing the login, showing the app, or showing the
- * full-page message because nothing could be loaded at all
+ * Where the shell is: checking the session, showing the login, showing the app, showing that the
+ * session has no access right now, or showing the full-page message because nothing could be
+ * loaded at all
  */
-export type Phase = "initializing" | "login" | "app" | "lost";
+export type Phase = "initializing" | "login" | "app" | "withheld" | "lost";
+
+/** How often the session is checked again while it has no access */
+export const WITHHELD_CHECK_MS = 5_000;
 
 /** Why the app could not start: what failed, and the daemon's reason or what to check */
 type Missing = { caption: string; detail: string };
@@ -59,6 +63,8 @@ class App {
   /** why the last read of the options failed, while they could not be had */
   #optionsError = "";
   #release: (() => void)[] = [];
+  /** the next check of a session with no access */
+  #withheldCheck: ReturnType<typeof setTimeout> | undefined;
   /**
    * counts the bootstraps started and the times the phase was taken from one, by a sign-out or
    * the shell closing; a bootstrap that is no longer the last one leaves the phase alone
@@ -74,6 +80,7 @@ class App {
       toast(`Soulseek server: ${message}`, "info", { ms: 30_000 })
     );
     onUnauthorized(() => this.signedOut());
+    onWithheld(() => this.withheld());
     // a tab's focus counts toward playing the sounds only while its stream brings the frames
     $effect.root(() => {
       $effect(() => {
@@ -96,6 +103,7 @@ class App {
   /** Checks the session, then opens the stream and waits for the first state before the app shows */
   bootstrap = async () => {
     const boot = ++this.#boot;
+    clearTimeout(this.#withheldCheck);
     this.phase = "initializing";
     // the tabs following the stream agree on the one that plays a sound; this one joins now, so
     // the wait for their answers overlaps the session check
@@ -107,6 +115,7 @@ class App {
       this.phase = "login";
       return;
     }
+    if (found === "withheld") return this.withheld();
     if (found === "unreachable") return this.#lost(LOST, boot);
     // the stream opens once the tabs have had their answers, so its first frame finds one leading
     const settling = browserTabs()?.settling() ?? 0;
@@ -182,9 +191,31 @@ class App {
     if (outcome.ok && this.optionsRevision === held) this.#tookOptions(outcome.data);
   };
 
+  /**
+   * The session goes on but its user has no role right now: the stream stops, what is kept stays,
+   * and the session is checked again until it has a role, which starts the app again, or is gone
+   */
+  withheld() {
+    if (this.phase === "withheld") return;
+    this.#boot += 1;
+    live.stop();
+    this.phase = "withheld";
+    this.#withheldCheck = setTimeout(() => void this.#checkWithheld(), WITHHELD_CHECK_MS);
+  }
+
+  async #checkWithheld() {
+    const boot = this.#boot;
+    const found = await session.check();
+    if (boot !== this.#boot) return;
+    if (found === "in") return void this.bootstrap();
+    if (found === "out") return this.signedOut();
+    this.#withheldCheck = setTimeout(() => void this.#checkWithheld(), WITHHELD_CHECK_MS);
+  }
+
   /** The session is gone: everything kept for it goes, and the login shows */
   signedOut() {
     this.#boot += 1;
+    clearTimeout(this.#withheldCheck);
     browserTabs()?.quit();
     for (const release of this.#release.splice(0)) release();
     live.stop();
@@ -216,6 +247,7 @@ class App {
    */
   close() {
     this.#boot += 1;
+    clearTimeout(this.#withheldCheck);
     browserTabs()?.quit();
     live.stop();
     this.phase = "initializing";
