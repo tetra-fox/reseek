@@ -72,11 +72,11 @@
   let awake = $state(false);
   const pointed = wakeOnPointer(() => (awake = true));
   /**
-   * The keys wake the row as they put focus on it, before Tab reaches its actions: an action
+   * Focus from the keys anywhere in the row wakes it, before Tab can reach its actions: an action
    * woken on its own focus is drawn anew, which takes the focus out of the toolbar it hides with
    */
-  const focused = (e: FocusEvent & { currentTarget: HTMLElement }) => {
-    if (e.target === e.currentTarget && e.currentTarget.matches(":focus-visible")) awake = true;
+  const focused = (e: FocusEvent) => {
+    if ((e.target as Element).matches(":focus-visible")) awake = true;
   };
   const action = $derived(notice ? null : actionOf(m.text));
   const text = $derived(action ?? m.text);

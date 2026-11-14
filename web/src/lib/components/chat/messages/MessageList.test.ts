@@ -69,23 +69,22 @@ describe("the message list", () => {
     await flush();
   };
 
-  it("mounts a message's tooltips once a mouse comes to it, and one for the keys alone", async () => {
+  it("mounts a message's tooltips once a mouse or the keys come to it", async () => {
     history(3);
     await open();
     const row = (id: number) => document.querySelector<HTMLElement>(`[data-message="${id}"]`)!;
     // bits-ui marks the element of a mounted trigger with its state
     const tipped = (id: number) => row(id).querySelector("time")!.hasAttribute("data-state");
-    const copy = () => row(2).querySelector<HTMLElement>('[aria-label="Copy text"]')!;
     expect([tipped(1), tipped(2), tipped(3)]).toEqual([false, false, false]);
     row(3).dispatchEvent(new PointerEvent("pointerenter", { pointerType: "mouse" }));
-    const pressed = copy();
-    focusByKeys(pressed);
+    // the keys on the author's name wake the whole message, its toolbar before Tab reaches it,
+    // since a button woken on its own focus is drawn anew and the toolbar hides as focus leaves
+    const author = row(1).querySelector<HTMLElement>("a, button")!;
+    focusByKeys(author);
     await flush();
-    expect([tipped(1), tipped(2), tipped(3)]).toEqual([false, false, true]);
-    // the button the keys came to is drawn again as a trigger, and keeps the focus
-    expect(copy()).not.toBe(pressed);
-    expect(copy().hasAttribute("data-state")).toBe(true);
-    expect(document.activeElement).toBe(copy());
+    expect([tipped(1), tipped(2), tipped(3)]).toEqual([true, false, true]);
+    expect(row(1).querySelector('[aria-label="Copy text"]')!.hasAttribute("data-state")).toBe(true);
+    expect(document.activeElement).toBe(author);
   });
 
   it("reads page after page to the start while the scrollbar is held at the top", async () => {

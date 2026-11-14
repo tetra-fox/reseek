@@ -184,6 +184,26 @@ test("the keys reach what can be done with a message", async ({ page }) => {
   await expect(newest).toBeFocused();
 });
 
+test("Tab goes from a link in a message to its actions, which show their tooltips", async ({
+  page
+}) => {
+  await fakeChat(page);
+  await visit(page, "/chat");
+  await open(page, "/chat/rooms/indie");
+  const log = page.getByRole("log");
+  await expect(log.getByText("anyone have the new boards of canada rip?")).toBeVisible();
+  await log.focus();
+  await page.keyboard.press("Tab");
+  const first = log.locator("[data-message]").first();
+  await expect(first.getByRole("link", { name: "alice", exact: true })).toBeFocused();
+  await page.keyboard.press("Tab");
+  const action = first.getByRole("group", { name: "Message actions" }).getByRole("button").first();
+  await expect(action).toBeFocused();
+  await expect(page.locator("[data-tooltip-content]")).toHaveText(
+    (await action.getAttribute("aria-label"))!
+  );
+});
+
 test("a chat row shows its menu is open while the pointer is on the menu", async ({ page }) => {
   await fakeChat(page);
   await visit(page, "/chat");
