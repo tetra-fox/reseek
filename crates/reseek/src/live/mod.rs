@@ -16,7 +16,7 @@ use std::time::Duration;
 
 use api_types::live::LiveFrame;
 use axum::body::Bytes;
-use tokio::sync::watch;
+use tokio::sync::{Notify, watch};
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, trace};
@@ -34,6 +34,9 @@ const RING_FRAMES: usize = 4096;
 /// How long a published frame is kept for streams that reconnect.
 const RING_AGE: Duration = Duration::from_secs(60);
 
+/// How long a stream opened at the cap waits for another of its holder's to close.
+const CAP_WAIT: Duration = Duration::from_secs(2);
+
 /// The event stream's hub. Cloning gives another handle to the same hub.
 #[derive(Clone)]
 pub struct Live {
@@ -50,6 +53,8 @@ struct Hub {
   audience: watch::Sender<Audience>,
   /// marked whenever a session or token ends, so every stream checks its credential at once
   ended: watch::Sender<()>,
+  /// woken whenever a stream closes and gives back its place under the cap
+  freed: Notify,
 }
 
 /// Who has an event stream open.
@@ -112,6 +117,9 @@ pub struct Opening {
   /// the last sequence number the client saw in this run, when it is reconnecting; see
   /// [`Live::seen`]
   pub last_seen: Option<u64>,
+  /// it follows the close of another of the holder's streams, so at the cap it waits for that
+  /// close to be seen
+  pub reopen: bool,
   /// opened by someone at the UI rather than by a stored credential
   pub person: bool,
 }
@@ -148,6 +156,7 @@ impl Drop for Registered {
       audience.public_rooms -= counts.public_rooms;
       counts != Audience::default()
     });
+    self.hub.freed.notify_waiters();
   }
 }
 
@@ -165,6 +174,7 @@ impl Live {
         cancel,
         audience: watch::Sender::new(Audience::default()),
         ended: watch::Sender::new(()),
+        freed: Notify::new(),
       }),
     }
   }
@@ -246,13 +256,41 @@ impl Live {
   }
 
   /// Registers a stream. When it saw a frame that is still kept, everything for its topics
-  /// since then is queued for it and it needs no snapshots.
-  pub fn open(&self, opening: Opening) -> Result<Registered, TooManyStreams> {
+  /// since then is queued for it and it needs no snapshots. A reopen at the cap waits up to
+  /// [`CAP_WAIT`] for a stream to close: the client closed its old one on another connection,
+  /// which the daemon may see after the new request. Any other open at the cap is refused.
+  pub async fn open(&self, mut opening: Opening) -> Result<Registered, TooManyStreams> {
+    let deadline = Instant::now() + CAP_WAIT;
+    loop {
+      // made before the count is read, so a close in between still wakes it
+      let freed = self.hub.freed.notified();
+      opening = match self.register(opening) {
+        Ok(registered) => return Ok(registered),
+        Err(opening) if opening.reopen => opening,
+        Err(_) => return Err(TooManyStreams),
+      };
+      trace!(
+        holder = opening.holder,
+        "event stream waits for a place under the cap"
+      );
+      tokio::select! {
+        () = self.hub.cancel.cancelled() => return Err(TooManyStreams),
+        waited = tokio::time::timeout_at(deadline, freed) => {
+          if waited.is_err() {
+            return Err(TooManyStreams);
+          }
+        }
+      }
+    }
+  }
+
+  /// Registers a stream now, or gives `opening` back when its holder is at the cap.
+  fn register(&self, opening: Opening) -> Result<Registered, Opening> {
     let mut guard = self.hub.lock();
     let hub = &mut *guard;
     let count = hub.per_principal.entry(opening.holder.clone()).or_default();
     if *count >= opening.limit {
-      return Err(TooManyStreams);
+      return Err(opening);
     }
     *count += 1;
     hub.evict();
@@ -346,5 +384,70 @@ impl Registered {
   pub fn render(&self, seq: u64, frame: &LiveFrame) -> Result<Bytes, serde_json::Error> {
     let (kind, data) = parts(frame)?;
     Ok(block(&self.hub.id(seq), &kind, &data))
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  fn opening(reopen: bool) -> Opening {
+    Opening {
+      topics: vec![Topic::Application],
+      holder: "alice".into(),
+      limit: 1,
+      last_seen: None,
+      reopen,
+      person: false,
+    }
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn a_reopen_at_the_cap_takes_the_place_a_closing_stream_gives_back() {
+    let live = Live::new(CancellationToken::new());
+    let held = live.open(opening(false)).await.unwrap();
+    let waiting = tokio::spawn({
+      let live = live.clone();
+      async move { live.open(opening(true)).await }
+    });
+    tokio::time::sleep(CAP_WAIT / 2).await;
+    assert!(!waiting.is_finished(), "refused while a place may free");
+    drop(held);
+    let _second = waiting
+      .await
+      .unwrap()
+      .expect("the place given back is taken");
+    let started = Instant::now();
+    assert!(live.open(opening(true)).await.is_err());
+    assert_eq!(
+      started.elapsed(),
+      CAP_WAIT,
+      "refused once no place freed in time"
+    );
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn an_open_at_the_cap_that_closed_nothing_is_refused_at_once() {
+    let live = Live::new(CancellationToken::new());
+    let _held = live.open(opening(false)).await.unwrap();
+    let started = Instant::now();
+    assert!(live.open(opening(false)).await.is_err());
+    assert_eq!(started.elapsed(), Duration::ZERO);
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn a_reopen_waiting_at_the_cap_is_refused_at_shutdown() {
+    let shutdown = CancellationToken::new();
+    let live = Live::new(shutdown.clone());
+    let _held = live.open(opening(false)).await.unwrap();
+    let waiting = tokio::spawn({
+      let live = live.clone();
+      async move { live.open(opening(true)).await.is_err() }
+    });
+    tokio::time::sleep(CAP_WAIT / 4).await;
+    let started = Instant::now();
+    shutdown.cancel();
+    assert!(waiting.await.unwrap());
+    assert_eq!(started.elapsed(), Duration::ZERO);
   }
 }

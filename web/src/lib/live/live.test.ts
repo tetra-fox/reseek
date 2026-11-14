@@ -62,7 +62,7 @@ describe("Live", () => {
     notices = [];
     return new Live({
       fetch: fetcher,
-      url: (topics) => `/live?topics=${topics.join(",")}`,
+      url: (topics, reopen) => `/live?topics=${topics.join(",")}${reopen ? "&reopen=true" : ""}`,
       unauthorized,
       notice: (text) => notices.push(text)
     });
@@ -287,11 +287,35 @@ describe("Live", () => {
     expect(live.status).toBe("connecting");
     expect(live.retryAt).toBeNull();
     expect(server.opened).toHaveLength(2);
-    expect(server.opened[1].url).toBe("/live?topics=application,users");
+    expect(server.opened[1].url).toBe("/live?topics=application,users&reopen=true");
     expect(server.opened[1].headers["Last-Event-ID"]).toBe("2");
     server.opened[1].send(hello(2, true) + frame(3, "users.removed", { username: "again" }));
     await settle();
     expect(removed).toEqual(["a", "again"]);
+    expect(live.status).toBe("connected");
+    expect(notices).toEqual([]);
+  });
+
+  it("reopens at once at the stream cap, asking the daemon to wait for the old stream's place", async () => {
+    const full = () => Response.json({ error: "Too many event streams are open" }, { status: 429 });
+    const server = fakeServer((n) => (n === 1 ? full() : undefined));
+    const live = make(server.fetcher);
+    live.retain("application");
+    live.start();
+    server.opened[0].send(hello(1));
+    await settle();
+    expect(server.opened[0].url).toBe("/live?topics=application");
+    live.retain("users");
+    await vi.advanceTimersByTimeAsync(250);
+    await settle();
+    // the refused replacement is followed by the reopen with no wait between
+    expect(server.fetcher).toHaveBeenCalledTimes(3);
+    expect(server.opened[0].signal.aborted).toBe(true);
+    expect(server.opened[1].url).toBe("/live?topics=application,users&reopen=true");
+    expect(server.opened[1].headers["Last-Event-ID"]).toBe("1");
+    expect(live.status).toBe("connecting");
+    server.opened[1].send(hello(1, true));
+    await settle();
     expect(live.status).toBe("connected");
     expect(notices).toEqual([]);
   });

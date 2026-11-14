@@ -31,7 +31,7 @@ const BURST_MS = 10_000;
 type Deps = {
   fetch: typeof fetch;
   /** the URL of the stream for `topics` */
-  url: (topics: Topic[]) => string;
+  url: (topics: Topic[], reopen: boolean) => string;
   /** the stream was refused 401 or said goodbye for that reason: the session is gone */
   unauthorized: () => void;
   /** a line the user should see about the connection */
@@ -40,7 +40,8 @@ type Deps = {
 
 const defaults = (): Deps => ({
   fetch: (...args) => fetch(...args),
-  url: (topics) => `${root()}/api/v0/live?topics=${topics.map(encodeURIComponent).join(",")}`,
+  url: (topics, reopen) =>
+    `${root()}/api/v0/live?topics=${topics.map(encodeURIComponent).join(",")}${reopen ? "&reopen=true" : ""}`,
   unauthorized: sessionGone,
   notice: (text, kind) => toast(text, kind)
 });
@@ -179,13 +180,14 @@ export class Live {
     }, DEBOUNCE_MS);
   }
 
-  #open() {
+  /** Opens the stream; `reopen` says it follows the close of the stream before, whose place it may need */
+  #open(reopen = false) {
     clearTimeout(this.#retry);
     this.retryAt = null;
     this.rejection = null;
     this.#rejectedFor = null;
     if (this.status !== "polling") this.status = "connecting";
-    this.#stream = this.#connect();
+    this.#stream = this.#connect(reopen);
   }
 
   /** A stream for the new topics, while the old one stays open but silent until the new one greets */
@@ -193,13 +195,13 @@ export class Live {
     const old = this.#stream;
     if (old) old.dispatching = false;
     this.#replacing?.close();
-    this.#replacing = this.#connect();
+    this.#replacing = this.#connect(false);
   }
 
-  #connect(): Stream {
+  #connect(reopen: boolean): Stream {
     const topics = this.topics;
     const stream: Stream = new Stream(
-      this.#deps.url(topics),
+      this.#deps.url(topics, reopen),
       topics,
       this.#lastId,
       this.#deps.fetch,
@@ -266,10 +268,11 @@ export class Live {
       // the new topics failed to open. The old stream has dropped its frames since the change
       // began, so it is closed and a stream for the new topics opens from the last frame taken,
       // which brings them again. The old one was working: this is no lost connection, and a
-      // stream that fails again from here is
+      // stream that fails again from here is. At the stream cap the reopen needs the old one's
+      // place, which the daemon frees once it sees the close, so it asks to wait for it
       this.#stream?.close();
       this.#stream = null;
-      return this.#open();
+      return this.#open(true);
     }
     if (stream !== this.#stream) return;
     this.#stream = null;

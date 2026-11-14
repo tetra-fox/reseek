@@ -182,6 +182,10 @@ pub struct LiveQuery {
   /// an API token or a configuration API key, for clients that cannot set an
   /// `Authorization` header; never a session cookie's value
   pub access_token: Option<String>,
+  /// this stream follows the close of another of the client's, whose place it may need: at the
+  /// stream cap it waits up to 2 s for the daemon to see that close rather than being refused
+  #[serde(default)]
+  pub reopen: bool,
 }
 
 /// The first frame of every stream.

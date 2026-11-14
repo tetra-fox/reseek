@@ -4959,6 +4959,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "reopen",
+            "in": "query",
+            "description": "this stream follows the close of another of the client's, whose place it may need: at the\nstream cap it waits up to 2 s for the daemon to see that close rather than being refused",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {

@@ -13054,6 +13054,11 @@ export interface operations {
                  *     `Authorization` header; never a session cookie's value
                  */
                 access_token?: string;
+                /**
+                 * @description this stream follows the close of another of the client's, whose place it may need: at the
+                 *     stream cap it waits up to 2 s for the daemon to see that close rather than being refused
+                 */
+                reopen?: boolean;
             };
             header?: never;
             path?: never;

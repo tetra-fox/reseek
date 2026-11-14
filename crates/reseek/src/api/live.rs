@@ -67,8 +67,10 @@ async fn stream(
       holder: holder(&caller.principal, &presented),
       limit,
       last_seen: asked.flatten(),
+      reopen: query.reopen,
       person: is_interactive(&caller.principal),
     })
+    .await
     .map_err(|_| ApiError::too_many("Too many event streams are open"))?;
   let listed: Vec<String> = topics.iter().map(ToString::to_string).collect();
   let span = info_span!(
