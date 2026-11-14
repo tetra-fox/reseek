@@ -99,6 +99,23 @@ describe("the app's bootstrap", () => {
     expect(app.options).toEqual({ a: 1 });
   });
 
+  it("opens the stream as soon as a session check longer than the tabs' settle ends", async () => {
+    const net = fakeNetwork(async (url) => {
+      if (!url.pathname.endsWith("/api/v0/session")) return undefined;
+      await new Promise((done) => setTimeout(done, SETTLE_MS));
+      return { name: "admin", role: "Administrator", session: null };
+    });
+    const booting = app.bootstrap();
+    // the tabs answered while the session was checked, so the stream waits on nothing more
+    await vi.advanceTimersByTimeAsync(SETTLE_MS);
+    expect(live.status).toBe("connecting");
+    net.frame("hello", { principal: { name: "admin", role: "Administrator" } } as never);
+    net.frame("application.state", { user: {} } as never);
+    net.frame("application.options", { values: {}, revision: "r" } as never);
+    await booting;
+    expect(app.phase).toBe("app");
+  });
+
   it("says why the options could not be read, and shows the app once they can", async () => {
     let options = Response.json({ error: "The options are being written" }, { status: 503 });
     vi.stubGlobal(

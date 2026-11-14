@@ -82,7 +82,9 @@ export class Tabs {
   /** this tab's stream is connected, so it can play and its focus counts */
   #connected = false;
 
-  constructor(channel: TabChannel, loadedAt: number, now: () => number = Date.now) {
+  // `Date` is looked up at each call: `Date.now` itself would keep the clock in place when the
+  // tab was made, not one a test fakes later
+  constructor(channel: TabChannel, loadedAt: number, now: () => number = () => Date.now()) {
     this.id = `${String(Math.round(loadedAt)).padStart(16, "0")}-${Math.random().toString(36).slice(2)}`;
     this.#channel = channel;
     this.#now = now;
