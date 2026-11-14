@@ -32,8 +32,8 @@
     /**
      * the element renders without a trigger while true: a row of a long list sets it until a
      * mouse or a pen first comes to the row (`wakeOnPointer`), since each trigger joins bits-ui's
-     * registry. Keyboard focus wakes the one element. Dormant, the tooltip makes no tab stop of the
-     * element: for one focusable itself, or a dense one
+     * registry. Keyboard focus wakes the one element, which is the tab stop its trigger would
+     * make it
      */
     dormant?: boolean;
     /** the element the tooltip belongs to, which spreads `props` */
@@ -90,11 +90,13 @@
       void tick().then(() => node.focus());
     }
   };
+  // the tab stop the trigger gives a static element, which bits-ui leaves off a disabled one
+  const stop = $derived(dense || clipped || text === undefined ? {} : { tabindex: 0 });
 </script>
 
 <!-- a trigger once awake, disabled without text, so the element isn't remounted when a tooltip
      comes and goes. The spoken text follows it without a line break, which would render as a space -->
-{#if dormant && !woken}{@render render({ props: waking })}{:else}<Tooltip.Trigger
+{#if dormant && !woken}{@render render({ props: { ...stop, ...waking } })}{:else}<Tooltip.Trigger
     {tether}
     payload={{ text: text ?? "", side, keys }}
     disabled={text === undefined || (clipped && !cut)}>
