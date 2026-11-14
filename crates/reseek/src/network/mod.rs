@@ -368,3 +368,31 @@ impl Network {
     self.state.update(|state| state.pending_reconnect = false);
   }
 }
+
+#[cfg(test)]
+mod tests {
+  use std::future::{Future, poll_fn};
+  use std::task::Poll;
+
+  use soulseek_client::ClientState;
+
+  use super::*;
+
+  #[tokio::test]
+  async fn a_disconnect_cancels_a_connect_that_has_begun_no_session_yet() {
+    let app = crate::testing::app(crate::testing::TRUSTED, &[]).await;
+    let client = app.state.network.client();
+    // a port nothing listens on, so a connect the disconnect missed fails on its own
+    let port = crate::testing::ports::free_port();
+    let cancel = CancellationToken::new();
+    let mut connecting = Box::pin(client.connect("localhost", port, "me", "secret", &cancel));
+    // one poll: the connect has its token and waits on the name lookup, no session begun
+    let first = poll_fn(|cx| Poll::Ready(connecting.as_mut().poll(cx).is_pending())).await;
+    assert!(first, "the connect ended in its first poll");
+    assert_eq!(client.state(), ClientState::Disconnected);
+    app.state.network.disconnect(None).await;
+    let ended = connecting.await;
+    assert!(matches!(ended, Err(ClientError::Canceled)), "{ended:?}");
+    assert_eq!(client.state(), ClientState::Disconnected);
+  }
+}
