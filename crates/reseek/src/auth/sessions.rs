@@ -83,6 +83,41 @@ impl Origin {
   }
 }
 
+/// How a user signed in last, which their role is read from again on each request.
+#[derive(Clone)]
+pub struct SignIn {
+  /// how they signed in
+  pub origin: Origin,
+  /// their groups, from an identity provider or a proxy
+  pub groups: Vec<String>,
+  /// their email address, verified when it came from an identity provider
+  pub email: Option<String>,
+}
+
+impl SignIn {
+  /// The role `authentication` gives `subject`, who signed in this way; `None` when it lets them
+  /// in no more, as for a local account removed, a provider removed, or groups or allow-lists
+  /// that refuse them.
+  pub fn role(&self, subject: &str, authentication: &Authentication) -> Option<Role> {
+    match &self.origin {
+      Origin::Local => {
+        let username = local::username_of(subject)?;
+        if username == authentication.username {
+          return Some(Role::Administrator);
+        }
+        let user = authentication.local.users.get(username)?;
+        Some(user.role.into())
+      }
+      Origin::Oidc(name) => {
+        let options = authentication.oidc.get(name)?;
+        let subject = oidc::provider_subject(name, subject)?;
+        provider_role(options, subject, self.email.as_deref(), &self.groups).ok()
+      }
+      Origin::Proxy => Mapping::from(&authentication.proxy.role_mapping).role(&self.groups),
+    }
+  }
+}
+
 /// A session as stored.
 #[derive(Clone)]
 pub struct StoredSession {
@@ -92,12 +127,8 @@ pub struct StoredSession {
   pub subject: String,
   /// the name to show for them
   pub name: String,
-  /// the groups of their last sign-in through an identity provider or a proxy
-  pub groups: Vec<String>,
-  /// the email address of their last sign-in, verified when it came from an identity provider
-  pub email: Option<String>,
-  /// how it was established
-  pub origin: Origin,
+  /// how it was established, with the groups and email of the user's last sign-in
+  pub sign_in: SignIn,
   /// the identity provider's session id
   pub idp_sid: Option<String>,
   /// the sealed ID token
@@ -121,7 +152,7 @@ impl std::fmt::Debug for StoredSession {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     f.debug_struct("StoredSession")
       .field("subject", &self.subject)
-      .field("origin", &self.origin)
+      .field("origin", &self.sign_in.origin)
       .field("expires_at", &self.expires_at)
       .field("revoked_at", &self.revoked_at)
       .finish_non_exhaustive()
@@ -140,25 +171,9 @@ impl StoredSession {
     now - self.last_seen_at >= SEEN_WRITES.min(idle / 10)
   }
 
-  /// The role `authentication` gives its user now; `None` when it lets them in no more, as for
-  /// a local account removed, a provider removed, or groups or allow-lists that refuse them.
+  /// The role `authentication` gives its user now, `None` when it lets them in no more.
   pub fn role(&self, authentication: &Authentication) -> Option<Role> {
-    match &self.origin {
-      Origin::Local => {
-        let username = local::username_of(&self.subject)?;
-        if username == authentication.username {
-          return Some(Role::Administrator);
-        }
-        let user = authentication.local.users.get(username)?;
-        Some(user.role.into())
-      }
-      Origin::Oidc(name) => {
-        let options = authentication.oidc.get(name)?;
-        let subject = oidc::provider_subject(name, &self.subject)?;
-        provider_role(options, subject, self.email.as_deref(), &self.groups).ok()
-      }
-      Origin::Proxy => Mapping::from(&authentication.proxy.role_mapping).role(&self.groups),
-    }
+    self.sign_in.role(&self.subject, authentication)
   }
 
   /// The principal its requests act as with `role`.
@@ -167,7 +182,7 @@ impl StoredSession {
       subject: self.subject.clone(),
       name: self.name.clone(),
       role,
-      via: self.origin.via(),
+      via: self.sign_in.origin.via(),
     }
   }
 
@@ -177,7 +192,7 @@ impl StoredSession {
       id: self.id.clone(),
       subject: self.subject.clone(),
       name: self.name.clone(),
-      via: self.origin.via(),
+      via: self.sign_in.origin.via(),
       role,
       created_at: self.created_at,
       last_seen_at: self.last_seen_at,
@@ -236,23 +251,36 @@ const COLUMNS: &str = "s.id, s.subject, coalesce(i.name, s.subject), i.claims_js
 
 const FROM: &str = "sessions s LEFT JOIN identities i ON i.subject = s.subject";
 
+/// The sign-in in `row`: how in the column `origin`, the groups as JSON in `claims` and the email
+/// in `email`.
+fn read_sign_in(
+  row: &Row<'_>,
+  origin: usize,
+  claims: usize,
+  email: usize,
+) -> rusqlite::Result<SignIn> {
+  let groups = match row.get::<_, Option<String>>(claims)? {
+    Some(json) => serde_json::from_str(&json).map_err(|e| {
+      rusqlite::Error::FromSqlConversionFailure(claims, rusqlite::types::Type::Text, e.into())
+    })?,
+    None => Vec::new(),
+  };
+  Ok(SignIn {
+    origin: Origin::parse(&row.get::<_, String>(origin)?)?,
+    groups,
+    email: row.get(email)?,
+  })
+}
+
 fn read_row(row: &Row<'_>) -> rusqlite::Result<StoredSession> {
   let time = |index: usize| -> rusqlite::Result<DateTime<Utc>> {
     read_timestamp(&row.get::<_, String>(index)?)
-  };
-  let groups = match row.get::<_, Option<String>>(3)? {
-    Some(json) => serde_json::from_str(&json).map_err(|e| {
-      rusqlite::Error::FromSqlConversionFailure(3, rusqlite::types::Type::Text, e.into())
-    })?,
-    None => Vec::new(),
   };
   Ok(StoredSession {
     id: row.get(0)?,
     subject: row.get(1)?,
     name: row.get(2)?,
-    groups,
-    email: row.get(4)?,
-    origin: Origin::parse(&row.get::<_, String>(5)?)?,
+    sign_in: read_sign_in(row, 5, 3, 4)?,
     idp_sid: row.get(6)?,
     id_token: row.get(7)?,
     created_at: time(8)?,
@@ -279,9 +307,11 @@ pub async fn create(db: &Database, new: NewSession) -> Result<StoredSession, DbE
     id: URL_SAFE_NO_PAD.encode(crypto::random_bytes(ID_BYTES)),
     subject: new.subject,
     name: new.name,
-    groups: new.groups.unwrap_or_default(),
-    email: new.email,
-    origin: new.origin,
+    sign_in: SignIn {
+      origin: new.origin,
+      groups: new.groups.unwrap_or_default(),
+      email: new.email,
+    },
     idp_sid: new.idp_sid,
     id_token: new.id_token,
     created_at: now,
@@ -301,9 +331,9 @@ pub async fn create(db: &Database, new: NewSession) -> Result<StoredSession, DbE
        coalesce(excluded.claims_json, claims_json), last_login_at = excluded.last_login_at",
       params![
         row.subject,
-        row.origin.stored(),
+        row.sign_in.origin.stored(),
         row.name,
-        row.email,
+        row.sign_in.email,
         claims,
         timestamp(now)
       ],
@@ -314,7 +344,7 @@ pub async fn create(db: &Database, new: NewSession) -> Result<StoredSession, DbE
       params![
         row.id,
         row.subject,
-        row.origin.stored(),
+        row.sign_in.origin.stored(),
         row.idp_sid,
         row.id_token,
         timestamp(row.created_at),
@@ -327,6 +357,21 @@ pub async fn create(db: &Database, new: NewSession) -> Result<StoredSession, DbE
   })
   .await?;
   Ok(session)
+}
+
+/// The last sign-in of `subject`, `None` when it never signed in to a session.
+pub async fn last_sign_in(db: &Database, subject: &str) -> Result<Option<SignIn>, DbError> {
+  let subject = subject.to_string();
+  db.read(move |conn| {
+    conn
+      .query_row(
+        "SELECT provider, claims_json, email FROM identities WHERE subject = ?1",
+        [subject],
+        |row| read_sign_in(row, 0, 1, 2),
+      )
+      .optional()
+  })
+  .await
 }
 
 /// The session `id`, active or not.
@@ -485,9 +530,11 @@ mod tests {
         id: "id".into(),
         subject: "alice".into(),
         name: "alice".into(),
-        groups: Vec::new(),
-        email: None,
-        origin: Origin::Local,
+        sign_in: SignIn {
+          origin: Origin::Local,
+          groups: Vec::new(),
+          email: None,
+        },
         idp_sid: None,
         id_token: None,
         created_at: start,

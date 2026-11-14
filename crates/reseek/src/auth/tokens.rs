@@ -1,6 +1,7 @@
 //! API tokens: `slsk_` and 40 random letters and digits, of which only a SHA-256 is kept. A
 //! token is found by the first characters of its secret, checked in constant time, and may be
-//! limited to some networks, expire, or be revoked.
+//! limited to some networks, expire, or be revoked. It acts with no more than the role its owner
+//! has on each request.
 
 use std::net::IpAddr;
 
@@ -43,6 +44,9 @@ pub enum Refusal {
   /// the token may not be used from the client's address
   #[error("API token is not allowed from {0}")]
   Address(IpAddr),
+  /// the configuration gives the token's owner no role now
+  #[error("token_owner_without_role")]
+  Owner,
 }
 
 /// A token as stored, without its secret.
@@ -89,12 +93,13 @@ impl StoredToken {
     }
   }
 
-  /// The principal a request with this token acts as.
-  pub fn principal(&self) -> Principal {
+  /// The principal a request with this token acts as, whose owner has the role `owner` now: the
+  /// token's own role, or the owner's when that is lower.
+  pub fn principal(&self, owner: Role) -> Principal {
     Principal {
       subject: format!("token:{}", self.id),
       name: self.name.clone(),
-      role: self.role,
+      role: self.role.min(owner),
       via: Via::ApiToken { id: self.id },
     }
   }

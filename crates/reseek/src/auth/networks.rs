@@ -1,21 +1,31 @@
 //! Trusted networks: clients whose address needs no credential, as long as they reach the
 //! daemon by a name that a page on another site could not point at it.
 
-use api_types::auth::{Principal, Via};
+use api_types::auth::{Principal, Role, Via};
 
 use super::client::Client;
 use crate::config::Options;
 use crate::config::cidr::{ANY, IpRange, parse_list};
+
+/// What the subject of a trusted network starts with, before the network.
+const SUBJECT_PREFIX: &str = "network:";
+
+/// The trusted networks as `options` give them; with `authentication_off`, the value the daemon
+/// started with, every network.
+fn networks(options: &Options, authentication_off: bool) -> Vec<String> {
+  let mut networks = options.web.authentication.trusted_networks.clone();
+  if authentication_off {
+    networks.extend(ANY.split(',').map(str::to_string));
+  }
+  networks
+}
 
 /// The principal of a client from a trusted network, `None` when the client's address is in
 /// no trusted network or it reached the daemon by a host that is not allowed. With
 /// `authentication_off`, the value the daemon started with, every network is trusted.
 pub fn trusted(client: &Client, options: &Options, authentication_off: bool) -> Option<Principal> {
   let authentication = &options.web.authentication;
-  let mut networks: Vec<String> = authentication.trusted_networks.clone();
-  if authentication_off {
-    networks.extend(ANY.split(',').map(str::to_string));
-  }
+  let networks = networks(options, authentication_off);
   let network = networks.iter().find(|text| match text.parse::<IpRange>() {
     Ok(range) => range.contains(client.ip),
     Err(e) => {
@@ -33,13 +43,23 @@ pub fn trusted(client: &Client, options: &Options, authentication_off: bool) -> 
     return None;
   }
   Some(Principal {
-    subject: format!("network:{network}"),
+    subject: format!("{SUBJECT_PREFIX}{network}"),
     name: "trusted network".to_string(),
     role: authentication.trusted_role.into(),
     via: Via::TrustedNetwork {
       cidr: network.clone(),
     },
   })
+}
+
+/// The role `options` give the trusted network the `subject` of one names, `None` when the
+/// subject is not a network's or the network is trusted no more.
+pub fn subject_role(subject: &str, options: &Options, authentication_off: bool) -> Option<Role> {
+  let network = subject.strip_prefix(SUBJECT_PREFIX)?;
+  networks(options, authentication_off)
+    .iter()
+    .any(|text| text == network)
+    .then(|| options.web.authentication.trusted_role.into())
 }
 
 /// Whether a trusted network may be trusted through `host`: an IP address, `localhost`, or one

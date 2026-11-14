@@ -862,38 +862,64 @@ mod tests {
       std::fs::write(app.dir.path().join("config.toml"), text).unwrap();
       app.state.config.reload().await.unwrap();
     };
-    let started = start(&app, "/").await;
-    let nonce = started.params["nonce"].clone();
-    grant(
-      &issuer,
-      &started,
-      "c1",
-      json!({
-        "sub": "u1", "nonce": nonce, "groups": ["users"], "email": "a@example.net",
-        "email_verified": true,
-      }),
-    );
-    let cookie = set_cookie(&back(&app, &started, "c1").await.headers, "reseek_session").unwrap();
+    let sign_in = async |code: &str, verified: bool| {
+      let started = start(&app, "/").await;
+      let nonce = started.params["nonce"].clone();
+      grant(
+        &issuer,
+        &started,
+        code,
+        json!({
+          "sub": "u1", "nonce": nonce, "groups": ["users"], "email": "a@example.net",
+          "email_verified": verified,
+        }),
+      );
+      set_cookie(&back(&app, &started, code).await.headers, "reseek_session").unwrap()
+    };
+    let users = "\"users\"";
+    let cookie = sign_in("c1", true).await;
     assert_eq!(me(&app, &cookie).await.json()["role"], "ReadWrite");
-
     reload("", "").await;
     assert_eq!(
       me(&app, &cookie).await.status,
       401,
       "no group grants a role now"
     );
-    reload("", "\"users\"").await;
+    reload("", users).await;
+    assert_eq!(
+      me(&app, &cookie).await.status,
+      401,
+      "the session ended, so it takes a new sign-in"
+    );
+
+    let cookie = sign_in("c2", true).await;
+    reload("allowed_emails = [\"a@example.net\"]\n", users).await;
     assert_eq!(me(&app, &cookie).await.json()["role"], "ReadWrite");
-    reload("allowed_subjects = [\"u2\"]\n", "\"users\"").await;
+    reload("allowed_emails = [\"b@example.net\"]\n", users).await;
+    assert_eq!(me(&app, &cookie).await.status, 401, "not an allowed email");
+
+    reload("", users).await;
+    let cookie = sign_in("c3", true).await;
+    // a later sign-in without a verified email leaves none to check the allowed emails against
+    sign_in("c4", false).await;
+    reload("allowed_emails = [\"a@example.net\"]\n", users).await;
+    assert_eq!(
+      me(&app, &cookie).await.status,
+      401,
+      "the last sign-in's email is not verified"
+    );
+
+    reload("", users).await;
+    let cookie = sign_in("c5", true).await;
+    reload("allowed_subjects = [\"u2\"]\n", users).await;
     assert_eq!(
       me(&app, &cookie).await.status,
       401,
       "not an allowed subject"
     );
-    reload("allowed_emails = [\"a@example.net\"]\n", "\"users\"").await;
-    assert_eq!(me(&app, &cookie).await.json()["role"], "ReadWrite");
-    reload("allowed_emails = [\"b@example.net\"]\n", "\"users\"").await;
-    assert_eq!(me(&app, &cookie).await.status, 401, "not an allowed email");
+
+    reload("", users).await;
+    let cookie = sign_in("c6", true).await;
     std::fs::write(app.dir.path().join("config.toml"), "").unwrap();
     app.state.config.reload().await.unwrap();
     assert_eq!(me(&app, &cookie).await.status, 401, "the provider is gone");

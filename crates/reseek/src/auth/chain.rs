@@ -1,8 +1,8 @@
 //! The chain that settles who a request is, in order: an API token, a configuration API key,
 //! the session cookie, a trusted reverse proxy's forwarded identity, a trusted network. A
-//! token or key that is presented but not valid fails at once; a session cookie that is not
-//! valid, or whose user the configuration in effect gives no role, is cleared and the next ways
-//! are tried. A session the proxy step started ends when the proxy forwards someone else or a
+//! token or key that is presented but not valid fails at once, as does a token whose owner the
+//! configuration in effect gives no role; a session cookie that is not valid is cleared and the
+//! next ways are tried, and its session ended when the configuration gives its user no role. A session the proxy step started ends when the proxy forwards someone else or a
 //! different role for them.
 
 use std::net::IpAddr;
@@ -19,6 +19,7 @@ use super::sessions::{self, NewSession, Origin, StoredSession};
 use super::{Client, TOKEN_PREFIX, client, keys, networks, proxy, tokens};
 use crate::api::error::ApiError;
 use crate::app::AppState;
+use crate::db::DbError;
 use crate::http::Peer;
 
 /// The path of the event stream, the one route that takes a credential in its query.
@@ -156,11 +157,16 @@ pub async fn identify(
       }
     };
     let outcome = if credential.starts_with(TOKEN_PREFIX) {
-      tokens::check(&auth.db, credential, ip).await.map(|found| {
-        found
-          .map(|token| token.principal())
-          .map_err(|refusal| refusal.to_string())
-      })
+      match tokens::check(&auth.db, credential, ip).await {
+        Ok(Ok(token)) => owner_role(app, &token.owner, options)
+          .await
+          .map(|owner| match owner {
+            Some(role) => Ok(token.principal(role)),
+            None => Err(tokens::Refusal::Owner.to_string()),
+          }),
+        Ok(Err(refusal)) => Ok(Err(refusal.to_string())),
+        Err(e) => Err(e),
+      }
     } else {
       Ok(
         keys::check(
@@ -216,6 +222,24 @@ pub async fn identify(
     app.startup.values.web.authentication.disabled,
   );
   Ok(identified)
+}
+
+/// The role of a token's `owner` now: what `options` give them by their last sign-in, or give
+/// the trusted network they are; `None` for anyone else, which refuses the token.
+async fn owner_role(
+  app: &AppState,
+  owner: &str,
+  options: &crate::config::Options,
+) -> Result<Option<Role>, DbError> {
+  let role = match sessions::last_sign_in(&app.auth.db, owner).await? {
+    Some(sign_in) => sign_in.role(owner, &options.web.authentication),
+    None => networks::subject_role(
+      owner,
+      options,
+      app.startup.values.web.authentication.disabled,
+    ),
+  };
+  Ok(role)
 }
 
 /// The proxy step: the identity a trusted reverse proxy forwarded, when its groups grant a
@@ -305,7 +329,7 @@ async fn cookie_session(
   let Some((session, role)) = session_of(app, value, presented, options, used).await? else {
     return Ok(None);
   };
-  if session.origin != Origin::Proxy {
+  if session.sign_in.origin != Origin::Proxy {
     return Ok(Some((session, role)));
   }
   let proxy = &options.web.authentication.proxy;
@@ -327,7 +351,7 @@ async fn cookie_session(
 }
 
 /// The active session a cookie value names with the role `options` give its user, recording its
-/// use when `used` and the record is stale. A session whose user they give no role is ignored.
+/// use when `used` and the record is stale. A session whose user they give no role is ended.
 async fn session_of(
   app: &AppState,
   value: &str,
@@ -356,10 +380,8 @@ async fn session_of(
     return Ok(None);
   }
   let Some(role) = session.role(&options.web.authentication) else {
-    debug!(
-      subject = session.subject,
-      "session cookie of a user the configuration gives no role ignored"
-    );
+    let reason = SessionRevokeReason::Configuration;
+    end_sessions(app, vec![session.id], None, reason).await?;
     return Ok(None);
   };
   if used && session.seen_due(now, idle) {
@@ -393,18 +415,32 @@ pub async fn start_session(
     .map_err(ApiError::internal)?;
   info!(
     principal = session.subject,
-    via = session.origin.stored(),
+    via = session.sign_in.origin.stored(),
     "session created"
   );
   app.events.raise(Event::SessionCreated(SessionCreated {
     version: 0,
     subject: session.subject.clone(),
     name: session.name.clone(),
-    via: session.origin.via(),
+    via: session.sign_in.origin.via(),
     role,
     ip: Some(presented.client.ip.to_string()),
   }));
   Ok(session)
+}
+
+/// Ends the active sessions whose users the configuration in effect gives no role.
+pub async fn end_sessions_without_role(app: &AppState) -> Result<(), ApiError> {
+  let current = app.config.current();
+  let authentication = &current.values.web.authentication;
+  let ids = sessions::active(&app.auth.db, None, idle(app))
+    .await
+    .map_err(ApiError::internal)?
+    .into_iter()
+    .filter(|session| session.role(authentication).is_none())
+    .map(|session| session.id)
+    .collect();
+  end_sessions(app, ids, None, SessionRevokeReason::Configuration).await
 }
 
 /// Revokes the sessions `ids`, raising `SessionRevoked` for each one that was still going and

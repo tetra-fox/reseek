@@ -25415,7 +25415,8 @@
           "admin",
           "backchannel",
           "proxy",
-          "expired"
+          "expired",
+          "configuration"
         ]
       },
       "SessionRevoked": {

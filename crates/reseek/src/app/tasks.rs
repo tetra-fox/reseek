@@ -48,6 +48,9 @@ async fn follow_configuration(app: AppState) {
     app.state.configured(&loaded);
     // a principal's role is read from the configuration, so every stream checks its own again
     app.live.credentials_changed();
+    if let Err(e) = crate::auth::end_sessions_without_role(&app).await {
+      warn!(error = ?e, "the sessions of users with no role now were not ended");
+    }
     app
       .live
       .publish(LiveFrame::ApplicationOptions(view::document(&loaded)));

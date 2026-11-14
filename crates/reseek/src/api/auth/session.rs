@@ -55,7 +55,7 @@ async fn get_session(
 ) -> Json<CurrentPrincipal> {
   let session = session.map(|Extension(RequestSession(session))| session);
   Json(CurrentPrincipal {
-    provider: session.as_ref().map(|s| s.origin.provider()),
+    provider: session.as_ref().map(|s| s.sign_in.origin.provider()),
     session: session.map(|s| CurrentSession {
       id: s.id,
       created_at: s.created_at,
@@ -293,7 +293,7 @@ async fn list(
     .map_err(ApiError::internal)?;
   let options = app.config.current();
   let authentication = &options.values.web.authentication;
-  // a session whose user the configuration gives no role is not let in, so it is not listed
+  // a session whose user the configuration gives no role is being ended, so it is not listed
   Ok(Json(
     active
       .iter()
@@ -381,7 +381,7 @@ async fn provider_logout(
   session: &StoredSession,
   client: &Client,
 ) -> Option<String> {
-  let Origin::Oidc(name) = &session.origin else {
+  let Origin::Oidc(name) = &session.sign_in.origin else {
     return None;
   };
   let current = app.config.current();
@@ -602,6 +602,7 @@ mod tests {
 
   #[tokio::test]
   async fn a_lowered_or_removed_user_loses_the_role_on_the_next_request() {
+    use crate::auth::sessions;
     let config = |role: Option<&str>| match role {
       Some(role) => format!(
         "[web.authentication.local.users.viewer]\npassword = \"look\"\nrole = \"{role}\"\n\
@@ -615,20 +616,46 @@ mod tests {
       app.state.config.reload().await.unwrap();
     };
     let admin = signed_in(&app).await;
-    let signed = app
+    let viewer_login = async || {
+      let signed = app
+        .send_from(
+          OUTSIDE,
+          request(
+            "POST",
+            "/api/v0/session",
+            Some(json!({ "username": "viewer", "password": "look" })),
+          ),
+        )
+        .await;
+      set_cookie(&signed.headers, "reseek_session").unwrap()
+    };
+    let cookie = viewer_login().await;
+    // never used again, so only the configuration change can end it
+    let unused = viewer_login().await;
+    let created = app
       .send_from(
         OUTSIDE,
-        request(
-          "POST",
-          "/api/v0/session",
-          Some(json!({ "username": "viewer", "password": "look" })),
+        with(
+          with(
+            request(
+              "POST",
+              "/api/v0/tokens",
+              Some(json!({ "name": "script", "role": "Administrator" })),
+            ),
+            "cookie",
+            &cookie,
+          ),
+          "origin",
+          "http://localhost",
         ),
       )
       .await;
-    let cookie = set_cookie(&signed.headers, "reseek_session").unwrap();
+    assert_eq!(created.status, 201, "{:?}", created.body);
+    let token = format!("Bearer {}", created.json()["secret"].as_str().unwrap());
     let credentials = [
       ("cookie", cookie.as_str()),
       ("x-api-key", "robot-key-0123456789"),
+      ("authorization", token.as_str()),
     ];
     let send = |uri: &str, (name, value): (&'static str, &str)| {
       app.send_from(OUTSIDE, with(request("GET", uri, None), name, value))
@@ -643,8 +670,10 @@ mod tests {
       let answer = send("/api/v0/options/view", credential).await;
       assert_eq!(answer.status, 403, "{credential:?} is no administrator now");
     }
-    let me = send("/api/v0/session", credentials[0]).await.json();
-    assert_eq!(me["role"], "ReadOnly");
+    for credential in [credentials[0], credentials[2]] {
+      let me = send("/api/v0/session", credential).await.json();
+      assert_eq!(me["role"], "ReadOnly", "{credential:?}");
+    }
     let listed = send("/api/v0/sessions", ("cookie", admin.as_str()))
       .await
       .json();
@@ -654,7 +683,7 @@ mod tests {
       .iter()
       .map(|session| session["role"].as_str().unwrap())
       .collect();
-    assert_eq!(roles, ["ReadOnly", "Administrator"]);
+    assert_eq!(roles, ["ReadOnly", "ReadOnly", "Administrator"]);
 
     reload(config(None)).await;
     for credential in credentials {
@@ -670,6 +699,28 @@ mod tests {
       .await
       .json();
     assert_eq!(listed.as_array().unwrap().len(), 1, "{listed}");
+    let id = unused.split_once('=').unwrap().1.split_once('.').unwrap().0;
+    let ended = async || {
+      let session = sessions::find(&app.state.auth.db, id).await.unwrap();
+      session.unwrap().revoked_at.is_some()
+    };
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
+    while !ended().await {
+      assert!(
+        tokio::time::Instant::now() < deadline,
+        "the unused session was not ended"
+      );
+      tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+
+    reload(config(Some("readonly"))).await;
+    assert_eq!(
+      send("/api/v0/session", credentials[0]).await.status,
+      401,
+      "an ended session takes a new sign-in"
+    );
+    let me = send("/api/v0/session", credentials[2]).await.json();
+    assert_eq!(me["role"], "ReadOnly", "the token follows its owner again");
   }
 
   #[tokio::test]

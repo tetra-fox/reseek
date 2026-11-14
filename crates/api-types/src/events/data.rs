@@ -209,6 +209,8 @@ pub enum SessionRevokeReason {
   Proxy,
   /// it expired
   Expired,
+  /// the configuration gives its user no role now
+  Configuration,
 }
 
 /// The data of `SessionRevoked`.

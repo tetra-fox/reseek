@@ -506,4 +506,68 @@ mod tests {
     assert_eq!(expired.status, 401);
     assert_eq!(expired.json()["error"], "token_expired");
   }
+
+  #[tokio::test]
+  async fn a_trusted_network_or_proxy_users_token_follows_what_the_configuration_gives_them() {
+    let config = |networks: &str, trusted_role: &str| {
+      format!(
+        "[web]\ntrusted_proxies = [\"192.0.2.7/32\"]\n[web.authentication]\n\
+         trusted_networks = [{networks}]\ntrusted_role = \"{trusted_role}\"\n\
+         [web.authentication.proxy]\nenabled = true\n\
+         [web.authentication.proxy.role_mapping]\nadministrator = [\"admins\"]\n"
+      )
+    };
+    let app = app(&config("\"127.0.0.0/8\"", "administrator"), &[]).await;
+    let reload = async |text: String| {
+      std::fs::write(app.dir.path().join("config.toml"), text).unwrap();
+      app.state.config.reload().await.unwrap();
+    };
+    let by_network = create(&app, json!({ "name": "lan", "role": "Administrator" })).await;
+    let by_network = by_network["secret"].as_str().unwrap().to_string();
+    // a proxy user who never had a page session, so no groups of theirs are stored
+    let by_proxy = app
+      .send_from(
+        "192.0.2.7:1",
+        with(
+          with(
+            request(
+              "POST",
+              "/api/v0/tokens",
+              Some(json!({ "name": "proxied", "role": "ReadOnly" })),
+            ),
+            "x-authentik-username",
+            "alice",
+          ),
+          "x-authentik-groups",
+          "admins",
+        ),
+      )
+      .await;
+    assert_eq!(by_proxy.status, 201, "{:?}", by_proxy.body);
+    let by_proxy = by_proxy.json()["secret"].as_str().unwrap().to_string();
+    let me = async |secret: &str| {
+      app
+        .send_from(
+          OUTSIDE,
+          bearer(request("GET", "/api/v0/session", None), secret),
+        )
+        .await
+    };
+    assert_eq!(me(&by_network).await.json()["role"], "Administrator");
+    let refused = me(&by_proxy).await;
+    assert_eq!(
+      refused.status, 401,
+      "nothing to read the proxy user's role from"
+    );
+    assert_eq!(refused.json()["error"], "token_owner_without_role");
+
+    reload(config("\"127.0.0.0/8\"", "readonly")).await;
+    assert_eq!(me(&by_network).await.json()["role"], "ReadOnly");
+    reload(config("", "administrator")).await;
+    assert_eq!(
+      me(&by_network).await.status,
+      401,
+      "the network is trusted no more"
+    );
+  }
 }
