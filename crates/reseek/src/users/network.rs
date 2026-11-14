@@ -310,8 +310,10 @@ impl UserService for Users {
   async fn info(&self, username: &str) -> Result<UserInfo, ApiError> {
     self.reachable(username)?;
     self.directory.refetch_statistics(username);
+    // a user with a row when asked is only filled in, so forgetting them meanwhile is not undone
+    let creates = !self.directory.known.has(username);
     self
-      .fetch_info(username, true)
+      .fetch_info(username, creates)
       .await
       .map_err(|e| unanswered(username, e))
   }

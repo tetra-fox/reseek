@@ -1432,8 +1432,9 @@ async fn a_profile_refresh_answered_after_the_user_is_forgotten_makes_no_row() {
   );
 }
 
-#[tokio::test]
-async fn a_profile_refresh_whose_info_comes_after_the_user_is_forgotten_makes_no_row() {
+/// Alice, who has a row, has her client asked for its info by `GET path`, and is forgotten
+/// before it answers; the answer makes her no row.
+async fn info_answered_after_alice_is_forgotten_makes_no_row(path: &str) {
   use soulseek_proto::frame::FrameKind;
   use soulseek_proto::peer::UserInfo;
   use soulseek_proto::server::GetPeerAddressResponse;
@@ -1464,7 +1465,7 @@ async fn a_profile_refresh_whose_info_comes_after_the_user_is_forgotten_makes_no
     .set_notes("alice", "kind".into())
     .await
     .unwrap();
-  let refreshing = app.call("GET", "/api/v0/users/alice/profile?refresh=true", None);
+  let asking = app.call("GET", path, None);
   // her info is answered once she is forgotten
   let forgetting = async {
     let (mut alice_client, _) = peer.accept().await.unwrap();
@@ -1489,12 +1490,62 @@ async fn a_profile_refresh_whose_info_comes_after_the_user_is_forgotten_makes_no
     alice_client.write_all(&info.encode()).await.unwrap();
     alice_client
   };
-  let ((status, _), _alice_client) = tokio::join!(refreshing, forgetting);
+  let ((status, _), _alice_client) = tokio::join!(asking, forgetting);
   assert_eq!(status, 200);
   assert_eq!(
     alice(&app).await["known"],
     false,
-    "the refresh made the forgotten user's row again"
+    "the info made the forgotten user's row again"
+  );
+}
+
+#[tokio::test]
+async fn a_profile_refresh_whose_info_comes_after_the_user_is_forgotten_makes_no_row() {
+  info_answered_after_alice_is_forgotten_makes_no_row("/api/v0/users/alice/profile?refresh=true")
+    .await;
+}
+
+#[tokio::test]
+async fn info_asked_for_that_comes_after_the_user_is_forgotten_makes_no_row() {
+  info_answered_after_alice_is_forgotten_makes_no_row("/api/v0/users/alice/info").await;
+}
+
+#[tokio::test]
+async fn statistics_asked_for_that_come_after_the_user_is_forgotten_make_no_row() {
+  let app = crate::testing::soulseek::app(CONFIG).await;
+  let server = crate::testing::soulseek::Server::silent().await;
+  server.login(&app).await;
+  let users = &app.state.users;
+  users.set_notes("alice", "kind".into()).await.unwrap();
+  // the writer is held, so the forget waits at the row's delete and the touches the answer
+  // makes queue behind it
+  let (held, holding) = tokio::sync::oneshot::channel();
+  let (release, released) = std::sync::mpsc::channel::<()>();
+  let db = users.database().clone();
+  let hold = tokio::spawn(async move {
+    db.write(move |_| {
+      held.send(()).expect("the test waits for the hold");
+      released.recv().expect("the test releases the hold");
+      Ok(())
+    })
+    .await
+  });
+  holding.await.unwrap();
+  let asking = async {
+    let asked = users
+      .statistics_of(app.state.network.client(), "alice")
+      .await;
+    release.send(()).unwrap();
+    asked
+  };
+  // the forget is sent to the writer on its first poll, before the statistics are asked for
+  let (forgotten, asked) = tokio::join!(users.remove("alice", false), asking);
+  hold.await.unwrap().unwrap();
+  forgotten.unwrap();
+  asked.unwrap();
+  assert!(
+    !alice_comes_back(&app).await,
+    "the statistics made the forgotten user's row again"
   );
 }
 

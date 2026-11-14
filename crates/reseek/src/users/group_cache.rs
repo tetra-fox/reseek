@@ -307,15 +307,19 @@ impl Directory {
   }
 
   /// Asks the server for `username`'s statistics now for ourselves, through the API or for
-  /// their upload groups, keeps them and touches the user, which makes their row when there is
-  /// none.
+  /// their groups, keeps them and touches the user, which makes their row when there was none
+  /// when asked. A user with a row then is only filled in, so forgetting them while the answer
+  /// is on its way is not undone.
   pub async fn statistics_of(
     &self,
     client: &Client,
     username: &str,
   ) -> Result<StatisticsSnapshot, ClientError> {
+    let known = self.known.has(username);
     let taken = self.statistics_reported(client, username).await?;
-    self.touch(username, Touch::Asked).await;
+    if !known {
+      self.touch(username, Touch::Asked).await;
+    }
     Ok(taken)
   }
 
