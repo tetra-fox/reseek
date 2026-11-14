@@ -3,6 +3,7 @@ import type { Component } from "svelte";
 import { app } from "#lib/app.svelte.js";
 import PortMapping from "#lib/components/settings/PortMapping.svelte";
 import { plural } from "#lib/format.js";
+import { agentNote } from "#lib/relay/agents.js";
 
 /**
  * The control an option is edited with. Most follow from the kind the daemon reports for the key;
@@ -55,7 +56,12 @@ export type Field = {
   columns?: Record<string, string>;
   /** for a map, the label of the column that holds each row's name; Name by default */
   rowName?: string;
+  /** for a map, what the daemon says now of the row named `name`, shown under it */
+  rowNote?: (name: string) => RowNote | undefined;
 };
+
+/** Something the daemon says of a row of a map, and more about it on hover */
+export type RowNote = { text: string; detail: string };
 
 /** The headings the side list of the settings page gathers its sections under */
 export type SectionGroup = "Network" | "Storage" | "Server";
@@ -779,7 +785,8 @@ export const sections: Section[] = [
         {
           key: "relay.agents",
           label: "Agents",
-          columns: { instance_name: "Instance name", secret: "Secret", cidr: "Networks" }
+          columns: { instance_name: "Instance name", secret: "Secret", cidr: "Networks" },
+          rowNote: (name) => agentNote(app.state?.relay, name)
         },
         ...(
           [

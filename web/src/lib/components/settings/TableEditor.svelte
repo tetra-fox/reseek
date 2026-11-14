@@ -97,6 +97,8 @@
   const fresh = (row: Row) => added.has(row.id) && !row.name.trim() && !error;
   const trouble = (row: Row) =>
     fresh(row) ? undefined : (problems.get(row.id) ?? said.byRow.get(row.id));
+  /** what the daemon says now of a row, by its name */
+  const noteOf = (row: Row) => field.rowNote?.(row.name.trim());
 
   const commit = (next: Row[]) => {
     rows = next;
@@ -243,6 +245,17 @@
   {/if}
 {/snippet}
 
+{#snippet note(row: Row)}
+  {@const said = noteOf(row)}
+  {#if said}
+    <Tooltip text={said.detail}>
+      {#snippet child({ props })}
+        <p {...props} class="w-fit text-xs text-warning-soft-fg">{said.text}</p>
+      {/snippet}
+    </Tooltip>
+  {/if}
+{/snippet}
+
 <div
   bind:this={root}
   id={field.key}
@@ -305,6 +318,9 @@
           {#if trouble(row)}
             <tr><td colspan={columns.length + 2}>{@render complaint(row)}</td></tr>
           {/if}
+          {#if noteOf(row)}
+            <tr><td colspan={columns.length + 2} class="px-5 pb-1.5">{@render note(row)}</td></tr>
+          {/if}
         {/each}
       </tbody>
     </table>
@@ -321,6 +337,7 @@
             </summary>
             <div class="flex flex-col gap-3 px-5 pb-3">
               {@render complaint(row)}
+              {@render note(row)}
               <div class="grid grid-cols-[minmax(0,1fr)] gap-3 md:grid-cols-2">
                 <div class="flex flex-col gap-1">
                   <span class="text-xs font-medium text-fg-muted">{nameLabel}</span>

@@ -1,6 +1,7 @@
 import { flushSync, mount, unmount } from "svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { app } from "#lib/app.svelte.js";
 import type { ConfigView } from "#lib/config/fields.js";
 import fixture from "#lib/config/fixtures/view.json";
 import { sections } from "#lib/config/sections.js";
@@ -121,6 +122,43 @@ describe("a settings section", () => {
     expect(auth.querySelector(`button[id="${key}"]`)!.textContent).toContain("Change");
     expect(save.disabled).toBe(true);
     vi.unstubAllGlobals();
+  });
+
+  it("says on an agent's row that another device is connected as it", () => {
+    const v = structuredClone(view);
+    (v.values as { relay: { agents: unknown } }).relay.agents = {
+      nas: { instance_name: "*****", secret: "*****", cidr: "0.0.0.0/0" },
+      laptop: { instance_name: "*****", secret: "*****", cidr: "0.0.0.0/0" }
+    };
+    app.state = {
+      relay: {
+        enabled: true,
+        agents: [],
+        refusedDevices: [
+          {
+            entry: "nas",
+            name: "nas",
+            ipAddress: "192.168.1.9",
+            device: "5e6f7a8b",
+            refusedAt: "2026-11-14T10:00:00Z"
+          }
+        ]
+      }
+    } as never;
+    const relay = render(
+      sections.find((s) => s.id === "relay")!,
+      v
+    );
+    /** What follows the row named `name` before the next row */
+    const under = (name: string) => {
+      const rows = [...relay.querySelectorAll("tr[data-row]")];
+      const row = rows.find((tr) => tr.querySelector("input")!.value === name)!;
+      const next = row.nextElementSibling;
+      return next && !next.hasAttribute("data-row") ? next.textContent!.trim() : "";
+    };
+    expect(under("nas")).toBe("Another device is connected as this agent");
+    expect(under("laptop")).toBe("");
+    app.state = null;
   });
 
   it("keeps a table's hidden secret unless something is typed in its place", async () => {

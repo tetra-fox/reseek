@@ -291,7 +291,8 @@
           <dd>
             {#each s.relay.agents as agent (agent.name)}
               <span class="flex flex-wrap items-center gap-inline">
-                <Tooltip text={`${agent.ipAddress}, version ${agent.version}`}>
+                <Tooltip
+                  text={`${agent.ipAddress}, version ${agent.version}${agent.device ? `, device ${agent.device}` : ""}`}>
                   {#snippet child({ props })}<span {...props}>{agent.name}</span>{/snippet}
                 </Tooltip>
                 <span class="text-fg-muted">
