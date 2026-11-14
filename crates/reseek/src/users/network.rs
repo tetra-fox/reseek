@@ -130,8 +130,9 @@ impl Users {
     Ok(())
   }
 
-  /// Asks `username`'s client for its info and stores what it said before returning it.
-  async fn fetch_info(&self, username: &str) -> Result<UserInfo, ClientError> {
+  /// Asks `username`'s client for its info and stores what it said before returning it, making
+  /// their row when there is none and `creates`.
+  async fn fetch_info(&self, username: &str, creates: bool) -> Result<UserInfo, ClientError> {
     let fetched = self
       .network
       .client()
@@ -145,7 +146,7 @@ impl Users {
       queue_length: fetched.queue_length,
       has_free_slot: fetched.has_free_upload_slot,
     };
-    self.directory.store_info(username, said).await;
+    self.directory.store_info(username, said, creates).await;
     Ok(shown)
   }
 
@@ -154,14 +155,16 @@ impl Users {
   /// from the row afterwards, and what the refresh did not store is the value from before,
   /// marked stale. A user nobody stored who the server says does not exist is a 404, and is
   /// asked about first: the server answers statistics for any name, and keeping those would
-  /// store a row for a user who does not exist.
+  /// store a row for a user who does not exist. A user stored when the refresh began is only
+  /// filled in, so forgetting them while it waits for the answers is not undone.
   async fn refreshed_profile(&self, username: &str) -> Result<UserProfile, ApiError> {
     let (row, _) = self
       .directory
       .stored(username)
       .await
       .map_err(ApiError::internal)?;
-    if row.is_none() && !self.exists(username).await {
+    let stored = row.is_some();
+    if !stored && !self.exists(username).await {
       return Err(ApiError::not_found(format!(
         "User {username} does not exist"
       )));
@@ -175,7 +178,7 @@ impl Users {
         REFRESH_TIMEOUT,
         self.directory.statistics_untouched(client, username)
       ),
-      tokio::time::timeout(REFRESH_TIMEOUT, self.fetch_info(username)),
+      tokio::time::timeout(REFRESH_TIMEOUT, self.fetch_info(username, !stored)),
     );
     // the info is stored as it arrives; reading the outcome logs a failure
     refreshed("info", username, info);
@@ -189,8 +192,8 @@ impl Users {
     if let Some(fresh) = refreshed("statistics", username, statistics) {
       touches.push(Touch::Statistics(fresh.statistics));
     }
-    // asking for the profile is a reason to know the user, which the answers alone are not
-    if !touches.is_empty() {
+    // asking for the profile is a reason to know a new user, which the answers alone are not
+    if !touches.is_empty() && !stored {
       touches.push(Touch::Asked);
     }
     self.directory.touch_now(username, touches).await;
@@ -308,7 +311,7 @@ impl UserService for Users {
     self.reachable(username)?;
     self.directory.refetch_statistics(username);
     self
-      .fetch_info(username)
+      .fetch_info(username, true)
       .await
       .map_err(|e| unanswered(username, e))
   }

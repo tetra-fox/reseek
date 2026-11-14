@@ -1109,25 +1109,6 @@ async fn places_a_peer_sends_on_its_own_are_kept_in_the_order_sent() {
   assert_eq!(read(&app, sent_often.id).await.place_in_queue(), Some(20));
 }
 
-/// Reads frames of `kind` from `stream` into `buffer` and returns the next one whole.
-async fn next_frame(
-  stream: &mut tokio::net::TcpStream,
-  buffer: &mut Vec<u8>,
-  kind: soulseek_proto::frame::FrameKind,
-) -> Vec<u8> {
-  use tokio::io::AsyncReadExt;
-  loop {
-    let split = soulseek_proto::frame::split(kind, buffer, &soulseek_proto::Limits::DEFAULT);
-    if let Some((_, consumed)) = split.unwrap() {
-      return buffer.drain(..consumed).collect();
-    }
-    let mut chunk = [0; 4096];
-    let read = stream.read(&mut chunk).await.unwrap();
-    assert!(read > 0, "the daemon closed the connection");
-    buffer.extend_from_slice(&chunk[..read]);
-  }
-}
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn an_albums_files_are_asked_of_their_user_in_the_order_enqueued() {
   use soulseek_proto::frame::FrameKind;
@@ -1176,7 +1157,7 @@ async fn an_albums_files_are_asked_of_their_user_in_the_order_enqueued() {
     .expect("the daemon connects to alice")
     .unwrap();
   let mut buffer = Vec::new();
-  let init = next_frame(&mut stream, &mut buffer, FrameKind::Init).await;
+  let init = crate::testing::soulseek::next_frame(&mut stream, &mut buffer, FrameKind::Init).await;
   assert!(matches!(
     InitMessage::decode(&init).unwrap(),
     InitMessage::PeerInit(_)
@@ -1185,7 +1166,7 @@ async fn an_albums_files_are_asked_of_their_user_in_the_order_enqueued() {
   while asked.len() < album.len() {
     let frame = tokio::time::timeout(
       within,
-      next_frame(&mut stream, &mut buffer, FrameKind::Peer),
+      crate::testing::soulseek::next_frame(&mut stream, &mut buffer, FrameKind::Peer),
     )
     .await
     .expect("every file is asked for");

@@ -621,7 +621,7 @@ async fn a_picture_too_large_or_not_cached_has_no_url() {
   app
     .state
     .users
-    .store_info("bob", sent(b"GIF89a, too large"))
+    .store_info("bob", sent(b"GIF89a, too large"), true)
     .await;
   assert_eq!(
     profile_info(&app, "bob").await,
@@ -634,13 +634,31 @@ async fn a_picture_too_large_or_not_cached_has_no_url() {
   unkept
     .state
     .users
-    .store_info("alice", sent(b"GIF89a"))
+    .store_info("alice", sent(b"GIF89a"), true)
     .await;
   assert_eq!(
     profile_info(&unkept, "alice").await,
     (json!(true), Value::Null),
     "pictures are not kept"
   );
+}
+
+#[tokio::test]
+async fn info_that_only_fills_in_makes_no_row() {
+  let app = app(CONFIG, &[]).await;
+  let users = &app.state.users;
+  let said = || info::PeerInfo {
+    description: "hello".into(),
+    picture: None,
+    upload_slots: 1,
+    queue_length: 0,
+    has_free_slot: true,
+  };
+  users.store_info("alice", said(), false).await;
+  assert_eq!(alice(&app).await["known"], false);
+  users.set_notes("alice", "kind".into()).await.unwrap();
+  users.store_info("alice", said(), false).await;
+  assert_eq!(alice(&app).await["info"]["description"], "hello");
 }
 
 #[tokio::test]
@@ -1194,6 +1212,115 @@ async fn statistics_asked_before_a_watched_user_is_forgotten_and_answered_after_
   assert!(
     !alice_comes_back(&app).await,
     "the forgotten user is in the directory again"
+  );
+}
+
+#[tokio::test]
+async fn a_profile_refresh_answered_after_the_user_is_forgotten_makes_no_row() {
+  use soulseek_proto::server::GetPeerAddressResponse;
+  use soulseek_proto::{ServerRequest, ServerResponse};
+
+  let app = crate::testing::soulseek::app(CONFIG).await;
+  // alice is offline to peers, so her info fails at once, and her status is answered only when
+  // the test says
+  let mut server = crate::testing::soulseek::Server::start(|request| match request {
+    ServerRequest::GetPeerAddress(asked) => {
+      vec![ServerResponse::GetPeerAddress(GetPeerAddressResponse {
+        username: asked.username.clone(),
+        ip: std::net::Ipv4Addr::UNSPECIFIED,
+        port: 0,
+        obfuscation: None,
+      })]
+    }
+    _ => Vec::new(),
+  })
+  .await;
+  server.login(&app).await;
+  app.state.users.set_notes("alice", "kind".into()).await.unwrap();
+  let refreshing = app.call("GET", "/api/v0/users/alice/profile?refresh=true", None);
+  let forgetting = async {
+    server
+      .received(|request| {
+        matches!(request, ServerRequest::GetStatus(asked) if asked.username == "alice")
+          .then_some(())
+      })
+      .await;
+    let (status, _) = app.call("DELETE", "/api/v0/users/alice", None).await;
+    assert_eq!(status, 204);
+    server.send(vec![alice_is(soulseek_proto::UserPresence::Online).0]);
+  };
+  let ((status, _), ()) = tokio::join!(refreshing, forgetting);
+  assert_eq!(status, 200);
+  assert_eq!(
+    alice(&app).await["known"],
+    false,
+    "the refresh made the forgotten user's row again"
+  );
+}
+
+#[tokio::test]
+async fn a_profile_refresh_whose_info_comes_after_the_user_is_forgotten_makes_no_row() {
+  use soulseek_proto::frame::FrameKind;
+  use soulseek_proto::peer::UserInfo;
+  use soulseek_proto::server::GetPeerAddressResponse;
+  use soulseek_proto::{PeerMessage, ServerRequest, ServerResponse};
+  use tokio::io::AsyncWriteExt;
+
+  // alice's client, which the daemon dials for her info
+  let peer = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+  let port = peer.local_addr().unwrap().port();
+  let app = crate::testing::soulseek::app(CONFIG).await;
+  let server = crate::testing::soulseek::Server::start(move |request| match request {
+    ServerRequest::GetPeerAddress(asked) => {
+      vec![ServerResponse::GetPeerAddress(GetPeerAddressResponse {
+        username: asked.username.clone(),
+        ip: std::net::Ipv4Addr::LOCALHOST,
+        port: port.into(),
+        obfuscation: None,
+      })]
+    }
+    ServerRequest::GetStatus(_) => vec![alice_is(soulseek_proto::UserPresence::Online).0],
+    _ => Vec::new(),
+  })
+  .await;
+  server.login(&app).await;
+  app
+    .state
+    .users
+    .set_notes("alice", "kind".into())
+    .await
+    .unwrap();
+  let refreshing = app.call("GET", "/api/v0/users/alice/profile?refresh=true", None);
+  // her info is answered once she is forgotten
+  let forgetting = async {
+    let (mut alice_client, _) = peer.accept().await.unwrap();
+    let mut buffer = Vec::new();
+    let next = crate::testing::soulseek::next_frame;
+    next(&mut alice_client, &mut buffer, FrameKind::Init).await;
+    let asked = next(&mut alice_client, &mut buffer, FrameKind::Peer).await;
+    assert_eq!(
+      PeerMessage::decode(&asked).unwrap(),
+      PeerMessage::InfoRequest
+    );
+    let (status, _) = app.call("DELETE", "/api/v0/users/alice", None).await;
+    assert_eq!(status, 204);
+    let info = PeerMessage::InfoResponse(UserInfo {
+      description: "hello".into(),
+      picture: None,
+      upload_slots: 1,
+      queue_length: 0,
+      has_free_upload_slot: true,
+      upload_permitted: None,
+    });
+    alice_client.write_all(&info.encode()).await.unwrap();
+    alice_client
+  };
+  let ((status, _), _alice_client) = tokio::join!(refreshing, forgetting);
+  assert_eq!(status, 200);
+  assert_eq!(
+    alice(&app).await["known"],
+    false,
+    "the refresh made the forgotten user's row again"
   );
 }
 

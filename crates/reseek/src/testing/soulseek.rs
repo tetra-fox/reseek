@@ -1,6 +1,7 @@
 //! A scripted Soulseek server on loopback, for what the daemon does with a session: it accepts
 //! every login, answers our own statistics and privileges, answers the other requests as the
 //! test's script says, hands on every request it reads, and sends or closes when told.
+//! [`next_frame`] reads what the daemon writes to a scripted peer.
 
 use std::net::Ipv4Addr;
 use std::time::Duration;
@@ -209,6 +210,25 @@ fn always(request: &ServerRequest) -> Vec<ServerResponse> {
       })]
     }
     _ => Vec::new(),
+  }
+}
+
+/// Reads frames of `kind` from `stream` into `buffer` and returns the next one whole.
+pub async fn next_frame(
+  stream: &mut tokio::net::TcpStream,
+  buffer: &mut Vec<u8>,
+  kind: soulseek_proto::frame::FrameKind,
+) -> Vec<u8> {
+  use tokio::io::AsyncReadExt;
+  loop {
+    let split = soulseek_proto::frame::split(kind, buffer, &soulseek_proto::Limits::DEFAULT);
+    if let Some((_, consumed)) = split.unwrap() {
+      return buffer.drain(..consumed).collect();
+    }
+    let mut chunk = [0; 4096];
+    let read = stream.read(&mut chunk).await.unwrap();
+    assert!(read > 0, "the daemon closed the connection");
+    buffer.extend_from_slice(&chunk[..read]);
   }
 }
 
