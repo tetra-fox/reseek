@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { app } from "./app.svelte";
 import { FALLBACK_MS, live } from "./live/live.svelte";
@@ -24,6 +24,16 @@ const tabsBus = await vi.hoisted(async () => {
 });
 
 describe("the app's bootstrap", () => {
+  /** Lets the tabs' settle pass, which the bootstrap waits out before the stream, and ends it */
+  const boot = async () => {
+    const booting = app.bootstrap();
+    await vi.advanceTimersByTimeAsync(SETTLE_MS);
+    await booting;
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
   afterEach(() => {
     app.signedOut();
     vi.unstubAllGlobals();
@@ -43,7 +53,7 @@ describe("the app's bootstrap", () => {
         return new Response(null, { status: 401 });
       })
     );
-    await app.bootstrap();
+    await boot();
     expect(app.phase).toBe("login");
     expect(live.status).toBe("off");
   });
@@ -64,7 +74,7 @@ describe("the app's bootstrap", () => {
         return Response.json({ error: "Too many streams" }, { status: 429 });
       })
     );
-    await app.bootstrap();
+    await boot();
     expect(app.phase).toBe("app");
     expect(app.options).toEqual({ soulseek: { username: "me" } });
     expect(app.optionsRevision).toBe("r");
@@ -77,10 +87,11 @@ describe("the app's bootstrap", () => {
         : undefined
     );
     const booting = app.bootstrap();
-    await vi.waitFor(() => expect(live.status).toBe("connecting"));
+    await vi.advanceTimersByTimeAsync(SETTLE_MS);
+    expect(live.status).toBe("connecting");
     net.frame("hello", { principal: { name: "admin", role: "Administrator" } } as never);
     net.frame("application.state", { user: {} } as never);
-    await new Promise((done) => setTimeout(done, 20));
+    await vi.advanceTimersByTimeAsync(20);
     expect(app.phase).toBe("initializing");
     net.frame("application.options", { values: { a: 1 }, revision: "r" } as never);
     await booting;
@@ -89,7 +100,6 @@ describe("the app's bootstrap", () => {
   });
 
   it("says why the options could not be read, and shows the app once they can", async () => {
-    vi.useFakeTimers();
     let options = Response.json({ error: "The options are being written" }, { status: 503 });
     vi.stubGlobal(
       "fetch",
@@ -105,9 +115,7 @@ describe("the app's bootstrap", () => {
         return Response.json({ error: "Too many streams" }, { status: 429 });
       })
     );
-    const booting = app.bootstrap();
-    await vi.advanceTimersByTimeAsync(SETTLE_MS + 10);
-    await booting;
+    await boot();
     expect(app.phase).toBe("lost");
     expect([app.lostReason, app.lostDetail]).toEqual([
       "Could not load the settings",
