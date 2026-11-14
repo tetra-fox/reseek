@@ -233,7 +233,7 @@ impl Client {
     &self.inner.waiter
   }
 
-  /// a fresh token for a search, a transfer or a connection request
+  /// a fresh token for a search or a transfer
   pub fn next_token(&self) -> u32 {
     self.inner.tokens.next()
   }

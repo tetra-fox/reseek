@@ -185,21 +185,30 @@ impl Searches {
     !self.running().is_empty()
   }
 
+  /// Runs `decide` with the running searches held, telling it whether a token is one of
+  /// theirs, so no search takes a token while it decides on one
+  pub(crate) fn holding_tokens<R>(&self, decide: impl FnOnce(&dyn Fn(u32) -> bool) -> R) -> R {
+    let running = self.running();
+    decide(&|token| running.contains_key(&token))
+  }
+
   /// Takes `token`, or a fresh one, for `search`, in one step so two callers cannot both take
-  /// one token
+  /// one token. A token `ticketed` says is a connection request's ticket is never taken: the
+  /// search sends it to every user.
   fn register(
     &self,
     tokens: &TokenGenerator,
     token: Option<u32>,
+    ticketed: impl Fn(u32) -> bool,
     search: impl FnOnce(u32) -> Running,
   ) -> Result<(Registration<'_>, Arc<Running>), ClientError> {
     let mut running = self.running();
     let token = match token {
-      Some(token) if running.contains_key(&token) => {
+      Some(token) if running.contains_key(&token) || ticketed(token) => {
         return Err(ClientError::DuplicateToken(token));
       }
       Some(token) => token,
-      None => tokens.next_free(|token| running.contains_key(&token)),
+      None => tokens.next_free(|token| running.contains_key(&token) || ticketed(token)),
     };
     let search = Arc::new(search(token));
     running.insert(token, search.clone());
@@ -282,15 +291,17 @@ impl Client {
     let search_text = query.search_text();
     self.require_logged_in(&format!("search for {search_text}"))?;
     let searches = self.searches();
-    let (_registration, search) = searches.register(self.tokens(), token, |token| Running {
-      token,
-      query,
-      scope,
-      options,
-      counts: Mutex::new(Counts::default()),
-      handler: Mutex::new(Box::new(handler)),
-      ended: watch::channel(false).0,
-    })?;
+    let ticketed = |token| self.ticket_held(token);
+    let (_registration, search) =
+      searches.register(self.tokens(), token, ticketed, |token| Running {
+        token,
+        query,
+        scope,
+        options,
+        counts: Mutex::new(Counts::default()),
+        handler: Mutex::new(Box::new(handler)),
+        ended: watch::channel(false).0,
+      })?;
     let span = tracing::info_span!("search", token = search.token);
     self
       .run_search(&search, &search_text, cancel)
@@ -514,8 +525,53 @@ fn search_query(text: &str, options: &SearchOptions) -> Result<SearchQuery, Clie
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
+  use std::time::Duration;
+
+  use soulseek_proto::PeerConnectionType;
+
   use super::*;
+  use crate::options::ClientOptions;
+
+  fn search(token: u32) -> Running {
+    Running {
+      token,
+      query: search_query("daft punk", &SearchOptions::default()).unwrap(),
+      scope: SearchScope::Network,
+      options: SearchOptions::default(),
+      counts: Mutex::new(Counts::default()),
+      handler: Mutex::new(Box::new(|_| {})),
+      ended: watch::channel(false).0,
+    }
+  }
+
+  /// a search running under `token` until the returned guard is dropped
+  pub(crate) fn running(searches: &Searches, token: u32) -> impl Sized + '_ {
+    let tokens = TokenGenerator::new(None);
+    let (registration, _) = searches
+      .register(&tokens, Some(token), |_| false, search)
+      .unwrap();
+    registration
+  }
+
+  #[tokio::test]
+  async fn a_search_never_takes_a_connection_requests_ticket() {
+    let client = Client::new(ClientOptions {
+      enable_listener: false,
+      ..ClientOptions::default()
+    })
+    .unwrap();
+    let ticket = client.issue_ticket("bob", PeerConnectionType::Peer, Duration::from_secs(10));
+    let held = ticket.token();
+    let ticketed = |token| client.ticket_held(token);
+    let searches = client.searches();
+    let given = searches.register(&TokenGenerator::new(None), Some(held), ticketed, search);
+    assert!(matches!(given, Err(ClientError::DuplicateToken(token)) if token == held));
+    // the count reaching the ticket passes it by
+    let counted = TokenGenerator::new(Some(held));
+    let (_registration, search) = searches.register(&counted, None, ticketed, search).unwrap();
+    assert_ne!(search.token, held);
+  }
 
   #[test]
   fn a_query_needs_a_term_longer_than_one_character() {

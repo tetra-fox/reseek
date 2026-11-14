@@ -16,12 +16,13 @@ use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
 use uuid::Uuid;
 
-use super::solicit::{Via, both_failed, race};
+use super::solicit::{Ticket, Via, both_failed, race};
 use super::{Entry, MESSAGE_CONNECTIONS_PER_ADDRESS, Outcome, PeerConnections, lock};
 use crate::client::Client;
 use crate::conn::{Conn, ConnKind, Disconnect, MessageConn};
 use crate::error::{ClientError, ConnectionErrorKind};
 use crate::log::LogLimiter;
+use crate::options::ConnectionOptions;
 
 /// how many times a caller follows a connection that was replaced while it waited for it
 const FOLLOW_REPLACEMENTS: usize = 3;
@@ -135,8 +136,9 @@ impl Client {
       &mut cache,
       self.options().limits.max_cached_peer_connections as usize,
     );
-    let request = self.next_token();
-    let (entry, settle) = peers.new_entry(Some(request));
+    let options = self.options().peer_connection_options.clone();
+    let ticket = self.issue_ticket(username, PeerConnectionType::Peer, options.connect_timeout);
+    let (entry, settle) = peers.new_entry(Some(ticket.token()));
     cache.insert(username.to_owned(), entry.clone());
     drop(cache);
     let client = self.clone();
@@ -148,7 +150,7 @@ impl Client {
         let lifetime = client.cancellation().clone();
         let result = tokio::select! {
           () = lifetime.cancelled() => Err(ClientError::Disposed),
-          result = client.establish_message_connection(&username, endpoint, request) => result,
+          result = client.establish_message_connection(&username, endpoint, ticket, options) => result,
         };
         if let Err(error) = &result {
           tracing::debug!(%error, "outbound message connection failed");
@@ -160,16 +162,16 @@ impl Client {
     entry
   }
 
-  /// dials `username` and asks the server, with `token`, to have the user dial us, keeping
+  /// dials `username` and asks the server, with `ticket`, to have the user dial us, keeping
   /// whichever connects first, then introduces us on a connection we dialed
   async fn establish_message_connection(
     &self,
     username: &str,
     endpoint: SocketAddr,
-    token: u32,
+    ticket: Ticket,
+    options: ConnectionOptions,
   ) -> Result<MessageConn, ClientError> {
     let own = self.own_username("establish a peer connection")?;
-    let options = self.options().peer_connection_options.clone();
     let stop = self.cancellation().child_token();
     let direct = self.connect_to_peer_socket(
       endpoint,
@@ -178,14 +180,7 @@ impl Client {
       options.clone(),
       &stop,
     );
-    let indirect = self.solicit(
-      username,
-      token,
-      PeerConnectionType::Peer,
-      options.clone(),
-      options.connect_timeout,
-      &stop,
-    );
+    let indirect = self.solicit(ticket, options.clone(), &stop);
     let (conn, via) = race(direct, indirect, &stop).await.map_err(|errors| {
       both_failed(
         format!(

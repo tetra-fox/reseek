@@ -144,14 +144,12 @@ impl Client {
       connection_options.clone(),
       &stop,
     );
-    let indirect = self.solicit(
+    let ticket = self.issue_ticket(
       &username,
-      self.next_token(),
       PeerConnectionType::Distributed,
-      connection_options.clone(),
       connection_options.connect_timeout,
-      &stop,
     );
+    let indirect = self.solicit(ticket, connection_options.clone(), &stop);
     let (conn, via) = race(direct, indirect, &stop).await.map_err(|errors| {
       both_failed(
         format!(

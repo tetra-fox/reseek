@@ -146,6 +146,18 @@ impl SearchResponder {
     kept.or_else(|| crate::lock(&self.riding).get(&response_token).cloned())
   }
 
+  /// whether anything is still filed under the connection request `token`: answers riding on
+  /// its attempt or kept under it, its refusal or its late connection
+  pub(crate) fn holds(&self, token: u32) -> bool {
+    self
+      .undelivered()
+      .find(|(rode_on, _)| *rode_on == token)
+      .is_some()
+      || crate::lock(&self.riding).peek(&token).is_some()
+      || crate::lock(&self.arrived).peek(&token).is_some()
+      || crate::lock(&self.refused).peek(&token).is_some()
+  }
+
   /// follows a change of the cache bound
   pub(crate) fn resize(&self, cache_size: u32) {
     self.undelivered().set_capacity(cache_size as usize);
@@ -621,15 +633,9 @@ mod tests {
     // an answer to carol's search waits on the attempt to reach her
     let _waiting = client.responder().wait_for("carol");
     let cancel = CancellationToken::new();
-    let token = 77;
-    let mut soliciting = Box::pin(client.solicit(
-      "carol",
-      token,
-      PeerConnectionType::Peer,
-      ConnectionOptions::default(),
-      Duration::from_secs(30),
-      &cancel,
-    ));
+    let ticket = client.issue_ticket("carol", PeerConnectionType::Peer, Duration::from_secs(30));
+    let token = ticket.token();
+    let mut soliciting = Box::pin(client.solicit(ticket, ConnectionOptions::default(), &cancel));
     tokio::select! {
       biased;
       _ = &mut soliciting => panic!("the attempt ended before the server had its request"),

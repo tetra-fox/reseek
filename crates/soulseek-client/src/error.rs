@@ -99,7 +99,8 @@ pub enum ClientError {
   /// which is its cue to ask again
   #[error("the file cannot be queued now")]
   DownloadUnavailable,
-  /// the token is already used by another search, or by another transfer
+  /// the token is already used by another search or transfer, or is a connection request's
+  /// ticket
   #[error("token {0} is already in use")]
   DuplicateToken(u32),
   /// a transfer of the same file with the same user in the same direction is already active

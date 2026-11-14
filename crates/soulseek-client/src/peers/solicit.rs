@@ -1,14 +1,16 @@
 //! Reaching a peer two ways at once: dialing it directly, and asking the server to have it dial
 //! us (a solicitation, answered by a connection that opens with `PierceFirewall` and the
-//! solicitation's token). Whichever connects first is kept; the other is dropped. A peer may
+//! solicitation's ticket). Whichever connects first is kept; the other is dropped. A peer may
 //! still answer a solicitation after dialing won, within the time the solicitation would have
-//! been waited for, so its token stays known until then. When a peer asks the server for us
-//! instead, we dial it and open with `PierceFirewall` and the token of its request.
+//! been waited for, so its ticket stays known until then. A ticket is a random token, never one
+//! a request of ours still holds or a running search uses, and it is answered once. When a peer
+//! asks the server for us instead, we dial it and open with `PierceFirewall` and the token of
+//! its request.
 
 use std::collections::HashMap;
 use std::future::Future;
 use std::net::SocketAddr;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use soulseek_proto::init::{PeerInit, PierceFirewall};
@@ -17,11 +19,12 @@ use soulseek_proto::{InitMessage, PeerConnectionType, ServerRequest};
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 
-use super::lock;
+use super::{PeerConnections, lock};
 use crate::client::Client;
 use crate::conn::{Conn, ConnKind};
 use crate::error::{ClientError, ConnectionErrorKind};
 use crate::options::ConnectionOptions;
+use crate::token::random_token;
 use crate::waiter::WaitKey;
 
 /// A connection request we had the server relay and wait to be answered
@@ -106,38 +109,71 @@ impl Solicitations {
     }
   }
 
-  /// Records a solicitation whose answer is awaited for `timeout`. Solicitations whose time is
-  /// up leave the table here.
-  fn insert(&self, token: u32, solicitation: Solicitation, timeout: Duration) -> Pending<'_> {
-    let now = Instant::now();
-    let mut pending = lock(&self.pending);
-    pending.retain(|_, entry| entry.awaited || entry.answerable_until > now);
-    pending.insert(
-      token,
-      Entry {
-        solicitation,
-        awaited: true,
-        answerable_until: now + timeout,
-      },
-    );
-    Pending {
-      solicitations: self,
-      token,
-    }
+  /// whether a solicitation is still filed under `token`
+  pub(crate) fn holds(&self, token: u32) -> bool {
+    lock(&self.pending).contains_key(&token)
   }
 }
 
-/// Ends the wait for a solicitation however the wait ends. A solicitation that was not answered
-/// stays known until its solicitor would have given up, so a user acting on the relayed request
-/// after the solicitor stopped waiting is still recognized.
-struct Pending<'a> {
-  solicitations: &'a Solicitations,
+/// The ticket of a solicitation, filed from when it is issued until its solicitor stops
+/// waiting for the answer. A solicitation that was not answered stays known until its
+/// solicitor would have given up, so a user acting on the relayed request after the solicitor
+/// stopped waiting is still recognized.
+pub(crate) struct Ticket {
+  peers: Arc<PeerConnections>,
   token: u32,
+  solicitation: Solicitation,
+  timeout: Duration,
 }
 
-impl Drop for Pending<'_> {
+impl Ticket {
+  /// Files `solicitation`, awaited for `timeout` from now, under the first token from `draw`
+  /// that no solicitation holds and `taken` does not claim. Solicitations whose time is up
+  /// leave the table here.
+  fn issue(
+    peers: Arc<PeerConnections>,
+    solicitation: Solicitation,
+    timeout: Duration,
+    mut draw: impl FnMut() -> u32,
+    taken: impl Fn(u32) -> bool,
+  ) -> Self {
+    let now = Instant::now();
+    let token = {
+      let mut pending = lock(&peers.solicitations.pending);
+      pending.retain(|_, entry| entry.awaited || entry.answerable_until > now);
+      let token = loop {
+        let token = draw();
+        if !pending.contains_key(&token) && !taken(token) {
+          break token;
+        }
+      };
+      pending.insert(
+        token,
+        Entry {
+          // the table answers the connection, the ticket names it in the request
+          solicitation: solicitation.clone(),
+          awaited: true,
+          answerable_until: now + timeout,
+        },
+      );
+      token
+    };
+    Self {
+      peers,
+      token,
+      solicitation,
+      timeout,
+    }
+  }
+
+  pub(crate) fn token(&self) -> u32 {
+    self.token
+  }
+}
+
+impl Drop for Ticket {
   fn drop(&mut self) {
-    let mut pending = lock(&self.solicitations.pending);
+    let mut pending = lock(&self.peers.solicitations.pending);
     let Some(entry) = pending.get_mut(&self.token) else {
       return;
     };
@@ -273,31 +309,61 @@ impl Client {
     Ok(conn)
   }
 
-  /// Asks the server to have `username` connect to us with a `connection_type` connection and
-  /// waits up to `timeout` for it to arrive, then takes the connection over with `options`. Once
-  /// `cancel` fires it ends at once, with a connection that arrived before it did. The request
-  /// is forgotten however this ends.
-  pub(crate) async fn solicit(
+  /// Issues the ticket for asking `username` to connect to us with a `connection_type`
+  /// connection, awaited for `timeout`: a random token, never one a request of ours still
+  /// holds or a running search uses, since a search's token goes out to every user
+  pub(crate) fn issue_ticket(
     &self,
     username: &str,
-    token: u32,
     connection_type: PeerConnectionType,
-    options: ConnectionOptions,
     timeout: Duration,
-    cancel: &CancellationToken,
-  ) -> Result<Conn, ClientError> {
+  ) -> Ticket {
+    self.issue_ticket_from(username, connection_type, timeout, random_token)
+  }
+
+  /// [`Client::issue_ticket`] with the candidates drawn from `draw`
+  fn issue_ticket_from(
+    &self,
+    username: &str,
+    connection_type: PeerConnectionType,
+    timeout: Duration,
+    draw: impl FnMut() -> u32,
+  ) -> Ticket {
     let solicitation = Solicitation {
       username: username.to_owned(),
       connection_type,
     };
-    let key = solicitation.key(token);
-    let _pending = self
-      .peers()
-      .solicitations
-      .insert(token, solicitation, timeout);
-    let pierced = self
-      .waiter()
-      .wait::<Conn>(key, Some(timeout), cancel.clone());
+    // the searches are held first, as a search taking a token holds them while it reads the
+    // tickets
+    self.searches().holding_tokens(|searching| {
+      Ticket::issue(self.peers_arc(), solicitation, timeout, draw, |token| {
+        searching(token) || self.responder().holds(token)
+      })
+    })
+  }
+
+  /// whether `token` is still a ticket of ours: its solicitation is filed, or answers ride on it
+  pub(crate) fn ticket_held(&self, token: u32) -> bool {
+    self.peers().solicitations.holds(token) || self.responder().holds(token)
+  }
+
+  /// Asks the server to have the ticket's user connect to us and waits for the connection, up to
+  /// the ticket's timeout, then takes it over with `options`. Once `cancel` fires it ends at
+  /// once, with a connection that arrived before it did. The ticket is let go however this ends.
+  pub(crate) async fn solicit(
+    &self,
+    ticket: Ticket,
+    options: ConnectionOptions,
+    cancel: &CancellationToken,
+  ) -> Result<Conn, ClientError> {
+    let token = ticket.token;
+    let username = ticket.solicitation.username.as_str();
+    let connection_type = ticket.solicitation.connection_type;
+    let pierced = self.waiter().wait::<Conn>(
+      ticket.solicitation.key(token),
+      Some(ticket.timeout),
+      cancel.clone(),
+    );
     let request = ServerRequest::ConnectToPeer(ConnectToPeerRequest {
       token,
       username: username.to_owned(),
@@ -420,11 +486,42 @@ mod tests {
     }
   }
 
+  fn peers() -> Arc<PeerConnections> {
+    Arc::new(PeerConnections::new(
+      4,
+      crate::waiter::Waiter::new(Duration::from_secs(10)),
+    ))
+  }
+
+  /// a ticket for `solicitation` under the first of `draws` free and not `taken`
+  fn issue(
+    peers: &Arc<PeerConnections>,
+    solicitation: Solicitation,
+    timeout: Duration,
+    draws: &[u32],
+    taken: impl Fn(u32) -> bool,
+  ) -> Ticket {
+    let mut draws = draws.iter().copied();
+    let draw = || draws.next().expect("a free token among the draws");
+    Ticket::issue(peers.clone(), solicitation, timeout, draw, taken)
+  }
+
+  /// a ticket for `solicitation` under `token`
+  fn ticket(
+    peers: &Arc<PeerConnections>,
+    token: u32,
+    solicitation: Solicitation,
+    timeout: Duration,
+  ) -> Ticket {
+    issue(peers, solicitation, timeout, &[token], |_| false)
+  }
+
   #[tokio::test(start_paused = true)]
   async fn an_unanswered_solicitation_is_known_late_until_its_time_is_up() {
-    let solicitations = Solicitations::default();
+    let peers = peers();
+    let solicitations = &peers.solicitations;
     let timeout = Duration::from_secs(10);
-    drop(solicitations.insert(7, bob(PeerConnectionType::Peer), timeout));
+    drop(ticket(&peers, 7, bob(PeerConnectionType::Peer), timeout));
     tokio::time::advance(Duration::from_secs(9)).await;
     assert_eq!(
       solicitations.take(7),
@@ -433,15 +530,26 @@ mod tests {
     // answered once, it is unknown to a second answer
     assert_eq!(solicitations.take(7), None);
 
-    drop(solicitations.insert(8, bob(PeerConnectionType::Transfer), timeout));
+    drop(ticket(
+      &peers,
+      8,
+      bob(PeerConnectionType::Transfer),
+      timeout,
+    ));
     tokio::time::advance(timeout).await;
     assert_eq!(solicitations.take(8), None);
   }
 
   #[tokio::test(start_paused = true)]
   async fn a_solicitation_is_awaited_while_its_wait_lasts() {
-    let solicitations = Solicitations::default();
-    let pending = solicitations.insert(7, bob(PeerConnectionType::Peer), Duration::from_secs(10));
+    let peers = peers();
+    let solicitations = &peers.solicitations;
+    let pending = ticket(
+      &peers,
+      7,
+      bob(PeerConnectionType::Peer),
+      Duration::from_secs(10),
+    );
     assert_eq!(
       solicitations.take(7),
       Some((bob(PeerConnectionType::Peer), Answer::Awaited))
@@ -453,8 +561,14 @@ mod tests {
 
   #[tokio::test(start_paused = true)]
   async fn a_refused_solicitation_is_not_answered_late() {
-    let solicitations = Solicitations::default();
-    let pending = solicitations.insert(7, bob(PeerConnectionType::Peer), Duration::from_secs(10));
+    let peers = peers();
+    let solicitations = &peers.solicitations;
+    let pending = ticket(
+      &peers,
+      7,
+      bob(PeerConnectionType::Peer),
+      Duration::from_secs(10),
+    );
     assert_eq!(
       solicitations.refused(7),
       Some(bob(PeerConnectionType::Peer))
@@ -465,10 +579,70 @@ mod tests {
 
   #[tokio::test(start_paused = true)]
   async fn solicitations_past_their_time_leave_the_table() {
-    let solicitations = Solicitations::default();
-    drop(solicitations.insert(1, bob(PeerConnectionType::Peer), Duration::from_secs(1)));
+    let peers = peers();
+    let second = Duration::from_secs(1);
+    drop(ticket(&peers, 1, bob(PeerConnectionType::Peer), second));
     tokio::time::advance(Duration::from_secs(2)).await;
-    let _waiting = solicitations.insert(2, bob(PeerConnectionType::Peer), Duration::from_secs(1));
-    assert!(!lock(&solicitations.pending).contains_key(&1));
+    let _waiting = ticket(&peers, 2, bob(PeerConnectionType::Peer), second);
+    assert!(!peers.solicitations.holds(1));
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn a_ticket_is_never_one_still_held_or_one_taken_elsewhere() {
+    let peers = peers();
+    let timeout = Duration::from_secs(10);
+    let waiting = ticket(&peers, 5, bob(PeerConnectionType::Peer), timeout);
+    let beside = issue(
+      &peers,
+      bob(PeerConnectionType::Transfer),
+      timeout,
+      &[5, 6],
+      |_| false,
+    );
+    assert_eq!(beside.token(), 6);
+    // its solicitor stopped waiting, but its user may still answer it late
+    drop(waiting);
+    let late = issue(
+      &peers,
+      bob(PeerConnectionType::Peer),
+      timeout,
+      &[5, 7],
+      |_| false,
+    );
+    assert_eq!(late.token(), 7);
+    let elsewhere = issue(
+      &peers,
+      bob(PeerConnectionType::Peer),
+      timeout,
+      &[9, 10],
+      |token| token == 9,
+    );
+    assert_eq!(elsewhere.token(), 10);
+    drop((beside, late, elsewhere));
+    tokio::time::advance(timeout).await;
+    assert_eq!(
+      ticket(&peers, 5, bob(PeerConnectionType::Peer), timeout).token(),
+      5
+    );
+  }
+
+  #[tokio::test]
+  async fn a_ticket_is_never_a_running_searchs_token_or_one_search_answers_are_filed_under() {
+    let client = Client::new(crate::options::ClientOptions {
+      enable_listener: false,
+      ..crate::options::ClientOptions::default()
+    })
+    .unwrap();
+    let _search = crate::search::tests::running(client.searches(), 9);
+    // the searcher refused the request answers to her search waited on
+    client.responder().refuse(10);
+    let mut draws = [9, 10, 11].into_iter();
+    let ticket = client.issue_ticket_from(
+      "bob",
+      PeerConnectionType::Peer,
+      Duration::from_secs(10),
+      || draws.next().expect("a free token among the draws"),
+    );
+    assert_eq!(ticket.token(), 11);
   }
 }

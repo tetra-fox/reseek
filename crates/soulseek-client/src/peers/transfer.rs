@@ -35,7 +35,11 @@ impl Client {
     self.check_not_disposed()?;
     let own = self.own_username("establish a transfer connection")?;
     let options = self.options().transfer_connection_options.clone();
-    let solicitation = self.next_token();
+    let ticket = self.issue_ticket(
+      username,
+      PeerConnectionType::Transfer,
+      options.connect_timeout,
+    );
     let stop = cancel.child_token();
     let direct = self.connect_to_peer_socket(
       endpoint,
@@ -44,14 +48,7 @@ impl Client {
       options.clone(),
       &stop,
     );
-    let indirect = self.solicit(
-      username,
-      solicitation,
-      PeerConnectionType::Transfer,
-      options.clone(),
-      options.connect_timeout,
-      &stop,
-    );
+    let indirect = self.solicit(ticket, options.clone(), &stop);
     let (mut conn, via) = race(direct, indirect, &stop).await.map_err(|errors| {
       both_failed(
         format!(

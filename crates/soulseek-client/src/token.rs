@@ -1,7 +1,8 @@
-//! Tokens: the `u32` values that tie a search, a transfer or a connection request to the replies
-//! and connections it causes. One counter per client hands them out in order, from a random start
-//! unless told otherwise, so a restarted client does not reuse tokens peers may still hold for its
-//! previous run.
+//! Tokens: the `u32` values that tie a search or a transfer to the replies and connections it
+//! causes. One counter per client hands them out in order, from a random start unless told
+//! otherwise, so a restarted client does not reuse tokens peers may still hold for its previous
+//! run. Connection requests take a random token each instead, since a search token goes out to
+//! every user and the next count after it is easy to guess.
 
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -10,6 +11,12 @@ use uuid::Uuid;
 /// The largest token handed out; the count starts again at 0 after it, which keeps every token
 /// in the range all clients read correctly
 pub const MAX_TOKEN: u32 = i32::MAX as u32;
+
+/// a random token in the range every client reads correctly
+pub(crate) fn random_token() -> u32 {
+  // a v4 uuid is 122 random bits, of which 31 make the token
+  (Uuid::new_v4().as_u128() as u32) & MAX_TOKEN
+}
 
 /// Hands out tokens in sequence from a starting value, wrapping from [`MAX_TOKEN`] to 0
 #[derive(Debug)]
@@ -20,8 +27,7 @@ pub struct TokenGenerator {
 impl TokenGenerator {
   /// a generator whose first token is `start`, or a random one when `None`
   pub fn new(start: Option<u32>) -> Self {
-    // a v4 uuid is 122 random bits, of which 31 make the start
-    let start = start.unwrap_or_else(|| (Uuid::new_v4().as_u128() as u32) & MAX_TOKEN);
+    let start = start.unwrap_or_else(random_token);
     Self {
       next: AtomicU32::new(start),
     }
