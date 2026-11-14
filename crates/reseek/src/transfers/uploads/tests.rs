@@ -515,3 +515,19 @@ async fn a_waiting_leecher_stays_in_leechers_however_many_names_the_cache_takes(
   assert!(reported.of("leecher").is_some(), "forgotten while queued");
   assert_eq!(users.queue_group("leecher"), "leechers");
 }
+
+#[tokio::test]
+async fn a_forecast_for_someone_not_queued_asks_nobody_about_them() {
+  use soulseek_proto::ServerRequest;
+
+  let app = crate::testing::soulseek::app("").await;
+  let mut server = crate::testing::soulseek::Server::silent().await;
+  server.login(&app).await;
+  assert_eq!(app.state.uploads.forecast("stranger").group, "default");
+  let asked = server
+    .receives(std::time::Duration::from_millis(500), |request| {
+      matches!(request, ServerRequest::GetUserStats(asked) if asked.username == "stranger")
+    })
+    .await;
+  assert!(!asked, "the stranger's statistics were asked for");
+}

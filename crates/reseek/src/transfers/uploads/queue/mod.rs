@@ -120,6 +120,21 @@ impl State {
   }
 }
 
+/// The group `name` when the queue has it, else the default group, which is logged once per
+/// name.
+fn known_group(state: &mut State, name: String) -> String {
+  if state.group(&name).is_some() {
+    return name;
+  }
+  if state.unknown.insert(name.clone()) {
+    warn!(
+      group = name,
+      "users in an upload group the queue does not have wait in the default group"
+    );
+  }
+  DEFAULT_GROUP.to_string()
+}
+
 /// A group's table entry from its options: at most `global` slots, `0` or none being all of
 /// them, and the queue order of `everyone` when it sets none.
 fn group(name: &str, upload: &GroupUpload, everyone: &GroupUpload, global: u32) -> Group {
@@ -187,20 +202,9 @@ impl UploadQueue {
     lock(&self.state)
   }
 
-  /// The group `username` is queued in now: their group, or the default group when the queue
-  /// has none of that name, which is logged once per name.
+  /// The group `username` is queued in now, by [`known_group`].
   fn queued_group(&self, state: &mut State, username: &str) -> String {
-    let name = (self.group_of)(username);
-    if state.group(&name).is_some() {
-      return name;
-    }
-    if state.unknown.insert(name.clone()) {
-      warn!(
-        group = name,
-        "users in an upload group the queue does not have wait in the default group"
-      );
-    }
-    DEFAULT_GROUP.to_string()
+    known_group(state, (self.group_of)(username))
   }
 
   /// Builds the groups again from `options` when the groups or the global slots changed,

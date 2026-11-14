@@ -166,9 +166,10 @@ impl Uploads {
       .ok_or(ClientError::Disposed)
   }
 
-  /// Where a new upload request from `username` would land in the queue.
+  /// Where a new upload request from `username` would land in the queue, by the group known
+  /// for them now; they may not be queued, so nobody is asked about them.
   pub fn forecast(&self, username: &str) -> Forecast {
-    self.queue.forecast(username)
+    self.queue.forecast(&self.users.placement(username).queue)
   }
 
   /// Where a new upload request from a user we know nothing about would land in the queue.

@@ -5,7 +5,7 @@
 
 use uuid::Uuid;
 
-use super::{State, UploadQueue};
+use super::{State, UploadQueue, known_group};
 
 /// Why a group a user is queued in is in the table.
 const KNOWN: &str = "users are queued in a group of the table, else in the default group";
@@ -107,10 +107,10 @@ impl UploadQueue {
     Some(self.place_at(&mut state, &group, u, i))
   }
 
-  /// Where a new request from `username` would land, by the group known for them now.
-  pub fn forecast(&self, username: &str) -> Forecast {
+  /// Where a new request queued in the group named `group` would land, by [`known_group`].
+  pub fn forecast(&self, group: &str) -> Forecast {
     let mut state = self.lock();
-    let group = self.queued_group(&mut state, username);
+    let group = known_group(&mut state, group.to_string());
     self.forecast_in(&mut state, group)
   }
 
@@ -263,7 +263,7 @@ mod tests {
        [transfers.groups.buddies.upload]\nslots = 5\n",
     );
     groups.set("bob", "buddies");
-    let empty = queue.forecast("alice");
+    let empty = queue.forecast(DEFAULT_GROUP);
     assert_eq!(
       (
         empty.group.as_str(),
@@ -279,7 +279,7 @@ mod tests {
       started(&mut bob) && started(&mut other),
       "the global slots are taken"
     );
-    let buddies = queue.forecast("bob");
+    let buddies = queue.forecast("buddies");
     assert_eq!(
       (buddies.total_slots, buddies.free_slots),
       (2, 1),
@@ -287,7 +287,7 @@ mod tests {
     );
     files(&queue, "dave", 3);
     files(&queue, "erin", 1);
-    let full = queue.forecast("alice");
+    let full = queue.forecast(DEFAULT_GROUP);
     assert_eq!(
       (full.free_slots, full.queue_length),
       (0, 3),
