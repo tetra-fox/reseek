@@ -72,8 +72,9 @@ in
       type = types.path;
       default = "/var/lib/${unit}";
       description = ''
-        Where the share index and, unless the settings say otherwise, the downloads copied from
-        the controller live.
+        The agent's application directory: the share index lives in its `cache` directory and,
+        unless the settings say otherwise, the downloads copied from the controller in
+        `data/downloads`.
       '';
     };
 
@@ -144,7 +145,7 @@ in
                 default = null;
                 description = ''
                   Where the controller's finished downloads are copied when
-                  `relay.controller.downloads` is on; `downloads` in the data directory when not
+                  `relay.controller.downloads` is on; `data/downloads` in `dataDir` when not
                   set.
                 '';
               };
@@ -160,7 +161,8 @@ in
       example = "/run/secrets/reseek-agent.env";
       description = ''
         A file of `NAME=value` lines for secrets: `RESEEK_CONTROLLER_API_KEY` and
-        `RESEEK_CONTROLLER_SECRET`. Not copied to the store.
+        `RESEEK_CONTROLLER_SECRET`. Not copied to the store. A variable ranks below the
+        configuration files, so an option set in `settings` or `extraConfigFiles` wins over it.
       '';
     };
 

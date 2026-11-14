@@ -39,7 +39,7 @@ pub fn man(schema: &Schema) -> String {
   page.push_str(
     ".SH DESCRIPTION\nreseek connects to the Soulseek network, shares the directories it is \
      given, and serves an HTTP API and a web UI for searching, browsing, transfers and chat.\n\
-     .PP\nEvery option is read from the configuration file, from an environment variable and \
+     .PP\nEvery option is read from an environment variable, from the configuration file and \
      from a flag, in that order of precedence from lowest to highest. The configuration \
      reloads when its file changes and on SIGHUP.\n",
   );

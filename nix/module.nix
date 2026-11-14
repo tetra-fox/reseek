@@ -74,8 +74,9 @@ let
         type = types.path;
         default = "/var/lib/${name}";
         description = ''
-          Where the databases, logs, runtime overrides and, unless the settings say otherwise,
-          the downloads and incomplete files live.
+          The daemon's application directory: the databases, runtime overrides and, unless the
+          settings say otherwise, the downloads and incomplete files live in its `data`
+          directory, the logs in `logs`.
         '';
       };
 
@@ -195,12 +196,12 @@ let
                   downloads = mkOption {
                     type = types.nullOr types.str;
                     default = null;
-                    description = "Where finished downloads are moved; `downloads` in the data directory when not set.";
+                    description = "Where finished downloads are moved; `data/downloads` in `dataDir` when not set.";
                   };
                   incomplete = mkOption {
                     type = types.nullOr types.str;
                     default = null;
-                    description = "Where downloads are written while they run; `incomplete` in the data directory when not set.";
+                    description = "Where downloads are written while they run; `data/incomplete` in `dataDir` when not set.";
                   };
                 };
               };
@@ -215,7 +216,9 @@ let
         example = "/run/secrets/reseek.env";
         description = ''
           A file of `NAME=value` lines for secrets, such as `RESEEK_SLSK_PASSWORD`,
-          `RESEEK_PASSWORD` and `RESEEK_API_KEY`. Not copied to the store.
+          `RESEEK_PASSWORD` and `RESEEK_API_KEY`. Not copied to the store. A variable ranks
+          below the configuration files, so an option set in `settings` or `extraConfigFiles`
+          wins over it.
         '';
       };
 

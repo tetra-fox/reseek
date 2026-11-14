@@ -47,7 +47,11 @@ in
       type = types.str;
       default = "${config.xdg.dataHome}/reseek";
       defaultText = literalExpression ''"''${config.xdg.dataHome}/reseek"'';
-      description = "Where the databases, logs, runtime overrides, downloads and incomplete files live.";
+      description = ''
+        The daemon's application directory: the databases, runtime overrides and, unless the
+        settings say otherwise, the downloads and incomplete files live in its `data`
+        directory, the logs in `logs`.
+      '';
     };
 
     settings = mkOption {
@@ -70,7 +74,9 @@ in
       default = null;
       description = ''
         A file of `NAME=value` lines for secrets, such as `RESEEK_SLSK_PASSWORD` and
-        `RESEEK_PASSWORD`, read when the daemon starts. Not copied to the store.
+        `RESEEK_PASSWORD`, read when the daemon starts. Not copied to the store. A variable
+        ranks below the configuration files, so an option set in `settings` or
+        `extraConfigFiles` wins over it.
       '';
     };
 
