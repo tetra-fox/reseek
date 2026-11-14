@@ -378,21 +378,42 @@ mod tests {
 
   use super::*;
 
-  #[tokio::test]
-  async fn a_disconnect_cancels_a_connect_that_has_begun_no_session_yet() {
-    let app = crate::testing::app(crate::testing::TRUSTED, &[]).await;
-    let client = app.state.network.client();
-    // a port nothing listens on, so a connect the disconnect missed fails on its own
-    let port = crate::testing::ports::free_port();
-    let cancel = CancellationToken::new();
-    let mut connecting = Box::pin(client.connect("localhost", port, "me", "secret", &cancel));
-    // one poll: the connect has its token and waits on the name lookup, no session begun
-    let first = poll_fn(|cx| Poll::Ready(connecting.as_mut().poll(cx).is_pending())).await;
-    assert!(first, "the connect ended in its first poll");
-    assert_eq!(client.state(), ClientState::Disconnected);
-    app.state.network.disconnect(None).await;
-    let ended = connecting.await;
-    assert!(matches!(ended, Err(ClientError::Canceled)), "{ended:?}");
-    assert_eq!(client.state(), ClientState::Disconnected);
+  /// The connect waits on its name lookup, which runs on the runtime's blocking pool: the test's
+  /// runtime has one blocking thread and the test holds it, so the lookup cannot end on its own
+  #[test]
+  fn a_disconnect_cancels_a_connect_that_has_begun_no_session_yet() {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+      .enable_all()
+      .max_blocking_threads(1)
+      .build()
+      .unwrap();
+    runtime.block_on(async {
+      let app = crate::testing::app(crate::testing::TRUSTED, &[]).await;
+      let client = app.state.network.client();
+      // a port nothing listens on, so a connect the disconnect missed fails on its own
+      let port = crate::testing::ports::free_port();
+      // the blocking thread, held until `release` drops, once it runs nothing else
+      let (release, held) = std::sync::mpsc::channel::<()>();
+      let (running, holding) = tokio::sync::oneshot::channel();
+      let holder = tokio::task::spawn_blocking(move || {
+        running.send(()).unwrap();
+        // nothing is sent: this ends when the sender drops, whether the test passes or panics
+        held.recv().unwrap_err();
+      });
+      holding.await.unwrap();
+      let cancel = CancellationToken::new();
+      let mut connecting = Box::pin(client.connect("localhost", port, "me", "secret", &cancel));
+      // one poll: the connect has its token and waits on the name lookup, no session begun
+      let first = poll_fn(|cx| Poll::Ready(connecting.as_mut().poll(cx).is_pending())).await;
+      assert!(first, "the connect ended in its first poll");
+      assert_eq!(client.state(), ClientState::Disconnected);
+      app.state.network.disconnect(None).await;
+      // the lookup can end now, so a connect the disconnect missed goes on and fails by itself
+      drop(release);
+      let ended = connecting.await;
+      assert!(matches!(ended, Err(ClientError::Canceled)), "{ended:?}");
+      assert_eq!(client.state(), ClientState::Disconnected);
+      holder.await.unwrap();
+    });
   }
 }
