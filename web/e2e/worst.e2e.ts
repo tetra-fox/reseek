@@ -39,6 +39,29 @@ const drawnWhole = (page: Page, part: string) =>
     return whole;
   }, part);
 
+/**
+ * The figures of `texts` the content area draws over more than one line, each found within a
+ * text of its own
+ */
+const brokenFigures = (page: Page, texts: string[]) =>
+  page.locator("[data-content]").evaluate((area, texts) => {
+    const broken: string[] = [];
+    for (const text of texts) {
+      const walker = document.createTreeWalker(area, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const at = node.textContent!.indexOf(text);
+        if (at < 0) continue;
+        const range = document.createRange();
+        range.setStart(node, at);
+        range.setEnd(node, at + text.length);
+        const lines = new Set([...range.getClientRects()].map((r) => Math.round(r.top)));
+        if (lines.size !== 1) broken.push(text);
+        break;
+      }
+    }
+    return broken;
+  }, texts);
+
 /** Checks the two long file names that differ only at their ends show those ends */
 const endsShow = async (page: Page, what: string) => {
   for (const end of ["_part1.flac", "_part2.flac"]) {
@@ -98,6 +121,17 @@ for (const [width, height] of [
       await worstProfile(page);
       await fits(page, `/users/${encodeURIComponent(NAMES.long)}`, shows("Upload slots"));
       await expect(page.getByText(/Upload slots\s*4,294,967,295/)).toBeVisible();
+      // the header's lines break between figures, never inside one
+      const figures = [
+        "9,999,999 files",
+        "2,400,000 folders",
+        "4 GB/s",
+        "4,294,967,295 uploads",
+        "9,999,999 downloads (0 B)",
+        "2,400,000 uploads (200 TB)",
+        "1,000,000 messages"
+      ];
+      expect(await brokenFigures(page, figures)).toEqual([]);
       // the description of a megabyte is folded, so what is under it is a scroll away
       const more = page.getByRole("button", { name: "Show more" });
       await expect(more).toBeVisible();
