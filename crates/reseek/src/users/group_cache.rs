@@ -229,8 +229,7 @@ impl Directory {
     stored: Option<&Stored>,
   ) -> Placement {
     let cached = self.groups.facts(username).unwrap_or_default();
-    let heard = cached.privileged || cached.presence.is_some() || cached.statistics.is_some();
-    let mut facts = if heard {
+    let mut facts = if cached.heard() {
       cached
     } else {
       stored.map(Facts::of).unwrap_or_default()
@@ -358,8 +357,9 @@ impl Directory {
     taken
   }
 
-  /// Asks the server for `username`'s status now and keeps it. The reply is also raised as a
-  /// status change, which [`Directory::status_received`] then knows we asked for.
+  /// Asks the server for `username`'s status now and keeps it, pushing the summary of a user
+  /// with a row whose groups it moves. The reply is also raised as a status change, which
+  /// [`Directory::status_received`] then knows we asked for.
   pub async fn status_of(
     &self,
     client: &Client,
@@ -369,21 +369,34 @@ impl Directory {
     let status = client.get_user_status(username).await?;
     asking.answered();
     let presence = UserPresence::from(status.presence);
-    self.status_fetched(username, presence, status.is_privileged);
+    if self.status_fetched(username, presence, status.is_privileged) && self.known.has(username) {
+      self.forget(username);
+      self.push(username).await;
+    }
     Ok(UserStatus {
       presence,
       is_privileged: status.is_privileged,
     })
   }
 
-  /// The status we asked for of `username`, kept. The same reply is also raised as a status
-  /// change, and either may be taken first, so both tell of a change missed while disconnected.
-  pub(super) fn status_fetched(&self, username: &str, presence: UserPresence, is_privileged: bool) {
+  /// The status we asked for of `username`, kept; says whether it moves the groups they are
+  /// shown in, as the first word on them in this run or a change of privileges. The same reply
+  /// is also raised as a status change, and either may be taken first, so both tell of a change
+  /// missed while disconnected.
+  pub(super) fn status_fetched(
+    &self,
+    username: &str,
+    presence: UserPresence,
+    is_privileged: bool,
+  ) -> bool {
     self.tell_missed(username, presence);
+    let mut moved = false;
     self.groups.update(username, true, |facts| {
+      moved = !facts.heard() || facts.privileged != is_privileged;
       facts.presence = Some(presence);
       facts.privileged = is_privileged;
     });
+    moved
   }
 
   /// Tells of a buddy's move from the presence we knew when the last server session ended to

@@ -890,6 +890,73 @@ async fn a_status_request_given_up_leaves_the_next_pushed_status_unasked() {
   );
 }
 
+/// Alice, whose row says she is privileged when `stored`, and of whom nothing was heard in this
+/// run, has her status asked, which says the opposite: her summary is pushed with it.
+async fn a_status_asked_moves_alice(stored: bool) {
+  use soulseek_proto::server::UserStatus;
+  use soulseek_proto::{ServerRequest, ServerResponse};
+
+  let app = crate::testing::soulseek::app(CONFIG).await;
+  let server = crate::testing::soulseek::Server::start(move |request| match request {
+    ServerRequest::GetStatus(asked) => vec![ServerResponse::GetStatus(UserStatus {
+      username: asked.username.clone(),
+      presence: soulseek_proto::UserPresence::Online,
+      is_privileged: !stored,
+    })],
+    _ => Vec::new(),
+  })
+  .await;
+  server.login(&app).await;
+  let users = &app.state.users;
+  // as written in an earlier run
+  let before = Utc::now() - chrono::Duration::days(1);
+  let row = touch::Pending {
+    seen_at: Some(before),
+    creates: true,
+    status: Some((UserPresence::Offline, stored, before)),
+    ..Default::default()
+  };
+  let batch = std::collections::BTreeMap::from([("alice".to_string(), row)]);
+  users
+    .db
+    .write(move |conn| touch::write(conn, &batch, &Default::default()))
+    .await
+    .unwrap();
+  // the rows read at startup are known
+  users.known.added("alice");
+  let summary = || async { app.call("GET", "/api/v0/users/alice/summary", None).await.1 };
+  assert_eq!(summary().await["isPrivileged"], stored);
+  let mut stream = app
+    .stream_from(
+      "127.0.0.1:1",
+      request("GET", "/api/v0/live?topics=users", None),
+    )
+    .await;
+  stream.until("hello").await;
+  users
+    .status_of(app.state.network.client(), "alice")
+    .await
+    .unwrap();
+  let pushed = tokio::time::timeout(
+    std::time::Duration::from_secs(5),
+    stream.until("users.updated"),
+  )
+  .await
+  .expect("alice's summary was not pushed");
+  assert_eq!(pushed.last().unwrap().data["isPrivileged"], !stored);
+  assert_eq!(summary().await["isPrivileged"], !stored);
+}
+
+#[tokio::test]
+async fn a_status_asked_that_grants_privileges_pushes_the_users_summary() {
+  a_status_asked_moves_alice(false).await;
+}
+
+#[tokio::test]
+async fn a_status_asked_of_a_user_privileged_in_an_earlier_run_pushes_their_summary() {
+  a_status_asked_moves_alice(true).await;
+}
+
 #[tokio::test]
 async fn two_buddy_changes_made_at_once_both_hold() {
   let app = app(CONFIG, &[]).await;
@@ -1236,7 +1303,12 @@ async fn a_profile_refresh_answered_after_the_user_is_forgotten_makes_no_row() {
   })
   .await;
   server.login(&app).await;
-  app.state.users.set_notes("alice", "kind".into()).await.unwrap();
+  app
+    .state
+    .users
+    .set_notes("alice", "kind".into())
+    .await
+    .unwrap();
   let refreshing = app.call("GET", "/api/v0/users/alice/profile?refresh=true", None);
   let forgetting = async {
     server

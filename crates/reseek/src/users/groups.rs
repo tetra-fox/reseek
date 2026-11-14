@@ -49,6 +49,12 @@ impl Facts {
       memberships: stored.groups.clone(),
     }
   }
+
+  /// The server said something of the user in this run, so their groups are worked out from
+  /// these facts rather than their row.
+  pub fn heard(&self) -> bool {
+    self.privileged || self.presence.is_some() || self.statistics.is_some()
+  }
 }
 
 /// The groups a user is in, and what their uploads get from them.

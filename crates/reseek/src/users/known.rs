@@ -31,6 +31,11 @@ impl Known {
     self.users().get(username).cloned().flatten()
   }
 
+  /// Whether `username` has a row.
+  pub fn has(&self, username: &str) -> bool {
+    self.users().contains_key(username)
+  }
+
   /// `username` has a row now.
   pub fn added(&self, username: &str) {
     self.users().entry(username.to_string()).or_insert(None);
