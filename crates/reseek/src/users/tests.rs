@@ -895,8 +895,9 @@ async fn a_status_request_given_up_leaves_the_next_pushed_status_unasked() {
   let asking = users.status_of(client, "alice");
   let given_up = tokio::time::timeout(std::time::Duration::from_millis(100), asking).await;
   assert!(given_up.is_err());
-  // the request ends on its own task once it sees the caller gave up
-  tokio::time::timeout(std::time::Duration::from_secs(5), async {
+  // the request ends on its own task once it sees the caller gave up, well before the client's
+  // own five-second wait would end it
+  tokio::time::timeout(std::time::Duration::from_secs(1), async {
     while !users.tasks.is_empty() {
       tokio::task::yield_now().await;
     }
