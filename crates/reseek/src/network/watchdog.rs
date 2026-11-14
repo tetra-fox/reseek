@@ -564,11 +564,10 @@ mod tests {
     use api_types::logs::LogLevel;
 
     let (logs, _capturing) = crate::testing::captured_logs();
-    let closed = std::net::TcpListener::bind("127.0.0.1:0")
-      .unwrap()
-      .local_addr()
-      .unwrap()
-      .port();
+    // bound and not listening, so the port refuses connections and nothing else takes it
+    let held = tokio::net::TcpSocket::new_v4().unwrap();
+    held.bind("127.0.0.1:0".parse().unwrap()).unwrap();
+    let closed = held.local_addr().unwrap().port();
     let _app = crate::testing::soulseek::app(&format!(
       "[soulseek]\naddress = \"127.0.0.1\"\nport = {closed}\nusername = \"me\"\n\
        password = \"secret\"\n"
