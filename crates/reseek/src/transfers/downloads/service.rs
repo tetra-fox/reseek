@@ -189,6 +189,7 @@ fn group(request: EnqueueDownloadGroup) -> Group {
       })
       .collect(),
     destination: request.destination,
+    folder: request.folder,
     search_id: request.search_id,
   }
 }

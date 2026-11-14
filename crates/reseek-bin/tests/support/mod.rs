@@ -39,6 +39,7 @@ pub fn job(username: &str, filename: &str, size: u64) -> EnqueueDownloadJobReque
         size,
       }],
       destination: None,
+      folder: None,
       search_id: None,
     }],
   }

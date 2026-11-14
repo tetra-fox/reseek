@@ -30,7 +30,7 @@ pub struct EnqueueFailure {
 }
 
 /// Files from one user, one group of a download job. Each of its downloads keeps the group's
-/// destination and search.
+/// destination, folder and search.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct EnqueueDownloadGroup {
@@ -39,11 +39,20 @@ pub struct EnqueueDownloadGroup {
   pub username: String,
   /// the files, at least one, no filename twice
   pub files: Vec<EnqueueDownloadFile>,
-  /// a relative path under the downloads directory that every file of the group goes to, in
-  /// place of the directory the download pattern gives; null for the pattern
+  /// a relative path under the downloads directory that every file of the group goes to as
+  /// written, in place of the directory the download pattern gives; null for the pattern. Not
+  /// given with `folder`
   #[serde(default)]
   #[schema(example = "Artist/Album")]
   pub destination: Option<String>,
+  /// the remote folder the files were picked in, such as a folder downloaded whole, which every
+  /// file is under: each file's folders from this one down, `Album/CD1` for
+  /// `@@abcde\Music\Album\CD1\01.flac` in `@@abcde\Music\Album`, take the place of the download
+  /// pattern's `${SOURCE_DIRECTORY}`, so the folder keeps its tree wherever the pattern puts it;
+  /// null for each file's own folder name
+  #[serde(default)]
+  #[schema(example = "@@abcde\\Music\\Artist\\Album")]
+  pub folder: Option<String>,
   /// the search the files were found by, null when there is none
   #[serde(default)]
   pub search_id: Option<Uuid>,

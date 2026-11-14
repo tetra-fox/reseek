@@ -276,6 +276,7 @@ async fn stopped_while_queued(
         size: SIZE as u64,
       }],
       destination: Some("Kept/Here".to_string()),
+      folder: None,
       search_id: None,
     }],
   };

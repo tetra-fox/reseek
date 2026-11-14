@@ -25,6 +25,7 @@ use crate::api::validate::USERNAME_CHARS;
 use crate::app::AppState;
 use crate::auth::{AnyRole, Authorized, ReadWrite};
 use crate::safety::{non_traversing, relative_everywhere};
+use crate::transfers::downloads::from_folder;
 
 /// The downloads routes.
 pub fn routes() -> OpenApiRouter<AppState> {
@@ -301,6 +302,24 @@ fn group_request(request: &EnqueueDownloadGroup) -> Result<(), ApiError> {
     relative_everywhere("Destination", destination).map_err(ApiError::bad_request)?;
     non_traversing("Destination", destination).map_err(ApiError::bad_request)?;
   }
+  if let Some(folder) = &request.folder {
+    // a written destination replaces the pattern the folder's tree goes into
+    if request.destination.is_some() {
+      return Err(ApiError::bad_request(
+        "The fields Destination and Folder must not both be given",
+      ));
+    }
+    if let Some(outside) = request
+      .files
+      .iter()
+      .find(|file| from_folder(folder, &file.filename).is_none())
+    {
+      return Err(ApiError::bad_request(format!(
+        "The file {} is not under the Folder {folder}",
+        outside.filename
+      )));
+    }
+  }
   Ok(())
 }
 
@@ -397,6 +416,7 @@ mod tests {
       username: "alice".to_string(),
       files,
       destination: destination.map(str::to_string),
+      folder: None,
       search_id: None,
     }
   }
@@ -438,5 +458,20 @@ mod tests {
       let request = group_of(vec![file("a", 1)], Some(destination));
       assert!(refusal(&request).contains(message), "{destination:?}");
     }
+    let album = |files: Vec<EnqueueDownloadFile>| EnqueueDownloadGroup {
+      folder: Some("@@a\\Album".to_string()),
+      ..group_of(files, None)
+    };
+    assert!(group_request(&album(vec![file("@@a\\Album\\CD1\\01.flac", 1)])).is_ok());
+    let outside = album(vec![
+      file("@@a\\Album\\01.flac", 1),
+      file("@@a\\Albums\\01.flac", 1),
+    ]);
+    assert!(refusal(&outside).contains("@@a\\\\Albums\\\\01.flac is not under the Folder"));
+    let both = EnqueueDownloadGroup {
+      destination: Some("Kept".to_string()),
+      ..album(vec![file("@@a\\Album\\01.flac", 1)])
+    };
+    assert!(refusal(&both).contains("must not both be given"));
   }
 }

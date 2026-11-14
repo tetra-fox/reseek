@@ -114,6 +114,7 @@ impl Downloads {
       filename: &record.filename,
       job: record.job_id,
       destination: record.destination.as_deref(),
+      folder: record.folder.as_deref(),
       search: search.as_ref(),
     };
     let relative = subdirectory(pattern, &source, Os::CURRENT)?;

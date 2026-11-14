@@ -31,7 +31,10 @@ pub use record::{ASKED_ORDER, COLUMNS, NEWEST_FIRST, Record, transfer};
 
 /// `transfers.db`: the `Transfers` table, each transfer's state history, and which speed limits
 /// are in force.
-pub static SCHEMA: Schema = db::schema!("transfers", ["0001_initial", "0002_queue_position"]);
+pub static SCHEMA: Schema = db::schema!(
+  "transfers",
+  ["0001_initial", "0002_queue_position", "0003_folder"]
+);
 
 /// How long the tasks of running transfers get to end at shutdown; what they leave unfinished
 /// is ended after.

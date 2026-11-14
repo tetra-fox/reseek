@@ -1840,6 +1840,7 @@ async fn a_forgotten_user_a_download_is_asked_of_is_known_again() {
       position: None,
     }],
     destination: None,
+    folder: None,
     search_id: None,
   };
   let enqueued = app

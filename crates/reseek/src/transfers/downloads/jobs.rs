@@ -821,6 +821,7 @@ mod tests {
         })
         .collect(),
       destination: None,
+      folder: None,
       search_id: None,
     };
     assert_eq!(

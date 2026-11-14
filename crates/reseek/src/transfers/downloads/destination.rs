@@ -1,9 +1,11 @@
 //! Where a download's file lives: the incomplete file it is written to, under a directory of
 //! the peer's own, and the directory under the downloads directory it is moved to once it has
-//! arrived, from the configured pattern or the download's own destination. Every name that came
-//! from the peer, the destination or the search is made safe before it becomes part of a path.
-//! The incomplete file's name carries a hash of the exact peer and remote filename, since two
-//! downloads can have names that are made safe alike or that a filesystem takes as one.
+//! arrived, from the configured pattern or the download's own destination. A download asked for
+//! in a folder puts the folder's tree, from the folder down, where the pattern names the file's
+//! own directory. Every name that came from the peer, the destination or the search is made safe
+//! before it becomes part of a path. The incomplete file's name carries a hash of the exact peer
+//! and remote filename, since two downloads can have names that are made safe alike or that a
+//! filesystem takes as one.
 
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
@@ -50,6 +52,8 @@ pub struct Source<'a> {
   pub job: Option<Uuid>,
   /// the download's own destination
   pub destination: Option<&'a str>,
+  /// the remote folder the download was asked for in
+  pub folder: Option<&'a str>,
   /// the search the download was found by, when it is still known
   pub search: Option<&'a SearchFound>,
 }
@@ -69,10 +73,27 @@ fn file_name(name: &str, os: Os) -> String {
   sanitize_filename(name, '_', os).unwrap_or_default()
 }
 
+/// The part of the remote filename `filename` from the remote folder `folder` down, the
+/// folder's own name first: `Album\CD1\01.flac` in `@@abcde\Music\Album`. `None` when the file
+/// is not under the folder.
+pub fn from_folder<'a>(folder: &str, filename: &'a str) -> Option<&'a str> {
+  let folder = folder.trim_end_matches(['/', '\\']);
+  let below = filename.strip_prefix(folder)?;
+  if folder.is_empty() || !below.starts_with(['/', '\\']) {
+    return None;
+  }
+  let name_at = folder
+    .rfind(['/', '\\'])
+    .map_or(0, |separator| separator + 1);
+  Some(&filename[name_at..])
+}
+
 /// The relative directory under the downloads directory the download of `source` goes to,
 /// empty for the downloads directory itself: the download's own destination when it has one, else
-/// `pattern` with its `${NAME}`s filled in, made safe. Fails only when the result would leave
-/// the downloads directory, which making it safe rules out.
+/// `pattern` with its `${NAME}`s filled in, made safe, `${SOURCE_DIRECTORY}` being the tree from
+/// the download's folder down when it has one. Fails when the result would leave the downloads
+/// directory, which making it safe rules out, or the file is not under its folder, which the
+/// API refuses.
 pub fn subdirectory(pattern: Option<&str>, source: &Source<'_>, os: Os) -> Result<String, String> {
   if let Some(destination) = source
     .destination
@@ -86,11 +107,22 @@ pub fn subdirectory(pattern: Option<&str>, source: &Source<'_>, os: Os) -> Resul
     return Ok(String::new());
   }
   let source_path = directory_name_safely(source.filename, true, os).unwrap_or_default();
-  let source_directory = source_path
-    .rsplit(os.separator())
-    .next()
-    .unwrap_or_default()
-    .to_string();
+  let source_directory = match source.folder {
+    Some(folder) => {
+      let tree = from_folder(folder, source.filename).ok_or_else(|| {
+        format!(
+          "the remote filename {} is not under the folder {folder}",
+          source.filename
+        )
+      })?;
+      directory_name_safely(tree, true, os).unwrap_or_default()
+    }
+    None => source_path
+      .rsplit(os.separator())
+      .next()
+      .unwrap_or_default()
+      .to_string(),
+  };
   let value = |name: &str| -> Option<String> {
     Some(match name.to_ascii_uppercase().as_str() {
       "SOURCE_USERNAME" => file_name(source.username, os),
@@ -230,6 +262,7 @@ mod tests {
       filename,
       job: None,
       destination: None,
+      folder: None,
       search: None,
     }
   }
@@ -346,6 +379,58 @@ mod tests {
       unix("${SEARCH_ID}/${SEARCH_TEXT}", &searched),
       "unknown_search_id/unknown_search_text"
     );
+  }
+
+  #[test]
+  fn a_folder_puts_its_tree_where_the_pattern_names_the_files_directory() {
+    let in_album = |filename| Source {
+      folder: Some("@@abcde\\Music\\Album"),
+      ..source("alice", filename)
+    };
+    let disc = in_album("@@abcde\\Music\\Album\\CD1\\01.flac");
+    let cover = in_album("@@abcde\\Music\\Album\\cover.jpg");
+    assert_eq!(
+      unix("${SOURCE_USERNAME}/${SOURCE_DIRECTORY}", &disc),
+      "alice/Album/CD1"
+    );
+    assert_eq!(unix("${SOURCE_DIRECTORY}", &disc), "Album/CD1");
+    assert_eq!(unix("${SOURCE_DIRECTORY}", &cover), "Album");
+    assert_eq!(
+      unix("${SOURCE_PATH}", &disc),
+      "Music/Album/CD1",
+      "the full path has the tree already"
+    );
+    assert_eq!(unix("{}", &disc), "");
+    let windows = subdirectory(Some("${SOURCE_DIRECTORY}"), &disc, Os::Windows).unwrap();
+    assert_eq!(windows, "Album\\CD1");
+    let hostile = Source {
+      folder: Some("@@abcde\\.."),
+      ..source("alice", "@@abcde\\..\\..\\x.flac")
+    };
+    assert_eq!(unix("${SOURCE_DIRECTORY}", &hostile), "_/_");
+    let elsewhere = in_album("@@abcde\\Music\\Albums\\01.flac");
+    assert!(subdirectory(None, &elsewhere, Os::Unix).is_err());
+  }
+
+  #[test]
+  fn a_file_is_under_a_folder_only_past_a_separator() {
+    assert_eq!(
+      from_folder("a\\Album", "a\\Album\\CD1\\1.flac"),
+      Some("Album\\CD1\\1.flac")
+    );
+    assert_eq!(
+      from_folder("a\\Album\\", "a\\Album\\1.flac"),
+      Some("Album\\1.flac")
+    );
+    assert_eq!(
+      from_folder("/home/Album", "/home/Album/1.flac"),
+      Some("Album/1.flac")
+    );
+    assert_eq!(from_folder("Album", "Album\\1.flac"), Some("Album\\1.flac"));
+    assert_eq!(from_folder("a\\Album", "a\\Albums\\1.flac"), None);
+    assert_eq!(from_folder("a\\Album", "a\\Album"), None);
+    assert_eq!(from_folder("", "a\\1.flac"), None);
+    assert_eq!(from_folder("\\", "\\a\\1.flac"), None);
   }
 
   #[test]

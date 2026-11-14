@@ -16,7 +16,7 @@ use crate::db::{self, read_timestamp};
 pub const COLUMNS: &str = "Id, JobId, Username, Direction, Filename, Size, State, RequestedAt, \
                            EnqueuedAt, StartedAt, EndedAt, BytesTransferred, AverageSpeed, \
                            PlaceInQueue, Exception, Attempts, NextAttemptAt, Removed, LocalPath, \
-                           Destination, SearchId, Paused, QueuePosition";
+                           Destination, SearchId, Paused, QueuePosition, Folder";
 
 /// The order transfers are listed in when nothing else decides: as they were asked for, and
 /// rows from the same instant in the order they were written, since their ids are random.
@@ -34,6 +34,9 @@ pub struct Record {
   /// the relative directory under the downloads directory a download's file goes to in place
   /// of the one the download pattern gives
   pub destination: Option<String>,
+  /// the remote folder a download was asked for in, whose tree from there down takes the place
+  /// of the download pattern's `${SOURCE_DIRECTORY}`
+  pub folder: Option<String>,
   /// the search a download's file was found by
   pub search_id: Option<Uuid>,
   /// the peer
@@ -81,6 +84,7 @@ impl Record {
       id: Uuid::new_v4(),
       job_id: None,
       destination: None,
+      folder: None,
       search_id: None,
       username: username.to_string(),
       direction: TransferDirection::Download,
@@ -139,6 +143,7 @@ impl Record {
       id: uuid(0, &row.get::<_, String>(0)?)?,
       job_id: text(1)?.map(|value| uuid(1, &value)).transpose()?,
       destination: text(19)?,
+      folder: text(23)?,
       search_id: text(20)?.map(|value| uuid(20, &value)).transpose()?,
       username: text_at(row, 2)?,
       direction: direction_at(row, 3)?,

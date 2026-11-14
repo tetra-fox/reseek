@@ -67,6 +67,9 @@ pub struct Group {
   /// the relative directory under the downloads directory the files go to, in place of the one
   /// the download pattern gives
   pub destination: Option<String>,
+  /// the remote folder the files were asked for in, whose tree from there down takes the place
+  /// of the download pattern's `${SOURCE_DIRECTORY}`
+  pub folder: Option<String>,
   /// the search the files were found by
   pub search_id: Option<Uuid>,
 }
@@ -83,21 +86,24 @@ impl FileRequest {
 }
 
 impl Group {
-  /// A group holding the file of the download `record`, with its user, destination and search.
+  /// A group holding the file of the download `record`, with its user, destination, folder and
+  /// search.
   pub fn of(record: &Record) -> Self {
     Self {
       username: record.username.clone(),
       files: vec![FileRequest::of(record)],
       destination: record.destination.clone(),
+      folder: record.folder.clone(),
       search_id: record.search_id,
     }
   }
 
   /// Whether the file of `record` belongs in this group: it comes from the same user, goes to
-  /// the same destination and was found by the same search.
+  /// the same destination, was asked for in the same folder and found by the same search.
   pub fn holds(&self, record: &Record) -> bool {
     self.username == record.username
       && self.destination == record.destination
+      && self.folder == record.folder
       && self.search_id == record.search_id
   }
 }
@@ -283,6 +289,7 @@ impl Downloads {
       username,
       files,
       destination,
+      folder,
       search_id,
     } = group;
     let username = username.as_str();
@@ -300,6 +307,7 @@ impl Downloads {
       .map(|file| Record {
         job_id: Some(job),
         destination: destination.clone(),
+        folder: folder.clone(),
         search_id,
         queue_position: file.position,
         ..Record::download(username, &file.filename, file.size)

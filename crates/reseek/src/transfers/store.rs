@@ -23,9 +23,9 @@ pub fn insert(conn: &Connection, record: &Record) -> rusqlite::Result<()> {
     "INSERT INTO Transfers (Id, JobId, Username, Direction, Filename, Size, State, \
      StateDescription, RequestedAt, EnqueuedAt, StartedAt, EndedAt, BytesTransferred, \
      AverageSpeed, PlaceInQueue, Exception, Removed, Attempts, NextAttemptAt, LocalPath, \
-     Destination, SearchId, Paused, QueuePosition) \
+     Destination, SearchId, Paused, QueuePosition, Folder) \
      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, \
-     ?19, ?20, ?21, ?22, ?23, ?24)",
+     ?19, ?20, ?21, ?22, ?23, ?24, ?25)",
     params![
       record.id.to_string(),
       record.job_id.map(|id| id.to_string()),
@@ -51,6 +51,7 @@ pub fn insert(conn: &Connection, record: &Record) -> rusqlite::Result<()> {
       record.search_id.map(|id| id.to_string()),
       record.paused,
       record.queue_position,
+      record.folder,
     ],
   )?;
   entered(conn, record.id, record.state.kind(), record.requested_at)

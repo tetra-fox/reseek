@@ -56,7 +56,7 @@ use crate::searches::Searches;
 use crate::telemetry::Telemetry;
 use crate::turns::{Turn, Turns};
 use crate::users::Directory;
-pub use destination::incomplete_path;
+pub use destination::{from_folder, incomplete_path};
 pub use enqueue::{Enqueued, FileRequest, Group};
 
 /// How many enqueue calls of the API run at once.

@@ -126,6 +126,7 @@ impl Downloads {
       username: username.to_string(),
       files: vec![file],
       destination: None,
+      folder: None,
       search_id: None,
     };
     // the rest runs on a task of its own, so a sender who stops waiting leaves no record
@@ -299,6 +300,7 @@ impl Downloads {
           })
           .collect(),
         destination: None,
+        folder: None,
         search_id: None,
       };
       let name = job_name(&[group]);

@@ -429,6 +429,7 @@ async fn a_folder_download_skips_the_files_the_filters_match_before_asking_its_u
       })
       .collect(),
     destination: None,
+    folder: None,
     search_id: None,
   };
   let kept = ["Thumbs.db.flac", "01 desktop.ini.mp3", "exe.flac"];
@@ -1145,6 +1146,7 @@ async fn an_albums_files_are_asked_of_their_user_in_the_order_enqueued() {
       })
       .collect(),
     destination: None,
+    folder: None,
     search_id: None,
   };
   let downloads = app.state.downloads.clone();
@@ -1562,6 +1564,7 @@ async fn a_file_enqueued_again_in_another_job_ends_the_job_it_waited_in_canceled
       position: None,
     }],
     destination: None,
+    folder: None,
     search_id: None,
   };
   let results = downloads.enqueue(Uuid::new_v4(), vec![again], false).await;

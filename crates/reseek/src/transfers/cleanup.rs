@@ -346,7 +346,8 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn interrupted_downloads_come_back_in_their_job_with_their_destination_search_and_place() {
+  async fn interrupted_downloads_come_back_in_their_job_with_their_destination_folder_search_and_place()
+   {
     let db = transfers().await;
     let job = Uuid::new_v4();
     let search = Uuid::new_v4();
@@ -356,10 +357,16 @@ mod tests {
       search_id: Some(search),
       ..Record::download("alice", filename, 1)
     };
+    let in_folder = Record {
+      destination: None,
+      folder: Some("a".to_string()),
+      ..in_job("a\\Disc 1\\3.flac", "")
+    };
     let mut records = [
       in_job("a\\Disc 1\\1.flac", "Album/Disc 1"),
       in_job("a\\Disc 2\\1.flac", "Album/Disc 2"),
       in_job("a\\Disc 1\\2.flac", "Album/Disc 1"),
+      in_folder,
       Record::download("alice", "b\\jobless.flac", 1),
     ];
     // asked for a second apart, so the order they are taken in is the order above, and placed
@@ -379,7 +386,7 @@ mod tests {
     .unwrap();
     end_unfinished(&db).await.unwrap();
     let resumable = take_resumable(&db).await.unwrap();
-    let group = |destination: Option<&str>, search_id, files: &[(&str, f64)]| Group {
+    let group = |destination: Option<&str>, folder: Option<&str>, files: &[(&str, f64)]| Group {
       username: "alice".to_string(),
       files: files
         .iter()
@@ -390,27 +397,25 @@ mod tests {
         })
         .collect(),
       destination: destination.map(str::to_string),
-      search_id,
+      folder: folder.map(str::to_string),
+      search_id: Some(search),
     };
     let expected = Resumable::from([(
       job,
       vec![
         group(
           Some("Album/Disc 1"),
-          Some(search),
+          None,
           &[("a\\Disc 1\\1.flac", 4.0), ("a\\Disc 1\\2.flac", 2.0)],
         ),
-        group(
-          Some("Album/Disc 2"),
-          Some(search),
-          &[("a\\Disc 2\\1.flac", 3.0)],
-        ),
+        group(Some("Album/Disc 2"), None, &[("a\\Disc 2\\1.flac", 3.0)]),
+        group(None, Some("a"), &[("a\\Disc 1\\3.flac", 1.0)]),
       ],
     )]);
     assert_eq!(
       resumable, expected,
-      "each destination keeps its files and each file its place, and a download without a job \
-       is left"
+      "each destination and folder keeps its files and each file its place, and a download \
+       without a job is left"
     );
   }
 }

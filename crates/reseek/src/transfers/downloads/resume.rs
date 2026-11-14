@@ -145,6 +145,7 @@ impl Downloads {
           files: whole,
           username: group.username.clone(),
           destination: group.destination.clone(),
+          folder: group.folder.clone(),
           search_id: group.search_id,
         });
       }
