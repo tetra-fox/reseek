@@ -490,71 +490,84 @@ describe("search results", () => {
     expect(searchOptions.hideLocked).toBe(true);
   });
 
-  it("download a folder in the folder, so the daemon keeps its own level", async () => {
-    session.principal = { name: "a", role: "Administrator", session: null } as never;
-    app.state = { server: { isConnected: true }, user: { username: "me" } } as never;
-    const album = response("alice", 1, [
-      sharedFile("@@alice\\Music\\Album\\CD1\\01.flac"),
-      sharedFile("@@alice\\Music\\Album\\CD2\\01.flac")
-    ]);
-    const net = await open([album]);
-    net.frame("search.response", { searchId: ID, response: album });
-    await streamed();
-    const line = [...document.querySelectorAll("[data-line]")].find((l) =>
-      l.getAttribute("data-line")!.endsWith("@@alice\\Music\\Album")
+  /** The folder of each group of each download job asked for, in order */
+  const folders = (net: Awaited<ReturnType<typeof open>>) =>
+    net.requests
+      .filter((r) => r.url.pathname.endsWith("/transfers/downloads/jobs"))
+      .map((r) =>
+        (r.body as { groups: { folder?: string | null }[] }).groups.map((g) => g.folder ?? null)
+      );
+  /** The tree's line whose key ends in `path` */
+  const lineOf = (path: string) =>
+    [...document.querySelectorAll<HTMLElement>("[data-line]")].find((l) =>
+      l.getAttribute("data-line")!.endsWith(path)
     )!;
-    line.querySelector<HTMLButtonElement>('button[aria-label^="Download folder"]')!.click();
-    await flushFaked();
-    const job = net.requests.find((r) => r.url.pathname.endsWith("/transfers/downloads/jobs"));
-    expect(job?.body).toEqual({
-      groups: [
-        {
-          username: "alice",
-          files: [
-            { filename: "@@alice\\Music\\Album\\CD1\\01.flac", size: expect.any(Number) },
-            { filename: "@@alice\\Music\\Album\\CD2\\01.flac", size: expect.any(Number) }
-          ],
-          searchId: ID,
-          folder: "@@alice\\Music\\Album"
-        }
-      ]
-    });
-  });
-
-  it("download a folder from its menu, and a user's results, keeping their folders", async () => {
-    session.principal = { name: "a", role: "Administrator", session: null } as never;
-    app.state = { server: { isConnected: true }, user: { username: "me" } } as never;
-    const album = response("alice", 1, [
-      sharedFile("@@alice\\Music\\Album\\CD1\\01.flac"),
-      sharedFile("@@alice\\Music\\Album\\CD2\\01.flac")
-    ]);
-    const net = await open([album]);
-    net.frame("search.response", { searchId: ID, response: album });
-    await streamed();
-    const folders = () =>
-      net.requests
-        .filter((r) => r.url.pathname.endsWith("/transfers/downloads/jobs"))
-        .map((r) =>
-          (r.body as { groups: { folder: string | null }[] }).groups.map((g) => g.folder)
-        );
-    const line = [...document.querySelectorAll("[data-line]")].find((l) =>
-      l.getAttribute("data-line")!.endsWith("@@alice\\Music\\Album")
-    )!;
+  /** Opens the menu of `line` and picks `item` in it */
+  const pick = async (line: HTMLElement, item: string) => {
     line.dispatchEvent(
       new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 5, clientY: 5 })
     );
     await flushFaked();
     [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
-      .find((i) => i.textContent?.trim() === "Download folder")!
+      .find((i) => i.textContent?.trim() === item)!
       .click();
     await flushFaked();
-    expect(folders()).toEqual([["@@alice\\Music\\Album"]]);
+  };
+  /** A search page with write access, showing `responses` */
+  const writable = async (responses: Schemas["SearchResponse"][]) => {
+    session.principal = { name: "a", role: "Administrator", session: null } as never;
+    app.state = { server: { isConnected: true }, user: { username: "me" } } as never;
+    const net = await open(responses);
+    for (const response of responses) net.frame("search.response", { searchId: ID, response });
+    await streamed();
+    return net;
+  };
+  // a folder holding a file and one folder, whose files' deepest common folder is itself
+  const album = () =>
+    response("alice", 1, [
+      sharedFile("@@alice\\Music\\Album\\cover.jpg"),
+      sharedFile("@@alice\\Music\\Album\\CD1\\01.flac")
+    ]);
 
-    [...document.querySelectorAll<HTMLButtonElement>("button")]
+  it("download a folder in the folder, from its button or its menu, so it keeps its tree", async () => {
+    const net = await writable([album()]);
+    lineOf("@@alice\\Music\\Album")
+      .querySelector<HTMLButtonElement>('button[aria-label^="Download folder"]')!
+      .click();
+    await flushFaked();
+    await pick(lineOf("@@alice\\Music\\Album"), "Download folder");
+    expect(folders(net)).toEqual([["@@alice\\Music\\Album"], ["@@alice\\Music\\Album"]]);
+    const job = net.requests.find((r) => r.url.pathname.endsWith("/transfers/downloads/jobs"));
+    expect((job!.body as { groups: { files: { filename: string }[] }[] }).groups[0].files).toEqual([
+      { filename: "@@alice\\Music\\Album\\cover.jpg", size: expect.any(Number) },
+      { filename: "@@alice\\Music\\Album\\CD1\\01.flac", size: expect.any(Number) }
+    ]);
+  });
+
+  it("download a user's results and a single file loose, where the pattern puts each", async () => {
+    const spread = response("bob", 1, [
+      sharedFile("@@bob\\Music\\Rock\\A\\01.flac"),
+      sharedFile("@@bob\\Music\\Jazz\\B\\01.flac")
+    ]);
+    const net = await writable([album(), spread]);
+    // A and B under the default pattern, as each file's own folder
+    [...lineOf("bob").querySelectorAll<HTMLButtonElement>("button")]
       .find((b) => b.textContent?.trim() === "Download all")!
       .click();
     await flushFaked();
-    expect(folders()[1], "the deepest folder holding them").toEqual(["@@alice\\Music\\Album"]);
+    // 01.flac under `{}`
+    await pick(lineOf("@@alice\\Music\\Album\\cover.jpg"), "Download");
+    expect(folders(net)).toEqual([[null], [null]]);
+  });
+
+  it("download a row loose and its folder in the folder in the list", async () => {
+    searchOptions.layout = "list";
+    const net = await writable([album()]);
+    const row = lineOf("@@alice\\Music\\Album\\cover.jpg");
+    row.querySelector<HTMLButtonElement>('button[aria-label^="Download folder"]')!.click();
+    await flushFaked();
+    await pick(row, "Download");
+    expect(folders(net)).toEqual([["@@alice\\Music\\Album"], [null]]);
   });
 
   it("keep every preset removed in a row off, and undo only the one undone", async () => {

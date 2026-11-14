@@ -19,7 +19,13 @@
   import { FILE_ACTIONS as A } from "#lib/files/actions.js";
   import type { AllFiles } from "#lib/files/allfiles.svelte.js";
   import type { FileColumn } from "#lib/files/columns.js";
-  import { type Enqueued, enqueueSelection, followDownloads } from "#lib/files/downloads.js";
+  import {
+    downloadFolderPlan,
+    type Enqueued,
+    enqueuePlan,
+    enqueueSelection,
+    followDownloads
+  } from "#lib/files/downloads.js";
   import { badgeCount, formatBytes, formatSpeed, getFileName, plural } from "#lib/format.js";
   import { inspector } from "#lib/inspector/inspector.svelte.js";
   import { heldOrder } from "#lib/lists/interaction.svelte.js";
@@ -33,7 +39,7 @@
     type ResultRow
   } from "#lib/search/list.js";
   import { Expansion } from "#lib/tree/expansion.svelte.js";
-  import { NO_FOLDER, type TreeLine } from "#lib/tree/folders.js";
+  import { NO_FOLDER, separatorOf, type TreeLine } from "#lib/tree/folders.js";
   import { users } from "#lib/users/users.svelte.js";
 
   import ResultUserItems from "./ResultUserItems.svelte";
@@ -128,10 +134,18 @@
       list.map((r) => ({ username: r.username, file: r.file })),
       searchId
     );
-  /** Downloads rows and says what came of it in a toast */
-  const downloadNow = async (list: ResultRow[]) => {
-    const outcome = await download(list);
+  const tell = (outcome: Enqueued) =>
     toast(outcome.text, outcome.kind === "done" ? "info" : "error");
+  /** Downloads rows and says what came of it in a toast */
+  const downloadNow = async (list: ResultRow[]) => tell(await download(list));
+  /** Downloads the files of a row's folder in the folder, so it keeps its own level */
+  const downloadFolder = async (row: ResultRow) => {
+    const plan = downloadFolderPlan(
+      row.folder,
+      folderOf(row).map((r) => r.file),
+      separatorOf(row.folder)
+    );
+    tell(await enqueuePlan(row.username, plan, searchId));
   };
 
   /** A row's file for the inspector, with what its user offers */
@@ -165,7 +179,7 @@
     <RemoteFolderItems
       folder={row.folder}
       username={row.username}
-      ondownload={canDownload ? () => void downloadNow(folder) : undefined}
+      ondownload={canDownload ? () => void downloadFolder(row) : undefined}
       onallfiles={() => void allFiles.show(row.username, row.folder)}
       browse={false} />
     <Menu.Separator />
@@ -260,7 +274,7 @@
               variant="ghost"
               size="icon-sm"
               aria-label={`${A.downloadFolder.label}, ${folderText(folder)}`}
-              onclick={() => void downloadNow(folder)}>
+              onclick={() => void downloadFolder(row)}>
               <A.downloadFolder.icon />
             </Button>
           {/snippet}

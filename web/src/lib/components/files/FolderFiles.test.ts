@@ -59,7 +59,7 @@ describe("every file in a search result's folder", () => {
     document.querySelector<HTMLElement>("[aria-label='Select 01.flac']")!.click();
     flushSync();
     button("Download").click();
-    expect(await asked(net)).toEqual([["s1", "@@a\\Album\\CD1"]]);
+    expect(await asked(net)).toEqual([["s1", null]]);
   });
 
   it("names who they come from as a username, which shows a name's edge spaces", () => {

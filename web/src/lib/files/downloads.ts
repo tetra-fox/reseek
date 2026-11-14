@@ -5,7 +5,7 @@ import { plural } from "#lib/format.js";
 import { keepCurrent } from "#lib/live/keep.svelte.js";
 import { call } from "#lib/request.js";
 import { downloads, fileKey } from "#lib/transfers/transfers.svelte.js";
-import { commonFolder, type Separator, separatorOf } from "#lib/tree/folders.js";
+import { commonFolder, type Separator } from "#lib/tree/folders.js";
 
 export type EnqueueItem = Schemas["EnqueueDownloadFile"];
 
@@ -178,9 +178,11 @@ export const downloadFolderPlan = (
 ];
 
 /**
- * Selected files as the groups that download them: the files under each top folder, which
- * `topOf` gives a path's, as a group in the deepest folder holding all of them, so the selection
- * keeps its folders below it as `downloadFolderPlan` keeps a folder's
+ * Selected files as the groups that download them, one per top folder, which `topOf` gives a
+ * path's. When anything in the selection is in a folder below the deepest one holding its top's
+ * files, folders were picked, and every group is sent in that deepest folder so the selection
+ * keeps its tree, as `downloadFolderPlan` keeps a folder's. When nothing is, the files are loose
+ * and each goes where the download pattern puts it
  */
 export const downloadPlan = (
   files: Schemas["File"][],
@@ -194,23 +196,28 @@ export const downloadPlan = (
     if (listed) listed.push(file);
     else byTop.set(top, [file]);
   }
-  return [...byTop.values()].map((grouped) => {
-    const name = commonFolder(
+  const tops = [...byTop.values()].map((grouped) => ({
+    name: commonFolder(
       grouped.map((f) => f.filename),
       separator
-    );
-    return { files: inOrder(name, grouped, separator), folder: folderOf(name, grouped, separator) };
-  });
-};
-
-/** The groups of a plan for `username`'s files as the job asks for them */
-const requestsOf = (username: string, plan: DownloadGroup[], searchId?: string): Request[] =>
-  plan.map((group) => ({
-    username,
-    files: group.files.map((f) => asItem(f)),
-    searchId,
-    folder: group.folder ?? undefined
+    ),
+    grouped
   }));
+  const deeper = ({ name, grouped }: (typeof tops)[number]) => {
+    const prefix = prefixOf(name, separator);
+    return (
+      name !== "" &&
+      grouped.some(
+        (f) => f.filename.startsWith(prefix) && f.filename.slice(prefix.length).includes(separator)
+      )
+    );
+  };
+  const nested = tops.some(deeper);
+  return tops.map(({ name, grouped }) => ({
+    files: inOrder(name, grouped, separator),
+    folder: nested ? folderOf(name, grouped, separator) : null
+  }));
+};
 
 /**
  * Enqueues the groups of a plan for one user's files as one download job, found by the search
@@ -220,20 +227,19 @@ export const enqueuePlan = (
   username: string,
   plan: DownloadGroup[],
   searchId?: string
-): Promise<Enqueued> => enqueueJob(requestsOf(username, plan, searchId));
-
-/** The share a path is in: its first folder, with the separators before it */
-const shareOf = (path: string, separator: Separator) => {
-  let start = 0;
-  while (path[start] === separator) start++;
-  const cut = path.indexOf(separator, start);
-  return cut === -1 ? path.slice(0, start) : path.slice(0, cut);
-};
+): Promise<Enqueued> =>
+  enqueueJob(
+    plan.map((group) => ({
+      username,
+      files: group.files.map((f) => asItem(f)),
+      searchId,
+      folder: group.folder ?? undefined
+    }))
+  );
 
 /**
- * Enqueues files of several users, such as a selection of search results, as one download job:
- * each user's files split by `downloadPlan` with a top folder per share, so they keep their
- * folders as a folder's own download does
+ * Enqueues loose files of several users, such as search results, as one download job, a group
+ * per user: each file goes where the download pattern puts it
  */
 export const enqueueSelection = (
   picked: { username: string; file: Schemas["File"] }[],
@@ -246,10 +252,10 @@ export const enqueueSelection = (
     else byUser.set(username, [file]);
   }
   return enqueueJob(
-    [...byUser].flatMap(([username, files]) => {
-      const separator = separatorOf(files[0].filename);
-      const plan = downloadPlan(files, (path) => shareOf(path, separator), separator);
-      return requestsOf(username, plan, searchId);
-    })
+    [...byUser].map(([username, files]) => ({
+      username,
+      files: files.map((f) => asItem(f)),
+      searchId
+    }))
   );
 };

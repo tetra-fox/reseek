@@ -23,7 +23,7 @@
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { undoable } from "#lib/feedback/undo.js";
   import { AllFiles } from "#lib/files/allfiles.svelte.js";
-  import { asItem, enqueue } from "#lib/files/downloads.js";
+  import { enqueueSelection } from "#lib/files/downloads.js";
   import { parseFilters } from "#lib/files/filters.js";
   import { formatCount, listText, plural } from "#lib/format.js";
   import { useInspector } from "#lib/inspector/inspector.svelte.js";
@@ -273,7 +273,7 @@
 
   /** Enqueues the file the inspector shows and says what came of it */
   const downloadPicked = async ({ username, file }: Picked) => {
-    const outcome = await enqueue({ username, files: [asItem(file)], searchId: id });
+    const outcome = await enqueueSelection([{ username, file }], id);
     toast(outcome.text, outcome.kind === "done" ? "info" : "error");
   };
 

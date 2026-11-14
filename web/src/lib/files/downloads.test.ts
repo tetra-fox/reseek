@@ -23,7 +23,7 @@ const plan = (files: string[], topOf: (path: string) => string, separator: "\\" 
   ).map((g): [string | null, string[]] => [g.folder, g.files.map((f) => f.filename)]);
 
 describe("downloading a selection", () => {
-  it("sends it in the deepest folder holding it, its own files first, each folder's together", () => {
+  it("sends it in the deepest folder holding it when it has folders below, its own files first", () => {
     expect(
       plan(
         [
@@ -45,18 +45,24 @@ describe("downloading a selection", () => {
         ]
       ]
     ]);
+    // the files of one folder, with nothing below it, go where the pattern puts them
     expect(plan(["top/sub/a", "top/sub/b"], () => "top", "/")).toEqual([
-      ["top/sub", ["top/sub/a", "top/sub/b"]]
+      [null, ["top/sub/a", "top/sub/b"]]
     ]);
   });
 
-  it("sends each top folder's files as a group of their own", () => {
+  it("sends every top's files in their folder once anything in the selection is nested", () => {
     const top = (path: string) => path.split("\\").slice(0, 2).join("\\");
     expect(
       plan(["@@a\\Music\\A\\1.flac", "@@a\\Video\\x.mkv", "@@a\\Music\\A\\CD2\\2.flac"], top)
     ).toEqual([
       ["@@a\\Music\\A", ["@@a\\Music\\A\\1.flac", "@@a\\Music\\A\\CD2\\2.flac"]],
       ["@@a\\Video", ["@@a\\Video\\x.mkv"]]
+    ]);
+    // with nothing nested anywhere, every top's files go where the pattern puts them
+    expect(plan(["@@a\\Music\\A\\1.flac", "@@a\\Video\\x.mkv"], top)).toEqual([
+      [null, ["@@a\\Music\\A\\1.flac"]],
+      [null, ["@@a\\Video\\x.mkv"]]
     ]);
   });
 
@@ -71,27 +77,27 @@ describe("downloading a selection", () => {
   });
 });
 
-describe("downloading a selection of several users", () => {
+describe("downloading loose files of several users", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it("keeps each user's folders below the deepest one holding their files in each share", async () => {
+  it("sends each user's files in no folder, so each goes where the pattern puts it", async () => {
     const net = fakeNetwork(() => ({ id: "j", groups: [] }));
     await enqueueSelection(
       [
-        { username: "alice", file: file("@@a\\Music\\Album\\CD1\\01.flac") },
+        { username: "alice", file: file("@@a\\Music\\Rock\\A\\01.flac") },
         { username: "bob", file: file("/home/bob/Album/01.flac") },
-        { username: "alice", file: file("@@a\\Music\\Album\\CD2\\01.flac") },
-        { username: "alice", file: file("@@b\\Video\\x.mkv") }
+        { username: "alice", file: file("@@a\\Music\\Jazz\\B\\01.flac") }
       ],
       "s1"
     );
     const body = net.requests[0].body as {
-      groups: { username: string; folder: string | null; files: unknown[] }[];
+      groups: { username: string; folder?: string | null; searchId: string; files: unknown[] }[];
     };
-    expect(body.groups.map((g) => [g.username, g.folder, g.files.length])).toEqual([
-      ["alice", "@@a\\Music\\Album", 2],
-      ["alice", "@@b\\Video", 1],
-      ["bob", "/home/bob/Album", 1]
+    expect(
+      body.groups.map((g) => [g.username, g.folder ?? null, g.searchId, g.files.length])
+    ).toEqual([
+      ["alice", null, "s1", 2],
+      ["bob", null, "s1", 1]
     ]);
   });
 });
