@@ -157,11 +157,11 @@ const withReason = (word: string, why: string | null) => {
   return `${word}: ${cut(why.replace(said, ""))}`;
 };
 
-/** How a transfer's state reads in its chip, its color, and the full text for its tooltip */
 /** A queued download's place, null when the peer gave none: 0, or a -1 read unsigned */
 export const placeOf = (t: Transfer): number | null =>
   t.placeInQueue && t.placeInQueue <= SIGNED_MOST ? t.placeInQueue : null;
 
+/** How a transfer's state reads in its chip, its color, and the full text for its tooltip */
 export const stateChip = (t: Transfer): { text: string; tone: Tone; title: string | null } => {
   const tries = t.attempts > 1 ? ` ×${formatCount(t.attempts)}` : "";
   const why = t.exception ?? null;
