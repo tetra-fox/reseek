@@ -110,10 +110,11 @@ export const CHAT = group(
 export const COMPOSER = group(
   "Message box",
   {
-    // Ctrl or Cmd+Enter, the send key of many chat apps, and Alt+Enter send as Enter does
+    // Ctrl or Cmd+Enter, the send key of many chat apps, and Alt+Enter send as Enter does, and
+    // so does AltGr+Enter, from a hand still on AltGr after typing a character with it
     send: bind(
       "Send",
-      key("Enter", { shift: false }),
+      key("Enter", { shift: false, altGr: true }),
       key("Enter", { mod: true, shift: false }),
       key("Enter", { alt: true, shift: false })
     ),

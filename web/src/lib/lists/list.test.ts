@@ -228,6 +228,17 @@ describe("a list's selection and focus", () => {
     expect(ticked()).toEqual([]);
   });
 
+  it("clears the selection on Escape whatever is held with it", () => {
+    start(grouped());
+    for (const held of [{ ctrlKey: true }, { altKey: true }, { metaKey: true }]) {
+      press(grid(), "ArrowDown");
+      press(grid(), " ");
+      expect(ticked()).not.toEqual([]);
+      press(grid(), "Escape", held);
+      expect(ticked()).toEqual([]);
+    }
+  });
+
   it("passes a removed row's place to the next row, else the one before", () => {
     const source = start(grouped());
     press(grid(), "ArrowDown");

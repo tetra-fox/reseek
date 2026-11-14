@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import Select from "#lib/components/ui/Select.svelte";
 
-import { APP, CHAT, DETAILS, LIST } from "./bindings";
+import { APP, CHAT, COMPOSER, DETAILS, LIST } from "./bindings";
 import { isPressed, keepsKey, keysAria, keysSpoken, keysText, keyStep, layerOpen } from "./keys";
 
 describe("which keys a focused element keeps", () => {
@@ -121,6 +121,26 @@ describe("a key binding", () => {
     expect(isPressed(DETAILS.details, key({ key: " ", shiftKey: true }))).toBe(false);
     expect(isPressed(DETAILS.select, key({ key: " " }))).toBe(false);
     expect(isPressed(LIST.select, key({ key: " ", shiftKey: true }))).toBe(true);
+  });
+
+  it("takes Escape whatever is held with it", () => {
+    for (const held of [{}, { shiftKey: true }, { ctrlKey: true }, { altKey: true }]) {
+      expect(isPressed(LIST.clear, key({ key: "Escape", ...held }))).toBe(true);
+    }
+  });
+
+  it("sends on AltGr+Enter, which Windows reports as Ctrl+Alt, and on no other Ctrl+Alt key", () => {
+    const altGr = { ctrlKey: true, altKey: true, modifierAltGraph: true };
+    expect(isPressed(COMPOSER.send, key({ key: "Enter", ...altGr }))).toBe(true);
+    // Linux reports AltGr alone
+    expect(isPressed(COMPOSER.send, key({ key: "Enter", modifierAltGraph: true }))).toBe(true);
+    expect(isPressed(COMPOSER.send, key({ key: "Enter", ctrlKey: true, altKey: true }))).toBe(
+      false
+    );
+    expect(isPressed(COMPOSER.newLine, key({ key: "Enter", shiftKey: true, ...altGr }))).toBe(
+      false
+    );
+    expect(isPressed(APP.palette, key({ key: "k", ...altGr }))).toBe(false);
   });
 
   it("tells the two ways of a pair apart", () => {

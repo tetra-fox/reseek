@@ -60,9 +60,11 @@ export const mac = typeof navigator !== "undefined" && /mac|iphone|ipad/i.test(n
  * A key and what is held with it. `mod` is Ctrl or Cmd, either on any keyboard, and shown as
  * the one the keyboard uses. `mod` and `alt` are held exactly as given. Shift is held as given
  * when `shift` is set and either way when it is not, since many keys are typed with it: `?` is
- * Shift+/ on most keyboards
+ * Shift+/ on most keyboards. With `altGr` the chord is also pressed while AltGr is held, whatever
+ * Ctrl and Alt say then: a layout types some characters with AltGr, which Windows reports as
+ * Ctrl+Alt. Escape is pressed whatever is held with it
  */
-export type Chord = { key: string; mod?: boolean; alt?: boolean; shift?: boolean };
+export type Chord = { key: string; mod?: boolean; alt?: boolean; shift?: boolean; altGr?: boolean };
 
 /**
  * What a key does: `keys` are the chords that do it. A binding of two keys that go opposite
@@ -79,11 +81,14 @@ export type Binding = {
 const sameKey = (want: string, got: string) =>
   want.length === 1 ? want.toLowerCase() === got.toLowerCase() : want === got;
 
-const chordPressed = (c: Chord, e: KeyboardEvent) =>
-  sameKey(c.key, e.key) &&
-  !!c.mod === (e.ctrlKey || e.metaKey) &&
-  !!c.alt === e.altKey &&
-  (c.shift === undefined || c.shift === e.shiftKey);
+const chordPressed = (c: Chord, e: KeyboardEvent) => {
+  if (!sameKey(c.key, e.key)) return false;
+  if (c.key === "Escape") return true;
+  const held =
+    (!!c.altGr && e.getModifierState("AltGraph")) ||
+    (!!c.mod === (e.ctrlKey || e.metaKey) && !!c.alt === e.altKey);
+  return held && (c.shift === undefined || c.shift === e.shiftKey);
+};
 
 /** Whether `e` is one of the binding's keys */
 export const isPressed = (binding: Binding, e: KeyboardEvent) =>

@@ -105,8 +105,8 @@ let lists = 0;
  * header only Ctrl/Cmd+A and Space act, unless headers take focus. In a list with an inspector,
  * Space and `i` on a line it shows open or close it instead, and Shift+Space ticks. Letters typed
  * one after another go to the next line whose name starts with them, in a list that names its
- * lines; an `i` in the middle of those is one of them. Escape closes what is open first (a menu,
- * a dialog, a card) and otherwise clears the selection
+ * lines; an `i` in the middle of those is one of them. Escape, whatever is held with it, closes
+ * what is open first (a menu, a dialog, a card) and otherwise clears the selection
  */
 export class ListControl<L> {
   /** the selected rows' ids */
@@ -406,6 +406,9 @@ export class ListControl<L> {
     const id = line === null ? null : this.#spec.id(line);
     if (isPressed(LIST.selectAll, e)) {
       this.setAll((line && this.#spec.group?.(line)) ?? this.everything, true);
+    } else if (isPressed(LIST.clear, e)) {
+      if (layerOpen()) return;
+      this.clear();
     } else if (withModifier(e)) {
       if (line === null || !this.#spec.onchord?.(e, line)) return;
       this.#ringed = true;
@@ -427,9 +430,6 @@ export class ListControl<L> {
       const past = this.#next(want - way, way);
       const to = past !== -1 ? past : this.#next(want, way === 1 ? -1 : 1);
       if (to !== -1) this.#moveTo(to);
-    } else if (isPressed(LIST.clear, e)) {
-      if (layerOpen()) return;
-      this.clear();
     } else if (this.#togglesInspector(e, line)) {
       inspector.toggle();
     } else if (
