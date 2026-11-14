@@ -542,6 +542,14 @@ mod tests {
       .await;
     assert_eq!(env.status, 409);
     assert_eq!(env.json()["error"], "Set by RESEEK_SLSK_DESCRIPTION");
+    let relative = app
+      .send(set(json!({ "set": { "blacklist.file": "list.txt" } })))
+      .await;
+    assert_eq!(relative.status, 400);
+    assert_eq!(
+      relative.json()["detail"],
+      "blacklist.file: a path set at run time must be absolute"
+    );
     let empty = app.send(set(json!({}))).await;
     assert_eq!(empty.status, 204);
     let nested = app
