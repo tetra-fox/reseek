@@ -445,6 +445,9 @@ describe("a conversation's pane", () => {
     net.frame("hello", { principal: { name: "me", role: "Administrator" } } as never);
     await pane.load();
     expect(pane.ordered.map((m) => m.unread)).toEqual([false, false]);
+    // the conversation is read beside the first page, which the load does not wait for
+    const paths = () => net.requests.map((r) => r.url.pathname);
+    await vi.waitFor(() => expect(paths()).toContain("/api/v0/conversations/alice"));
     const reads = net.requests.length;
     // our acknowledgement of the older one was lost, so the server delivers it again
     net.frame("conversations.update", {
