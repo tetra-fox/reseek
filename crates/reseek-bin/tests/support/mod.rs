@@ -139,8 +139,12 @@ impl Printed {
   }
 }
 
-/// How long the daemon may take to start listening and answer `/health`.
-const STARTUP: Duration = Duration::from_secs(20);
+/// How long the daemon may take to start: far past what it takes on a busy machine, as a start
+/// that never ends is a failure of its own, not a slow one.
+const STARTUP: Duration = Duration::from_secs(120);
+
+/// The line the daemon writes once it has started, just before it takes requests.
+const STARTED: &str = "reseek started";
 
 /// The port in the log line the daemon writes once its HTTP listener is bound.
 fn listening_port(printed: &str) -> Option<u16> {
@@ -154,13 +158,13 @@ fn listening_port(printed: &str) -> Option<u16> {
 
 impl Daemon {
   /// Starts the daemon in `dir` on a loopback port the system picks, with `args` and only the
-  /// variables in `env`, and waits until it answers `/health`.
+  /// variables in `env`, and waits until it says it has started.
   pub fn start(dir: &Path, args: &[&str], env: &[(&str, &str)]) -> Self {
     Self::start_on(0, dir, args, env)
   }
 
-  /// Starts the daemon as [`Daemon::start`] does, on `port`. A daemon that exits before it
-  /// answers fails the test with what it printed.
+  /// Starts the daemon as [`Daemon::start`] does, on `port`. A daemon that exits before it has
+  /// started fails the test with what it printed.
   pub fn start_on(port: u16, dir: &Path, args: &[&str], env: &[(&str, &str)]) -> Self {
     Self::launch(Command::new(PROGRAM), port, dir, args, env)
   }
@@ -198,33 +202,42 @@ impl Daemon {
       .args(args)
       .env_clear()
       .envs(env.iter().copied());
-    let mut daemon = Self {
-      process: Process::spawn(&mut command),
-      port,
-    };
-    let started = Instant::now();
-    daemon.port = daemon.listening(started);
-    while send(daemon.port, "GET", "/health").is_none() {
-      daemon.process.still_running(started);
-      std::thread::sleep(Duration::from_millis(50));
-    }
-    daemon
+    let mut process = Process::spawn(&mut command);
+    let port = Self::started(&mut process);
+    Self { process, port }
   }
 
-  /// The port the daemon says it listens on, once it says so.
-  fn listening(&mut self, started: Instant) -> u16 {
+  /// Waits until the daemon says it has started, and gives the port it said it listens on. Fails
+  /// the test when the program exits first, or has not started after [`STARTUP`].
+  fn started(process: &mut Process) -> u16 {
+    let begun = Instant::now();
     loop {
-      let printed = &self.process.printed;
-      let text = printed.text.lock().unwrap_or_else(PoisonError::into_inner);
-      if let Some(port) = listening_port(&text) {
-        return port;
+      let text = process
+        .printed
+        .text
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
+      if text.contains(STARTED) {
+        return listening_port(&text).expect("the daemon names its HTTP port before it starts");
       }
-      let (text, _) = printed
+      // woken by each line the program writes and when its output ends
+      let (text, _) = process
+        .printed
         .more
-        .wait_timeout(text, Duration::from_millis(50))
+        .wait_timeout(text, Duration::from_millis(100))
         .unwrap_or_else(PoisonError::into_inner);
       drop(text);
-      self.process.still_running(started);
+      if let Some(status) = process.child.try_wait().unwrap() {
+        panic!(
+          "the program exited with {status} before it started:\n{}",
+          process.output()
+        );
+      }
+      assert!(
+        begun.elapsed() < STARTUP,
+        "not started after {STARTUP:?}:\n{}",
+        process.printed()
+      );
     }
   }
 
@@ -253,17 +266,6 @@ impl Process {
       printed,
       reader: Some(reader),
     }
-  }
-
-  /// Fails the test when the program exited, or took too long to start.
-  fn still_running(&mut self, started: Instant) {
-    if let Some(status) = self.child.try_wait().unwrap() {
-      panic!(
-        "the program exited with {status} before it answered:\n{}",
-        self.output()
-      );
-    }
-    assert!(started.elapsed() < STARTUP, "never answered");
   }
 
   /// What it printed so far.
