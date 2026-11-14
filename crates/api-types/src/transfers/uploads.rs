@@ -9,8 +9,9 @@ use utoipa::ToSchema;
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UploadQueueStatus {
-  /// the upload's 0-based place among its group's uploads, uploads in progress counted; null
-  /// when the queue does not hold the upload
+  /// the upload's place in its group's queue, counted from 1 as its peer is told it: one more
+  /// than the group's uploads ahead of it, those in progress counted; null once the upload has
+  /// started or when the queue does not hold it
   pub position: Option<u32>,
   /// the group whose queue the user waits in
   #[schema(example = "default")]

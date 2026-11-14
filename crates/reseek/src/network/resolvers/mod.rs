@@ -286,7 +286,7 @@ async fn profile(edges: &Edges, username: &str) -> UserInfo {
     description: local.description,
     picture: local.picture,
     upload_slots: forecast.total_slots,
-    queue_length: forecast.position,
+    queue_length: forecast.queue_length,
     has_free_upload_slot: forecast.free_slots > 0,
     upload_permitted: Some(upload_permitted(&options.values)),
   }

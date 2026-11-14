@@ -1,6 +1,7 @@
-//! Where an upload stands in the queue, and where a new request would land. Places count only
-//! the uploads of the same group, those running included, 0-based: higher groups cannot be
-//! foreseen cheaply, so a place can be lower than the wait turns out.
+//! Where an upload stands in the queue, and where a new request would land. A place counts from
+//! 1, as peers are told it: one more than the uploads ahead of it. Only the uploads of the same
+//! group count, those running included: higher groups cannot be foreseen cheaply, so a place can
+//! be lower than the wait turns out.
 
 use uuid::Uuid;
 
@@ -21,15 +22,16 @@ pub struct Forecast {
   /// how many of those are free; slots other groups hold are not counted, so a slot can be
   /// free here while every global slot is taken
   pub free_slots: u32,
-  /// the place the request would take, 0 when a slot is free
-  pub position: u32,
+  /// how many of the group's uploads the request would wait behind, 0 when a slot is free,
+  /// which peers are told as our queue length
+  pub queue_length: u32,
 }
 
 /// What a queued upload waits for.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Standing {
   /// its place among its group's uploads, `None` once it started
-  pub position: Option<u32>,
+  pub place: Option<u32>,
   /// the group it is queued in, or started from
   pub group: String,
   /// the group's slots in use
@@ -60,7 +62,7 @@ impl UploadQueue {
   }
 
   /// The place of the upload at `i` of user `u` in `group`.
-  fn estimate_at(&self, state: &mut State, group: &str, u: usize, i: usize) -> u32 {
+  fn place_at(&self, state: &mut State, group: &str, u: usize, i: usize) -> u32 {
     let strategy = state.group(group).expect(KNOWN).strategy;
     let username = state.users[u].username.clone();
     let others: Vec<(String, usize)> = self
@@ -68,7 +70,7 @@ impl UploadQueue {
       .into_iter()
       .filter(|(name, _)| *name != username)
       .collect();
-    let place = match strategy {
+    let ahead = match strategy {
       // every user downloads a file per round: the files of the rounds before this one, and,
       // assuming this file is last in its round, every other user with a file in it
       QueueStrategy::RoundRobin => {
@@ -89,7 +91,7 @@ impl UploadQueue {
         ahead
       }
     };
-    u32::try_from(place).unwrap_or(u32::MAX)
+    u32::try_from(ahead + 1).unwrap_or(u32::MAX)
   }
 
   /// The place of the latest upload of `filename` to `username`, `None` when the queue holds
@@ -102,7 +104,7 @@ impl UploadQueue {
       .iter()
       .rposition(|e| e.filename == filename)?;
     let group = self.queued_group(&mut state, username);
-    Some(self.estimate_at(&mut state, &group, u, i))
+    Some(self.place_at(&mut state, &group, u, i))
   }
 
   /// Where a new request from `username` would land, by the group known for them now.
@@ -124,7 +126,7 @@ impl UploadQueue {
     let known = state.group(&group).expect(KNOWN);
     let (strategy, total, used) = (known.strategy, known.slots, known.used.len() as u32);
     let free = total.saturating_sub(used);
-    let position = if free > 0 {
+    let queue_length = if free > 0 {
       0
     } else {
       let users = self.group_users(state, &group);
@@ -138,7 +140,7 @@ impl UploadQueue {
       group,
       total_slots: total,
       free_slots: free,
-      position,
+      queue_length,
     }
   }
 
@@ -157,7 +159,7 @@ impl UploadQueue {
       .filter(|e| e.started.is_some())
       .count() as u32;
     Standing {
-      position: None,
+      place: None,
       group,
       group_slots_used,
       group_slots,
@@ -178,10 +180,10 @@ impl UploadQueue {
       Some(started_in) => started_in.clone(),
       None => self.queued_group(&mut state, &username),
     };
-    let position = state.users[u].entries[i]
+    let place = state.users[u].entries[i]
       .started
       .is_none()
-      .then(|| self.estimate_at(&mut state, &group, u, i));
+      .then(|| self.place_at(&mut state, &group, u, i));
     let (group_slots_used, group_slots) = state
       .group(&group)
       .map_or((0, 0), |g| (g.used.len() as u32, g.slots));
@@ -191,7 +193,7 @@ impl UploadQueue {
       .filter(|e| e.started.is_some())
       .count() as u32;
     Some(Standing {
-      position,
+      place,
       group,
       group_slots_used,
       group_slots,
@@ -228,8 +230,8 @@ mod tests {
     files(&queue, "b", 2);
     files(&queue, "c", 12);
     let d = files(&queue, "d", 7);
-    assert_eq!(queue.place("d", "d4"), Some(16));
-    assert_eq!(queue.standing(d[4]).unwrap().position, Some(16));
+    assert_eq!(queue.place("d", "d4"), Some(17));
+    assert_eq!(queue.standing(d[4]).unwrap().place, Some(17));
     assert_eq!(queue.place("d", "nothing"), None);
   }
 
@@ -246,8 +248,12 @@ mod tests {
     // running uploads count as ahead
     let mut start = queue.await_start(a[0]).unwrap();
     assert!(started(&mut start));
-    assert_eq!(queue.place("b", "b1"), Some(3), "a's two and b's first");
-    assert_eq!(queue.place("a", "a1"), Some(1));
+    assert_eq!(
+      queue.place("b", "b1"),
+      Some(4),
+      "behind a's two and b's first"
+    );
+    assert_eq!(queue.place("a", "a1"), Some(2));
   }
 
   #[test]
@@ -263,7 +269,7 @@ mod tests {
         empty.group.as_str(),
         empty.total_slots,
         empty.free_slots,
-        empty.position
+        empty.queue_length
       ),
       (DEFAULT_GROUP, 1, 1, 0)
     );
@@ -283,7 +289,7 @@ mod tests {
     files(&queue, "erin", 1);
     let full = queue.forecast("alice");
     assert_eq!(
-      (full.free_slots, full.position),
+      (full.free_slots, full.queue_length),
       (0, 3),
       "carol, dave and erin wait in the group"
     );
@@ -299,7 +305,7 @@ mod tests {
     assert_eq!(
       standing,
       Standing {
-        position: Some(1),
+        place: Some(2),
         group: DEFAULT_GROUP.to_string(),
         group_slots_used: 1,
         group_slots: 1,
@@ -308,7 +314,7 @@ mod tests {
         user_active: 1,
       }
     );
-    assert_eq!(queue.standing(running).unwrap().position, None);
+    assert_eq!(queue.standing(running).unwrap().place, None);
     assert!(queue.standing(Uuid::new_v4()).is_none());
   }
 }

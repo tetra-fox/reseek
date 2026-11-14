@@ -47,7 +47,7 @@ pub struct OwnProfile {
   pub upload_slots: u32,
   /// whether one of those slots is free
   pub free_upload_slot: bool,
-  /// the place in the queue such a user is told a new request would take
+  /// how many uploads such a user is told a new request would wait behind, 0 with a free slot
   pub queue_length: u32,
   /// what we like and hate, which the server is told
   pub interests: Interests,

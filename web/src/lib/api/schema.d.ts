@@ -6546,7 +6546,7 @@ export interface components {
             pictureUrl?: string | null;
             /**
              * Format: int32
-             * @description the place in the queue such a user is told a new request would take
+             * @description how many uploads such a user is told a new request would wait behind, 0 with a free slot
              */
             queueLength: number;
             /** @description the layer each value comes from */
@@ -8614,8 +8614,9 @@ export interface components {
             limits: components["schemas"]["UploadLimits"];
             /**
              * Format: int32
-             * @description the upload's 0-based place among its group's uploads, uploads in progress counted; null
-             *     when the queue does not hold the upload
+             * @description the upload's place in its group's queue, counted from 1 as its peer is told it: one more
+             *     than the group's uploads ahead of it, those in progress counted; null once the upload has
+             *     started or when the queue does not hold it
              */
             position?: number | null;
             /**

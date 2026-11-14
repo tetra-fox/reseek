@@ -23251,7 +23251,7 @@
           "queueLength": {
             "type": "integer",
             "format": "int32",
-            "description": "the place in the queue such a user is told a new request would take",
+            "description": "how many uploads such a user is told a new request would wait behind, 0 with a free slot",
             "minimum": 0
           },
           "sources": {
@@ -27007,7 +27007,7 @@
               "null"
             ],
             "format": "int32",
-            "description": "the upload's 0-based place among its group's uploads, uploads in progress counted; null\nwhen the queue does not hold the upload",
+            "description": "the upload's place in its group's queue, counted from 1 as its peer is told it: one more\nthan the group's uploads ahead of it, those in progress counted; null once the upload has\nstarted or when the queue does not hold it",
             "minimum": 0
           },
           "userActive": {

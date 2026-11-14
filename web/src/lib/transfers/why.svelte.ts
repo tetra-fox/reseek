@@ -38,11 +38,11 @@ class Waits {
 
 export const waits = new Waits();
 
-/** The queue cell's text: the place among the queue's uploads, counted from 1 */
+/** The queue cell's text: the place among the queue's uploads, as the peer is told it */
 export const placeText = (s: UploadQueueStatus) =>
   s.position === null || s.position === undefined
     ? `Queued in the ${s.group} queue`
-    : `Queued (#${formatCount(s.position + 1)} in the ${s.group} queue)`;
+    : `Queued (#${formatCount(s.position)} in the ${s.group} queue)`;
 
 /** Why an upload waits, in a line per reason */
 export const whyText = (s: UploadQueueStatus): string => {

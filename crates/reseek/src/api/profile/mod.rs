@@ -81,7 +81,7 @@ async fn get_profile(
     picture_url: picture.map(|p| format!("{PICTURE_URL}?v={}", picture_tag(&p))),
     upload_slots: forecast.total_slots,
     free_upload_slot: forecast.free_slots > 0,
-    queue_length: forecast.position,
+    queue_length: forecast.queue_length,
     interests: Interests {
       liked: interests.liked.clone(),
       hated: interests.hated.clone(),

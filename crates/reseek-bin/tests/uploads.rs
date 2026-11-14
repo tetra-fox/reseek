@@ -180,7 +180,8 @@ async fn a_second_request_waits_its_place_and_starts_once_the_first_ends() {
       why.global_slots,
       why.user_active
     ),
-    (Some(1), "default", 1, 1, 1, 1, 0)
+    (Some(2), "default", 1, 1, 1, 1, 0),
+    "the place the peer is told"
   );
 
   // a newcomer is told where a request of theirs would land; asking for the user info finds

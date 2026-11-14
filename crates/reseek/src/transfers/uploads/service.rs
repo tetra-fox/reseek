@@ -149,7 +149,7 @@ impl TransferService for Uploads {
       .map_err(internal)?;
     let options = self.config.current();
     Ok(UploadQueueStatus {
-      position: standing.position,
+      position: standing.place,
       limits: limits::usage(
         &options.values,
         &self.users.placement(username).limits,

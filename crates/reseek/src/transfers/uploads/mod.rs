@@ -170,12 +170,9 @@ impl Uploads {
   }
 
   /// The place a peer is told of the latest upload of `filename` to `username`, `None` when
-  /// the queue holds none. Peers count from 1, so it is the queue's own place plus one.
+  /// the queue holds none.
   pub fn place(&self, username: &str, filename: &str) -> Option<u32> {
-    let place = self
-      .queue
-      .place(username, filename)
-      .map(|place| place.saturating_add(1));
+    let place = self.queue.place(username, filename);
     debug!(username, filename, ?place, "place in the upload queue");
     place
   }

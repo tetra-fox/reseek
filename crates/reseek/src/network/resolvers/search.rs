@@ -230,7 +230,7 @@ async fn answer(
     files,
     has_free_upload_slot: forecast.free_slots > 0,
     upload_speed,
-    queue_length: forecast.position,
+    queue_length: forecast.queue_length,
     locked_files: Vec::new(),
   });
   Some(match confined_to {
