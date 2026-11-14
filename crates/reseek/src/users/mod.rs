@@ -506,6 +506,13 @@ impl Directory {
     }));
   }
 
+  /// Drops the summary and figures of `username` after our conversation with them changed,
+  /// once a summary being built meanwhile is cached, so one read before the change is not kept.
+  pub(crate) async fn conversation_changed(&self, username: &str) {
+    let _turn = self.summary_turns.take(username).await;
+    self.forget(username);
+  }
+
   /// Forgets what is cached about `username`.
   fn forget(&self, username: &str) {
     self.figures.forget(username);

@@ -130,7 +130,6 @@ impl Messaging {
           }));
       }
     } else {
-      self.users.touch(&username, Touch::MessageIn).await;
       self
         .events
         .raise(Event::PrivateMessageReceived(PrivateMessageReceived {
@@ -156,6 +155,8 @@ impl Messaging {
     // the conversation goes first, so a client has its notification level when the message comes
     if !notice {
       self.conversation_changed(&username, redelivered).await;
+      // after the user's summary is dropped, since the touch may wait for room in its queue
+      self.users.touch(&username, Touch::MessageIn).await;
     }
     if let Some(message) = pushed {
       self
@@ -170,8 +171,9 @@ impl Messaging {
   /// Pushes the conversation with `username` as it is now, with `redelivered` when the server
   /// delivered that message again, and the unread counts. One push at a time, each reading the
   /// conversation after the one before it was sent, so a push read before a change is never sent
-  /// after it.
+  /// after it. The user's summary, which counts their messages, is read anew from here on.
   async fn conversation_changed(&self, username: &str, redelivered: Option<PrivateMessage>) {
+    self.users.conversation_changed(username).await;
     let _pushing = self.conversations_pushing.lock().await;
     let name = username.to_string();
     match self
@@ -351,7 +353,6 @@ impl Messaging {
         internal(e)
       })?;
     debug!(username, local_id = sent.local_id, "private message sent");
-    self.users.touch(username, Touch::MessageOut).await;
     self
       .live
       .publish(LiveFrame::ConversationsMessage(ConversationMessage {
@@ -359,6 +360,7 @@ impl Messaging {
         message: sent,
       }));
     self.conversation_changed(username, None).await;
+    self.users.touch(username, Touch::MessageOut).await;
     self.watch_peer(username);
     Ok(())
   }
@@ -568,6 +570,26 @@ mod tests {
       "the update names the repeat"
     );
     assert_eq!(redelivered[1], serde_json::Value::Null);
+  }
+
+  // the clock stands still, so the user touch writer, which gathers for a second, never writes
+  #[tokio::test(start_paused = true)]
+  async fn a_users_summary_counts_a_message_once_it_is_stored() {
+    let app = app("", &[]).await;
+    let message = |id| soulseek_client::PrivateMessage {
+      id,
+      timestamp: SystemTime::now(),
+      username: "alice".into(),
+      message: format!("hello {id}"),
+      replayed: false,
+    };
+    let summary = || async { app.state.users.summary("alice").await.unwrap() };
+    app.state.messaging.received(message(1)).await;
+    assert_eq!(summary().await.unread_messages, 1);
+    app.state.messaging.received(message(2)).await;
+    let after = summary().await;
+    assert_eq!(after.unread_messages, 2);
+    assert_eq!(after.figures.messages.inbound, 2);
   }
 
   #[tokio::test]
