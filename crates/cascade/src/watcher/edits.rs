@@ -353,6 +353,81 @@ mod tests {
   }
 
   #[tokio::test]
+  async fn runtime_entries_of_a_user_keyed_map_outlast_a_file_change() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    let file = |port: u16, a: &str, gone: &str, more: &str| {
+      let text = format!(
+        "[server]\nport = {port}\n[api_keys.a]\n{a}\n[api_keys.gone]\nkey = \"{gone}\"\n{more}"
+      );
+      fs::write(&path, text).unwrap();
+    };
+    file(2000, "key = \"a1\"\nrole = \"reader\"", "g1", "");
+    let watcher = watched(dir.path());
+    // a client changes a's role, adds b and deletes gone, sending the whole map as it read it
+    let mut keys = watcher.current().redacted()["api_keys"].clone();
+    keys["a"]["role"] = json!("writer");
+    keys["b"] = json!({ "key": "b1", "role": "reader" });
+    keys.as_object_mut().unwrap().remove("gone");
+    watcher
+      .set_overrides(
+        values(&[("api_keys", keys)]),
+        vec![],
+        "admin",
+        Lasts::UntilRemoved,
+        None,
+      )
+      .await
+      .unwrap();
+    let names = |watcher: &Watcher<crate::testing::Example>| {
+      let current = watcher.current();
+      let keys = &current.values.api_keys;
+      keys
+        .iter()
+        .map(|(name, k)| format!("{name}:{}:{}", k.key, k.role))
+        .collect::<Vec<_>>()
+    };
+    assert_eq!(names(&watcher), ["a:a1:writer", "b:b1:reader"]);
+
+    file(
+      3000,
+      "key = \"a2\"\nrole = \"reader\"",
+      "g1",
+      "[api_keys.c]\nkey = \"c1\"\n",
+    );
+    watcher.reload().await.unwrap();
+    assert_eq!(watcher.current().values.server.port, 3000);
+    assert_eq!(
+      names(&watcher),
+      ["a:a2:writer", "b:b1:reader", "c:c1:"],
+      "the file's changes to keys the runtime layer leaves alone show, its own stay"
+    );
+    assert!(matches!(
+      watcher.current().sources["api_keys"],
+      Source::Runtime { .. }
+    ));
+
+    file(3000, "key = \"a2\"\nrole = \"admin\"", "g2", "");
+    watcher.reload().await.unwrap();
+    assert_eq!(
+      names(&watcher),
+      ["a:a2:admin", "b:b1:reader", "gone:g2:"],
+      "a key the file moves under the runtime layer's change takes the file's value, and an \
+       entry deleted at run time comes back when the file changes it"
+    );
+
+    let restarted = watched(dir.path());
+    assert_eq!(
+      names(&restarted),
+      names(&watcher),
+      "the runtime entries are kept across a restart"
+    );
+
+    watcher.remove_override("api_keys", None).await.unwrap();
+    assert_eq!(names(&watcher), ["a:a2:admin", "gone:g2:"]);
+  }
+
+  #[tokio::test]
   async fn a_map_entry_keeps_the_secret_it_shows_hidden() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("config.toml");

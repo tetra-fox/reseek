@@ -3,18 +3,21 @@
 //!
 //! Each override remembers the value the layers below it had when it was set. When that value
 //! changes, because a file was edited or the defaults moved, the override is dropped: a new
-//! declaration wins over an older runtime change. An override also ends when it expires, and
+//! declaration wins over an older runtime change. A user-keyed map's override is not dropped
+//! whole: the entries it adds, changes or deletes stay over the files, and a key of an entry
+//! gives way on its own when the files change it too. An override also ends when it expires, and
 //! one set until restart is never written to the file, so it ends with the process.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Map, Value};
 use tracing::warn;
 
-use crate::schema::Schema;
+use crate::describe::Kind;
+use crate::schema::{Field, Schema};
 use crate::source::Source;
 use crate::write::{self, Mode};
 use crate::{Error, Key, files, tree};
@@ -169,7 +172,8 @@ impl Overrides {
   }
 
   /// The overrides that still apply over `declared`, the configuration below the runtime
-  /// layer, at `now`, and the keys of those that no longer do, each with the reason.
+  /// layer, at `now`, each as [`rebased`] over it, and the keys of those that no longer do, each
+  /// with the reason.
   pub(crate) fn pruned(
     &self,
     schema: &Schema,
@@ -181,25 +185,132 @@ impl Overrides {
     let mut dropped = Vec::new();
     for (key, o) in &self.items {
       let current = tree::get(declared, key).unwrap_or(&Value::Null);
-      let reason = if o.expires_at.is_some_and(|t| t <= now) {
-        Some("expired".to_string())
-      } else if schema.field(key).is_none() {
-        Some("not a configuration key".to_string())
+      let outcome = if o.expires_at.is_some_and(|t| t <= now) {
+        Err("expired".to_string())
       } else if let Some(by) = sources.get(key).and_then(Source::fixed_by) {
-        Some(format!("set by {by}"))
-      } else if !same(current, &o.declared) {
-        Some("the value it was set over changed".to_string())
+        Err(format!("set by {by}"))
       } else {
-        None
-      };
-      match reason {
-        Some(reason) => dropped.push((key.clone(), reason)),
-        None => {
-          kept.insert(key.clone(), o.clone());
+        match schema.field(key) {
+          Some(field) => rebased(field, o, current, &mut dropped),
+          None => Err("not a configuration key".to_string()),
         }
+      };
+      match outcome {
+        Ok(o) => {
+          kept.insert(key.clone(), o);
+        }
+        Err(reason) => dropped.push((key.clone(), reason)),
       }
     }
     (kept, dropped)
+  }
+}
+
+/// Why an override, or a key of a map entry it changes, gives way to the files.
+const MOVED: &str = "the value it was set over changed";
+
+/// `o`, an override of `field`, over `current`, the value below it now: as it is while that is
+/// the value it was set over, else dropped. A user-keyed map's override instead keeps what it
+/// changes and the files do not, set over `current`; each key of an entry that both change is
+/// the files', and goes into `lost` with the reason.
+fn rebased(
+  field: &Field,
+  o: &Override,
+  current: &Value,
+  lost: &mut Vec<(Key, String)>,
+) -> Result<Override, String> {
+  if same(current, &o.declared) {
+    return Ok(o.clone());
+  }
+  if field.kind != Kind::Map {
+    return Err(MOVED.to_string());
+  }
+  let value = merged_map(field, &field.key, &o.declared, &o.value, current, lost);
+  if same(&value, current) {
+    return Err(MOVED.to_string());
+  }
+  Ok(Override {
+    value,
+    declared: current.clone(),
+    ..o.clone()
+  })
+}
+
+/// The entries of `map`, a user-keyed map at `at`, with the runtime layer's changes from `base`
+/// in `ours` kept over the files' in `theirs`, entry by entry.
+fn merged_map<'a>(
+  map: &Field,
+  at: &str,
+  base: &'a Value,
+  ours: &'a Value,
+  theirs: &'a Value,
+  lost: &mut Vec<(Key, String)>,
+) -> Value {
+  let names: BTreeSet<&String> = [base, ours, theirs]
+    .into_iter()
+    .filter_map(Value::as_object)
+    .flat_map(Map::keys)
+    .collect();
+  let mut merged = Map::new();
+  for name in names {
+    let entry = |side: &'a Value| side.get(name.as_str()).unwrap_or(&Value::Null);
+    let at = format!("{at}.{name}");
+    let value = merged_entry(map, &at, entry(base), entry(ours), entry(theirs), lost);
+    if !value.is_null() {
+      merged.insert(name.clone(), value);
+    }
+  }
+  Value::Object(merged)
+}
+
+/// One entry of `map` merged as [`merged_map`] says: the side that changed it, or when both did
+/// and both still have it, each of its keys on its own.
+fn merged_entry<'a>(
+  map: &Field,
+  at: &str,
+  base: &'a Value,
+  ours: &'a Value,
+  theirs: &'a Value,
+  lost: &mut Vec<(Key, String)>,
+) -> Value {
+  if let Some(value) = settled(base, ours, theirs) {
+    return value;
+  }
+  if map.entries.is_empty() || !ours.is_object() || !theirs.is_object() {
+    lost.push((at.to_string(), MOVED.to_string()));
+    return theirs.clone();
+  }
+  let mut entry = theirs.clone();
+  for inner in &map.entries {
+    let side = |side: &'a Value| tree::get(side, &inner.key).unwrap_or(&Value::Null);
+    let (base, ours, theirs) = (side(base), side(ours), side(theirs));
+    let at = format!("{at}.{}", inner.key);
+    let value = if inner.kind == Kind::Map {
+      merged_map(inner, &at, base, ours, theirs, lost)
+    } else {
+      settled(base, ours, theirs).unwrap_or_else(|| {
+        lost.push((at, MOVED.to_string()));
+        theirs.clone()
+      })
+    };
+    if value.is_null() {
+      tree::remove(&mut entry, &inner.key);
+    } else {
+      tree::set(&mut entry, &inner.key, value);
+    }
+  }
+  entry
+}
+
+/// The value when only one side changed it from `base`, or both to the same; `None` when both
+/// changed it apart.
+fn settled(base: &Value, ours: &Value, theirs: &Value) -> Option<Value> {
+  if same(ours, base) || same(ours, theirs) {
+    Some(theirs.clone())
+  } else if same(theirs, base) {
+    Some(ours.clone())
+  } else {
+    None
   }
 }
 
@@ -391,6 +502,81 @@ mod tests {
     assert_eq!(dropped["instance_name"], "expired");
     assert_eq!(dropped["debug"], "set by APP_DEBUG");
     assert_eq!(dropped["gone"], "not a configuration key");
+  }
+
+  #[derive(Default, Serialize, crate::Cascade)]
+  struct Seen {
+    /// Who sees each share.
+    #[cascade(user_keyed)]
+    seen: BTreeMap<String, Vec<String>>,
+  }
+
+  #[test]
+  fn a_map_override_keeps_what_the_files_do_not_change_too() {
+    let schema = example_schema();
+    let api_keys = schema.field("api_keys").unwrap();
+    let mut lost = Vec::new();
+    // an entry made at run time that a file defines later
+    let made = item(
+      json!({ "b": { "key": "mine", "role": "r" } }),
+      json!({}),
+      None,
+    );
+    let kept = rebased(
+      api_keys,
+      &made,
+      &json!({ "b": { "key": "file" } }),
+      &mut lost,
+    )
+    .unwrap();
+    assert_eq!(
+      kept.value,
+      json!({ "b": { "key": "file", "role": "r" } }),
+      "each key of an entry both define is the runtime layer's until the file sets it too"
+    );
+    assert_eq!(kept.declared, json!({ "b": { "key": "file" } }));
+    assert_eq!(lost, [("api_keys.b.key".to_string(), MOVED.to_string())]);
+    let cleared = item(
+      json!({ "a": { "key": "k", "role": null } }),
+      json!({ "a": { "key": "k", "role": "r" } }),
+      None,
+    );
+    let kept = rebased(
+      api_keys,
+      &cleared,
+      &json!({ "a": { "key": "k2", "role": "r" } }),
+      &mut lost,
+    )
+    .unwrap();
+    assert_eq!(
+      kept.value,
+      json!({ "a": { "key": "k2" } }),
+      "a key cleared at run time stays out"
+    );
+
+    let schema = Schema::of::<Seen>();
+    let seen = schema.field("seen").unwrap();
+    let mut lost = Vec::new();
+    let set = item(
+      json!({ "music": ["a", "b"], "films": ["b"] }),
+      json!({ "music": ["a"] }),
+      None,
+    );
+    let kept = rebased(seen, &set, &json!({ "music": ["c"] }), &mut lost).unwrap();
+    assert_eq!(
+      kept.value,
+      json!({ "music": ["c"], "films": ["b"] }),
+      "an entry with no keys of its own is one value"
+    );
+    assert_eq!(lost, [("seen.music".to_string(), MOVED.to_string())]);
+
+    let mut lost = Vec::new();
+    let set = item(json!({ "music": ["a"] }), json!({}), None);
+    assert_eq!(
+      rebased(seen, &set, &json!({ "music": ["c"] }), &mut lost),
+      Err(MOVED.to_string()),
+      "an override with nothing left over the files is dropped"
+    );
   }
 
   #[cfg(unix)]

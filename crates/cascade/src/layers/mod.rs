@@ -1,6 +1,7 @@
 //! The layers a configuration is loaded from, lowest first: the defaults, environment
 //! variables, the files, the command line, and the runtime overrides. A later layer replaces an
-//! earlier one's value per key; a list or user-keyed map is one value, replaced whole.
+//! earlier one's value per key; a list or user-keyed map is one value, replaced whole, except a
+//! user-keyed map's runtime override, which is kept over the files entry by entry.
 
 mod declare;
 
@@ -270,8 +271,9 @@ impl<T: Root> Layers<T> {
     Ok(loaded)
   }
 
-  /// Puts the runtime layer on `declared`: drops the overrides that no longer apply, then
-  /// those the configuration cannot load with, saving both removals.
+  /// Puts the runtime layer on `declared`: drops the overrides that no longer apply and sets
+  /// each user-keyed map's override over the files as they are now, then drops those the
+  /// configuration cannot load with, saving each change.
   pub(crate) fn apply(
     &mut self,
     declared: &Declared,
@@ -281,10 +283,10 @@ impl<T: Root> Layers<T> {
       self
         .overrides
         .pruned(&self.schema, &declared.tree, &declared.sources, now);
-    if !dropped.is_empty() {
-      for (key, reason) in &dropped {
-        info!(key, reason, "runtime override dropped");
-      }
+    for (key, reason) in &dropped {
+      info!(key, reason, "runtime override dropped");
+    }
+    if kept != *self.overrides.items() {
       self.overrides.keep_only(kept);
     }
     loop {

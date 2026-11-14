@@ -39,6 +39,17 @@ pub(crate) fn set(tree: &mut Value, key: &str, value: Value) {
   }
 }
 
+/// Takes out the value at a dotted key, when there is one.
+pub(crate) fn remove(tree: &mut Value, key: &str) {
+  let (table, last) = match key.rsplit_once('.') {
+    Some((above, last)) => (get_mut(tree, above), last),
+    None => (Some(tree), key),
+  };
+  if let Some(Value::Object(table)) = table {
+    table.remove(last);
+  }
+}
+
 /// A value from an env var or the command line, read as `kind`. A list's elements come from
 /// `split`, each read as the list's element kind.
 pub(crate) fn coerce(raw: &str, kind: &Kind, split: Option<char>) -> Result<Value, String> {

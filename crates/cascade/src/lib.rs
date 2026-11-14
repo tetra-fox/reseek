@@ -3,7 +3,8 @@
 //! A configuration is a struct deriving [`Cascade`]. Its values come from layers, each
 //! replacing the one before per key: the defaults (`T::default()`), environment variables, TOML
 //! files, the command line, and runtime overrides. A list or a map whose keys the user picks is
-//! one value, replaced whole by the highest layer that sets it. [`Layers`] loads a
+//! one value, replaced whole by the highest layer that sets it, except that a runtime override
+//! of such a map keeps its entries over the files entry by entry. [`Layers`] loads a
 //! [`Loaded`]: the values, the [`Source`] of each, and warnings for keys nothing knows.
 //!
 //! A [`Watcher`] reloads when the files change or when asked, keeps the last good values when
@@ -69,8 +70,10 @@
 //! - `doc = "..."`: the field's help, the doc comment when not given.
 //! - `kind = "bool" | "integer" | "float" | "string" | "duration" | "size"`: the field's kind
 //!   when its type does not say, such as a size type or an enum written as a string.
-//! - `user_keyed`: a map whose keys the user picks, one value as a whole. Its values need
-//!   `Default` and `Serialize`: their default is what a new entry holds.
+//! - `user_keyed`: a map whose keys the user picks, one value as a whole, except that a runtime
+//!   override keeps the entries it adds, changes or deletes over the files, each key of an entry
+//!   until a file changes that key too. Its values need `Default` and `Serialize`: their default
+//!   is what a new entry holds.
 //!
 //! A field's key is its name, or its `#[serde(rename = "...")]`; `#[serde(skip)]` fields are
 //! not part of the configuration.
