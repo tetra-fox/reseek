@@ -1,4 +1,5 @@
 import type { Schemas } from "#lib/api/client.js";
+import { SIGNED_MOST } from "#lib/files/attributes.js";
 import { formatCount } from "#lib/format.js";
 import { fold } from "#lib/text.js";
 
@@ -157,6 +158,10 @@ const withReason = (word: string, why: string | null) => {
 };
 
 /** How a transfer's state reads in its chip, its color, and the full text for its tooltip */
+/** A queued download's place, null when the peer gave none: 0, or a -1 read unsigned */
+export const placeOf = (t: Transfer): number | null =>
+  t.placeInQueue && t.placeInQueue <= SIGNED_MOST ? t.placeInQueue : null;
+
 export const stateChip = (t: Transfer): { text: string; tone: Tone; title: string | null } => {
   const tries = t.attempts > 1 ? ` ×${formatCount(t.attempts)}` : "";
   const why = t.exception ?? null;
@@ -172,9 +177,10 @@ export const stateChip = (t: Transfer): { text: string; tone: Tone; title: strin
     case "starting":
       return { text: name + tries, tone: "info", title: null };
     case "queued": {
-      const place = t.placeInQueue ? ` (#${formatCount(t.placeInQueue)})` : "";
+      const place = placeOf(t);
+      const placed = place === null ? "" : ` (#${formatCount(place)})`;
       return {
-        text: `${name}${place}${tries}`,
+        text: `${name}${placed}${tries}`,
         tone: t.attempts > 1 ? "warning" : "neutral",
         title: s
       };

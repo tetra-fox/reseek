@@ -33,6 +33,7 @@
     type Direction,
     isMoving,
     isQueued,
+    placeOf,
     rowActions,
     stateChip,
     type Transfer
@@ -87,6 +88,7 @@
   const wait = $derived(waiting ? waits.get(t.id) : undefined);
 
   const milliseconds = (ms: number | null | undefined) => (ms ? formatDuration(ms / 1000) : null);
+  const place = $derived(placeOf(t));
   const details = $derived<Field[]>([
     { label: "Folder", value: getDirectoryName(t.filename) },
     ...facts,
@@ -96,7 +98,7 @@
     { label: "Attempts", value: t.attempts > 1 ? formatCount(t.attempts) : null },
     {
       label: "Queue place",
-      value: wait ? placeText(wait) : t.placeInQueue ? formatCount(t.placeInQueue) : null
+      value: wait ? placeText(wait) : place === null ? null : formatCount(place)
     },
     { label: "Next attempt", value: t.nextAttemptAt ? ago(t.nextAttemptAt) : null }
   ]);

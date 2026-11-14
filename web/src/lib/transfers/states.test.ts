@@ -145,6 +145,8 @@ describe("the row menu", () => {
 describe("state chips", () => {
   it("read the state, the place in the queue, the attempts and the reason", () => {
     expect(stateChip(transfer({ placeInQueue: 12 })).text).toBe("Queued (#12)");
+    // a peer's -1, read unsigned, is no place
+    expect(stateChip(transfer({ placeInQueue: 4_294_967_295 })).text).toBe("Queued");
     expect(stateChip(transfer({ state: "Requested", attempts: 3 }))).toMatchObject({
       text: "Requested ×3",
       tone: "warning"

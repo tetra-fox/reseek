@@ -51,6 +51,7 @@
     type Direction,
     isMoving,
     isQueued,
+    placeOf,
     rowActions,
     stateChip,
     type Transfer
@@ -286,7 +287,8 @@
       {formatBytesTransferred(t.size, t.bytesTransferred)}
     {:else if column === "queue"}
       {#if direction === "download"}
-        {#if t.placeInQueue}<span class="tabular-nums">#{formatCount(t.placeInQueue)}</span>{/if}
+        {@const place = placeOf(t)}
+        {#if place !== null}<span class="tabular-nums">#{formatCount(place)}</span>{/if}
         {#if can.queuePosition}
           {@const failed = storeOf(t).queueErrors.get(t.id)}
           <Tooltip text={failed === undefined ? "Check queue position" : queueFailure(failed)}>

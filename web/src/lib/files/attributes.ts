@@ -5,7 +5,7 @@
 const LONGEST_S = 7 * 86_400;
 
 /** The most a peer's figure is believed: past it, it is a negative number read unsigned */
-const SIGNED_MOST = 2 ** 31 - 1;
+export const SIGNED_MOST = 2 ** 31 - 1;
 
 type Attributes = {
   length?: number | null;
