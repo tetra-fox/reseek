@@ -13,7 +13,9 @@ use tokio_util::sync::CancellationToken;
 use super::options::{DownloadSink, Governor, Reporter, UploadSource};
 use super::record::Tracker;
 use crate::bucket::{INTERVAL, TokenBucket};
-use crate::conn::{ConnHandle, ConnReadHalf, ConnState, ConnWriteHalf, closed_by_remote};
+use crate::conn::{
+  ConnHandle, ConnReadHalf, ConnState, ConnWriteHalf, closed_by_remote, reset_by_remote,
+};
 use crate::error::{ClientError, ConnectionErrorKind};
 
 /// How fast one transfer may go: its governor, then the speed limit of its direction
@@ -146,6 +148,8 @@ pub(super) async fn closed(read: &mut ConnReadHalf) -> ClientError {
 pub(super) enum Linger {
   /// the downloader closed the connection: it has every byte
   Closed,
+  /// the downloader reset the connection, as one that closes before reading every byte does
+  Reset,
   /// the downloader kept it open past the deadline, so we closed it
   Forced,
   /// the caller canceled while waiting
@@ -168,6 +172,7 @@ pub(super) async fn linger(
       read = read.read(&mut stray) => match read {
         // a byte the downloader had no reason to send; keep waiting for the close
         Ok(_) => {}
+        Err(error) if reset_by_remote(&error) => return Linger::Reset,
         Err(_) => return Linger::Closed,
       },
       () = sleep_until(deadline) => {

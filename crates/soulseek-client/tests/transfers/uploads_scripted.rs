@@ -20,6 +20,7 @@ use soulseek_proto::peer::{QueueDownload, TransferResponse, UploadDenied, Upload
 use soulseek_proto::server::{GetPeerAddressRequest, GetPeerAddressResponse};
 use soulseek_proto::{PeerMessage, ServerRequest, ServerResponse, TransferDirection};
 use tokio::io::AsyncWriteExt;
+use tokio::sync::Notify;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
@@ -323,6 +324,37 @@ async fn a_downloader_that_closes_or_resets_mid_file_left_and_is_told_nothing() 
       "reset: {reset}"
     );
   }
+}
+
+#[tokio::test]
+async fn a_downloader_that_resets_after_the_last_byte_fails_the_upload_and_is_told_nothing() {
+  let mut scripted = Scripted::start().await;
+  let written = Arc::new(Notify::new());
+  let running = upload(&scripted, "@@share\\reset.mp3", |request| {
+    let written = written.clone();
+    request.options.progress_updated = Some(Arc::new(move |_, transfer| {
+      if transfer.bytes_transferred == SIZE as u64 {
+        written.notify_one();
+      }
+    }));
+  });
+  let mut bob = scripted.connected().await;
+  let mut transfer = accepted(&mut scripted, &mut bob, "@@share\\reset.mp3").await;
+  transfer.send(&0u64.to_le_bytes()).await;
+  assert_eq!(transfer.raw(SIZE - 10).await, content(SIZE - 10));
+  // every byte is written, so the upload waits for the downloader to close; it resets instead,
+  // its last bytes unread
+  written.notified().await;
+  socket2::SockRef::from(&transfer.stream)
+    .set_linger(Some(Duration::ZERO))
+    .unwrap();
+  drop(transfer);
+  let error = running.result().await.unwrap_err();
+  assert_eq!(
+    error.to_string(),
+    "Transfer failed: the downloader reset the connection before reading every byte"
+  );
+  assert!(bob.quiet_for(Duration::from_millis(200)).await);
 }
 
 #[tokio::test]

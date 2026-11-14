@@ -2,9 +2,9 @@
 //! user, then the application's slot policy, then the bound on uploads at once. We then offer the
 //! file to the peer; once it accepts we open the transfer connection, the peer says where to
 //! start, and we write the rest of the file. The peer closes the connection when it has every
-//! byte; we close it ourselves only after a grace period. An upload that does not succeed tells
-//! the peer, which queues the file again unless we canceled it; a peer that refused it or closed
-//! the transfer connection itself is told nothing.
+//! byte; we close it ourselves only after a grace period, and a reset then fails the upload. An
+//! upload that does not succeed tells the peer, which queues the file again unless we canceled
+//! it; a peer that refused it or closed the transfer connection itself is told nothing.
 
 use std::io::SeekFrom;
 use std::sync::Arc;
@@ -358,6 +358,12 @@ impl Upload {
       Linger::Closed | Linger::Forced => {}
       // every byte was written, so the upload counts as delivered
       Linger::Canceled => tracing::debug!("canceled after the last byte; the upload stands"),
+      Linger::Reset => {
+        return Err(ClientError::connection(
+          ConnectionErrorKind::RemoteClosed,
+          format!("Transfer failed: {DOWNLOADER} reset the connection before reading every byte"),
+        ));
+      }
     }
     Ok(())
   }

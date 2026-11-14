@@ -327,22 +327,34 @@ fn remote_closed(handle: &ConnHandle, len: usize) -> ClientError {
   read_failed(handle, len, "Remote connection closed".into(), Some(ended))
 }
 
-/// Whether `error`, a failed read or write, means the remote end closed the connection: it
-/// ended the stream, or reset it, which a write after the reset reports as a broken pipe
-pub(crate) fn closed_by_remote(error: &ClientError) -> bool {
+/// The kind of the I/O error a failed read or write on a connection ended with
+fn io_kind(error: &ClientError) -> Option<std::io::ErrorKind> {
   let ClientError::Connection {
     source: Some(source),
     ..
   } = error
   else {
-    return false;
+    return None;
   };
   source
     .downcast_ref::<std::io::Error>()
-    .is_some_and(|error| {
-      use std::io::ErrorKind::{BrokenPipe, ConnectionReset, UnexpectedEof};
-      matches!(error.kind(), UnexpectedEof | ConnectionReset | BrokenPipe)
-    })
+    .map(std::io::Error::kind)
+}
+
+/// Whether `error`, a failed read or write, means the remote end closed the connection: it
+/// ended the stream, or reset it, which a write after the reset reports as a broken pipe
+pub(crate) fn closed_by_remote(error: &ClientError) -> bool {
+  use std::io::ErrorKind::{BrokenPipe, ConnectionReset, UnexpectedEof};
+  matches!(
+    io_kind(error),
+    Some(UnexpectedEof | ConnectionReset | BrokenPipe)
+  )
+}
+
+/// Whether `error`, a failed read, means the remote end reset the connection, as it does when
+/// it closes with bytes we sent still unread
+pub(crate) fn reset_by_remote(error: &ClientError) -> bool {
+  io_kind(error) == Some(std::io::ErrorKind::ConnectionReset)
 }
 
 fn read_failed(
