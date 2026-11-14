@@ -1,7 +1,8 @@
+import { createHash } from "node:crypto";
+
 import type { Page } from "@playwright/test";
 
 import type { Schemas } from "../../src/lib/api/client";
-import { newId } from "../../src/lib/ids";
 import { EPOCH, frameText } from "../../src/lib/testing/frames";
 import { layout, spectra, spectrogram, waveform } from "./pictures";
 
@@ -526,17 +527,37 @@ export const user = (username: string, rest: Partial<Schemas["UserSummary"]> = {
   } satisfies Schemas["UserSummary"];
 };
 
-/** A download of `filename` from `username`, finished unless `state` says otherwise */
+/**
+ * A fake transfer's id, in the form of a version 4 UUID: the same for the same direction, user
+ * and file, as the daemon's id stays the same across reads of the list, which then keeps its rows
+ */
+const transferId = (
+  direction: Schemas["TransferDirection"],
+  username: string,
+  filename: string
+) => {
+  const hex = createHash("sha256").update(`${direction}\0${username}\0${filename}`).digest("hex");
+  return [
+    hex.slice(0, 8),
+    hex.slice(8, 12),
+    `4${hex.slice(13, 16)}`,
+    `8${hex.slice(17, 20)}`,
+    hex.slice(20, 32)
+  ].join("-");
+};
+
+/** A transfer of `filename` with `username`, a finished download unless told otherwise */
 export const transfer = (
   filename: string,
   state: Schemas["TransferStates"] = "Completed, Succeeded",
   size = 1000,
-  username = "alice"
+  username = "alice",
+  direction: Schemas["TransferDirection"] = "Download"
 ) =>
   ({
-    id: newId(),
+    id: transferId(direction, username, filename),
     username,
-    direction: "Download",
+    direction,
     filename,
     size,
     state,

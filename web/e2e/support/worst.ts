@@ -142,8 +142,8 @@ const moved = (
   username: string,
   state: Schemas["TransferStates"],
   size: number,
-  rest: Partial<Schemas["Transfer"]> = {}
-) => ({ ...transfer(filename, state, size, username), ...rest });
+  rest: Partial<Schemas["Transfer"]> & { direction: Schemas["TransferDirection"] }
+) => ({ ...transfer(filename, state, size, username, rest.direction), ...rest });
 
 /** One line of an error as a peer's reason can make it */
 const LONG_ERROR =
