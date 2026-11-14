@@ -152,7 +152,7 @@ export class ListWindow<L> {
           this.#virtualizer.measure();
         }
         if (name !== place) {
-          saver?.flush();
+          saver?.leave();
           place = name;
           saver = name ? new Saver(name) : null;
           this.#back = name ? new Return(markOf(name)) : null;
@@ -218,7 +218,7 @@ export class ListWindow<L> {
       });
     });
     $effect(() => this.#virtualizer._didMount());
-    $effect(() => () => saver?.flush());
+    $effect(() => () => saver?.leave());
   }
 
   /** Notes a change the virtualizer reported, for the effect above to take in */

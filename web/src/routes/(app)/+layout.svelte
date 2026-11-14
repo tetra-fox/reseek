@@ -20,7 +20,7 @@
   import SendFilesDialog from "#lib/components/transfers/SendFilesDialog.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import BlockDialog from "#lib/components/users/BlockDialog.svelte";
-  import { keepsScroll } from "#lib/lists/scroll.svelte.js";
+  import { arrived, keepsScroll } from "#lib/lists/scroll.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
   import { changesScreen, fillsContent, href, redirectFor, route, titleOf } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
@@ -71,6 +71,7 @@
   // a screen whose place is in its address comes back to it from the navigation, and a screen
   // that failed is tried again once the user goes to another address
   afterNavigate(({ to }) => {
+    arrived();
     if (to?.url) visited(route(to.url).path, route(to.url).query);
     if (!broken || broken.href === to?.url.href) return;
     const { reset } = broken;

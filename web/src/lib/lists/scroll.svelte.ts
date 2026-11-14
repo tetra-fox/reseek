@@ -20,6 +20,17 @@ const addressQuery = () => {
   return query.toString();
 };
 
+/**
+ * The query of the address the last finished navigation came to. A box that a navigation takes
+ * away is let go once the address has moved on, so this is the address it was left at
+ */
+let arrivedAt: string | null = null;
+
+/** For `afterNavigate`: notes the address a navigation came to */
+export const arrived = () => {
+  arrivedAt = addressQuery();
+};
+
 /** how many boxes are remembered; the one left longest ago is dropped first */
 const KEPT = 100;
 /** how long a box being brought back waits for the line it was left at, in ms */
@@ -124,11 +135,16 @@ export class Return {
   }
 }
 
-/** Saves a box's mark a moment after its scrolling rests, and at once when asked */
+/**
+ * Saves a box's mark a moment after its scrolling rests, and when the box is left, with the
+ * address it was left at
+ */
 export class Saver {
   #name: string;
   /** what to save next, null to forget the box, undefined for nothing */
   #last: Kept | null | undefined;
+  /** where the box was last noted to be, undefined while it has not been */
+  #noted: ScrollMark | null | undefined;
   #timer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(name: string) {
@@ -140,15 +156,28 @@ export class Saver {
    * address has moved on by the time the box is left; null to forget it
    */
   note(mark: ScrollMark | null) {
+    this.#noted = mark;
     this.#last = mark && { ...mark, query: addressQuery() };
     clearTimeout(this.#timer);
-    this.#timer = setTimeout(() => this.flush(), SAVE_MS);
+    this.#timer = setTimeout(() => this.#flush(), SAVE_MS);
   }
 
-  flush() {
+  #flush() {
     clearTimeout(this.#timer);
     if (this.#last !== undefined) remember(this.#name, this.#last);
     this.#last = undefined;
+  }
+
+  /**
+   * Saves where the box was last noted to be, with the address it is left at, which may have
+   * moved on since without moving the box, as a search typed into a sticky box does
+   */
+  leave() {
+    clearTimeout(this.#timer);
+    this.#last = undefined;
+    const mark = this.#noted;
+    if (mark !== undefined)
+      remember(this.#name, mark && { ...mark, query: arrivedAt ?? addressQuery() });
   }
 }
 
@@ -219,6 +248,6 @@ export const keepsScroll = (name: string) => (box: HTMLElement) => {
     cancelAnimationFrame(frame);
     grown.disconnect();
     box.removeEventListener("scroll", scrolled);
-    saver.flush();
+    saver.leave();
   };
 };

@@ -126,6 +126,26 @@ test("a page scrolled down comes back there, and a link under another filter ope
   expect(await content.evaluate((el) => el.scrollTop)).toBe(0);
 });
 
+test("a page scrolled down and then searched comes back where it was left", async ({ page }) => {
+  await visit(page, "/system/settings");
+  const content = page.locator("[data-content]");
+  const search = page.getByRole("searchbox", { name: "Search settings" });
+  await expect(search).toBeVisible();
+  await content.hover();
+  await page.mouse.wheel(0, 1200);
+  await expect.poll(() => content.evaluate((el) => el.scrollTop)).toBeGreaterThan(1000);
+  // the box stays in view while the page scrolls under it; the search moves the address and
+  // keeps the page where it is
+  await search.fill("the");
+  await expect(page).toHaveURL(/q=the/);
+  const left = await content.evaluate((el) => el.scrollTop);
+  expect(left).toBeGreaterThan(0);
+  const back = await away(page, "System");
+  await back();
+  await expect(search).toHaveValue("the");
+  await expect.poll(() => content.evaluate((el) => el.scrollTop)).toBe(left);
+});
+
 /** A finished cleanup job, the `n`th of the evening */
 const job = (n: number) =>
   ({

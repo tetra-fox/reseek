@@ -53,7 +53,7 @@
   // svelte-ignore state_referenced_locally
   const place = `chat.${paneKey(pane.target.kind, pane.target.name)}`;
   const saver = new Saver(place);
-  $effect(() => () => saver.flush());
+  $effect(() => () => saver.leave());
 
   /** this close to the bottom counts as at the bottom */
   const NEAR = 48;

@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 
-import { landing, markOf, Return, Saver } from "./scroll.svelte";
+import { arrived, landing, markOf, Return, Saver } from "./scroll.svelte";
 
 const mark = { key: "c", index: 2, delta: -10, top: 82 };
 
@@ -15,9 +15,10 @@ it("lands where that row was while it is gone or not read yet, and waits for eno
 
 it("is kept for the address it was left at, not for the same screen under another filter", () => {
   location.hash = "#/downloads?state=done&user=bob";
+  arrived();
   const saver = new Saver("transfers.download");
   saver.note(mark);
-  saver.flush();
+  saver.leave();
   // the same address with its parameters in another order
   location.hash = "#/downloads?user=bob&state=done";
   expect(markOf("transfers.download")).toMatchObject(mark);
@@ -25,6 +26,34 @@ it("is kept for the address it was left at, not for the same screen under anothe
   expect(markOf("transfers.download")).toBeNull();
   location.hash = "#/downloads";
   expect(markOf("transfers.download")).toBeNull();
+});
+
+it("is kept for the address it was left at, which a search typed after its last scroll moved", () => {
+  location.hash = "#/system/settings";
+  arrived();
+  const saver = new Saver("content./system/settings");
+  saver.note(mark);
+  // the search goes into the address once typing pauses, which scrolls nothing
+  location.hash = "#/system/settings?q=port";
+  arrived();
+  // the navigation away has moved the address on by the time the box is let go
+  location.hash = "#/dashboard";
+  saver.leave();
+  location.hash = "#/system/settings?q=port";
+  expect(markOf("content./system/settings")).toMatchObject(mark);
+});
+
+it("leaves a box's place as it was when it was not scrolled", () => {
+  location.hash = "#/users";
+  arrived();
+  const first = new Saver("content./users");
+  first.note(mark);
+  first.leave();
+  location.hash = "#/users?tab=groups";
+  arrived();
+  new Saver("content./users").leave();
+  location.hash = "#/users";
+  expect(markOf("content./users")).toMatchObject(mark);
 });
 
 it("gives way to the page's own scroll at the next put, before the scroll event comes", () => {
