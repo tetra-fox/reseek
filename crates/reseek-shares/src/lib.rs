@@ -530,7 +530,7 @@ impl Shares {
   /// read later is put in place first.
   async fn rewrite_browse_cache(&self, view: &View, file: &Path) -> Result<(), browse::CacheError> {
     let started = Instant::now();
-    info!("Warming browse response cache...");
+    debug!("Warming browse response cache...");
     let written = self.write_browse_cache(view, file).await?;
     if self.place_browse_cache(view, written).await? {
       info!(
