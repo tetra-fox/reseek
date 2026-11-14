@@ -203,6 +203,20 @@ impl Client {
     session.stage.username().map(str::to_owned)
   }
 
+  /// whether the session is logged in as `username` with `password`, which a password changed
+  /// on the server while logged in becomes
+  pub fn logged_in_as(&self, username: &str, password: &str) -> bool {
+    let session = self.inner.session();
+    match &session.stage {
+      Stage::LoggedIn {
+        username: current,
+        password: current_password,
+        ..
+      } => current == username && current_password.expose() == password,
+      _ => false,
+    }
+  }
+
   /// the tuning values the server has sent so far
   pub fn server_info(&self) -> ServerInfo {
     lock(&self.inner.server_info).clone()

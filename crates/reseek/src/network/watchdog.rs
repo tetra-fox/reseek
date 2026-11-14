@@ -262,16 +262,69 @@ impl Watchdog {
     if was {
       info!("(Re)connection process restarted");
     }
-    // the session number is read after the cancel, so a session numbered above it began once
-    // the canceled turn was told to stop
+    self.start_over(true);
+    was
+  }
+
+  /// Turns the watchdog off and cancels its wait or attempt, for a reconnect the caller makes
+  /// with [`Watchdog::resume`]; false, changing nothing, while a disconnect asked for holds it.
+  pub fn pause(&self) -> bool {
+    let turns = lock(&self.inner.turns);
+    let mut held = false;
+    self.inner.mode.send_if_modified(|mode| match mode {
+      Mode::Held => {
+        held = true;
+        false
+      }
+      Mode::Off => false,
+      Mode::On => {
+        *mode = Mode::Off;
+        true
+      }
+    });
+    if held {
+      return false;
+    }
+    turns.cancel();
+    drop(turns);
+    self.publish();
+    true
+  }
+
+  /// Starts over at once as a restart does, unless a disconnect asked for holds the watchdog;
+  /// whether it did.
+  pub fn resume(&self) -> bool {
+    self.start_over(false)
+  }
+
+  /// Turns the watchdog on, cancels the running loop and its back-off and forgets the waits
+  /// after unanswered logins; a new loop starts as soon as the old one has ended. A watchdog
+  /// held off stays so unless `release`; whether it turned on.
+  fn start_over(&self, release: bool) -> bool {
     {
       let mut turns = lock(&self.inner.turns);
+      let mut on = true;
+      self.inner.mode.send_if_modified(|mode| {
+        if *mode == Mode::Held && !release {
+          on = false;
+          return false;
+        }
+        let changed = *mode != Mode::On;
+        *mode = Mode::On;
+        changed
+      });
+      if !on {
+        return false;
+      }
       turns.clear();
       turns.cancel();
+      // read after the cancel, so a session numbered above it began once the canceled turn was
+      // told to stop
       turns.superseded = self.inner.client.session().number;
     }
-    self.start();
-    was
+    self.publish();
+    self.attempt_connection();
+    true
   }
 
   /// Forgets the failed attempts, the unanswered logins and the failures warned of, once a login

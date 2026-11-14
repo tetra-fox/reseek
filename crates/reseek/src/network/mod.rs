@@ -59,6 +59,9 @@ enum Intent {
   /// the daemon is stopping
   #[error("the application is shutting down")]
   Shutdown,
+  /// the session ends to log in again with new credentials
+  #[error("logging in again with new credentials")]
+  Relogin,
 }
 
 impl Intent {
@@ -290,6 +293,20 @@ impl Network {
       .client
       .disconnect(Some(&message), Some(Intent::User.error()))
       .await;
+  }
+
+  /// Ends the server session and connects again at once with the options in effect now, unless
+  /// a disconnect asked for holds the watchdog, which stays; whether it reconnects.
+  pub async fn log_in_again(&self) -> bool {
+    if !self.watchdog.pause() {
+      return false;
+    }
+    let message = Intent::Relogin.to_string();
+    self
+      .client
+      .disconnect(Some(&message), Some(Intent::Relogin.error()))
+      .await;
+    self.watchdog.resume()
   }
 
   /// Stops for good at shutdown: the watchdog is canceled, the port mapping removed, the

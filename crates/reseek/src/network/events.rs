@@ -579,8 +579,9 @@ pub async fn follow_shared_counts(app: AppState) {
 }
 
 /// The server session ended: why is logged, the watchdog starts again after a session that
-/// reached the server unless a disconnect was asked for, by this end or since, the server
-/// refused our login or another session took our name, and the event is raised.
+/// reached the server unless a disconnect was asked for, by this end or since, the end is for
+/// logging in again, which starts it itself, the server refused our login or another session
+/// took our name, and the event is raised.
 fn disconnected(app: &AppState, message: &str, error: Option<&ClientError>, reached: bool) {
   app.network.forget_reconnect();
   let intent = error.and_then(Intent::of);
@@ -590,6 +591,10 @@ fn disconnected(app: &AppState, message: &str, error: Option<&ClientError>, reac
     }
     _ if intent == Some(Intent::Shutdown) => {
       info!("Disconnected from the Soulseek server: the client is shutting down");
+    }
+    // the change of options that asked for it logged why
+    _ if intent == Some(Intent::Relogin) => {
+      debug!("Disconnected from the Soulseek server: logging in again with new credentials");
     }
     // the request that asked for it logged who asked and why
     _ if intent == Some(Intent::User) => {
@@ -639,6 +644,7 @@ fn error_kind(error: &ClientError) -> &'static str {
     return match intent {
       Intent::User => "IntentionalDisconnect",
       Intent::Shutdown => "ApplicationShutdown",
+      Intent::Relogin => "Relogin",
     };
   }
   match error {

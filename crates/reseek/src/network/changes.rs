@@ -1,14 +1,14 @@
 //! Following the options while running: a change to the search request filters compiles them
 //! again, a change to the Soulseek, upload or download options or to whether we take private
 //! room invitations patches the client, a change to the listener or to port mapping moves the
-//! mapping on the router, a change that takes effect only on a new session is flagged while
-//! connected, a change to how we reach the server starts the watchdog over, and rooms added to
-//! the configuration are joined.
+//! mapping on the router, new credentials log in again at once, another change that takes
+//! effect only on a new session is flagged while connected, a change to how we reach the server
+//! starts the watchdog over, and rooms added to the configuration are joined.
 
 use std::sync::Arc;
 
 use cascade::Loaded;
-use soulseek_client::ClientError;
+use soulseek_client::{Client, ClientError};
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{debug, info, warn};
 
@@ -26,11 +26,8 @@ pub async fn follow_changes(app: AppState) {
   let mut applied = app.startup.values.clone();
   let mut current = app.config.current();
   loop {
-    // stored in the poll that saw the client take the options, so before a session that began
-    // with them is connected
     if let Some(now) = apply(&app, &applied, &current).await {
       applied = now;
-      app.network.set_applied(current);
     }
     current = tokio::select! {
       () = app.shutdown.cancelled() => return,
@@ -92,10 +89,11 @@ async fn apply(
       }
     }
   }
+  let relogin = new_credentials(network.client(), applied, &values);
   // the reconnect-class keys changed since the session began; while disconnected the next
-  // connect takes them without a flag
+  // connect takes them without a flag, as logging in again does
   let connected = network.client().state().is_connected();
-  if (connected && !current.pending_reconnect.is_empty()) || reconnect_required {
+  if !relogin && ((connected && !current.pending_reconnect.is_empty()) || reconnect_required) {
     let already = app.state.current().pending_reconnect;
     app.state.update(|state| state.pending_reconnect = true);
     if !already {
@@ -114,7 +112,16 @@ async fn apply(
   {
     network.listening_changed(now.port_mapping);
   }
-  if network.watchdog().is_enabled() && reaches_differently(applied, &values) {
+  // stored in the poll that saw the client take the options, so before a session that began
+  // with them is connected
+  network.set_applied(current.clone());
+  if relogin {
+    if network.log_in_again().await {
+      info!("Soulseek username or password changed; logging in again");
+    } else {
+      debug!("Soulseek username or password changed while disconnected by the user");
+    }
+  } else if network.watchdog().is_enabled() && reaches_differently(applied, &values) {
     info!("Options changed, restarting (re)connection process...");
     network.watchdog().restart();
   }
@@ -124,6 +131,17 @@ async fn apply(
       .configured_rooms_changed(&applied.rooms, &values.rooms);
   }
   Some(values)
+}
+
+/// Whether the username or password changed to ones that can log in, and the session is not
+/// logged in with them already, as it is once the server changed our password.
+fn new_credentials(client: &Client, previous: &Options, current: &Options) -> bool {
+  let (was, now) = (&previous.soulseek, &current.soulseek);
+  if was.username == now.username && was.password == now.password {
+    return false;
+  }
+  super::credentials(now)
+    .is_some_and(|(username, password)| !client.logged_in_as(username, password))
 }
 
 /// Whether the server's address, our credentials or the connection options differ.
@@ -241,5 +259,68 @@ mod tests {
       )
       .await;
     assert!(joined, "the room was not joined");
+  }
+
+  #[tokio::test]
+  async fn new_credentials_log_in_again_at_once_unless_a_disconnect_was_asked_for() {
+    use soulseek_proto::ServerResponse;
+    use soulseek_proto::server::NewPassword;
+
+    let mut server = Server::start(|request| match request {
+      ServerRequest::NewPassword(asked) => vec![ServerResponse::NewPassword(NewPassword {
+        new_password: asked.new_password.clone(),
+      })],
+      _ => Vec::new(),
+    })
+    .await;
+    // no password, so nothing connects at the start
+    let app = crate::testing::soulseek::app(&format!(
+      "remote_configuration = true\n[web.authentication]\n\
+       trusted_networks = [\"127.0.0.0/8\"]\n\
+       [soulseek]\naddress = \"127.0.0.1\"\nport = {}\nusername = \"me\"\n",
+      server.port
+    ))
+    .await;
+    let send = async |method: &str, uri: &str, body: serde_json::Value| {
+      let answer = app.send(request(method, uri, Some(body))).await;
+      assert!(answer.status.is_success(), "{uri}: {:?}", answer.body);
+    };
+    let set = async |key: &str, value: &str| {
+      send("PATCH", "/api/v0/options", json!({ "set": { key: value } })).await;
+    };
+    let client = app.state.network.client();
+    let logged_in = async || {
+      let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+      while !client.state().is_logged_in() {
+        assert!(tokio::time::Instant::now() < deadline, "never logged in");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+      }
+    };
+    let login = |request: &ServerRequest| match request {
+      ServerRequest::Login(login) => Some(login.username.clone()),
+      _ => None,
+    };
+    let another_login = |request: &ServerRequest| matches!(request, ServerRequest::Login(_));
+
+    set("soulseek.password", "secret").await;
+    assert_eq!(server.received(login).await, "me");
+    logged_in().await;
+    set("soulseek.username", "other").await;
+    assert_eq!(server.received(login).await, "other");
+    logged_in().await;
+    assert!(!app.state.state.current().pending_reconnect);
+
+    // the server changed the password of the session, which goes on
+    let change = json!({ "password": "n3w-password" });
+    send("PUT", "/api/v0/application/password", change).await;
+    let wait = Duration::from_secs(1);
+    assert!(!server.receives(wait, another_login).await);
+
+    app.state.network.disconnect(None).await;
+    set("soulseek.username", "third").await;
+    assert!(
+      !server.receives(wait, another_login).await,
+      "the disconnect asked for stays"
+    );
   }
 }
