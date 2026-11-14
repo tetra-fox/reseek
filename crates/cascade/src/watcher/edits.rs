@@ -508,10 +508,16 @@ mod tests {
     let e = set("providers", json!({ "home": { "ca": "ca.pem" } }))
       .await
       .unwrap_err();
-    assert!(
-      matches!(&e, Error::Value { key, .. } if key == "providers"),
-      "{e}"
+    assert_eq!(
+      e.to_string(),
+      "providers (set by a runtime override): a path set at run time must be absolute (at \
+       providers.home.ca)",
+      "the entry and its field are named, the path is not"
     );
+    let e = set("mirrors", json!([{ "ca": "/m.pem" }, { "ca": "m.pem" }]))
+      .await
+      .unwrap_err();
+    assert!(e.to_string().ends_with("(at mirrors[1].ca)"), "{e}");
     assert!(watcher.current().overrides.is_empty());
 
     let resolved = dir.path().join("dl");

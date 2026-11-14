@@ -35,36 +35,46 @@ pub fn absolute(path: &Path) -> std::io::Result<PathBuf> {
   Ok(resolved)
 }
 
-/// Calls `f` on each path in `value`, a value of `field`, with what `others`, other values of
-/// the field, hold in its place: themselves when the field is a path, else the paths at the
-/// same key in any of their entries, since an entry may have been renamed or moved.
+/// Calls `f` on each path in `value`, a value of `field` at `at`, with what `others`, other
+/// values of the field, hold in its place, and where the path is, such as `mirrors[1].ca`.
+/// What the others hold is themselves when the field is a path, else the paths at the same key
+/// in any of their entries, since an entry may have been renamed or moved.
 fn each_path<'a, E>(
   field: &Field,
+  at: &str,
   value: &mut Value,
   others: &[&'a Value],
-  f: &mut impl FnMut(&mut Value, &[&'a Value]) -> Result<(), E>,
+  f: &mut impl FnMut(&mut Value, &[&'a Value], &str) -> Result<(), E>,
 ) -> Result<(), E> {
   if field.path {
-    return f(value, others);
+    return f(value, others, at);
   }
   if field.entries.is_empty() {
     return Ok(());
   }
-  let entries: Vec<&mut Value> = match value {
-    Value::Object(entries) if field.kind == Kind::Map => entries.values_mut().collect(),
-    Value::Array(items) => items.iter_mut().collect(),
+  let entries: Vec<(String, &mut Value)> = match value {
+    Value::Object(entries) if field.kind == Kind::Map => entries
+      .iter_mut()
+      .map(|(name, entry)| (format!("{at}.{name}"), entry))
+      .collect(),
+    Value::Array(items) => items
+      .iter_mut()
+      .enumerate()
+      .map(|(i, item)| (format!("{at}[{i}]"), item))
+      .collect(),
     // a value of the wrong shape is refused when the configuration is read into its type
     _ => return Ok(()),
   };
   let other_entries: Vec<&Value> = others.iter().flat_map(|other| entries_of(other)).collect();
-  for entry in entries {
+  for (entry_at, entry) in entries {
     for inner in &field.entries {
       if let Some(value) = tree::get_mut(entry, &inner.key) {
         let others: Vec<&Value> = other_entries
           .iter()
           .filter_map(|other| tree::get(other, &inner.key))
           .collect();
-        each_path(inner, value, &others, f)?;
+        let at = format!("{entry_at}.{}", inner.key);
+        each_path(inner, &at, value, &others, f)?;
       }
     }
   }
@@ -83,18 +93,26 @@ fn entries_of(value: &Value) -> Vec<&Value> {
 /// Makes each relative path in `value`, a value of `field`, absolute against `base`: the
 /// directory of the file that sets it, or the working directory when `None`.
 pub(crate) fn resolve(field: &Field, value: &mut Value, base: Option<&Path>) -> Result<(), String> {
-  each_path(field, value, &[], &mut |value, _| resolve_one(value, base))
+  each_path(field, &field.key, value, &[], &mut |value, _, _| {
+    resolve_one(value, base)
+  })
 }
 
 /// [`resolve`] for a value set at run time, where nothing says what a relative path counts
-/// from, so one is refused. The message does not quote the path, which may be secret.
+/// from, so one is refused. The message names where the path is inside an entry, and does not
+/// quote it, since it may be secret.
 pub(crate) fn resolve_runtime(field: &Field, value: &mut Value) -> Result<(), String> {
-  each_path(field, value, &[], &mut |value, _| {
+  each_path(field, &field.key, value, &[], &mut |value, _, at| {
     if let Value::String(text) = value
       && !text.is_empty()
       && !Path::new(text.as_str()).is_absolute()
     {
-      return Err("a path set at run time must be absolute".to_string());
+      let message = "a path set at run time must be absolute";
+      return Err(if at == field.key {
+        message.to_string()
+      } else {
+        format!("{message} (at {at})")
+      });
     }
     resolve_one(value, None)
   })
@@ -140,9 +158,10 @@ pub(crate) fn as_written(schema: &Schema, set: &mut BTreeMap<Key, Value>, text: 
     };
     let kept: Result<(), Infallible> = each_path(
       field,
+      key,
       value,
       tree::get(&written, key).as_slice(),
-      &mut |value, written| {
+      &mut |value, written, _| {
         let same = written.iter().find(|written| {
           let mut resolved = Value::clone(written);
           resolve_one(&mut resolved, Some(dir)).is_ok() && resolved == *value
