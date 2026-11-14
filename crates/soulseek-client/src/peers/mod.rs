@@ -169,6 +169,19 @@ impl PeerConnections {
     self.cache().get(username).and_then(Entry::connection)
   }
 
+  /// `username`'s current connection, while it is open
+  pub(crate) fn open(&self, username: &str) -> Option<MessageConn> {
+    Self::open_in(&self.cache(), username)
+  }
+
+  /// [`PeerConnections::open`] in the locked `cache`
+  fn open_in(cache: &HashMap<String, Entry>, username: &str) -> Option<MessageConn> {
+    cache
+      .get(username)
+      .and_then(Entry::connection)
+      .filter(|open| open.handle().is_open())
+  }
+
   /// every user with an established message connection, and its address
   pub(crate) fn message_connections(&self) -> Vec<(String, SocketAddr)> {
     self

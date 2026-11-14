@@ -51,11 +51,7 @@ impl Client {
   /// with that user: only when the server gives its address for the user. With nothing open
   /// the server is not asked, and the connection is taken whatever its address.
   async fn vouched(&self, username: &str, conn: &Conn) -> bool {
-    let open = self
-      .peers()
-      .cached(username)
-      .is_some_and(|open| open.handle().is_open());
-    open
+    self.peers().open(username).is_some()
       && self
         .server_gives(username, conn.handle().remote().ip())
         .await

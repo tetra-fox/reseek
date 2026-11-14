@@ -267,11 +267,7 @@ impl Client {
           .disconnect("Too many message connections from this address", None);
         return Ok(());
       }
-      let open = cache
-        .get(username)
-        .and_then(Entry::connection)
-        .filter(|open| open.handle().is_open());
-      if !vouched && let Some(open) = open {
+      if !vouched && let Some(open) = PeerConnections::open_in(&cache, username) {
         drop(cache);
         tracing::debug!(
           username,
