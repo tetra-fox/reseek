@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 /** How long the daemon may take to start, far past what it takes on a busy machine */
 const STARTUP_MS = 120_000;
-/** How long it has to stop on SIGTERM before it is killed */
+/** How long it has to stop before it is killed */
 const STOP_MS = 10_000;
 
 /**
@@ -15,9 +15,11 @@ const STOP_MS = 10_000;
 export default async function startDaemon(): Promise<() => Promise<void>> {
   const serve = spawn(fileURLToPath(new URL("./serve.sh", import.meta.url)), {
     env: { ...process.env, E2E_PORT: process.env.E2E_PORT ?? "0" },
-    // its own process group, so a stop reaches the daemon serve.sh waits on
+    // its own process group, which a Ctrl-C at the terminal does not reach and the last resort
+    // of a stop kills whole
     detached: true,
-    stdio: ["ignore", "pipe", "inherit"]
+    // serve.sh stops the daemon once its standard input ends, which the runner's exit ends too
+    stdio: ["pipe", "pipe", "inherit"]
   });
   try {
     process.env.E2E_PORT = String(await started(serve));
@@ -68,11 +70,11 @@ const started = (serve: ChildProcess) =>
     });
   });
 
-/** Stops serve.sh and the daemon with SIGTERM, which lets serve.sh remove its directory */
+/** Ends serve.sh's standard input, on which it stops the daemon and removes its directory */
 const stop = async (serve: ChildProcess) => {
   if (serve.exitCode !== null || serve.signalCode !== null) return;
   const exited = new Promise((done) => serve.once("exit", done));
-  process.kill(-serve.pid!, "SIGTERM");
+  serve.stdin!.end();
   const late = setTimeout(() => process.kill(-serve.pid!, "SIGKILL"), STOP_MS);
   await exited;
   clearTimeout(late);
