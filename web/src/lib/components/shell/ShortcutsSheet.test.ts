@@ -3,6 +3,7 @@ import { afterEach, expect, it, vi } from "vitest";
 
 import Select from "#lib/components/ui/Select.svelte";
 import { shortcuts } from "#lib/shell/shortcuts.svelte.js";
+import { flush } from "#lib/testing/flush.js";
 import { press } from "#lib/testing/keys.js";
 import List from "#lib/testing/List.svelte";
 import { box } from "#lib/testing/state.svelte.js";
@@ -96,7 +97,7 @@ it("does not open over a select's open list", () => {
   unmount(select);
 });
 
-it("leaves ? to a focused list, which goes to the row it names", () => {
+it("leaves ? to a focused list, which goes to the row it names", async () => {
   const lines = box([
     { key: "alpha", group: "g" },
     { key: "?odd", group: "g" }
@@ -108,13 +109,33 @@ it("leaves ? to a focused list, which goes to the row it names", () => {
   grid.focus();
   press(grid, "ArrowDown");
   press(grid, "?", { shiftKey: true });
+  await flush();
   expect(open()).toBeNull();
   expect(document.querySelector('[data-line="?odd"]')!.id).toBe(
     grid.getAttribute("aria-activedescendant")
   );
-  // a control in a row is in the list too
-  press(document.querySelector('[data-line="alpha"] button')!, "?", { shiftKey: true });
-  expect(open()).toBeNull();
   unmount(sheet);
   unmount(list);
 });
+
+for (const named of [true, false]) {
+  it(`keeps the sheet closed on ? in a list ${named ? "with no row it names" : "that names no rows"}`, async () => {
+    const lines = box([
+      { key: "alpha", group: "g" },
+      { key: "beta", group: "g" }
+    ]);
+    const list = mount(List, { target: document.body, props: { source: lines, named } });
+    const sheet = mount(ShortcutsSheet, { target: document.body });
+    flushSync();
+    const grid = document.querySelector<HTMLElement>("[role=grid]")!;
+    grid.focus();
+    press(grid, "ArrowDown");
+    press(grid, "?", { shiftKey: true });
+    // a control in a row is in the list too
+    press(document.querySelector('[data-line="beta"] button')!, "?", { shiftKey: true });
+    await flush();
+    expect(open()).toBeNull();
+    unmount(sheet);
+    unmount(list);
+  });
+}
