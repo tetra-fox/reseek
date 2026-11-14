@@ -389,16 +389,21 @@ mod tests {
       .unwrap()
       .to_string();
     let logs = app
-      .stream_from(
+      .send_from(
         OUTSIDE,
         request(
           "GET",
-          &format!("/api/v0/live?topics=logs&access_token={viewer}"),
+          &format!("/api/v0/live?topics=users,logs&access_token={viewer}"),
           None,
         ),
       )
       .await;
     assert_eq!(logs.status, 403, "the log is for administrators");
+    assert_eq!(
+      logs.json(),
+      json!({ "error": "topic_forbidden", "detail": "logs" }),
+      "the answer names the topic, so a client can ask again without it"
+    );
     let mut held = open(&app, "/api/v0/live").await;
     assert_eq!(held.status, 200);
     held.next().await.unwrap();
