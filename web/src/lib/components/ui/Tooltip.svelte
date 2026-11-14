@@ -2,6 +2,7 @@
   import { Tooltip } from "bits-ui";
   import type { Snippet } from "svelte";
   import { createAttachmentKey } from "svelte/attachments";
+  import { on } from "svelte/events";
 
   import { type Side, tether, words } from "#lib/components/ui/TooltipHost.svelte";
   import type { Binding } from "#lib/ui/keys.js";
@@ -29,8 +30,10 @@
      */
     clipped?: boolean;
     /**
-     * the element renders without a trigger while true: a row of a long list sets it until the
-     * pointer or focus first comes to the row, since each trigger joins bits-ui's registry
+     * the element renders without a trigger while true: a row of a long list sets it until a
+     * mouse or a pen first comes to the row (`wakeOnPointer`), since each trigger joins bits-ui's
+     * registry. Keyboard focus wakes the one element. Dormant, the tooltip makes no tab stop of the
+     * element: for one focusable itself, or a dense one
      */
     dormant?: boolean;
     /** the element the tooltip belongs to, which spreads `props` */
@@ -67,11 +70,29 @@
     };
   };
   const measuring = { [createAttachmentKey()]: measure };
+
+  // keyboard focus on a dormant element mounts its trigger, which renders the element anew, so
+  // the new one takes the focus back. A press's focus wakes nothing: the swap would lose its click
+  let woken = $state(false);
+  let refocus = false;
+  const waking = {
+    [createAttachmentKey()]: (node: HTMLElement) =>
+      on(node, "focus", () => {
+        if (node.matches(":focus-visible")) woken = refocus = true;
+      })
+  };
+  const taking = {
+    [createAttachmentKey()]: (node: HTMLElement) => {
+      if (!refocus) return;
+      refocus = false;
+      node.focus();
+    }
+  };
 </script>
 
 <!-- a trigger once awake, disabled without text, so the element isn't remounted when a tooltip
      comes and goes. The spoken text follows it without a line break, which would render as a space -->
-{#if dormant}{@render render({ props: {} })}{:else}<Tooltip.Trigger
+{#if dormant && !woken}{@render render({ props: waking })}{:else}<Tooltip.Trigger
     {tether}
     payload={{ text: text ?? "", side, keys }}
     disabled={text === undefined || (clipped && !cut)}>
@@ -86,7 +107,12 @@
       } = props}
       <!-- the trigger makes its element a tab stop, which dense and clipped leave to the element -->
       {@render render({
-        props: { ...own, ...(dense || clipped ? {} : { tabindex }), ...(clipped ? measuring : {}) }
+        props: {
+          ...own,
+          ...(dense || clipped ? {} : { tabindex }),
+          ...(clipped ? measuring : {}),
+          ...(woken ? taking : {})
+        }
       })}
     {/snippet}
   </Tooltip.Trigger>{/if}{#if spoken && text !== undefined}<span class="sr-only"

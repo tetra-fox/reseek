@@ -15,6 +15,7 @@
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import { chatTime, formatDate, shortTime } from "#lib/format.js";
   import type { MenuAnchor } from "#lib/lists/linemenu.svelte.js";
+  import { wakeOnPointer } from "#lib/lists/wake.js";
   import { MESSAGES } from "#lib/ui/bindings.js";
   import { clock } from "#lib/ui/clock.svelte.js";
   import { isPressed, keyStep } from "#lib/ui/keys.js";
@@ -67,16 +68,9 @@
   }: Props = $props();
 
   let shownHidden = $state(false);
-  /** a mouse, a pen or focus has come to the row, which then mounts its tooltips */
+  /** a mouse or a pen has come to the row, which then mounts its tooltips */
   let awake = $state(false);
-  const wake = () => (awake = true);
-  /**
-   * A touch shows no tooltip, and mounting them would replace the element it landed on before
-   * its pointerdown, which the browser then sends nowhere, losing a long press
-   */
-  const pointed = (e: PointerEvent) => {
-    if (e.pointerType !== "touch") wake();
-  };
+  const pointed = wakeOnPointer(() => (awake = true));
   const action = $derived(notice ? null : actionOf(m.text));
   const text = $derived(action ?? m.text);
 
@@ -137,7 +131,6 @@
   role="article"
   onkeydown={keydown}
   onpointerenter={pointed}
-  onfocusin={wake}
   class={[
     "group/message relative grid gap-x-2.5 border-l-2 pr-3 pl-2.5",
     notice ? "grid-cols-[4rem_minmax(0,1fr)]" : "grid-cols-[2.25rem_minmax(0,1fr)]",

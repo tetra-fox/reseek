@@ -7,7 +7,7 @@ import { dismiss, toasts } from "#lib/feedback/toast.svelte.js";
 import { Freeze, freezesWhileUsed, interaction } from "#lib/lists/interaction.svelte.js";
 import { ListWindow } from "#lib/lists/virtual.svelte.js";
 import { flush } from "#lib/testing/flush.js";
-import { press } from "#lib/testing/keys.js";
+import { press, tabTo } from "#lib/testing/keys.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 
 import MessageList from "./MessageList.svelte";
@@ -69,17 +69,23 @@ describe("the message list", () => {
     await flush();
   };
 
-  it("mounts a message's tooltips once the pointer or focus first comes to it", async () => {
+  it("mounts a message's tooltips once a mouse comes to it, and one for the keys alone", async () => {
     history(3);
     await open();
     const row = (id: number) => document.querySelector<HTMLElement>(`[data-message="${id}"]`)!;
     // bits-ui marks the element of a mounted trigger with its state
     const tipped = (id: number) => row(id).querySelector("time")!.hasAttribute("data-state");
+    const copy = () => row(2).querySelector<HTMLElement>('[aria-label="Copy text"]')!;
     expect([tipped(1), tipped(2), tipped(3)]).toEqual([false, false, false]);
-    row(3).dispatchEvent(new Event("pointerenter"));
-    row(2).dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    row(3).dispatchEvent(new PointerEvent("pointerenter", { pointerType: "mouse" }));
+    const pressed = copy();
+    tabTo(pressed);
     await flush();
-    expect([tipped(1), tipped(2), tipped(3)]).toEqual([false, true, true]);
+    expect([tipped(1), tipped(2), tipped(3)]).toEqual([false, false, true]);
+    // the button the keys came to is drawn again as a trigger, and keeps the focus
+    expect(copy()).not.toBe(pressed);
+    expect(copy().hasAttribute("data-state")).toBe(true);
+    expect(document.activeElement).toBe(copy());
   });
 
   it("reads page after page to the start while the scrollbar is held at the top", async () => {

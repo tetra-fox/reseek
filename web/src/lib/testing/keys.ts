@@ -8,6 +8,16 @@ export const press = (target: Element, key: string, mods: KeyboardEventInit = {}
   return event;
 };
 
+/**
+ * Moves focus to `target` as Tab does: the key goes down where focus is, then `target` takes it,
+ * which jsdom then counts as focus from the keys (`:focus-visible`)
+ */
+export const tabTo = (target: HTMLElement) => {
+  const from = document.activeElement ?? document.body;
+  from.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
+  target.focus();
+};
+
 /** The keys of the selected lines in `root` */
 export const ticked = (root: ParentNode = document) =>
   [...root.querySelectorAll('[data-line][aria-selected="true"]')].map((l) =>
