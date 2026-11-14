@@ -123,47 +123,60 @@ export type DownloadGroup = {
 };
 
 /**
- * Selected files of the folder `name` split for downloading: those directly in it go where the
- * download pattern puts them, and those in each of its subfolders go to that subfolder's path
- * from the folder's parent, with `/` between, so `Music\Album\Disc 1` lands in `Album/Disc 1`
+ * Files under the folder `name` by the path of their folder below it, `""` for those directly
+ * in it, which come first
  */
-const downloadGroups = (
+const byFolder = (
   name: string,
   files: Schemas["File"][],
   separator: Separator
-): DownloadGroup[] => {
-  const parent = name.split(separator).slice(0, -1).join(separator);
+): [string, Schemas["File"][]][] => {
   const prefix = name + separator;
   const groups = new Map<string, Schemas["File"][]>();
   for (const file of files) {
     const relative = file.filename.startsWith(prefix)
       ? file.filename.slice(prefix.length)
       : file.filename;
-    const parts = relative.split(separator).filter(Boolean);
-    const group = parts.length > 1 ? parts[0] : "";
+    const group = relative.split(separator).filter(Boolean).slice(0, -1).join("/");
     const grouped = groups.get(group);
     if (grouped) grouped.push(file);
     else groups.set(group, [file]);
   }
-  return [...groups.entries()]
-    .toSorted(([a], [b]) => (a === "" ? -1 : b === "" ? 1 : 0))
-    .map(([group, grouped]) => ({
-      files: grouped,
-      destination:
-        group === ""
-          ? null
-          : (prefix + group)
-              .slice(parent.length > 0 ? parent.length + 1 : 0)
-              .split(separator)
-              .join("/")
-    }));
+  return [...groups.entries()].toSorted(([a], [b]) => (a === "" ? -1 : b === "" ? 1 : 0));
+};
+
+/** Groups of files under the folder `name`, each sent to its folder's path from `name`'s parent */
+const named = (
+  name: string,
+  groups: [string, Schemas["File"][]][],
+  separator: Separator
+): DownloadGroup[] => {
+  const label = name.split(separator).filter(Boolean).pop() ?? "";
+  return groups.map(([group, files]) => ({
+    files,
+    destination: [label, group].filter(Boolean).join("/") || null
+  }));
 };
 
 /**
+ * Files under the folder `name` split for downloading, each folder's to its path from `name`'s
+ * parent with `/` between: those directly in `Music\Album` to `Album`, those in
+ * `Music\Album\Disc 1\Extras` to `Album/Disc 1/Extras`. Every destination is written, so a
+ * folder lands the same whatever the download pattern, which the daemon does not apply to a
+ * written one
+ */
+export const downloadFolderPlan = (
+  name: string,
+  files: Schemas["File"][],
+  separator: Separator
+): DownloadGroup[] => named(name, byFolder(name, files, separator), separator);
+
+/**
  * Selected files split into the groups that download them. The files under each top folder,
- * which `topOf` gives a path's, are split from the deepest folder holding all of them: those
- * directly in it go where the download pattern puts them, and each subfolder's go to that
- * subfolder's path from the folder's parent, so a selection keeps its folders
+ * which `topOf` gives a path's, are split from the deepest folder holding all of them. When
+ * anything in the selection is below such a folder, every group is named as
+ * `downloadFolderPlan` names it, so the selection keeps its folders and lands in one tree; when
+ * nothing is, every file goes where the download pattern puts it
  */
 export const downloadPlan = (
   files: Schemas["File"][],
@@ -177,14 +190,35 @@ export const downloadPlan = (
     if (listed) listed.push(file);
     else byTop.set(top, [file]);
   }
-  return [...byTop.values()].flatMap((grouped) =>
-    downloadGroups(
-      commonFolder(
-        grouped.map((f) => f.filename),
-        separator
-      ),
-      grouped,
+  const tops = [...byTop.values()].map((grouped) => {
+    const name = commonFolder(
+      grouped.map((f) => f.filename),
       separator
-    )
+    );
+    return { name, groups: byFolder(name, grouped, separator) };
+  });
+  const nested = tops.some(({ groups }) => groups.some(([group]) => group !== ""));
+  return tops.flatMap(({ name, groups }) =>
+    nested
+      ? named(name, groups, separator)
+      : groups.map(([, grouped]) => ({ files: grouped, destination: null }))
   );
 };
+
+/**
+ * Enqueues the groups of a plan for one user's files as one download job, found by the search
+ * `searchId` when they came from one
+ */
+export const enqueuePlan = (
+  username: string,
+  plan: DownloadGroup[],
+  searchId?: string
+): Promise<Enqueued> =>
+  enqueueJob(
+    plan.map((group) => ({
+      username,
+      files: group.files.map((f) => asItem(f)),
+      searchId,
+      destination: group.destination ?? undefined
+    }))
+  );

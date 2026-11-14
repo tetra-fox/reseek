@@ -517,5 +517,6 @@
     username={allFiles.shown.username}
     folder={allFiles.shown.folder}
     files={allFiles.shown.files}
-    {connected} />
+    {connected}
+    searchId={id} />
 {/if}

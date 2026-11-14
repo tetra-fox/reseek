@@ -25,11 +25,10 @@
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { fileColumns, fileTemplate, fileWidth } from "#lib/files/columns.js";
   import {
-    asItem,
+    downloadFolderPlan,
     downloadPlan,
     type Enqueued,
-    enqueue,
-    enqueueJob,
+    enqueuePlan,
     followDownloads
   } from "#lib/files/downloads.js";
   import { FILTER_PLACEHOLDER } from "#lib/files/filters.js";
@@ -234,23 +233,15 @@
    * deepest one holding them
    */
   const download = (list: RemoteFile[]): Promise<Enqueued> =>
-    enqueueJob(
-      downloadPlan(list, topOf, browser.separator).map((group) => ({
-        username: browser.username,
-        files: group.files.map((f) => asItem(f)),
-        destination: group.destination ?? undefined
-      }))
-    );
+    enqueuePlan(browser.username, downloadPlan(list, topOf, browser.separator));
 
-  /** Every file under a folder, filtered or not, as one job in a folder named like it */
+  /** Every file under a folder, filtered or not, as one job that keeps the folders below it */
   const downloadFolder = async (node: FolderNode<RemoteFile>) => {
-    const outcome = await enqueue({
-      username: browser.username,
-      files: itemsUnder(node)
-        .filter((f) => !f.locked)
-        .map((f) => asItem(f)),
-      destination: node.label
-    });
+    const files = itemsUnder(node).filter((f) => !f.locked);
+    const outcome = await enqueuePlan(
+      browser.username,
+      downloadFolderPlan(node.path, files, browser.separator)
+    );
     toast(outcome.text, outcome.kind === "done" ? "info" : "error");
   };
 

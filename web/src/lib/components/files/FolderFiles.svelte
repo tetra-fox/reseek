@@ -8,7 +8,12 @@
   import Input from "#lib/components/ui/Input.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { fileColumns, fileTemplate, fileWidth } from "#lib/files/columns.js";
-  import { asItem, type Enqueued, enqueue } from "#lib/files/downloads.js";
+  import {
+    downloadFolderPlan,
+    downloadPlan,
+    type Enqueued,
+    enqueuePlan
+  } from "#lib/files/downloads.js";
   import { fileMatches, parseFilters } from "#lib/files/filters.js";
   import { getFileName } from "#lib/format.js";
   import { session } from "#lib/session.svelte.js";
@@ -40,9 +45,11 @@
     files: Schemas["File"][];
     /** the app is connected to the Soulseek server, which a download needs */
     connected: boolean;
+    /** the search the folder was found by */
+    searchId?: string;
   };
 
-  let { open = $bindable(), username, folder, files, connected }: Props = $props();
+  let { open = $bindable(), username, folder, files, connected, searchId }: Props = $props();
 
   let text = $state("");
   const selected = new SvelteSet<string>();
@@ -68,22 +75,28 @@
   const columns = $derived(fileColumns({ quality: true, phone: viewport.phone }));
   const chosen = $derived(shown.filter((f) => selected.has(f.filename)));
   const ticked = $derived(tickedCounts(selected));
-  /** the downloads land in a folder named like the remote one */
-  const destination = $derived(folder.split(separatorOf(folder)).filter(Boolean).pop());
+  const separator = $derived(separatorOf(folder));
 
+  const tell = (result: Enqueued) => toast(result.text, result.kind === "done" ? "info" : "error");
+
+  /** Downloads files as one job that keeps their folders below the deepest one holding them */
   const download = (list: Schemas["File"][]): Promise<Enqueued> =>
-    enqueue({ username, files: list.map((f) => asItem(f)), destination });
-  const downloadNow = async (list: Schemas["File"][]) => {
-    const result = await download(list);
-    toast(result.text, result.kind === "done" ? "info" : "error");
-  };
+    enqueuePlan(
+      username,
+      downloadPlan(list, () => folder, separator),
+      searchId
+    );
+  const downloadNow = async (list: Schemas["File"][]) => tell(await download(list));
+  /** Every file under a folder as one job that keeps the folders below it */
+  const downloadFolder = async (path: string, list: Schemas["File"][]) =>
+    tell(await enqueuePlan(username, downloadFolderPlan(path, list, separator), searchId));
 </script>
 
 {#snippet folderItems(node: FolderNode<Schemas["File"]>)}
   <RemoteFolderItems
     folder={node.path}
     {username}
-    ondownload={write ? () => void downloadNow(itemsUnder(node)) : undefined} />
+    ondownload={write ? () => void downloadFolder(node.path, itemsUnder(node)) : undefined} />
 {/snippet}
 
 <Dialog
@@ -156,7 +169,9 @@
   {/if}
   {#snippet footer()}
     {#if session.can("ReadWrite")}
-      <Button disabled={!connected || !files.length} onclick={() => void downloadNow(files)}>
+      <Button
+        disabled={!connected || !files.length}
+        onclick={() => void downloadFolder(folder, files)}>
         <DownloadIcon />Download all
       </Button>
     {/if}
