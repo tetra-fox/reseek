@@ -70,8 +70,8 @@ async fn listing(edges: &Edges, view: &View) -> BrowseReply {
       debug!("browse cache of the view not written yet or since an agent came or went; writing it")
     }
   }
-  let file = match edges.shares.rebuild_browse_cache(view).await {
-    Ok(file) => file,
+  let opened = match edges.shares.rebuild_browse_cache(view).await {
+    Ok(opened) => opened,
     Err(e) => {
       if let Some(suppressed) = UNWRITTEN.allow() {
         error!(error = %e, suppressed, "Error caching browse response");
@@ -79,9 +79,9 @@ async fn listing(edges: &Edges, view: &View) -> BrowseReply {
       return BrowseReply::Response(empty_listing());
     }
   };
-  match cached(&file).await {
+  match framed(opened).await {
     Ok(frame) => BrowseReply::Encoded(frame),
-    Err(e) => unread(&file, &e),
+    Err(e) => unread(&edges.shares.browse_cache(view), &e),
   }
 }
 
@@ -163,7 +163,11 @@ async fn current(edges: &Edges, view: &View) -> Result<BrowseReply, Unwritten> {
 /// The browse cache `file` as a frame read from it while it is sent. The file is replaced
 /// whole, never written in place, so the one opened here stays complete.
 async fn cached(file: &Path) -> std::io::Result<EncodedFrame> {
-  let opened = tokio::fs::File::open(file).await?;
+  framed(tokio::fs::File::open(file).await?).await
+}
+
+/// The browse cache `opened` as a frame read from it while it is sent.
+async fn framed(opened: tokio::fs::File) -> std::io::Result<EncodedFrame> {
   let len = opened.metadata().await?.len();
   Ok(EncodedFrame {
     len,

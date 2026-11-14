@@ -351,8 +351,13 @@ async fn a_browse_cache_of_a_forgotten_generation_is_not_left_behind() {
   std::fs::write(older("removed"), "x").unwrap();
   shares.forget_browse_views();
   eventually(async || !older("removed").exists()).await;
-  assert!(!shares.place_browse_cache(&everyone, written).await.unwrap());
+  let (opened, placed) = shares.place_browse_cache(&everyone, written).await.unwrap();
+  assert!(!placed);
   assert!(!file.exists());
+  assert!(
+    opened.metadata().await.unwrap().len() > 0,
+    "what was written is read"
+  );
 
   // a placement in progress as the generation moves on is put in place, then removed
   let file = shares.browse_cache(&everyone);
@@ -363,6 +368,45 @@ async fn a_browse_cache_of_a_forgotten_generation_is_not_left_behind() {
   assert!(file.exists(), "the removal waits for the placement");
   drop(placing);
   eventually(async || !file.exists()).await;
+}
+
+/// A browse whose cache is being written as who sees what changes still gets the listing it
+/// asked for, though the file was written for a generation forgotten meanwhile.
+#[tokio::test]
+async fn a_browse_rebuilt_across_a_visibility_change_gets_its_listing() {
+  let (files, engine) = shared_engine().await;
+  let shares = &engine.shares;
+  let text = format!(
+    "{}[shares.visible_to]\nmusic = [\"buddies\"]\n",
+    config(files.path())
+  );
+  engine.reconfigure(&text).await;
+  eventually(async || shares.shared_counts().borrow().files == 0).await;
+  let everyone = shares.view(&BTreeSet::new());
+  let unfinished = || {
+    std::fs::read_dir(&shares.cache).unwrap().any(|entry| {
+      entry
+        .unwrap()
+        .file_name()
+        .to_string_lossy()
+        .starts_with("browse.cache.tmp-")
+    })
+  };
+  let placing = shares.browse_placing.lock().await;
+  let (rebuilt, ()) = tokio::join!(shares.rebuild_browse_cache(&everyone), async {
+    // the listing is written, and waits to be put in place, as the change comes
+    eventually(async || unfinished()).await;
+    shares.forget_browse_views();
+    drop(placing);
+  });
+  let mut bytes = Vec::new();
+  tokio::io::AsyncReadExt::read_to_end(&mut rebuilt.unwrap(), &mut bytes)
+    .await
+    .unwrap();
+  assert!(matches!(
+    soulseek_proto::PeerMessage::decode(&bytes),
+    Ok(soulseek_proto::PeerMessage::BrowseResponse(_))
+  ));
 }
 
 #[tokio::test]
@@ -1486,8 +1530,14 @@ async fn a_browse_cache_read_before_an_agent_changed_never_replaces_one_read_aft
     "the cache is behind the agent"
   );
   let after = shares.write_browse_cache(&everything, &file).await.unwrap();
-  assert!(shares.place_browse_cache(&everything, after).await.unwrap());
-  let placed = shares
+  assert!(
+    shares
+      .place_browse_cache(&everything, after)
+      .await
+      .unwrap()
+      .1
+  );
+  let (_, placed) = shares
     .place_browse_cache(&everything, before)
     .await
     .unwrap();
@@ -1504,6 +1554,7 @@ async fn a_browse_cache_read_before_an_agent_changed_never_replaces_one_read_aft
       .place_browse_cache(&everything, before)
       .await
       .unwrap()
+      .1
   );
   assert!(cached_directories(shares, &everything).contains(&other));
   assert_eq!(shares.current_browse_cache(&everything), None);

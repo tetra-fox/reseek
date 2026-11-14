@@ -515,8 +515,12 @@ impl Shares {
   }
 
   /// Writes the browse cache of `view` again from the index, unless one read later is put in
-  /// place first; returns the file.
-  pub async fn rebuild_browse_cache(&self, view: &View) -> Result<PathBuf, browse::CacheError> {
+  /// place first; returns the listing a peer is sent, opened, so a removal of its file after
+  /// this leaves it readable.
+  pub async fn rebuild_browse_cache(
+    &self,
+    view: &View,
+  ) -> Result<tokio::fs::File, browse::CacheError> {
     // the view is kept in the generation its file is written in, so the file is rewritten
     // with the shares for as long as it can be read
     let file = {
@@ -526,23 +530,27 @@ impl Shares {
       }
       browse::path(&self.cache, view, views.generation)
     };
-    self.rewrite_browse_cache(view, &file).await?;
-    Ok(file)
+    self.rewrite_browse_cache(view, &file).await
   }
 
   /// Writes the browse cache of `view` at `file` from the shares as they are now, unless one
-  /// read later is put in place first.
-  async fn rewrite_browse_cache(&self, view: &View, file: &Path) -> Result<(), browse::CacheError> {
+  /// read later is put in place first; returns the listing a peer is sent, opened.
+  async fn rewrite_browse_cache(
+    &self,
+    view: &View,
+    file: &Path,
+  ) -> Result<tokio::fs::File, browse::CacheError> {
     let started = Instant::now();
     debug!("Warming browse response cache...");
     let written = self.write_browse_cache(view, file).await?;
-    if self.place_browse_cache(view, written).await? {
+    let (opened, placed) = self.place_browse_cache(view, written).await?;
+    if placed {
       info!(
         ms = started.elapsed().as_millis() as u64,
         "Browse response cached successfully"
       );
     }
-    Ok(())
+    Ok(opened)
   }
 
   /// The browse cache of `view` for `file`, written beside it from a read of the shares
@@ -558,15 +566,16 @@ impl Shares {
   }
 
   /// Puts `written` in place of its file unless the file holds a listing read after it, which
-  /// is left as it is, or belongs to a generation forgotten since it was written; returns
-  /// whether it was put in place.
+  /// is left as it is, or belongs to a generation forgotten since it was written. Returns the
+  /// listing a peer is sent, opened: the file in place, or `written` when its generation was
+  /// forgotten; and whether `written` was put in place.
   async fn place_browse_cache(
     &self,
     view: &View,
     written: browse::Unplaced,
-  ) -> Result<bool, std::io::Error> {
-    // checked and renamed under one lock, so no later listing is put in place between the two,
-    // and the removal of a forgotten generation's files runs before the check or after the rename
+  ) -> Result<(tokio::fs::File, bool), std::io::Error> {
+    // checked, renamed and opened under one lock, so no later listing is put in place between,
+    // and the removal of a forgotten generation's files runs before the check or after the open
     let _placing = self.browse_placing.lock().await;
     let (forgotten, read_later) = {
       let views = lock(&self.browse_views);
@@ -575,18 +584,27 @@ impl Shares {
         views.read_after(&written.file, written.read),
       )
     };
-    if forgotten || read_later {
-      debug!(forgotten, "browse cache discarded");
+    if forgotten {
+      debug!("browse cache of a forgotten generation not put in place");
+      // the browse that asked for it still reads it once it is deleted
+      let opened = written.open().await;
       written.discard().await;
-      return Ok(false);
+      return Ok((opened?, false));
+    }
+    if read_later {
+      debug!("browse cache read before the one in place discarded");
+      let file = written.file.clone();
+      written.discard().await;
+      return Ok((tokio::fs::File::open(&file).await?, false));
     }
     written.place().await?;
+    let opened = tokio::fs::File::open(&written.file).await?;
     let mut views = lock(&self.browse_views);
     // a generation forgotten since the check removes the file once the lock is let go
     if browse::path(&self.cache, view, views.generation) == written.file {
       views.listed.insert(written.file, written.read);
     }
-    Ok(true)
+    Ok((opened, true))
   }
 
   /// The next number in the order of browse cache reads and host changes.

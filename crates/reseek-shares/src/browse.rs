@@ -102,6 +102,11 @@ impl Unplaced {
     placed
   }
 
+  /// Opens it to be read, which it stays once it is deleted.
+  pub async fn open(&self) -> std::io::Result<tokio::fs::File> {
+    tokio::fs::File::open(&self.temporary).await
+  }
+
   /// Deletes it, leaving its file as it is.
   pub async fn discard(self) {
     self.remove().await;
