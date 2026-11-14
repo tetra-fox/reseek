@@ -461,10 +461,16 @@ impl Controller {
       wait.fail(files::StreamFailure::Disconnected);
     }
     info!(agent = name, reason, pending, "Agent disconnected");
-    // a device refused for it gets in at its next dial
-    lock(&self.registry)
-      .refused_devices
-      .retain(|(refused, _), _| refused != name);
+    {
+      let mut registry = lock(&self.registry);
+      // a device refused for it gets in at its next dial, unless the agent is back on a newer
+      // socket, as after a restart
+      if !registry.agents.contains_key(name) {
+        registry
+          .refused_devices
+          .retain(|(refused, _), _| refused != name);
+      }
+    }
     self.shares.remove_host(name);
     self.publish();
     self

@@ -560,8 +560,8 @@ fn warnings(
 
 /// An agent that logs in again from its device, as after a restart its controller has not
 /// noticed yet, replaces its earlier session without a warning; another device logging in under
-/// its name is refused for it, warned about once while it keeps trying and listed in the state
-/// until it stops or the first one leaves, and then gets in.
+/// its name is refused for it, warned about once while it keeps trying, across a restart of the
+/// first, and listed in the state until it stops or the first one leaves, and then gets in.
 #[tokio::test]
 async fn a_restarted_agent_replaces_its_session_and_another_device_is_refused() {
   let (app, controller) = controller().await;
@@ -610,6 +610,21 @@ async fn a_restarted_agent_replaces_its_session_and_another_device_is_refused() 
     ("nas", "nas")
   );
   assert_eq!(refused[0].device, "5e6f7a8b");
+
+  // the connected agent restarts: the other device is still refused, listed and not warned
+  // about again
+  let ((_restarted, mut restarted, _), answered) = log_in_from(&controller, Some(DEVICE)).await;
+  assert!(matches!(read(&answered[0]), RelayMessage::LoginOk { .. }));
+  assert_eq!(app.state.state.current().relay.refused_devices.len(), 1);
+  let (_, answered) = log_in_from(&controller, Some(other)).await;
+  assert_eq!(
+    read(&answered[0]),
+    RelayMessage::LoginFailed {
+      reason: LoginFailure::AnotherDevice
+    }
+  );
+  assert_eq!(warnings(&mut logs), Vec::<String>::new());
+  assert_eq!(closed(&mut restarted), None);
 
   // a device that stopped dialing is forgotten, and warned about again once it is back
   for refused in lock(&controller.registry).refused_devices.values_mut() {
