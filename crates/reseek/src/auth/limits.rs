@@ -1,8 +1,10 @@
 //! Limits on failed attempts per client address: failed logins and failed API credentials, each
 //! counted over a sliding minute and kept in memory only. An IPv6 client is counted by its /64,
-//! the block one host is usually given, so it cannot spread attempts over its own addresses. Every
-//! attempt is counted when it starts and forgiven when it succeeds, so attempts made at the
-//! same time are held to the limit too.
+//! the block one host is usually given, so it cannot spread attempts over its own addresses. An
+//! attempt holds a place from when it starts until it ends, and keeps it as a failure unless it
+//! is forgiven. An address refused for its failures is answered at once; one whose attempts under
+//! way take the places its failures leave waits for one of them to end, so attempts made at the
+//! same time are held to the limit without refusing those that succeed.
 
 use std::collections::{HashMap, VecDeque};
 use std::net::{IpAddr, Ipv6Addr};
@@ -11,6 +13,7 @@ use std::time::Duration;
 
 use reseek_shares::lock;
 use soulseek_client::LogLimiter;
+use tokio::sync::Notify;
 use tokio::time::Instant;
 use tracing::warn;
 
@@ -23,7 +26,8 @@ const LOGINS: usize = 5;
 /// Failed token or API key presentations an address may make in [`WINDOW`].
 const PRESENTATIONS: usize = 20;
 
-/// The most addresses tracked at once; past it the oldest are forgotten first.
+/// The most addresses tracked at once; past it the oldest without an attempt under way are
+/// forgotten first.
 const TRACKED: usize = 65_536;
 
 static TRIPPED: LogLimiter = LogLimiter::new();
@@ -49,7 +53,18 @@ impl Default for Limits {
 pub struct Window {
   what: &'static str,
   limit: usize,
-  failures: Mutex<HashMap<IpAddr, VecDeque<Instant>>>,
+  addresses: Mutex<HashMap<IpAddr, Address>>,
+  /// told whenever an attempt ends, for the attempts waiting for a place
+  ended: Notify,
+}
+
+/// What one address has used of the limit.
+#[derive(Default)]
+struct Address {
+  /// when each failure still in the window happened
+  failures: VecDeque<Instant>,
+  /// attempts started and not ended
+  running: usize,
 }
 
 impl Window {
@@ -57,74 +72,103 @@ impl Window {
     Self {
       what,
       limit,
-      failures: Mutex::new(HashMap::new()),
+      addresses: Mutex::new(HashMap::new()),
+      ended: Notify::new(),
     }
   }
 
-  /// Starts an attempt of `ip`, counted as a failure until it is forgiven; `None` when `ip` has
-  /// failed or is trying as often as it may within the window, which is logged.
-  pub fn attempt(&self, ip: IpAddr) -> Option<Attempt> {
-    let now = Instant::now();
+  /// Starts an attempt of `ip`, waiting while its attempts under way take the places its
+  /// failures leave; `None` when `ip` has failed as often as it may within the window, which is
+  /// logged.
+  pub async fn attempt(&self, ip: IpAddr) -> Option<Attempt<'_>> {
     let key = counted_as(ip);
-    let mut failures = lock(&self.failures);
-    let times = tracked(&mut failures, key, now);
-    if times.len() >= self.limit {
-      if let Some(suppressed) = TRIPPED.allow() {
-        warn!(%ip, kind = self.what, suppressed, "rate limit tripped");
+    loop {
+      // made before the counts are read, so an attempt that ends in between still wakes it
+      let ended = self.ended.notified();
+      {
+        let mut addresses = lock(&self.addresses);
+        let address = tracked(&mut addresses, key, Instant::now());
+        if address.failures.len() >= self.limit {
+          if let Some(suppressed) = TRIPPED.allow() {
+            warn!(%ip, kind = self.what, suppressed, "rate limit tripped");
+          }
+          return None;
+        }
+        if address.failures.len() + address.running < self.limit {
+          address.running += 1;
+          return Some(Attempt {
+            window: self,
+            key,
+            failed: true,
+          });
+        }
       }
-      return None;
+      ended.await;
     }
-    times.push_back(now);
-    Some(Attempt { key, at: now })
   }
 
-  /// Takes back the failure `attempt` counted, for an attempt that succeeded.
-  pub fn forgive(&self, attempt: Attempt) {
-    let mut failures = lock(&self.failures);
-    let Some(times) = failures.get_mut(&attempt.key) else {
-      // the address was forgotten to make room, so there is nothing to take back
-      return;
-    };
-    if let Some(position) = times.iter().position(|at| *at == attempt.at) {
-      times.remove(position);
+  /// Ends an attempt of the address `key`, keeping it as a failure when `failed`.
+  fn end(&self, key: IpAddr, failed: bool) {
+    let mut addresses = lock(&self.addresses);
+    // an address with an attempt under way is never forgotten
+    let address = addresses
+      .get_mut(&key)
+      .expect("an address is tracked while its attempts run");
+    address.running -= 1;
+    if failed {
+      address.failures.push_back(Instant::now());
     }
-    if times.is_empty() {
-      failures.remove(&attempt.key);
+    if address.failures.is_empty() && address.running == 0 {
+      addresses.remove(&key);
     }
+    drop(addresses);
+    self.ended.notify_waiters();
   }
 }
 
-/// An attempt [`Window::attempt`] counted.
-pub struct Attempt {
+/// An attempt [`Window::attempt`] started. It ends when dropped, as a failure unless it was
+/// forgiven, so an attempt whose request went away before an answer still counts.
+pub struct Attempt<'a> {
+  window: &'a Window,
   key: IpAddr,
-  at: Instant,
+  failed: bool,
 }
 
-/// The failures of `key` with the old ones forgotten, making room for it when [`TRACKED`]
+impl Attempt<'_> {
+  /// Ends the attempt without counting it, for one that succeeded or was never checked.
+  pub fn forgive(mut self) {
+    self.failed = false;
+  }
+}
+
+impl Drop for Attempt<'_> {
+  fn drop(&mut self) {
+    self.window.end(self.key, self.failed);
+  }
+}
+
+/// The address `key` with its old failures forgotten, making room for it when [`TRACKED`]
 /// addresses are tracked already.
-fn tracked(
-  failures: &mut HashMap<IpAddr, VecDeque<Instant>>,
-  key: IpAddr,
-  now: Instant,
-) -> &mut VecDeque<Instant> {
-  if failures.len() >= TRACKED && !failures.contains_key(&key) {
-    failures.retain(|_, times| {
-      forget_old(times, now);
-      !times.is_empty()
+fn tracked(addresses: &mut HashMap<IpAddr, Address>, key: IpAddr, now: Instant) -> &mut Address {
+  if addresses.len() >= TRACKED && !addresses.contains_key(&key) {
+    addresses.retain(|_, address| {
+      forget_old(&mut address.failures, now);
+      !address.failures.is_empty() || address.running > 0
     });
-    if failures.len() >= TRACKED {
-      let oldest = failures
+    if addresses.len() >= TRACKED {
+      let oldest = addresses
         .iter()
-        .min_by_key(|(_, times)| times.back().copied())
+        .filter(|(_, address)| address.running == 0)
+        .min_by_key(|(_, address)| address.failures.back().copied())
         .map(|(ip, _)| *ip);
       if let Some(oldest) = oldest {
-        failures.remove(&oldest);
+        addresses.remove(&oldest);
       }
     }
   }
-  let times = failures.entry(key).or_default();
-  forget_old(times, now);
-  times
+  let address = addresses.entry(key).or_default();
+  forget_old(&mut address.failures, now);
+  address
 }
 
 /// The address failures of `ip` are counted under: an IPv4 address itself, an IPv6 address its
@@ -150,6 +194,8 @@ fn forget_old(times: &mut VecDeque<Instant>, now: Instant) {
 
 #[cfg(test)]
 mod tests {
+  use futures_util::FutureExt;
+
   use super::*;
 
   #[tokio::test(start_paused = true)]
@@ -157,48 +203,55 @@ mod tests {
     let limits = Limits::default();
     let ip: IpAddr = "192.0.2.1".parse().unwrap();
     let other: IpAddr = "192.0.2.2".parse().unwrap();
+    // each attempt is dropped as soon as it starts, which counts it as a failure
     for _ in 0..4 {
-      assert!(limits.logins.attempt(ip).is_some());
+      assert!(limits.logins.attempt(ip).await.is_some());
     }
     tokio::time::advance(Duration::from_secs(30)).await;
-    assert!(limits.logins.attempt(ip).is_some());
-    assert!(limits.logins.attempt(ip).is_none());
-    assert!(limits.logins.attempt(other).is_some());
+    assert!(limits.logins.attempt(ip).await.is_some());
+    assert!(limits.logins.attempt(ip).await.is_none());
+    assert!(limits.logins.attempt(other).await.is_some());
     assert!(
-      limits.presentations.attempt(ip).is_some(),
+      limits.presentations.attempt(ip).await.is_some(),
       "the limits are apart"
     );
     tokio::time::advance(Duration::from_secs(30)).await;
     assert!(
-      limits.logins.attempt(ip).is_some(),
+      limits.logins.attempt(ip).await.is_some(),
       "the first four left the window"
     );
     for _ in 0..PRESENTATIONS {
-      assert!(limits.presentations.attempt(other).is_some());
+      assert!(limits.presentations.attempt(other).await.is_some());
     }
-    assert!(limits.presentations.attempt(other).is_none());
+    assert!(limits.presentations.attempt(other).await.is_none());
   }
 
   #[tokio::test(start_paused = true)]
-  async fn attempts_started_at_once_are_held_to_the_limit() {
+  async fn attempts_under_way_hold_their_places_and_the_next_waits_for_one() {
     let limits = Limits::default();
     let ip: IpAddr = "192.0.2.1".parse().unwrap();
-    let started: Vec<Attempt> = (0..50).filter_map(|_| limits.logins.attempt(ip)).collect();
-    assert_eq!(
-      started.len(),
-      LOGINS,
-      "the rest are refused before any finishes"
-    );
-    let mut started = started.into_iter();
-    limits.logins.forgive(started.next().unwrap());
+    let mut running = Vec::new();
+    for _ in 0..LOGINS {
+      running.push(limits.logins.attempt(ip).await.unwrap());
+    }
+    let next = limits.logins.attempt(ip);
+    tokio::pin!(next);
     assert!(
-      limits.logins.attempt(ip).is_some(),
-      "a success gives its place back"
+      next.as_mut().now_or_never().is_none(),
+      "it waits for a place"
     );
-    assert!(limits.logins.attempt(ip).is_none());
+    running.pop().unwrap().forgive();
+    let next = next.await.expect("a success gives its place to the next");
+    running.push(next);
+    let after = limits.logins.attempt(ip);
+    tokio::pin!(after);
+    assert!(after.as_mut().now_or_never().is_none());
+    // the five under way fail, which refuses the one waiting
+    drop(running);
+    assert!(after.await.is_none());
     tokio::time::advance(WINDOW).await;
     assert!(
-      limits.logins.attempt(ip).is_some(),
+      limits.logins.attempt(ip).await.is_some(),
       "the failures left the window"
     );
   }
@@ -209,25 +262,36 @@ mod tests {
     let address = |text: &str| text.parse::<IpAddr>().unwrap();
     for host in 1..=LOGINS {
       let host = address(&format!("2001:db8:1:2::{host:x}"));
-      assert!(limits.logins.attempt(host).is_some());
+      assert!(limits.logins.attempt(host).await.is_some());
     }
     assert!(
       limits
         .logins
         .attempt(address("2001:db8:1:2:ffff::1"))
+        .await
         .is_none()
     );
     assert!(
-      limits.logins.attempt(address("2001:db8:1:3::1")).is_some(),
+      limits
+        .logins
+        .attempt(address("2001:db8:1:3::1"))
+        .await
+        .is_some(),
       "another /64"
     );
     for _ in 0..LOGINS {
-      assert!(limits.logins.attempt(address("::ffff:192.0.2.9")).is_some());
+      assert!(
+        limits
+          .logins
+          .attempt(address("::ffff:192.0.2.9"))
+          .await
+          .is_some()
+      );
     }
     assert!(
-      limits.logins.attempt(address("192.0.2.9")).is_none(),
+      limits.logins.attempt(address("192.0.2.9")).await.is_none(),
       "a mapped address is its IPv4 one"
     );
-    assert!(limits.logins.attempt(address("192.0.2.10")).is_some());
+    assert!(limits.logins.attempt(address("192.0.2.10")).await.is_some());
   }
 }

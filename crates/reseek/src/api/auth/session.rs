@@ -97,8 +97,8 @@ async fn login(
   let mut current = app.config.current();
   let client = &presented.client;
   password_login_offered(&current.values, client)?;
-  // counted as a failure from the start, so attempts made at the same time are limited too
-  let Some(attempt) = app.auth.limits.logins.attempt(client.ip) else {
+  // a failure unless forgiven, so attempts made at the same time are limited too
+  let Some(attempt) = app.auth.limits.logins.attempt(client.ip).await else {
     return Err(ApiError::rate_limited());
   };
   let username = login.username.clone();
@@ -120,20 +120,20 @@ async fn login(
     }
     current = now;
     if let Err(e) = password_login_offered(&current.values, client) {
-      app.auth.limits.logins.forgive(attempt);
+      attempt.forgive();
       return Err(e);
     }
   };
   let options = &current.values;
   let account = match checked {
     Ok(Some(account)) => {
-      app.auth.limits.logins.forgive(attempt);
+      attempt.forgive();
       account
     }
     Ok(None) => return Err(failed_login(&app, &username, client)),
     Err(Busy) => {
       // a check that never ran is not a failed one
-      app.auth.limits.logins.forgive(attempt);
+      attempt.forgive();
       if let Some(suppressed) = LOGIN_BUSY.allow() {
         warn!(
           suppressed,
@@ -592,6 +592,37 @@ mod tests {
       )
       .await;
     assert_eq!(missing.status, 400);
+  }
+
+  #[tokio::test]
+  async fn correct_logins_at_once_wait_their_turn_and_wrong_ones_still_count() {
+    use std::time::Duration;
+
+    let app = app("", &[]).await;
+    let login = |password: &str| {
+      app.send_from(
+        OUTSIDE,
+        request("POST", "/api/v0/session", Some(credentials(password))),
+      )
+    };
+    // the password checks wait until the hold drops, so every login is under way at once
+    let at_once = async |password: &str, count: usize| {
+      let held = app.state.auth.accounts.hold_checks().await;
+      let logins = futures_util::future::join_all((0..count).map(|_| login(password)));
+      tokio::pin!(logins);
+      let waited = tokio::time::timeout(Duration::from_millis(200), &mut logins).await;
+      assert!(waited.is_err(), "the logins wait for the held checks");
+      drop(held);
+      let mut statuses: Vec<u16> = logins.await.iter().map(|a| a.status.as_u16()).collect();
+      statuses.sort_unstable();
+      statuses
+    };
+    assert_eq!(at_once("reseek", 10).await, [204; 10]);
+    assert_eq!(
+      at_once("wrong", 8).await,
+      [401, 401, 401, 401, 401, 429, 429, 429]
+    );
+    assert_eq!(login("reseek").await.status, 429, "the failures count");
   }
 
   #[tokio::test]

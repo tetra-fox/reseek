@@ -110,9 +110,8 @@ async fn callback(
 ) -> Result<Response, ApiError> {
   let provider = provider(&app, &name).await?;
   let client = &presented.client;
-  let logins = &app.auth.limits.logins;
-  // counted as a failure from the start, so callbacks made at the same time are limited too
-  let Some(attempt) = logins.attempt(client.ip) else {
+  // a failure unless forgiven, so callbacks made at the same time are limited too
+  let Some(attempt) = app.auth.limits.logins.attempt(client.ip).await else {
     return Err(ApiError::rate_limited());
   };
   let scope = Scope::new(&app.url_base, client.https);
@@ -164,14 +163,14 @@ async fn callback(
   let callback = match callback_url(&app, &presented, &name) {
     Ok(callback) => callback,
     Err(e) => {
-      logins.forgive(attempt);
+      attempt.forgive();
       return Err(e);
     }
   };
   let metadata = match provider.metadata().await {
     Ok(metadata) => metadata,
     Err(e) => {
-      logins.forgive(attempt);
+      attempt.forgive();
       return Err(unavailable(&name, &e));
     }
   };
@@ -182,7 +181,7 @@ async fn callback(
     Ok(claims) => claims,
     // the provider's fault, not the client's failed login
     Err(NotSignedIn::Unavailable(why)) => {
-      logins.forgive(attempt);
+      attempt.forgive();
       return Err(unavailable(&name, &why));
     }
     Err(NotSignedIn::Refused(reason)) => {
@@ -196,7 +195,7 @@ async fn callback(
   };
   let admitted = match flow::admit(&provider, &claims) {
     Ok(admitted) => {
-      logins.forgive(attempt);
+      attempt.forgive();
       admitted
     }
     Err(reason) => {

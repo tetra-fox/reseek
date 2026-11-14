@@ -136,20 +136,22 @@ pub async fn identify(
   let auth = &app.auth;
   let ip = presented.client.ip;
   if let Some(credential) = &presented.credential {
-    let presentations = &auth.limits.presentations;
-    // counted as a failure from the start, so credentials presented at the same time are limited
-    // too; a credential checked again counts nothing
+    // a failure unless forgiven, so credentials presented at the same time are limited too; a
+    // credential checked again counts nothing
     let attempt = match check {
       Check::Request => Some(
-        presentations
+        auth
+          .limits
+          .presentations
           .attempt(ip)
+          .await
           .ok_or_else(ApiError::rate_limited)?,
       ),
       Check::Again => None,
     };
     let forgive = || {
       if let Some(attempt) = attempt {
-        presentations.forgive(attempt);
+        attempt.forgive();
       }
     };
     let outcome = if credential.starts_with(TOKEN_PREFIX) {
