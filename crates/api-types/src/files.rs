@@ -8,8 +8,6 @@ use utoipa::openapi::schema::{KnownFormat, ObjectBuilder, Schema, SchemaFormat, 
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
-use crate::flags::flag_names;
-
 /// A directory the files endpoints can reach, named in their path.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "lowercase")]
@@ -61,11 +59,59 @@ bitflags::bitflags! {
   }
 }
 
-flag_names!(
-  FilesystemAttributes,
-  "the names of the set attribute flags joined by \", \"",
-  "Hidden, Directory"
-);
+/// The names of the set flags joined by `", "` in the order they are declared, which is
+/// ascending bit order; `"None"` for the empty set.
+impl std::fmt::Display for FilesystemAttributes {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    if self.is_empty() {
+      return f.write_str("None");
+    }
+    let names: Vec<&str> = self.iter_names().map(|(name, _)| name).collect();
+    f.write_str(&names.join(", "))
+  }
+}
+
+impl FilesystemAttributes {
+  /// The attributes the written form `text` names; names are matched exactly.
+  fn from_names(text: &str) -> Result<Self, String> {
+    if text == "None" {
+      return Ok(Self::empty());
+    }
+    text.split(',').try_fold(Self::empty(), |set, name| {
+      let name = name.trim();
+      Self::from_name(name)
+        .map(|flag| set.union(flag))
+        .ok_or_else(|| format!("`{name}` is not a flag name"))
+    })
+  }
+}
+
+impl Serialize for FilesystemAttributes {
+  fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+    serializer.collect_str(self)
+  }
+}
+
+impl<'de> Deserialize<'de> for FilesystemAttributes {
+  fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+    let text = <std::borrow::Cow<'de, str>>::deserialize(deserializer)?;
+    Self::from_names(&text).map_err(serde::de::Error::custom)
+  }
+}
+
+impl utoipa::PartialSchema for FilesystemAttributes {
+  fn schema() -> RefOr<Schema> {
+    ObjectBuilder::new()
+      .schema_type(Type::String)
+      .description(Some(
+        "the names of the set attribute flags joined by \", \"",
+      ))
+      .examples(["Hidden, Directory"])
+      .into()
+  }
+}
+
+impl ToSchema for FilesystemAttributes {}
 
 /// A local file in a listing.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -199,3 +245,20 @@ impl utoipa::PartialSchema for FileContent {
 }
 
 impl ToSchema for FileContent {}
+
+#[cfg(test)]
+mod tests {
+  use super::FilesystemAttributes as Fs;
+
+  #[test]
+  fn attributes_are_written_by_name_in_bit_order() {
+    for (value, text) in [
+      (Fs::Directory | Fs::ReadOnly, "ReadOnly, Directory"),
+      (Fs::ReparsePoint | Fs::Directory, "Directory, ReparsePoint"),
+    ] {
+      let json = format!("\"{text}\"");
+      assert_eq!(serde_json::to_string(&value).unwrap(), json);
+      assert_eq!(serde_json::from_str::<Fs>(&json).unwrap(), value, "{text}");
+    }
+  }
+}

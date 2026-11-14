@@ -10,8 +10,6 @@
 
 #![warn(missing_docs)]
 
-mod flags;
-
 pub mod activity;
 pub mod analysis;
 pub mod application;
