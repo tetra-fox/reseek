@@ -15,7 +15,7 @@ rm -rf "$logs"
 echo "the daemon for the browser tests logs to $logs" >&2
 dir="$(mktemp -d)"
 trap 'rm -rf "$dir"' EXIT
-# playwright stops the servers with SIGTERM; exiting on it runs the cleanup above
+# daemon.ts stops this script and the daemon with SIGTERM; exiting on it runs the cleanup above
 trap 'exit 143' TERM INT
 
 cat > "$dir/config.toml" <<TOML

@@ -31,27 +31,40 @@ export default async function startDaemon(): Promise<() => Promise<void>> {
   return () => stop(serve);
 }
 
-/** The port the daemon names once it has started, read from its log on standard output */
+/**
+ * The port the daemon names once it has started, read from its log on standard output. A start
+ * that fails says what the daemon printed until then
+ */
 const started = (serve: ChildProcess) =>
   new Promise<number>((resolve, reject) => {
     let port: number | null = null;
+    // what it printed before it started, kept for a start that fails
+    let printed: string[] | null = [];
+    const fail = (why: string) => {
+      if (printed === null) return;
+      reject(new Error(`${why}:\n${printed.join("\n")}`));
+      printed = null;
+    };
     const timer = setTimeout(
-      () => reject(new Error(`the daemon did not start within ${STARTUP_MS / 1000} s`)),
+      () => fail(`the daemon did not start within ${STARTUP_MS / 1000} s`),
       STARTUP_MS
     );
     // read to the end, as a pipe nobody reads would stop the daemon once full
     createInterface({ input: serve.stdout! }).on("line", (line) => {
+      if (printed === null) return;
+      printed.push(line);
       const listening = /Listening for HTTP requests.*url=http:\/\/[^/\s]*:(\d+)/.exec(line);
       if (listening) port = Number(listening[1]);
-      if (line.includes("reseek started")) {
-        clearTimeout(timer);
-        if (port === null) reject(new Error("the daemon started without naming its port"));
-        else resolve(port);
-      }
-    });
-    serve.on("exit", (code, signal) => {
+      if (!line.includes("reseek started")) return;
       clearTimeout(timer);
-      reject(new Error(`the daemon exited with ${signal ?? code} before it started`));
+      if (port === null) return fail("the daemon started without naming its port");
+      printed = null;
+      resolve(port);
+    });
+    // after it exited and every line it printed was read
+    serve.on("close", (code, signal) => {
+      clearTimeout(timer);
+      fail(`the daemon exited with ${signal ?? code} before it started`);
     });
   });
 
