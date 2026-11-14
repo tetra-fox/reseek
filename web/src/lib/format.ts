@@ -37,9 +37,12 @@ export const formatSpeedPadded = (bytesPerSecond: number | null | undefined): st
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
 
-/** A length of a track: "MM:SS", or "H:MM:SS" from an hour on with no upper bound */
+/**
+ * A length of a track: "MM:SS", or "H:MM:SS" from an hour on with no upper bound. A length of 0
+ * is one a peer doesn't know, as a bitrate of 0 is, and shows nothing
+ */
 export const formatSeconds = (seconds: number | null | undefined): string => {
-  if (seconds === null || seconds === undefined || !Number.isFinite(seconds) || seconds < 0) {
+  if (seconds === null || seconds === undefined || !Number.isFinite(seconds) || seconds <= 0) {
     return "";
   }
   const total = Math.floor(seconds);

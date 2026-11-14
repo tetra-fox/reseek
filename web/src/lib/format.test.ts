@@ -62,7 +62,8 @@ describe("times", () => {
     expect(formatSeconds(undefined)).toBe("");
     expect(formatSeconds(null)).toBe("");
     expect(formatSeconds(-1)).toBe("");
-    expect(formatSeconds(0)).toBe("00:00");
+    expect(formatSeconds(0)).toBe("");
+    expect(formatSeconds(1)).toBe("00:01");
     expect(formatSeconds(65)).toBe("01:05");
     expect(formatSeconds(3599)).toBe("59:59");
     expect(formatSeconds(3600)).toBe("1:00:00");
@@ -93,6 +94,7 @@ describe("files", () => {
     expect(formatAttributes({ isVariableBitRate: true })).toBe("VBR");
     expect(formatAttributes({ bitRate: 320 })).toBe("320 kbps");
     expect(formatAttributes({})).toBe("");
+    expect(formatAttributes({ bitRate: 0 })).toBe("");
   });
 
   it("splits remote paths", () => {
