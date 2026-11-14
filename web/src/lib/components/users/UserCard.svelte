@@ -74,10 +74,12 @@
     if (own) ownProfile.need();
   });
   const pictureUrl = $derived(draft ? draft.pictureUrl : pictureOf(name, user));
-  const description = $derived.by(() => {
-    const text = draft ? draft.description : own ? ownProfile.data?.description : null;
-    return text === null || text === undefined ? user?.description : firstLines(text, 3) || null;
-  });
+  // the draft is a new object on each change in the editor, its picture's too, so its text is
+  // read out on its own and cut only when it changes
+  const ownText = $derived(draft ? draft.description : own ? ownProfile.data?.description : null);
+  const description = $derived(
+    ownText === null || ownText === undefined ? user?.description : firstLines(ownText, 3) || null
+  );
   const manageable = $derived(canManage(name));
   const befriending = new Busy();
   const toggleBuddy = () =>
