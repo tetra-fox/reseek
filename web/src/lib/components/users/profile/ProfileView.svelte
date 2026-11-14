@@ -26,9 +26,11 @@
   let { name, pictureUrl, src, alt, description, uploadSlots, freeUploadSlot, queueLength }: Props =
     $props();
 
-  // a description past a screenful is folded until the rest is asked for
+  /** A description longer than about a screenful, which is folded until the rest is asked for */
+  const LONG = { chars: 4000, lines: 40 };
+
   let unfolded = $state(false);
-  const folded = $derived(unfolded ? null : fold(description, 4000, 40));
+  const folded = $derived(unfolded ? null : fold(description, LONG.chars, LONG.lines));
 </script>
 
 <div class="flex flex-col gap-4 sm:flex-row">
