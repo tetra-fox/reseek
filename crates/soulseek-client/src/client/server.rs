@@ -498,6 +498,14 @@ impl Client {
     }
     let discarded = self.try_discard(token);
     let refused = self.peers().solicitations.refused(token);
+    // a search answer riding on this request is not worth keeping for a late connection; the
+    // request is refused before its attempt is woken, which keeps such an answer otherwise
+    if let Some(solicitation) = &refused
+      && solicitation.connection_type == PeerConnectionType::Peer
+      && self.responder().answers_waiting_for(&solicitation.username)
+    {
+      self.responder().refuse(token);
+    }
     let solicited = refused.as_ref().is_some_and(|solicitation| {
       self.waiter().fault(
         &solicitation.key(token),
@@ -507,14 +515,6 @@ impl Client {
         ),
       )
     });
-    // a search answer riding on this request is not worth keeping for a late connection
-    if let Some(solicitation) = &refused
-      && solicited
-      && solicitation.connection_type == PeerConnectionType::Peer
-      && self.responder().answers_waiting_for(&solicitation.username)
-    {
-      self.responder().refuse(token);
-    }
     tracing::debug!(token, discarded, solicited, "peer cannot connect");
   }
 

@@ -502,8 +502,9 @@ mod tests {
     }
   }
 
-  #[tokio::test]
-  async fn a_refused_connection_request_that_carried_no_answer_leaves_nothing_behind() {
+  /// A client logged in as alice to a server played by the test, with what the server has read
+  /// from it and not yet taken.
+  async fn logged_in() -> (Client, TcpStream, Vec<u8>) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
     let client = Client::new(ClientOptions {
@@ -529,8 +530,15 @@ mod tests {
       server.write_all(&accepted.encode()).await.unwrap();
       server
     };
-    let (connected, mut server) = tokio::join!(connecting, serving);
+    let (connected, server) = tokio::join!(connecting, serving);
     connected.unwrap();
+    (client, server, buffer)
+  }
+
+  #[tokio::test]
+  async fn a_refused_connection_request_that_carried_no_answer_leaves_nothing_behind() {
+    let (client, mut server, mut buffer) = logged_in().await;
+    let cancel = CancellationToken::new();
     // nothing listens where bob is said to be, and bob refuses the request the server relays
     let nowhere = std::net::TcpListener::bind("127.0.0.1:0")
       .unwrap()
@@ -552,6 +560,82 @@ mod tests {
     let (asked, ()) = tokio::join!(asking, refusing);
     assert!(asked.is_err());
     assert_eq!(crate::lock(&client.responder().refused).len(), 0);
+  }
+
+  /// Wakes a task, noting first whether the connection request `token` is refused by then.
+  struct Woken {
+    client: crate::client::WeakClient,
+    token: u32,
+    refused: std::sync::Mutex<Option<bool>>,
+    told: tokio::sync::Notify,
+  }
+
+  impl std::task::Wake for Woken {
+    fn wake(self: Arc<Self>) {
+      self.wake_by_ref();
+    }
+
+    fn wake_by_ref(self: &Arc<Self>) {
+      let client = self.client.upgrade().expect("the test holds the client");
+      let refused = crate::lock(&client.responder().refused)
+        .get(&self.token)
+        .is_some();
+      crate::lock(&self.refused).get_or_insert(refused);
+      self.told.notify_one();
+    }
+  }
+
+  #[tokio::test]
+  async fn a_request_the_searcher_cannot_act_on_is_refused_before_its_attempt_is_woken() {
+    use crate::options::ConnectionOptions;
+    use soulseek_proto::PeerConnectionType;
+    use std::future::Future;
+
+    let (client, mut server, mut buffer) = logged_in().await;
+    // an answer to carol's search waits on the attempt to reach her
+    let _waiting = client.responder().wait_for("carol");
+    let cancel = CancellationToken::new();
+    let token = 77;
+    let mut soliciting = Box::pin(client.solicit(
+      "carol",
+      token,
+      PeerConnectionType::Peer,
+      ConnectionOptions::default(),
+      Duration::from_secs(30),
+      &cancel,
+    ));
+    tokio::select! {
+      biased;
+      _ = &mut soliciting => panic!("the attempt ended before the server had its request"),
+      () = request(&mut server, &mut buffer, |request| {
+        matches!(request, ServerRequest::ConnectToPeer(_)).then_some(())
+      }) => {}
+    }
+    // from here the attempt is woken through a waker that looks at the refusals first
+    let woken = Arc::new(Woken {
+      client: client.downgrade(),
+      token,
+      refused: std::sync::Mutex::new(None),
+      told: tokio::sync::Notify::new(),
+    });
+    let waker = std::task::Waker::from(woken.clone());
+    let polled = soliciting
+      .as_mut()
+      .poll(&mut std::task::Context::from_waker(&waker));
+    assert!(polled.is_pending());
+    let refusal = ServerResponse::CannotConnect(CannotConnectResponse {
+      token,
+      username: Some("carol".into()),
+    });
+    server.write_all(&refusal.encode()).await.unwrap();
+    tokio::time::timeout(Duration::from_secs(5), woken.told.notified())
+      .await
+      .expect("the attempt was never woken");
+    assert_eq!(
+      *crate::lock(&woken.refused),
+      Some(true),
+      "woken before the request was refused, so an answer could be kept under it"
+    );
   }
 
   /// carol's answer to the search `token`, as a kept answer
