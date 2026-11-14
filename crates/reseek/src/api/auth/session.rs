@@ -6,17 +6,17 @@ use api_types::auth::session::{
   Providers, ProxyProvider, Session,
 };
 use api_types::events::{Event, LoginFailed, SessionRevokeReason};
-use axum::extract::rejection::JsonRejection;
+use axum::Extension;
 use axum::extract::{Path, State};
 use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
-use axum::{Extension, Json};
 use soulseek_client::LogLimiter;
 use tracing::{info, warn};
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
 use crate::api::error::ApiError;
+use crate::api::extract::Json;
 use crate::app::AppState;
 use crate::auth::cookies::{self, Scope};
 use crate::auth::local::Busy;
@@ -79,12 +79,10 @@ async fn get_session(
 async fn login(
   State(app): State<AppState>,
   Extension(presented): Extension<Presented>,
-  body: Result<Json<LoginRequest>, JsonRejection>,
+  Json(login): Json<LoginRequest>,
 ) -> Result<Response, ApiError> {
-  let missing = || ApiError::bad_request("Username or password is missing");
-  let Json(login) = body.map_err(|_| missing())?;
   if login.username.trim().is_empty() || login.password.trim().is_empty() {
-    return Err(missing());
+    return Err(ApiError::bad_request("Username or password is missing"));
   }
   // headless takes effect at a restart, like the UI it turns off
   if app.startup.values.headless {
@@ -594,6 +592,26 @@ mod tests {
       )
       .await;
     assert_eq!(missing.status, 400);
+  }
+
+  #[tokio::test]
+  async fn a_sign_in_body_that_does_not_read_is_answered_with_why() {
+    let app = app("", &[]).await;
+    let mut cut = request("POST", "/api/v0/session", Some(json!({})));
+    *cut.body_mut() = axum::body::Body::from("{\"username\": \"reseek\", ");
+    let answer = app.send_from(OUTSIDE, cut).await;
+    assert_eq!(answer.status, 400);
+    assert_eq!(answer.json()["error"], "Invalid request body");
+
+    let mut broken = request("POST", "/api/v0/session", Some(json!({})));
+    let pieces: [Result<&str, std::io::Error>; 2] = [
+      Ok("{\"username\": "),
+      Err(std::io::Error::other("connection reset")),
+    ];
+    *broken.body_mut() = axum::body::Body::from_stream(futures_util::stream::iter(pieces));
+    let answer = app.send_from(OUTSIDE, broken).await;
+    assert_eq!(answer.status, 400);
+    assert_eq!(answer.json()["error"], "Could not read the request body");
   }
 
   #[tokio::test]
