@@ -297,7 +297,6 @@
     key: (line) => line.key,
     enabled: () => !!menu,
     menuable: (line) => menuable(line),
-    focused: () => list.focused,
     focus: (line) => (list.focusedKey = line.key),
     anchor: () => (shownId === undefined ? null : document.getElementById(shownId))
   });

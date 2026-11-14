@@ -14,16 +14,18 @@
   import Username from "#lib/components/users/Username.svelte";
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import { chatTime, formatDate, shortTime } from "#lib/format.js";
+  import type { MenuAnchor } from "#lib/lists/linemenu.svelte.js";
   import { MESSAGES } from "#lib/ui/bindings.js";
   import { clock } from "#lib/ui/clock.svelte.js";
-  import { inControl, isPressed, keyStep } from "#lib/ui/keys.js";
+  import { isPressed, keyStep } from "#lib/ui/keys.js";
   import { reach } from "#lib/users/actions.js";
-  import { LONG_PRESS_MS } from "#lib/users/hover.svelte.js";
   import { pictureOf } from "#lib/users/profile.svelte.js";
 
   import LongText from "./LongText.svelte";
 
   type Props = {
+    /** its line's key, which its menu finds it by */
+    line: string;
     message: Message;
     /** the first of a group: shows the face, the author and the time */
     head: boolean;
@@ -37,16 +39,20 @@
     notice?: boolean;
     /** the keys are on it: it takes focus, and Tab goes from it to its actions */
     active: boolean;
-    /** its menu is open */
-    menu: boolean;
-    /** opens or closes its menu */
-    onmenu: (open: boolean) => void;
+    /**
+     * where its open menu hangs: at the pointer, or from the message itself for the keys; null
+     * while it is closed
+     */
+    menu: MenuAnchor | null;
+    /** closes its menu */
+    onclosemenu: () => void;
     /** quotes the message in the composer, when one can be sent */
     onreply?: (message: Message) => void;
     onretry: () => void;
   };
 
   let {
+    line,
     message: m,
     head,
     highlight,
@@ -55,7 +61,7 @@
     notice = false,
     active,
     menu,
-    onmenu,
+    onclosemenu,
     onreply,
     onretry
   }: Props = $props();
@@ -116,21 +122,6 @@
       row.focus();
     }
   };
-  let press: ReturnType<typeof setTimeout> | undefined;
-  const released = () => clearTimeout(press);
-  $effect(() => released);
-  /** A touch held on the message opens its menu, there being no hover to show the toolbar */
-  const pressed = (e: PointerEvent) => {
-    if (e.pointerType !== "touch" || inControl(e) || !actions.length) return;
-    press = setTimeout(() => onmenu(true), LONG_PRESS_MS);
-  };
-  /** A right click opens the menu, but the browser's own stays for a link or selected text */
-  const contextmenu = (e: MouseEvent) => {
-    const link = e.target instanceof Element && e.target.closest("a");
-    if (link || !document.getSelection()?.isCollapsed || !actions.length) return;
-    e.preventDefault();
-    onmenu(true);
-  };
 </script>
 
 {#snippet body()}
@@ -147,10 +138,6 @@
   onkeydown={keydown}
   onpointerenter={pointed}
   onfocusin={wake}
-  onpointerdown={pressed}
-  onpointerup={released}
-  onpointercancel={released}
-  oncontextmenu={contextmenu}
   class={[
     "group/message relative grid gap-x-2.5 border-l-2 pr-3 pl-2.5",
     notice ? "grid-cols-[4rem_minmax(0,1fr)]" : "grid-cols-[2.25rem_minmax(0,1fr)]",
@@ -167,6 +154,7 @@
     menu && "bg-hover/60 ring-2 ring-accent ring-inset"
   ]}
   tabindex={active ? -1 : undefined}
+  data-line={line}
   data-message={m.localId}>
   <div class="flex justify-end">
     {#if head}
@@ -273,8 +261,8 @@
     </div>
   {/if}
   {#if menu}
-    <Menu.Root open onOpenChange={onmenu}>
-      <Menu.Content align="end" customAnchor={row}>
+    <Menu.Root open onOpenChange={(open) => !open && onclosemenu()}>
+      <Menu.Content align={menu === row ? "end" : "start"} customAnchor={menu}>
         {#each actions as action (action.label)}
           <Menu.Item onSelect={action.run ?? (() => void goto(action.href))}>
             <action.icon />{action.label}

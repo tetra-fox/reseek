@@ -350,6 +350,30 @@ describe("a chat pane", () => {
     expect(document.body.textContent).not.toContain("Not sent");
   });
 
+  it("quotes a message from its right-click menu into the composer, which keeps the keys", async () => {
+    indie(() => ({ messages: [roomMessage(1), roomMessage(2)], hasMore: false, gaps: [] }));
+    live.start();
+    component = mount(Pane, {
+      target: document.body,
+      props: { target: { kind: "room", name: "indie" } }
+    });
+    await flush();
+    const composer = document.querySelector<HTMLTextAreaElement>("textarea")!;
+    composer.focus();
+    const at = { bubbles: true, cancelable: true, clientX: 5, clientY: 5 };
+    row(1).dispatchEvent(new MouseEvent("contextmenu", at));
+    await flush();
+    const quote = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((i) =>
+      i.textContent?.includes("Quote")
+    )!;
+    quote.click();
+    await flush();
+    await vi.waitFor(() => expect(document.querySelector('[role="menu"]')).toBeNull());
+    await flush();
+    expect(document.activeElement).toBe(composer);
+    expect(composer.value).toMatch(/^\[/);
+  });
+
   it("puts the unread line after the room's read marker", async () => {
     indie(
       () => ({

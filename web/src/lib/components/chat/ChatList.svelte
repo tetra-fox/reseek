@@ -32,7 +32,8 @@
   import Avatar from "#lib/components/users/Avatar.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { ago, badgeCount, formatCount, plural } from "#lib/format.js";
-  import { freezesWhileUsed, heldOrder, interaction } from "#lib/lists/interaction.svelte.js";
+  import { freezesWhileUsed, heldOrder } from "#lib/lists/interaction.svelte.js";
+  import { LineMenu } from "#lib/lists/linemenu.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
   import { RowDrag } from "#lib/lists/rowdrag.svelte.js";
   import { keepsScroll } from "#lib/lists/scroll.svelte.js";
@@ -78,8 +79,6 @@
   const count = "-my-px ml-auto py-0 row-meta";
 
   const folded = new SvelteSet<string>();
-  /** the row whose menu is open, from its button or a right click */
-  let menuFor = $state<string | null>(null);
 
   const pinned = $derived(pinnedChats());
   const rooms = $derived(sortedRooms());
@@ -88,7 +87,6 @@
   // the list holds still while the pointer is on it, a text is selected in it or a row's menu
   // is open, so a row never moves away from a click
   const hold = heldOrder<Line>((l) => l.key);
-  $effect(() => (menuFor ? interaction.hold() : undefined));
   const lines = $derived.by(() => {
     // an empty section shows no heading
     const section = (key: string, title: string, targets: Target[]): Line[] => {
@@ -142,8 +140,24 @@
       nudge(l.target, way);
       return true;
     },
+    onkey: (e, l) => lineMenu.key(e, l),
     openOnClick: true
   });
+
+  const lineMenu: LineMenu<Line> = new LineMenu({
+    lines: () => lines,
+    key: (l) => l.key,
+    enabled: () => true,
+    menuable: (l) => l.kind === "row",
+    focus: (l) => (list.focusedKey = l.key),
+    anchor: () => document.getElementById(list.activeId ?? "")
+  });
+  const menuTarget = $derived(lineMenu.line?.kind === "row" ? lineMenu.line.target : null);
+  /**
+   * the row button the open menu came from, which focus goes back to as it closes, as a menu
+   * button's does; null for one opened at the pointer or by the keys
+   */
+  let opener = $state.raw<HTMLElement | null>(null);
 
   /** what the last move of a pin came to, for a screen reader */
   let placed = $state("");
@@ -252,6 +266,7 @@
     aria-activedescendant={list.activeId}
     tabindex="0"
     {@attach list.attach}
+    {@attach lineMenu.attach}
     {@attach freezesWhileUsed}
     {@attach keepsScroll("chat.list")}>
     {#each lines as line, i (line.key)}
@@ -317,10 +332,6 @@
               drag.key !== line.key &&
               "transition-[translate] duration-(--motion-fast) ease-(--ease-out-soft)"
           ]}
-          oncontextmenu={(e) => {
-            e.preventDefault();
-            menuFor = line.key;
-          }}
           onpointerdown={(e) => {
             if (movable && e.pointerType === "mouse" && !inControl(e)) {
               drag.press(e, line.key, line.ids);
@@ -407,21 +418,18 @@
               {/if}
             </span>
           </span>
-          <Menu.Root
-            open={menuFor === line.key}
-            onOpenChange={(o) => (menuFor = o ? line.key : null)}>
-            <Menu.Trigger>
-              {#snippet child({ props })}
-                <Button
-                  {...props}
-                  variant="ghost"
-                  size="icon-sm"
-                  class="row-menu"
-                  aria-label={`Menu for ${chatName(t)}`}><EllipsisIcon /></Button>
-              {/snippet}
-            </Menu.Trigger>
-            <Menu.Content align="end" class="min-w-52"><ChatMenuItems target={t} /></Menu.Content>
-          </Menu.Root>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            class="row-menu"
+            aria-label={`Menu for ${chatName(t)}`}
+            aria-haspopup="menu"
+            aria-expanded={lineMenu.line?.key === line.key}
+            data-state={lineMenu.line?.key === line.key ? "open" : "closed"}
+            onclick={(e) => {
+              opener = e.currentTarget;
+              lineMenu.open(line, opener);
+            }}><EllipsisIcon /></Button>
         </div>
       {/if}
     {:else}
@@ -466,3 +474,21 @@
     </Tooltip>
   </div>
 </div>
+
+{#if menuTarget}
+  <!-- from a row's button the menu lines up with the button's end -->
+  <Menu.Root open onOpenChange={(open) => !open && lineMenu.close()}>
+    <Menu.Content
+      customAnchor={lineMenu.anchor}
+      align={opener ? "end" : "start"}
+      class="min-w-52"
+      onCloseAutoFocus={(e) => {
+        e.preventDefault();
+        if (opener?.isConnected) opener.focus();
+        else list.focus();
+        opener = null;
+      }}>
+      <ChatMenuItems target={menuTarget} />
+    </Menu.Content>
+  </Menu.Root>
+{/if}

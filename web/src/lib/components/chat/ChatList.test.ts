@@ -250,6 +250,48 @@ describe("the chat list", () => {
     await vi.waitFor(() => expect(document.querySelector("[role=alert]")).toBeNull());
     expect(document.querySelector('[data-line="user:alice"]')).not.toBeNull();
   });
+
+  it("opens a row's one menu from the menu key, a right-click or its button", async () => {
+    start();
+    const menu = () => document.querySelector("[role=menu]");
+    const closes = () => document.querySelector("[role=menu]")?.textContent?.includes("Leave room");
+    press(grid(), "ArrowDown");
+    press(grid(), "F10", { shiftKey: true });
+    await vi.waitFor(() => expect(menu()).not.toBeNull());
+    expect(closes()).toBe(true);
+    press(menu()!, "Escape");
+    await vi.waitFor(() => expect(menu()).toBeNull());
+
+    const alice = document.querySelector('[data-line="user:alice"]')!;
+    const at = { bubbles: true, cancelable: true, clientX: 5, clientY: 5 };
+    const click = new MouseEvent("contextmenu", at);
+    alice.querySelector("[role=gridcell]")!.dispatchEvent(click);
+    flushSync();
+    expect(click.defaultPrevented).toBe(true);
+    await vi.waitFor(() => expect(menu()?.textContent).toContain("Close conversation"));
+    press(menu()!, "Escape");
+    await vi.waitFor(() => expect(menu()).toBeNull());
+
+    // a heading has nothing in its menu, so the browser keeps its own there
+    const heading = new MouseEvent("contextmenu", at);
+    document.querySelector('[data-line="h:rooms"] button')!.dispatchEvent(heading);
+    flushSync();
+    expect(heading.defaultPrevented).toBe(false);
+    expect(menu()).toBeNull();
+
+    // beside the rows the browser keeps its own menu, whichever row the keys are on
+    const beside = new MouseEvent("contextmenu", at);
+    grid().dispatchEvent(beside);
+    flushSync();
+    expect(beside.defaultPrevented).toBe(false);
+    expect(menu()).toBeNull();
+
+    const button = alice.querySelector<HTMLButtonElement>('[aria-label="Menu for alice"]')!;
+    button.click();
+    flushSync();
+    expect(button.getAttribute("aria-expanded")).toBe("true");
+    await vi.waitFor(() => expect(menu()?.textContent).toContain("Close conversation"));
+  });
 });
 
 describe("the chat list's pinned chats, to assistive technology", () => {

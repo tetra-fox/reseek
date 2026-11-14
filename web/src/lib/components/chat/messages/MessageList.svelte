@@ -22,6 +22,7 @@
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { formatDay, plural } from "#lib/format.js";
   import { freezesWhileUsed, interaction } from "#lib/lists/interaction.svelte.js";
+  import { LineMenu } from "#lib/lists/linemenu.svelte.js";
   import { markOf, Saver, type ScrollMark } from "#lib/lists/scroll.svelte.js";
   import { ListWindow } from "#lib/lists/virtual.svelte.js";
   import { MESSAGES } from "#lib/ui/bindings.js";
@@ -100,8 +101,6 @@
 
   /** the message the arrow keys are on, the one message that can take focus */
   let active = $state<number | null>(null);
-  /** the message whose menu is open */
-  let menuFor = $state<number | null>(null);
   /** where the active message is in the lines, -1 when none is */
   const activeAt = $derived(
     active === null
@@ -154,14 +153,21 @@
     if (!interaction.frozen) held = keys;
   });
 
-  // the lines stay as they are while a message's menu hangs from one
-  $effect(() => {
-    if (menuFor !== null) return interaction.hold();
-  });
-
   /** The active message's element, while it is drawn */
   const activeRow = () =>
     active === null ? null : box?.querySelector<HTMLElement>(`[data-message="${active}"]`);
+
+  /**
+   * A message's menu: a right-click or a long press opens it at the pointer, Enter or the menu key
+   * on the active message under it. The pointer leaves the keys where they are
+   */
+  const lineMenu: LineMenu<Line | Start> = new LineMenu({
+    lines: () => lines,
+    key: (line) => line.key,
+    enabled: () => true,
+    menuable: (line) => line.kind === "message" && actionable(line.message),
+    anchor: () => activeRow() ?? null
+  });
 
   /** Gives the active message DOM focus once it is drawn, so Tab goes on to its actions */
   const focusActive = async () => {
@@ -205,7 +211,7 @@
       e.preventDefault();
       // the menu hangs from the message, which may have been scrolled away from
       shown.scrollTo(activeAt);
-      menuFor = active;
+      lineMenu.open(lines[activeAt]);
     }
   };
 
@@ -215,7 +221,7 @@
    */
   const focusout = (e: FocusEvent) => {
     const to = e.relatedTarget;
-    if (menuFor === null && to instanceof Node && !box?.contains(to)) active = null;
+    if (lineMenu.line === null && to instanceof Node && !box?.contains(to)) active = null;
   };
 
   /** The message line at the top of the view, and how far below the view's top it starts */
@@ -389,6 +395,7 @@
     onpointerdown={grip}
     onkeydown={keydown}
     onfocusout={focusout}
+    {@attach lineMenu.attach}
     {@attach shown.attach}
     {@attach followsEnd}
     {@attach freezesWhileUsed}>
@@ -417,6 +424,7 @@
             </div>
           {:else}
             <MessageRow
+              line={line.key}
               message={line.message}
               head={line.head && !notices}
               highlight={line.message.localId === pane.at}
@@ -424,11 +432,11 @@
               room={pane.target.kind === "room"}
               notice={notices}
               active={line.message.localId === active}
-              menu={line.message.localId === menuFor}
-              onmenu={(open) => {
-                menuFor = open ? line.message.localId : null;
+              menu={lineMenu.line?.key === line.key ? lineMenu.anchor : null}
+              onclosemenu={() => {
+                lineMenu.close();
                 // the keys go on from the message the menu was opened on
-                if (!open && active !== null) void focusActive();
+                if (active !== null) void focusActive();
               }}
               {onreply}
               onretry={() => void pane.retry(line.message)} />

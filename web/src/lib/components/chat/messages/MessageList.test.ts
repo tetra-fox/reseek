@@ -149,6 +149,47 @@ describe("the message list", () => {
     expect(interaction.frozen).toBe(false);
   });
 
+  it("opens a message's menu at a right-click, and leaves the browser's on a day's line", async () => {
+    history(3);
+    await open();
+    const at = { bubbles: true, cancelable: true, clientX: 5, clientY: 5 };
+    const day = document.querySelector('[role="separator"]')!;
+    const onDay = new MouseEvent("contextmenu", at);
+    day.dispatchEvent(onDay);
+    await flush();
+    expect(onDay.defaultPrevented).toBe(false);
+    expect(document.querySelector('[role="menu"]')).toBeNull();
+
+    const message = document.querySelector('[data-message="2"]')!;
+    const onMessage = new MouseEvent("contextmenu", at);
+    message.querySelector("p, span")!.dispatchEvent(onMessage);
+    await flush();
+    expect(onMessage.defaultPrevented).toBe(true);
+    expect(document.querySelector('[role="menuitem"]')?.textContent).toContain("Copy text");
+    expect(interaction.frozen).toBe(true);
+    press(document.querySelector('[role="menuitem"]')!, "Escape");
+    await flush();
+    expect(document.querySelector('[role="menu"]')).toBeNull();
+    expect(interaction.frozen).toBe(false);
+    // the pointer leaves the keys where they were: no message became the one they are on
+    expect(document.querySelector("[data-message][tabindex]")).toBeNull();
+    expect(document.activeElement?.closest("[data-message]")).toBeNull();
+  });
+
+  it("leaves the browser's menu beside the messages, while the keys are on one", async () => {
+    history(3);
+    const { box } = await open();
+    box.focus();
+    press(box, "ArrowUp");
+    await flush();
+    expect(document.activeElement?.closest("[data-message]")).not.toBeNull();
+    const beside = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+    box.dispatchEvent(beside);
+    await flush();
+    expect(beside.defaultPrevented).toBe(false);
+    expect(document.querySelector('[role="menu"]')).toBeNull();
+  });
+
   it("walks past the messages of ours that are not sent", async () => {
     history(3);
     const { pane, box } = await open();

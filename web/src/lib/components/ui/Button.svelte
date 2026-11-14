@@ -5,7 +5,7 @@
 
   type Props = Omit<HTMLButtonAttributes, "onclick"> & {
     /** a click, on the button or on the link it renders with `href` */
-    onclick?: (e: MouseEvent) => void;
+    onclick?: (e: MouseEvent & { currentTarget: HTMLElement }) => void;
     variant?: "primary" | "secondary" | "outline" | "ghost" | "danger" | "link";
     size?: "default" | "sm" | "icon" | "icon-sm";
     /** renders a link that looks like the button, for navigation */
@@ -67,7 +67,7 @@
   )}
   data-label
   {...rest}
-  onclick={(e: MouseEvent) => {
+  onclick={(e: MouseEvent & { currentTarget: HTMLElement }) => {
     if (unusable) return e.preventDefault();
     onclick?.(e);
   }}>

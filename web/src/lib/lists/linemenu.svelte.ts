@@ -19,19 +19,21 @@ export type LineMenuSpec<L> = {
   enabled: () => boolean;
   /** whether a line has anything in its menu; a line without opens none */
   menuable?: (line: L) => boolean;
-  /** the line with keyboard focus, which the menu key opens the menu of */
-  focused: () => L | null;
-  /** gives the line keyboard focus, as opening its menu does */
-  focus: (line: L) => void;
+  /**
+   * gives the line keyboard focus as its menu opens; a list whose pointer leaves the keys where
+   * they are leaves it out
+   */
+  focus?: (line: L) => void;
   /** the element the focused line is drawn as, which a menu opened from the keys hangs under */
   anchor: () => HTMLElement | null;
 };
 
 /**
  * The menu of a list's lines, opened by a right-click or a long press on a line, at the pointer,
- * or by the menu key or Shift+F10, under the focused line. A link and selected text keep the
- * browser's own menu. While a menu is open the lines hold still. Put `attach` on the list's
- * container, pass its keys to `key`, and render the menu while `line` is set
+ * by the menu key or Shift+F10, under the focused line, or by a line's own button, under it. A
+ * link, selected text and a line with nothing in its menu keep the browser's own menu. While a
+ * menu is open the lines hold still. Put `attach` on the list's container, pass its keys to
+ * `key`, and render the menu while `line` is set
  */
 export class LineMenu<L> {
   #spec: LineMenuSpec<L>;
@@ -60,13 +62,16 @@ export class LineMenu<L> {
     return this.#at?.anchor ?? null;
   }
 
-  /** Opens a line's menu at the point `at`, or under the line */
-  open(line: L, at?: { x: number; y: number }) {
-    this.#spec.focus(line);
+  /** Opens a line's menu at the point `at`, under the element `at`, or under the line */
+  open(line: L, at?: { x: number; y: number } | HTMLElement) {
+    this.#spec.focus?.(line);
     if (!(this.#spec.menuable?.(line) ?? true)) return;
-    const anchor = at
-      ? { getBoundingClientRect: () => new DOMRect(at.x, at.y, 0, 0) }
-      : this.#spec.anchor();
+    const anchor =
+      at instanceof HTMLElement
+        ? at
+        : at
+          ? { getBoundingClientRect: () => new DOMRect(at.x, at.y, 0, 0) }
+          : this.#spec.anchor();
     this.#at = { key: this.#spec.key(line), anchor };
   }
 
@@ -127,8 +132,9 @@ export class LineMenu<L> {
   };
 
   /**
-   * A right-click on a line opens its menu at the pointer. The menu key's event, which comes to
-   * the container itself, opens the focused line's
+   * A right-click on a line opens its menu at the pointer; one beside the lines leaves the
+   * browser's. The menu key's own event comes after `key` opened the menu, to the container or to
+   * the line, and changes nothing
    */
   #contextmenu = (e: MouseEvent) => {
     this.#released();
@@ -136,12 +142,14 @@ export class LineMenu<L> {
       return;
     }
     if (e.target instanceof Element && e.target.closest("a[href]")) return;
-    const hit = this.#lineOf(e.target);
-    const line = hit ?? this.#spec.focused();
-    if (!line) return;
-    e.preventDefault();
-    // the keys opened it already, before their own event came
+    const line = this.#lineOf(e.target);
+    if (!line) {
+      if (this.line) e.preventDefault();
+      return;
+    }
+    // a line with nothing in its menu leaves the browser's
+    if (this.#spec.menuable?.(line) ?? true) e.preventDefault();
     if (this.#at?.key === this.#spec.key(line)) return;
-    this.open(line, hit ? { x: e.clientX, y: e.clientY } : undefined);
+    this.open(line, { x: e.clientX, y: e.clientY });
   };
 }

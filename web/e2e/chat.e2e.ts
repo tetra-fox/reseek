@@ -101,6 +101,7 @@ test("the server's notices are one read-only entry, reached by the keys", async 
     "Clear history"
   ]);
   await page.keyboard.press("Escape");
+  await expect(lines.last().getByRole("button", { name: "Menu for Server" })).toBeFocused();
 
   await list.focus();
   await page.keyboard.press("End");
@@ -167,6 +168,29 @@ test("the keys reach what can be done with a message", async ({ page }) => {
   await page.keyboard.press("Tab");
   await page.keyboard.press("Escape");
   await expect(newest).toBeFocused();
+});
+
+test("a chat row shows its menu is open while the pointer is on the menu", async ({ page }) => {
+  await fakeChat(page);
+  await visit(page, "/chat");
+  const row = page.locator('[data-line="room:indie"]');
+  await row.hover();
+  const button = row.getByRole("button", { name: "Menu for indie" });
+  await button.click();
+  await page.getByRole("menuitem").first().hover();
+  await expect(button).toHaveCSS("opacity", "1");
+  await expect(row).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+});
+
+test("a message takes the page's own hover tint", async ({ page }) => {
+  await fakeChat(page);
+  await visit(page, "/chat");
+  await open(page, "/chat/rooms/indie");
+  const message = page.getByRole("log").locator("[data-message]").last();
+  await message.hover();
+  // a line re-points the tones of what is inside it, which would darken the message's own
+  const tone = (e: Element) => getComputedStyle(e).getPropertyValue("--color-hover");
+  expect(await message.evaluate(tone)).toBe(await page.locator("html").evaluate(tone));
 });
 
 test("a toast sits above the docked activity log", async ({ page }) => {
