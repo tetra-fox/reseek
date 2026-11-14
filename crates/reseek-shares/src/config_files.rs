@@ -12,9 +12,12 @@ pub struct ConfigFiles {
   pub names: Vec<String>,
 }
 
-/// A configuration file or directory given by a path that cannot be made absolute.
+/// A configuration file or directory given by a path that cannot be resolved.
 #[derive(Debug, thiserror::Error)]
-#[error("The configuration files could not be found: {} has no absolute path: {source}", path.display())]
+#[error(
+  "The configuration files could not be found: {} cannot be resolved: {source}",
+  path.display()
+)]
 pub struct NotFound {
   /// the path as given
   pub path: PathBuf,
@@ -25,8 +28,9 @@ pub struct NotFound {
 impl ConfigFiles {
   /// `config.toml` in `config_dir`, or the files given on the command line, followed by every
   /// `config.d/*.toml` next to the first of them. Relative paths count from the working
-  /// directory, with their `..` resolved by name, so a relative path in the files counts from
-  /// a directory without one.
+  /// directory, and their `.` and `..` are resolved as the system resolves them
+  /// ([`cascade::absolute`]), so a relative path in the files counts from a directory without
+  /// them.
   pub fn new(given: &[PathBuf], config_dir: &Path) -> Result<Self, NotFound> {
     let absolute = |path: &Path| {
       cascade::absolute(path).map_err(|source| NotFound {
@@ -114,5 +118,23 @@ mod tests {
     assert!(!files.dir.to_string_lossy().contains(".."), "{files:?}");
     let files = ConfigFiles::new(&[], Path::new("../x")).unwrap();
     assert_eq!(files.dir, parent);
+  }
+
+  #[cfg(unix)]
+  #[test]
+  fn a_file_named_through_a_link_and_dot_dot_is_the_one_the_system_opens() {
+    let dir = tempfile::tempdir().unwrap();
+    let dir = std::fs::canonicalize(dir.path()).unwrap();
+    std::fs::create_dir_all(dir.join("releases/42")).unwrap();
+    std::fs::create_dir_all(dir.join("releases/shared")).unwrap();
+    std::os::unix::fs::symlink(dir.join("releases/42"), dir.join("current")).unwrap();
+    let given = dir.join("current/../shared/reseek.toml");
+    std::fs::write(&given, "[flags]\n").unwrap();
+    let files = ConfigFiles::new(std::slice::from_ref(&given), Path::new("/etc")).unwrap();
+    assert_eq!(files.dir, dir.join("releases/shared"));
+    assert_eq!(
+      std::fs::read(files.first()).unwrap(),
+      std::fs::read(&given).unwrap()
+    );
   }
 }

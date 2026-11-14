@@ -411,12 +411,17 @@ mod tests {
       "and one in a list of tables, its `..` resolved by name"
     );
 
-    write(dir, "config.d/10-a.toml", "data = \"/srv/./dl\"\n");
+    let absolute = format!("{}/sub/./../dl", dir.display());
+    write(
+      dir,
+      "config.d/10-a.toml",
+      &format!("data = \"{absolute}\"\n"),
+    );
     let loaded = layers().load().unwrap();
     assert_eq!(
-      loaded.tree()["data"],
-      "/srv/./dl",
-      "an absolute path is kept as written"
+      loaded.tree()["data"].as_str().map(Path::new),
+      Some(dir.join("dl").as_path()),
+      "an absolute path's `.` and `..` resolve as a relative one's do"
     );
     write(dir, "config.d/10-a.toml", "data = \"\"\n");
     let loaded = layers().load().unwrap();

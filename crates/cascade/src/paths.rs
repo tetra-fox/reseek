@@ -11,15 +11,22 @@ use crate::describe::Kind;
 use crate::schema::{Field, Schema};
 use crate::{Key, tree};
 
-/// `path` made absolute against the working directory, with its `.` and `..` resolved by name
-/// rather than by following links, so `../conf` from `/srv/reseek` is `/srv/conf`.
+/// `path` made absolute against the working directory, without `.` and `..`: `..` leaves the
+/// place the part before it leads to, as the system does when it opens the path, so after a
+/// link it leaves the link's target. A part that does not exist yet leads nowhere else, so its
+/// `..` drops it by name.
 pub fn absolute(path: &Path) -> std::io::Result<PathBuf> {
   let mut resolved = PathBuf::new();
   for part in std::path::absolute(path)?.components() {
     match part {
       Component::CurDir => {}
-      // the root has no parent, so `/..` stays `/`
       Component::ParentDir => {
+        match std::fs::canonicalize(&resolved) {
+          Ok(real) => resolved = real,
+          Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+          Err(e) => return Err(e),
+        }
+        // the root has no parent, so `/..` stays `/`
         resolved.pop();
       }
       part => resolved.push(part),
@@ -73,21 +80,22 @@ pub(crate) fn resolve(field: &Field, value: &mut Value, base: Option<&Path>) -> 
   each_path(field, value, None, &mut |value, _| resolve_one(value, base))
 }
 
-/// [`resolve`] for one path. An empty one names no path and stays, for the application's
-/// checks to refuse.
+/// [`resolve`] for one path, which an absolute one goes through too for its `.` and `..`. An
+/// empty one names no path and stays, for the application's checks to refuse.
 fn resolve_one(value: &mut Value, base: Option<&Path>) -> Result<(), String> {
   let Value::String(text) = value else {
     return Ok(());
   };
-  if text.is_empty() || Path::new(text.as_str()).is_absolute() {
+  if text.is_empty() {
     return Ok(());
   }
+  // joining an absolute path gives the path itself
   let joined = match base {
     Some(dir) => dir.join(text.as_str()),
     None => PathBuf::from(text.as_str()),
   };
-  let resolved = absolute(&joined)
-    .map_err(|e| format!("the working directory it counts from is not known: {e}"))?;
+  let resolved =
+    absolute(&joined).map_err(|e| format!("{} cannot be resolved: {e}", joined.display()))?;
   *text = resolved
     .into_os_string()
     .into_string()
@@ -145,5 +153,29 @@ mod tests {
       here.parent().unwrap().join("conf")
     );
     assert!(absolute(Path::new("")).is_err());
+  }
+
+  #[cfg(unix)]
+  #[test]
+  fn dot_dot_after_a_link_leaves_where_the_link_leads() {
+    let dir = tempfile::tempdir().unwrap();
+    let dir = std::fs::canonicalize(dir.path()).unwrap();
+    std::fs::create_dir_all(dir.join("releases/42")).unwrap();
+    std::fs::create_dir_all(dir.join("releases/shared")).unwrap();
+    std::os::unix::fs::symlink(dir.join("releases/42"), dir.join("current")).unwrap();
+    let file = dir.join("current/../shared/reseek.toml");
+    std::fs::write(&file, "x").unwrap();
+    let resolved = absolute(&file).unwrap();
+    assert_eq!(resolved, dir.join("releases/shared/reseek.toml"));
+    assert_eq!(
+      std::fs::read(&resolved).unwrap(),
+      b"x",
+      "the file the system opens"
+    );
+    assert_eq!(
+      absolute(&dir.join("current/new/../x")).unwrap(),
+      dir.join("current/x"),
+      "a part that does not exist is dropped by name"
+    );
   }
 }
