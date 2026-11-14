@@ -660,18 +660,3 @@ async fn a_download_whose_calls_drop_fails_without_the_call_url() {
   );
   assert_eq!(warnings.count("relay/controller/downloads"), 0);
 }
-
-#[tokio::test]
-async fn the_controller_address_is_logged_without_its_password() {
-  let logged = Logged::at(tracing::Level::INFO);
-  let socket = socket_controller().await;
-  let address = format!("http://nas:hunter2@{socket}/");
-  let calls = Arc::new(AtomicUsize::new(0));
-  let agent = agent_at(Start::Scanned, &address, calls, false).await;
-  let running = tokio::spawn(agent.agent.clone().run());
-  eventually(|| logged.count("connected to the relay controller") == 1).await;
-  agent.shutdown.cancel();
-  running.await.unwrap();
-  assert_eq!(logged.count("hunter2"), 0);
-  assert_eq!(logged.count(&format!("address=http://{socket}/")), 1);
-}

@@ -164,7 +164,10 @@ pub fn validate(
   let controller = &options.relay.controller;
   let key = "relay.controller.address";
   match controller.address.as_deref() {
-    Some(address) if !address.trim().is_empty() => check(key, http_url(key, address)),
+    Some(address) if !address.trim().is_empty() => {
+      check(key, http_url(key, address));
+      check(key, no_userinfo(key, address));
+    }
     address => check(key, required(key, address)),
   }
   for (key, value) in [
@@ -198,6 +201,19 @@ pub fn validate(
     Ok(())
   } else {
     Err(report)
+  }
+}
+
+/// The controller address `value`, the option `key`, without a user name or password: the
+/// relay socket cannot send them, so a controller behind Basic auth would refuse the socket
+/// while it took the agent's other calls.
+fn no_userinfo(key: &str, value: &str) -> Result<(), String> {
+  match url::Url::parse(value) {
+    Ok(url) if !url.username().is_empty() || url.password().is_some() => Err(format!(
+      "The field {key} must not contain a user name or password, which the relay socket cannot \
+       send."
+    )),
+    _ => Ok(()),
   }
 }
 
@@ -240,5 +256,34 @@ mod tests {
       ..Controller::default()
     };
     assert!(problems(&options).is_empty());
+  }
+
+  #[test]
+  fn a_controller_address_with_a_user_or_password_is_refused() {
+    let mut options = Options {
+      instance_name: "nas".into(),
+      ..Options::default()
+    };
+    options.relay.controller = Controller {
+      api_key: Some("agent-key-0123456789".into()),
+      secret: Some("agent-secret-0123456789".into()),
+      ..Controller::default()
+    };
+    let downloads = Path::new("/nowhere/downloads");
+    for address in [
+      "https://nas:hunter2@controller.lan:5031",
+      "https://nas@controller.lan:5031",
+      "https://:hunter2@controller.lan:5031",
+    ] {
+      options.relay.controller.address = Some(address.into());
+      let invalid = validate(&options, downloads, downloads, false).unwrap_err();
+      assert_eq!(invalid.len(), 1, "{address}");
+      assert_eq!(invalid[0].key, "relay.controller.address");
+      assert!(
+        invalid[0].message.contains("user name or password"),
+        "{}",
+        invalid[0].message
+      );
+    }
   }
 }

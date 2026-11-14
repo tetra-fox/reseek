@@ -118,7 +118,7 @@ pub(super) fn call_error(e: reqwest::Error) -> String {
 }
 
 /// `url` without the user name and password it may hold, to be logged or shown.
-pub(super) fn without_userinfo(url: &Url) -> Url {
+fn without_userinfo(url: &Url) -> Url {
   let mut shown = url.clone();
   // a URL that cannot take a user name or password has none
   let _ = shown.set_username("");
