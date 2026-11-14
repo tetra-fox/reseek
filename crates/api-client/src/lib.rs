@@ -80,6 +80,10 @@ pub enum Error {
   /// the base URL is not one
   #[error("not a base URL: {0}")]
   Base(String),
+  /// the TLS settings could not be made: reading the certificate authorities failed, or the TLS
+  /// library refused the settings
+  #[error("the TLS settings could not be made: {0}")]
+  Tls(String),
   /// the relay socket could not be opened, written or read
   #[error("relay socket: {0}")]
   Socket(String),
@@ -131,8 +135,8 @@ impl Client {
     // the system's store is read from disk
     let roots = tokio::task::spawn_blocking(reseek_tls::roots)
       .await
-      .map_err(|e| Error::Base(e.to_string()))?;
-    let tls = reseek_tls::client_config(roots).map_err(|e| Error::Base(e.to_string()))?;
+      .map_err(|e| Error::Tls(format!("the certificate authorities were not read: {e}")))?;
+    let tls = reseek_tls::client_config(roots).map_err(|e| Error::Tls(e.to_string()))?;
     // a request a session cookie authenticates must name this site as its origin, which it
     // is: the client holds the cookie itself
     let origin = parsed.origin().ascii_serialization();
