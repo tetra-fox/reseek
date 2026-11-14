@@ -5,7 +5,8 @@
 //! answers that waited on one attempt are kept together under its request, and one that comes to
 //! be kept after the searcher's late connection took the others goes out on that connection. A
 //! request is known as the searcher's from the moment an answer waits on its attempt, so a late
-//! connection that comes before any answer is kept under it is taken too.
+//! connection that comes before any answer is kept under it is taken too. One connection answers
+//! a request; another with its token is not taken.
 //! How many requests wait for an answer at once is the resolver's to bound.
 
 use std::collections::HashMap;
@@ -58,6 +59,9 @@ pub(crate) struct SearchResponder {
   /// the connection requests whose attempts answers wait on, with their searcher; forgotten
   /// once the last answer waiting on the searcher is done
   riding: Mutex<BoundedCache<u32, String>>,
+  /// connection requests a connection has answered, awaited or late, so no other connection
+  /// is taken for them while answers may still be kept under them
+  answered: Mutex<BoundedCache<u32, ()>>,
   /// how many answers wait for a connection to each searcher
   waiting: Mutex<HashMap<String, usize>>,
 }
@@ -70,6 +74,7 @@ impl SearchResponder {
       refused: Mutex::new(BoundedCache::new(cache_size as usize, KEEP_UNDELIVERED)),
       arrived: Mutex::new(BoundedCache::new(cache_size as usize, KEEP_UNDELIVERED)),
       riding: Mutex::new(BoundedCache::new(cache_size as usize, KEEP_UNDELIVERED)),
+      answered: Mutex::new(BoundedCache::new(cache_size as usize, KEEP_UNDELIVERED)),
       waiting: Mutex::new(HashMap::new()),
     }
   }
@@ -136,23 +141,32 @@ impl SearchResponder {
     }
   }
 
-  /// The searcher answers ride on the connection request `response_token` for: answers kept
-  /// under it, or waiting on its attempt. A request the searcher's late connection took is
-  /// answered, and is no one's after that.
-  pub(crate) fn searcher_for(&self, response_token: u32) -> Option<String> {
-    // held while the arrivals are read, as when a late connection is recorded
+  /// Takes the connection request `response_token` for the searcher answers ride on it for,
+  /// answers kept under it or waiting on its attempt, and returns that searcher. A request is
+  /// taken once.
+  pub(crate) fn claim(&self, response_token: u32) -> Option<String> {
     let undelivered = self.undelivered();
-    if crate::lock(&self.arrived).peek(&response_token).is_some() {
+    let mut answered = crate::lock(&self.answered);
+    if answered.peek(&response_token).is_some() {
       return None;
     }
-    let kept = undelivered
+    let searcher = undelivered
       .find(|(rode_on, _)| *rode_on == response_token)
-      .map(|kept| kept.username.clone());
-    kept.or_else(|| crate::lock(&self.riding).get(&response_token).cloned())
+      .map(|kept| kept.username.clone())
+      .or_else(|| crate::lock(&self.riding).get(&response_token).cloned())?;
+    answered.insert(response_token, ());
+    Some(searcher)
+  }
+
+  /// a connection answered the connection request `token`, which no other connection is taken
+  /// for from now on
+  pub(crate) fn answered(&self, token: u32) {
+    let _undelivered = self.undelivered();
+    crate::lock(&self.answered).insert(token, ());
   }
 
   /// whether anything is still filed under the connection request `token`: answers riding on
-  /// its attempt or kept under it, its refusal or its late connection
+  /// its attempt or kept under it, its refusal, its late connection or its answer
   pub(crate) fn holds(&self, token: u32) -> bool {
     self
       .undelivered()
@@ -161,6 +175,7 @@ impl SearchResponder {
       || crate::lock(&self.riding).peek(&token).is_some()
       || crate::lock(&self.arrived).peek(&token).is_some()
       || crate::lock(&self.refused).peek(&token).is_some()
+      || crate::lock(&self.answered).peek(&token).is_some()
   }
 
   /// follows a change of the cache bound
@@ -169,6 +184,7 @@ impl SearchResponder {
     crate::lock(&self.refused).set_capacity(cache_size as usize);
     crate::lock(&self.arrived).set_capacity(cache_size as usize);
     crate::lock(&self.riding).set_capacity(cache_size as usize);
+    crate::lock(&self.answered).set_capacity(cache_size as usize);
   }
 }
 
@@ -778,7 +794,7 @@ mod tests {
       .await;
     let request = reached.err().unwrap().request.unwrap();
     // carol acts on the request now, before the answer is kept: what the connection is taken as
-    let searcher = client.responder().searcher_for(request);
+    let searcher = client.responder().claim(request);
     assert_eq!(searcher.as_deref(), Some("carol"));
     let (conn, mut carol) = crate::conn::tests::pair(ConnectionOptions::default()).await;
     client
@@ -796,37 +812,69 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn a_request_the_searchers_late_connection_answered_is_not_known_again() {
-    let client = Client::new(ClientOptions {
-      enable_listener: false,
-      ..ClientOptions::default()
-    })
-    .unwrap();
+  async fn a_request_is_claimed_for_its_searcher_once() {
+    let responder = SearchResponder::new(3);
+    let mut waiting = responder.wait_for("carol");
+    waiting.rides_on(7);
+    assert_eq!(responder.claim(7).as_deref(), Some("carol"));
+    // someone else connecting with the same token is not taken for carol
+    assert_eq!(responder.claim(7), None);
+    drop(waiting);
+    assert_eq!(responder.claim(7), None);
+  }
+
+  #[tokio::test]
+  async fn a_request_the_searcher_answered_while_awaited_is_not_answered_again() {
+    use crate::options::ConnectionOptions;
+
+    let (client, mut server, mut buffer) = logged_in().await;
     let nowhere = std::net::TcpListener::bind("127.0.0.1:0")
       .unwrap()
       .local_addr()
       .unwrap();
+    let cancel = CancellationToken::new();
+    // an answer to carol's search waits on the attempt to reach her
     let mut waiting = client.responder().wait_for("carol");
-    let reached = client
-      .reach(
-        "carol",
-        Some(nowhere),
-        &CancellationToken::new(),
-        |request| {
-          waiting.rides_on(request);
-        },
-      )
-      .await;
-    let request = reached.err().unwrap().request.unwrap();
-    assert_eq!(
-      client.responder().searcher_for(request).as_deref(),
-      Some("carol")
+    let mut reaching = Box::pin(client.reach("carol", Some(nowhere), &cancel, |request| {
+      waiting.rides_on(request);
+    }));
+    let request = tokio::select! {
+      biased;
+      _ = &mut reaching => panic!("the attempt ended before the server had its request"),
+      token = request(&mut server, &mut buffer, |request| match request {
+        ServerRequest::ConnectToPeer(asked) => Some(asked.token),
+        _ => None,
+      }) => token,
+    };
+    let (answered, _carol) = crate::conn::tests::pair(ConnectionOptions::default()).await;
+    let carol = answered.handle().remote();
+    client.pierced(request, answered).await.unwrap();
+    let reached = reaching.await.ok().unwrap();
+    assert_eq!(reached.handle().remote(), carol);
+    // someone else answers the same request while the answer still waits on carol
+    let (stranger, _stranger) = crate::conn::tests::pair(ConnectionOptions::default()).await;
+    let refused = stranger.handle().clone();
+    client.pierced(request, stranger).await.unwrap();
+    assert!(
+      refused
+        .disconnected()
+        .await
+        .message
+        .starts_with("Unknown PierceFirewall attempt")
     );
-    // carol's late connection takes the request, while an answer still waits on her
-    client.try_respond_cached(request).await;
-    // someone else connecting with the same token is not taken for carol
-    assert_eq!(client.responder().searcher_for(request), None);
+    assert_eq!(client.message_connection_address("carol"), Some(carol));
     drop(waiting);
+    // a later answer finds the connection made; the request it was made with is done
+    let mut ridden = Vec::new();
+    let mut later = client.responder().wait_for("carol");
+    let again = client
+      .reach("carol", None, &cancel, |request| {
+        ridden.push(request);
+        later.rides_on(request);
+      })
+      .await;
+    assert_eq!(again.ok().unwrap().handle().remote(), carol);
+    assert_eq!(ridden, []);
   }
 
   #[tokio::test]

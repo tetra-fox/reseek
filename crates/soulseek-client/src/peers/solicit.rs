@@ -83,13 +83,15 @@ impl Solicitations {
   }
 
   /// Takes the solicitation a connection answering `token` belongs to, and whether the
-  /// solicitor still waits for it. A token answered once, or past the time its solicitor would
-  /// have waited, is unknown.
-  pub(crate) fn take(&self, token: u32) -> Option<(Solicitation, Answer)> {
-    let entry = lock(&self.pending).remove(&token)?;
+  /// solicitor still waits for it, telling `answered` while no other connection can take it. A
+  /// token answered once, or past the time its solicitor would have waited, is unknown.
+  pub(crate) fn take(&self, token: u32, answered: impl FnOnce()) -> Option<(Solicitation, Answer)> {
+    let mut pending = lock(&self.pending);
+    let entry = pending.remove(&token)?;
     if entry.answerable_until <= Instant::now() {
       return None;
     }
+    answered();
     let answer = if entry.awaited {
       Answer::Awaited
     } else {
@@ -524,11 +526,11 @@ mod tests {
     drop(ticket(&peers, 7, bob(PeerConnectionType::Peer), timeout));
     tokio::time::advance(Duration::from_secs(9)).await;
     assert_eq!(
-      solicitations.take(7),
+      solicitations.take(7, || {}),
       Some((bob(PeerConnectionType::Peer), Answer::Late))
     );
     // answered once, it is unknown to a second answer
-    assert_eq!(solicitations.take(7), None);
+    assert_eq!(solicitations.take(7, || {}), None);
 
     drop(ticket(
       &peers,
@@ -537,7 +539,7 @@ mod tests {
       timeout,
     ));
     tokio::time::advance(timeout).await;
-    assert_eq!(solicitations.take(8), None);
+    assert_eq!(solicitations.take(8, || {}), None);
   }
 
   #[tokio::test(start_paused = true)]
@@ -551,12 +553,12 @@ mod tests {
       Duration::from_secs(10),
     );
     assert_eq!(
-      solicitations.take(7),
+      solicitations.take(7, || {}),
       Some((bob(PeerConnectionType::Peer), Answer::Awaited))
     );
     // the answer took it, so the end of the wait leaves nothing behind
     drop(pending);
-    assert_eq!(solicitations.take(7), None);
+    assert_eq!(solicitations.take(7, || {}), None);
   }
 
   #[tokio::test(start_paused = true)]
@@ -574,7 +576,7 @@ mod tests {
       Some(bob(PeerConnectionType::Peer))
     );
     drop(pending);
-    assert_eq!(solicitations.take(7), None);
+    assert_eq!(solicitations.take(7, || {}), None);
   }
 
   #[tokio::test(start_paused = true)]

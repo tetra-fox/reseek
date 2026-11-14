@@ -100,7 +100,10 @@ impl Client {
         }
       };
       let (id, request) = (entry.id, entry.request);
-      if let Some(request) = request {
+      // a settled attempt's request was answered or given up, and nothing rides on it now
+      if let Some(request) = request
+        && entry.connection().is_none()
+      {
         waits_on(request);
       }
       let conn = tokio::select! {

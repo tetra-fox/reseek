@@ -64,10 +64,12 @@ impl Client {
   /// A peer connected because the server relayed one of our requests: a solicitation still
   /// waiting takes it, or it is the searcher answers ride on the request for, who gets those
   /// kept now and the rest as they come to be kept. One that comes after its solicitor stopped
-  /// waiting is taken as [`Client::late_answer`] says. Anything else is closed. The ticket it
-  /// answers with went only to the user it was relayed to, so it vouches for the connection.
-  async fn pierced(&self, token: u32, conn: Conn) -> Result<(), ClientError> {
-    if let Some((solicitation, answer)) = self.peers().solicitations.take(token) {
+  /// waiting is taken as [`Client::late_answer`] says. Anything else is closed, a request
+  /// answered once included. The ticket it answers with went only to the user it was relayed
+  /// to, so it vouches for the connection.
+  pub(crate) async fn pierced(&self, token: u32, conn: Conn) -> Result<(), ClientError> {
+    let answered = || self.responder().answered(token);
+    if let Some((solicitation, answer)) = self.peers().solicitations.take(token, answered) {
       let conn = match answer {
         Answer::Awaited => match self.waiter().offer(&solicitation.key(token), conn) {
           Ok(()) => return Ok(()),
@@ -78,7 +80,7 @@ impl Client {
       };
       return self.late_answer(token, &solicitation, conn).await;
     }
-    if let Some(username) = self.responder().searcher_for(token) {
+    if let Some(username) = self.responder().claim(token) {
       self.add_or_update_message_connection(&username, conn, Via::Indirect.kind(), true)?;
       self.try_respond_cached(token).await;
       return Ok(());
