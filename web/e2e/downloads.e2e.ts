@@ -90,3 +90,19 @@ test("a line keeps its tint and its buttons while the pointer is on its right-cl
   await expect(row).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
   await expect(row.locator(".row-action")).toHaveCSS("opacity", "1");
 });
+
+test("the keys reach a button's tooltip in a row no pointer has come to", async ({ page }) => {
+  await fakeDownloadList(page, () => [userDownloads("alice", [transfer("@@a\\One\\keys.flac")])]);
+  await visit(page, "/downloads");
+  const row = page.getByRole("treegrid", { name: "Downloads" }).getByRole("row").filter({
+    hasText: "keys.flac"
+  });
+  const remove = row.getByRole("button", { name: "Remove" });
+  // the row mounts its tooltips once a mouse comes to it, or one at a time for the keys
+  await expect(remove).not.toHaveAttribute("data-tooltip-trigger");
+  // focus put on the name, not by the keys, wakes nothing; Tab then goes to Remove
+  await row.getByRole("button", { name: "keys.flac", exact: true }).focus();
+  await page.keyboard.press("Tab");
+  await expect(remove).toBeFocused();
+  await expect(page.locator("[data-tooltip-content]")).toHaveText("Remove");
+});

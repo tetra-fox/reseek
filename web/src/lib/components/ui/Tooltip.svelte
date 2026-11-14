@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Tooltip } from "bits-ui";
-  import type { Snippet } from "svelte";
+  import { type Snippet, tick } from "svelte";
   import { createAttachmentKey } from "svelte/attachments";
   import { on } from "svelte/events";
 
@@ -85,7 +85,9 @@
     [createAttachmentKey()]: (node: HTMLElement) => {
       if (!refocus) return;
       refocus = false;
-      node.focus();
+      // once the trigger has joined the tether, which its focus opens the tooltip on: before
+      // that the tether falls back to its first trigger and shows that one's text
+      void tick().then(() => node.focus());
     }
   };
 </script>
