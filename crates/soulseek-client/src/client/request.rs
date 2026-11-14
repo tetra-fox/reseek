@@ -31,21 +31,23 @@ impl Client {
     key: WaitKey,
     request: ServerRequest,
   ) -> Result<T, ClientError> {
-    self.ask_within(verb, key, request, None).await
+    self
+      .ask_within(verb, key, request, None, &CancellationToken::new())
+      .await
   }
 
-  /// [`Client::ask`] with a timeout other than the default one
+  /// [`Client::ask`] with a timeout other than the default one, ending at once when `cancel`
+  /// fires unless the reply had come by then
   pub(super) async fn ask_within<T: Send + 'static>(
     &self,
     verb: &str,
     key: WaitKey,
     request: ServerRequest,
     timeout: Option<Duration>,
+    cancel: &CancellationToken,
   ) -> Result<T, ClientError> {
     self.require_logged_in(verb)?;
-    let reply = self
-      .waiter()
-      .wait::<T>(key, timeout, CancellationToken::new());
+    let reply = self.waiter().wait::<T>(key, timeout, cancel.clone());
     self
       .write_server_message(&request)
       .await

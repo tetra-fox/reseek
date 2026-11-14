@@ -10,6 +10,7 @@ use soulseek_proto::server::{
   GetPeerAddressRequest, GetPeerAddressResponse, PeerAddressObfuscation,
 };
 use soulseek_proto::{RoomType, ServerCode, ServerRequest, UserPresence};
+use tokio_util::sync::CancellationToken;
 
 #[tokio::test]
 async fn the_address_of_an_online_user_and_of_an_unknown_one() {
@@ -97,7 +98,11 @@ async fn status_is_raised_when_asked_for_and_when_a_watched_user_goes_away() {
   };
   let bob = server.login("bob", options()).await;
   let mut alice = server.login("alice", options()).await;
-  let status = alice.client.get_user_status(&bob.username).await.unwrap();
+  let status = alice
+    .client
+    .get_user_status(&bob.username, &CancellationToken::new())
+    .await
+    .unwrap();
   assert_eq!(status.username, bob.username);
   assert_eq!(status.presence, UserPresence::Online);
   assert!(!status.is_privileged);

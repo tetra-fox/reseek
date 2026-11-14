@@ -511,6 +511,16 @@ mod tests {
   }
 
   #[tokio::test]
+  async fn a_wait_canceled_after_its_completion_still_returns_it() {
+    let waiter = waiter();
+    let cancel = CancellationToken::new();
+    let wait = waiter.wait::<u32>(key("a"), None, cancel.clone());
+    assert!(waiter.complete(&key("a"), 7u32));
+    cancel.cancel();
+    assert_eq!(wait.await.unwrap(), 7);
+  }
+
+  #[tokio::test]
   async fn a_dropped_wait_does_not_swallow_a_completion() {
     let waiter = waiter();
     let dropped = waiter.wait::<u32>(key("a"), None, CancellationToken::new());

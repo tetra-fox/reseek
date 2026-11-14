@@ -6,22 +6,30 @@ use soulseek_proto::server::{
   UserStatus, WatchUserRequest, WatchUserResponse, WatchedUser,
 };
 use soulseek_proto::{ServerCode, ServerRequest};
+use tokio_util::sync::CancellationToken;
 
 use super::Client;
 use super::request::{non_blank, user_key};
 use crate::error::ClientError;
 
 impl Client {
-  /// the presence of `username`; the server answers for any name
-  pub async fn get_user_status(&self, username: &str) -> Result<UserStatus, ClientError> {
+  /// the presence of `username`; the server answers for any name. Once `cancel` fires it ends
+  /// at once, with the reply when it had come by then
+  pub async fn get_user_status(
+    &self,
+    username: &str,
+    cancel: &CancellationToken,
+  ) -> Result<UserStatus, ClientError> {
     non_blank("username", username)?;
     self
-      .ask(
+      .ask_within(
         &format!("get status for user {username}"),
         user_key(ServerCode::GetStatus, username),
         ServerRequest::GetStatus(GetStatusRequest {
           username: username.to_owned(),
         }),
+        None,
+        cancel,
       )
       .await
   }

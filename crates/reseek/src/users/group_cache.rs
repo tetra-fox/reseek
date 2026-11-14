@@ -433,18 +433,14 @@ impl Directory {
     username: &str,
   ) -> Result<UserStatus, ClientError> {
     let asking = Asking::new(&self.groups.asked, username);
-    // the request runs on a task of its own, so a caller that gives up while its reply is in
-    // hand, not yet taken, still leaves the count for the reply's event
+    // the request runs to its end on a task of its own, and a caller that gives up cancels it,
+    // which still returns a reply that had come, so its count is left for the reply's event
     let given_up = CancellationToken::new();
     let _gives_up = given_up.clone().drop_guard();
     let (client, name) = (client.clone(), username.to_string());
     let asked = self.tasks.spawn(
       async move {
-        let status = tokio::select! {
-          biased;
-          status = client.get_user_status(&name) => status,
-          () = given_up.cancelled() => Err(ClientError::Canceled),
-        };
+        let status = client.get_user_status(&name, &given_up).await;
         if status.is_ok() {
           asking.answered();
         }
