@@ -48,8 +48,6 @@ pub struct RelayAgentState {
 pub struct RelayRefusedDevice {
   /// the key of the configured agent under `relay.agents` whose instance name it gave
   pub entry: String,
-  /// the instance name it gave
-  pub name: String,
   /// the address it connected from
   pub ip_address: String,
   /// the start of its device id

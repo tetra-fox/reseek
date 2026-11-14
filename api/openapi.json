@@ -24246,7 +24246,6 @@
         "description": "A device refused because another device is connected under the instance name it gave.",
         "required": [
           "entry",
-          "name",
           "ipAddress",
           "device",
           "refusedAt"
@@ -24263,10 +24262,6 @@
           "ipAddress": {
             "type": "string",
             "description": "the address it connected from"
-          },
-          "name": {
-            "type": "string",
-            "description": "the instance name it gave"
           },
           "refusedAt": {
             "type": "string",

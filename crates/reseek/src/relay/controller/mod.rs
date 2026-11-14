@@ -355,7 +355,6 @@ impl Controller {
         let refused = Refused {
           record: RelayRefusedDevice {
             entry: entry.clone(),
-            name: name.clone(),
             ip_address,
             device: short(device),
             refused_at: chrono::Utc::now(),

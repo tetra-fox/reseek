@@ -605,10 +605,7 @@ async fn a_restarted_agent_replaces_its_session_and_another_device_is_refused() 
   let state = app.state.state.current();
   let refused = &state.relay.refused_devices;
   assert_eq!(refused.len(), 1);
-  assert_eq!(
-    (refused[0].entry.as_str(), refused[0].name.as_str()),
-    ("nas", "nas")
-  );
+  assert_eq!(refused[0].entry, "nas");
   assert_eq!(refused[0].device, "5e6f7a8b");
 
   // the connected agent restarts: the other device is still refused, listed and not warned

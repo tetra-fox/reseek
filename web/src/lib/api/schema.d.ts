@@ -7124,8 +7124,6 @@ export interface components {
             entry: string;
             /** @description the address it connected from */
             ipAddress: string;
-            /** @description the instance name it gave */
-            name: string;
             /**
              * Format: date-time
              * @description when it was last refused
