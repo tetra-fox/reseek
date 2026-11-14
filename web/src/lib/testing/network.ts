@@ -16,6 +16,7 @@ export const fakeNetwork = (
   answer: (url: URL, method: string, body: unknown) => Answer | Promise<Answer>
 ) => {
   let send: (text: string) => void = () => {};
+  let end: () => void = () => {};
   let seq = 0;
   // the run of the daemon the frames' ids name, the one the last hello came from
   let epoch = EPOCH;
@@ -32,6 +33,7 @@ export const fakeNetwork = (
           controller.error(new DOMException("aborted"))
         );
         send = (text) => controller.enqueue(new TextEncoder().encode(text));
+        end = () => controller.close();
         return new Response(body);
       }
       const text = await request.text();
@@ -52,6 +54,10 @@ export const fakeNetwork = (
   );
   return {
     requests,
+    /** ends the open stream, as a lost connection does */
+    drop() {
+      end();
+    },
     /** sends one frame on the open stream */
     frame<T extends FrameType>(type: T, data: FrameData<T>) {
       // a test's hello may leave the run out, which keeps the one before

@@ -1,5 +1,6 @@
 import { accessWithheld, principalChanged, root, sessionGone } from "#lib/api/client.js";
 import { toast } from "#lib/feedback/toast.svelte.js";
+import { type Role, session } from "#lib/session.svelte.js";
 
 import {
   type End,
@@ -38,6 +39,8 @@ type Deps = {
   withheld: () => void;
   /** the principal's role changed; resolves once the session was read again */
   roleChanged: () => Promise<void>;
+  /** the role the tab takes the principal to have, null before it knows */
+  role: () => Role | null;
   /** a line the user should see about the connection */
   notice: (text: string, kind: "info" | "error") => void;
 };
@@ -49,6 +52,7 @@ const defaults = (): Deps => ({
   unauthorized: sessionGone,
   withheld: accessWithheld,
   roleChanged: principalChanged,
+  role: () => session.role,
   notice: (text, kind) => toast(text, kind)
 });
 
@@ -69,6 +73,8 @@ export class Live {
 
   #deps: Deps;
   #wanted = new Map<Topic, number>();
+  /** topics the daemon said the principal's role may not follow, left out until the role changes */
+  #forbidden = new Set<string>();
   #handlers = new Map<FrameType, Set<(data: unknown) => void>>();
   #added = new Set<(topics: Topic[]) => void>();
   #missed = new Set<() => void>();
@@ -117,6 +123,7 @@ export class Live {
   /** Closes everything and forgets the last frame, as at logout */
   stop() {
     this.#shut();
+    this.#forbidden.clear();
     this.#lastId = null;
     this.#epoch = null;
     this.#greeted = false;
@@ -166,9 +173,12 @@ export class Live {
     return () => this.#missed.delete(handler);
   }
 
-  /** The topics asked for right now, in the order the stream asks for them */
+  /**
+   * The topics asked for right now, in the order the stream asks for them, but those the role may
+   * not follow
+   */
   get topics(): Topic[] {
-    return ordered(this.#wanted.keys());
+    return ordered([...this.#wanted.keys()].filter((topic) => !this.#forbidden.has(topic)));
   }
 
   #topicsChanged() {
@@ -221,6 +231,12 @@ export class Live {
 
   #frame(stream: Stream, frame: LiveFrame, id: string | null) {
     if (frame.type === "hello") {
+      // a stream opened after a loss may be the first word of a role changed meanwhile
+      const known = this.#deps.role();
+      if (known !== null && frame.data.principal.role !== known) {
+        this.#forbidden.clear();
+        void this.#deps.roleChanged();
+      }
       if (stream === this.#replacing) {
         this.#stream?.close();
         this.#stream = stream;
@@ -272,6 +288,7 @@ export class Live {
       if (end.kind === "unauthorized") return this.#unauthorized();
       if (end.kind === "withheld") return this.#withheld();
       if (end.kind === "roleChanged") return this.#roleChanged();
+      if (end.kind === "forbidden") return this.#forbid(end.topic);
       if (end.kind === "rejected") return this.#rejected(end);
       // the new topics failed to open. The old stream has dropped its frames since the change
       // began, so it is closed and a stream for the new topics opens from the last frame taken,
@@ -287,6 +304,7 @@ export class Live {
     if (end.kind === "unauthorized") return this.#unauthorized();
     if (end.kind === "withheld") return this.#withheld();
     if (end.kind === "roleChanged") return this.#roleChanged();
+    if (end.kind === "forbidden") return this.#forbid(end.topic);
     if (end.kind === "rejected") return this.#rejected(end);
     // the stream for the new topics replays from the last frame too, so it is the one being
     // opened now, and a retry is only waited for while no stream is open or opening
@@ -315,6 +333,21 @@ export class Live {
    * may sign out or withhold instead, which stops the store
    */
   #roleChanged() {
+    this.#forbidden.clear();
+    this.#afterSession();
+  }
+
+  /**
+   * The daemon refused `topic` to the principal's role, which may have changed while no stream
+   * was open: the session is read again, and the stream opens again without the topic
+   */
+  #forbid(topic: string) {
+    this.#forbidden.add(topic);
+    this.#afterSession();
+  }
+
+  /** Closes what is open and opens again from the last frame once the session was read again */
+  #afterSession() {
     this.#stream?.close();
     this.#replacing?.close();
     this.#stream = null;

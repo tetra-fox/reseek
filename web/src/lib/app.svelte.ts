@@ -231,6 +231,11 @@ class App {
    */
   signOut = async (): Promise<string | null> => {
     const outcome = await session.logout();
+    // the session already ended, which is what was asked
+    if (!outcome.ok && outcome.status === 401) {
+      this.signedOut();
+      return null;
+    }
     if (!outcome.ok) return outcome.error;
     // an identity provider's own logout page ends its session too
     if (outcome.data) window.location.href = outcome.data;

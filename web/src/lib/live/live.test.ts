@@ -59,7 +59,10 @@ describe("Live", () => {
   let withheld: ReturnType<typeof vi.fn<() => void>>;
   let roleChanged: ReturnType<typeof vi.fn<() => Promise<void>>>;
   let notices: string[];
-  const make = (fetcher: typeof fetch) => {
+  const make = (
+    fetcher: typeof fetch,
+    extra: Partial<ConstructorParameters<typeof Live>[0]> = {}
+  ) => {
     unauthorized = vi.fn<() => void>();
     withheld = vi.fn<() => void>();
     roleChanged = vi.fn<() => Promise<void>>(async () => {});
@@ -70,7 +73,8 @@ describe("Live", () => {
       unauthorized,
       withheld,
       roleChanged,
-      notice: (text) => notices.push(text)
+      notice: (text) => notices.push(text),
+      ...extra
     });
   };
 
@@ -190,6 +194,81 @@ describe("Live", () => {
     expect(unauthorized).not.toHaveBeenCalled();
     expect(server.opened).toHaveLength(2);
     expect(server.opened[1].headers["Last-Event-ID"]).toBe(`${EPOCH}-1`);
+    // the old stream's place may still be held, which the reopen waits for
+    expect(server.opened[1].url).toContain("reopen=true");
+  });
+
+  it("opens nothing more once reading the session for a changed role stopped it", async () => {
+    // reading the session signed out, or signed out and in again, which opens a stream itself
+    const cases: [() => void, number][] = [
+      [() => live.stop(), 1],
+      [
+        () => {
+          live.stop();
+          live.start();
+        },
+        2
+      ]
+    ];
+    let live!: Live;
+    for (const [reading, opened] of cases) {
+      const server = fakeServer();
+      live = make(server.fetcher, { roleChanged: async () => reading() });
+      live.start();
+      server.opened[0].send(hello(1) + frameText(2, "bye", { reason: "roleChanged" }));
+      await settle();
+      expect(server.opened).toHaveLength(opened);
+      live.stop();
+    }
+  });
+
+  it("reads the session again when a stream opens at another role than the tab took", async () => {
+    const server = fakeServer();
+    const live = make(server.fetcher, { role: () => "Administrator" });
+    live.start();
+    server.opened[0].send(hello(1));
+    await settle();
+    expect(roleChanged).not.toHaveBeenCalled();
+    server.opened[0].end();
+    await vi.advanceTimersByTimeAsync(2_000);
+    server.opened[1].send(
+      frameText(1, "hello", {
+        serverTime: "2026-10-26T12:00:00Z",
+        version: {},
+        principal: { name: "admin", role: "ReadOnly" },
+        topics: [],
+        resumed: true,
+        epoch: EPOCH
+      })
+    );
+    await settle();
+    expect(roleChanged).toHaveBeenCalledOnce();
+    expect(live.status).toBe("connected");
+    expect(server.opened).toHaveLength(2);
+  });
+
+  it("opens again without a topic the role may not follow, once the session was read", async () => {
+    const server = fakeServer((n) =>
+      n === 0
+        ? Response.json({ error: "topic_forbidden", detail: "logs" }, { status: 403 })
+        : undefined
+    );
+    const live = make(server.fetcher);
+    live.retain("logs");
+    live.retain("users");
+    live.start();
+    await settle();
+    expect(roleChanged).toHaveBeenCalledOnce();
+    expect(server.opened).toHaveLength(1);
+    expect(server.opened[0].url).toContain("topics=users");
+    expect(server.opened[0].url).not.toContain("logs");
+    server.opened[0].send(hello(1));
+    await settle();
+    expect(live.status).toBe("connected");
+    // within the silence a stream is allowed, nothing is tried again
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(server.opened).toHaveLength(1);
+    expect(notices).toEqual([]);
   });
 
   it("reconnects after a goodbye for any other reason", async () => {

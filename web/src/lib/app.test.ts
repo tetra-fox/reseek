@@ -219,6 +219,52 @@ describe("the app's bootstrap", () => {
     expect(opened).toHaveLength(2);
   });
 
+  it("takes a role changed while the stream was down from the stream that opens after", async () => {
+    let role = "Administrator";
+    const net = fakeNetwork((url) =>
+      url.pathname.endsWith("/api/v0/session") ? { name: "alice", role, session: null } : undefined
+    );
+    await booted(net, role);
+    net.drop();
+    role = "ReadOnly";
+    // the stream opens again after its wait
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(session.role).toBe("Administrator");
+    net.frame("hello", { principal: { name: "alice", role } } as never);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(session.role).toBe("ReadOnly");
+    expect(app.phase).toBe("app");
+  });
+
+  it("follows what reading the session after a role change finds, unless it was left meanwhile", async () => {
+    let answer: unknown = { name: "alice", role: "Administrator", session: null };
+    const net = fakeNetwork((url) =>
+      url.pathname.endsWith("/api/v0/session") ? answer : undefined
+    );
+    await booted(net, "Administrator");
+    answer = { status: 401, body: { error: "Authentication required" } };
+    await app.roleChanged();
+    expect(app.phase).toBe("login");
+
+    answer = { name: "alice", role: "Administrator", session: null };
+    await booted(net, "Administrator");
+    answer = { status: 403, body: { error: "access_withheld" } };
+    await app.roleChanged();
+    expect(app.phase).toBe("withheld");
+
+    answer = { name: "alice", role: "Administrator", session: null };
+    await booted(net, "Administrator");
+    let reply!: () => void;
+    answer = new Promise(
+      (done) => (reply = () => done({ status: 403, body: { error: "access_withheld" } }))
+    );
+    const reading = app.roleChanged();
+    app.signedOut();
+    reply();
+    await reading;
+    expect(app.phase).toBe("login");
+  });
+
   it("checks a session with no role on one timer, stops its stream, and drops the timer when it leaves", async () => {
     const withheld = { status: 403, body: { error: "access_withheld" } };
     let answer: unknown = { name: "alice", role: "ReadOnly", session: null };

@@ -46,6 +46,15 @@ const rank = (topic: string) => {
 export const ordered = (topics: Iterable<Topic>): Topic[] =>
   [...topics].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
 
+/** The topic a 403 says the principal's role may not follow, null for another 403 */
+const forbiddenTopic = (body: unknown): string | null => {
+  const { error, detail } = (body && typeof body === "object" ? body : {}) as {
+    error?: unknown;
+    detail?: unknown;
+  };
+  return error === "topic_forbidden" && typeof detail === "string" ? detail : null;
+};
+
 /** How one stream ended, which decides what the store does next */
 export type End =
   | { kind: "unauthorized" }
@@ -53,6 +62,8 @@ export type End =
   | { kind: "withheld" }
   /** the principal's role changed; a stream opened again follows the new one */
   | { kind: "roleChanged" }
+  /** the principal's role may not follow `topic`, which may be news of a changed role */
+  | { kind: "forbidden"; topic: string }
   /** the server refused the stream for this principal or set of topics; polling takes over */
   | { kind: "refused"; status: number; retryAfterMs: number | null }
   /**
@@ -136,6 +147,8 @@ export class Stream {
       if (response.status === 403) {
         const body: unknown = await response.json().catch(() => undefined);
         if (isWithheld(body)) return this.#end({ kind: "withheld" });
+        const topic = forbiddenTopic(body);
+        if (topic !== null) return this.#end({ kind: "forbidden", topic });
       }
       if (response.status === 403 || response.status === 429) {
         return this.#end({ kind: "refused", status: response.status, retryAfterMs });
