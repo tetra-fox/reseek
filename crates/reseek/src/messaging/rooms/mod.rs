@@ -318,6 +318,11 @@ impl Messaging {
         if refused.is_empty() {
           return;
         }
+        debug!(
+          rooms = refused.len(),
+          wait = ?wait,
+          "rooms not joined after the login; tried again"
+        );
         tokio::select! {
           () = session.cancelled() => {
             return debug!("session ended; the rooms refused are joined at the next login");
@@ -325,19 +330,21 @@ impl Messaging {
           () = tokio::time::sleep(wait) => {}
         }
         // a room left or joined meanwhile is not tried again
-        refused.retain(|room| {
+        refused.retain(|(room, _)| {
           let tracker = this.rooms.tracker();
           tracker.get(room).is_some_and(|tracked| !tracked.joined)
         });
-        refused = this.rejoin_rooms(refused, &session).await;
+        let rooms = refused.into_iter().map(|(room, _)| room).collect();
+        refused = this.rejoin_rooms(rooms, &session).await;
       }
       let mut marked = false;
-      for room in refused {
-        if this.rooms.tracker().refused(&room) {
+      for (room, error) in refused {
+        if this.rooms.tracker().mark_refused(&room) {
           warn!(
             room,
             tries = REJOIN_AGAIN.len() + 1,
-            "the server refused the room at every try after the login; left for the user to join"
+            %error,
+            "room not joined at any try after the login; left for the user to join"
           );
           marked = true;
         }
@@ -348,9 +355,13 @@ impl Messaging {
     });
   }
 
-  /// Joins `rooms` in turn after a login and returns those the server refused, each kept among
-  /// the rooms, not joined. Stops once `session` ended, as the next login joins them.
-  async fn rejoin_rooms(&self, rooms: Vec<String>, session: &CancellationToken) -> Vec<String> {
+  /// Joins `rooms` in turn after a login and returns those not joined, each with why and kept
+  /// among the rooms, not joined. Stops once `session` ended, as the next login joins them.
+  async fn rejoin_rooms(
+    &self,
+    rooms: Vec<String>,
+    session: &CancellationToken,
+  ) -> Vec<(String, ClientError)> {
     let mut refused = Vec::new();
     let mut kept = false;
     for room in rooms {
@@ -364,9 +375,9 @@ impl Messaging {
           break;
         }
         Err(e) => {
-          debug!(room, error = %e, "room refused after the login; tried again later");
+          debug!(room, error = %e, "room not joined after the login");
           kept |= self.rooms.tracker().keep(&room, leaves);
-          refused.push(room);
+          refused.push((room, e));
         }
       }
     }
@@ -737,8 +748,9 @@ mod tests {
     Some(listed["refused"].as_bool().unwrap())
   }
 
-  #[tokio::test]
-  async fn a_room_refused_after_a_reconnect_is_tried_twice_more_then_left_to_join() {
+  /// A daemon in the room `lobby` whose session was lost and that logged in again to a server
+  /// that refuses joins while the flag returned is set, as it is now.
+  async fn refused_after_a_reconnect() -> (TestApp, Server, Arc<AtomicBool>) {
     let app = soulseek::app(TRUSTED).await;
     let refusing = Arc::new(AtomicBool::new(false));
     let refuses = refusing.clone();
@@ -757,6 +769,31 @@ mod tests {
     refusing.store(true, Ordering::SeqCst);
     server.drop_session(&app).await;
     server.login(&app).await;
+    (app, server, refusing)
+  }
+
+  #[tokio::test]
+  async fn the_tries_after_a_login_stop_when_its_session_ends() {
+    let (app, mut server, _refusing) = refused_after_a_reconnect().await;
+    server.received(joins("lobby")).await;
+    // the session ends before its next try, and a new one begins
+    server.drop_session(&app).await;
+    server.login(&app).await;
+    let mut tries = 0;
+    while server
+      .receives(std::time::Duration::from_millis(500), |request| {
+        joins("lobby")(request).is_some()
+      })
+      .await
+    {
+      tries += 1;
+    }
+    assert_eq!(tries, 3, "the new session's tries alone");
+  }
+
+  #[tokio::test]
+  async fn a_room_refused_after_a_reconnect_is_tried_twice_more_then_left_to_join() {
+    let (app, mut server, refusing) = refused_after_a_reconnect().await;
     // the try after the login, then two more
     for _ in 0..3 {
       server.received(joins("lobby")).await;

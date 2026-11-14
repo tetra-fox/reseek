@@ -21195,7 +21195,7 @@
           },
           "refused": {
             "type": "boolean",
-            "description": "the server refused the room each time it was joined again after a login, and reseek\nstopped trying: it is not joined until someone joins it"
+            "description": "no try to join the room again after a login got us in, refused or unanswered, and reseek\nstopped trying: it is not joined until someone joins it"
           },
           "unread": {
             "type": "integer",

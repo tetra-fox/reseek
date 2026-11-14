@@ -17,8 +17,7 @@ pub struct Tracked {
   pub name: String,
   /// the server has us in the room in this session
   pub joined: bool,
-  /// the server refused the room each time it was joined again after a login; joining it is
-  /// left to the user
+  /// no try to join the room again after a login got us in; joining it is left to the user
   pub refused: bool,
   /// who is there, by username
   pub users: BTreeMap<String, RoomUser>,
@@ -223,9 +222,9 @@ impl Tracker {
     true
   }
 
-  /// The server refused `name` each time it was joined again after a login; false when it is
+  /// Marks `name` refused: no try to join it again after a login got us in. False when it is
   /// not among the rooms or is joined.
-  pub fn refused(&mut self, name: &str) -> bool {
+  pub fn mark_refused(&mut self, name: &str) -> bool {
     match self.get_mut(name).filter(|room| !room.joined) {
       Some(room) => {
         room.refused = true;
@@ -503,7 +502,7 @@ mod tests {
     let leaves = tracker.leaves("indie");
     assert!(tracker.keep("indie", leaves));
     assert!(!tracker.keep("indie", leaves), "kept once");
-    assert!(tracker.refused("indie"));
+    assert!(tracker.mark_refused("indie"));
     assert!(tracker.get("indie").unwrap().refused);
     let data = RoomData {
       name: "indie".into(),
@@ -512,7 +511,10 @@ mod tests {
     };
     tracker.joined(&data, "me");
     assert!(!tracker.get("indie").unwrap().refused);
-    assert!(!tracker.refused("indie"), "a joined room is not refused");
+    assert!(
+      !tracker.mark_refused("indie"),
+      "a joined room is not refused"
+    );
 
     // a room left while its join after the login was under way is not kept
     let leaves = tracker.leaves("jazz");
