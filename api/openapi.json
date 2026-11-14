@@ -21150,7 +21150,8 @@
           "mentions",
           "notify",
           "userCount",
-          "lastReadId"
+          "lastReadId",
+          "refused"
         ],
         "properties": {
           "lastMessage": {
@@ -21191,6 +21192,10 @@
           "notify": {
             "$ref": "#/components/schemas/NotifyLevel",
             "description": "which messages notify"
+          },
+          "refused": {
+            "type": "boolean",
+            "description": "the server refused the room each time it was joined again after a login, and reseek\nstopped trying: it is not joined until someone joins it"
           },
           "unread": {
             "type": "integer",

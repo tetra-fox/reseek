@@ -124,7 +124,8 @@ describe("the join dialog", () => {
             userCount: 40,
             lastMessageAt: null,
             lastMessage: null,
-            lastReadId: 0
+            lastReadId: 0,
+            refused: false
           }
         ];
       }

@@ -97,6 +97,7 @@ impl Messaging {
   /// session row is opened.
   pub(super) async fn session_started(&self, username: String) {
     *lock(&self.session_user) = Some(username);
+    *lock(&self.session_ends) = self.shutdown.child_token();
     let now = Utc::now();
     let opened = self
       .db

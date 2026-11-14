@@ -95,6 +95,7 @@ export const joinedRoom = (name: string, rest: Partial<Schemas["JoinedRoom"]> = 
     lastMessageAt: null,
     lastMessage: null,
     lastReadId: 0,
+    refused: false,
     ...rest
   }) satisfies Schemas["JoinedRoom"];
 

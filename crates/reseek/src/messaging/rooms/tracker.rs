@@ -17,6 +17,9 @@ pub struct Tracked {
   pub name: String,
   /// the server has us in the room in this session
   pub joined: bool,
+  /// the server refused the room each time it was joined again after a login; joining it is
+  /// left to the user
+  pub refused: bool,
   /// who is there, by username
   pub users: BTreeMap<String, RoomUser>,
   /// the users' tickers, by username
@@ -165,11 +168,13 @@ impl Tracker {
     match self.get_mut(&data.name) {
       Some(room) => {
         room.joined = true;
+        room.refused = false;
         room.users = users;
       }
       None => self.rooms.push(Tracked {
         name: data.name.clone(),
         joined: true,
+        refused: false,
         users,
         tickers: early.tickers,
         hidden: BTreeSet::new(),
@@ -203,6 +208,31 @@ impl Tracker {
   /// as it ends, and a leave in between undoes the join.
   pub fn leaves(&self, name: &str) -> u64 {
     self.leaves.get(name).copied().unwrap_or(0)
+  }
+
+  /// Keeps `name` among the rooms, not joined, after a join of it after a login failed, unless
+  /// it was left since `leaves` was read; says whether it was added.
+  pub fn keep(&mut self, name: &str, leaves: u64) -> bool {
+    if self.get(name).is_some() || self.leaves(name) != leaves {
+      return false;
+    }
+    self.rooms.push(Tracked {
+      name: name.to_string(),
+      ..Tracked::default()
+    });
+    true
+  }
+
+  /// The server refused `name` each time it was joined again after a login; false when it is
+  /// not among the rooms or is joined.
+  pub fn refused(&mut self, name: &str) -> bool {
+    match self.get_mut(name).filter(|room| !room.joined) {
+      Some(room) => {
+        room.refused = true;
+        true
+      }
+      None => false,
+    }
   }
 
   /// We left `name`; false when it was not tracked.
@@ -465,6 +495,30 @@ mod tests {
     assert_eq!(room.operator_count, Some(1));
     assert!(tracker.drop_private("club"));
     assert!(tracker.room("club").is_none());
+  }
+
+  #[test]
+  fn a_room_refused_after_a_login_is_kept_unless_left_and_a_join_ends_the_refusal() {
+    let mut tracker = Tracker::default();
+    let leaves = tracker.leaves("indie");
+    assert!(tracker.keep("indie", leaves));
+    assert!(!tracker.keep("indie", leaves), "kept once");
+    assert!(tracker.refused("indie"));
+    assert!(tracker.get("indie").unwrap().refused);
+    let data = RoomData {
+      name: "indie".into(),
+      users: vec![user("me")],
+      private: None,
+    };
+    tracker.joined(&data, "me");
+    assert!(!tracker.get("indie").unwrap().refused);
+    assert!(!tracker.refused("indie"), "a joined room is not refused");
+
+    // a room left while its join after the login was under way is not kept
+    let leaves = tracker.leaves("jazz");
+    tracker.left("jazz");
+    assert!(!tracker.keep("jazz", leaves));
+    assert!(tracker.get("jazz").is_none());
   }
 
   #[test]

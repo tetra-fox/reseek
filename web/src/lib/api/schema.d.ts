@@ -5807,6 +5807,11 @@ export interface components {
             /** @description which messages notify */
             notify: components["schemas"]["NotifyLevel"];
             /**
+             * @description the server refused the room each time it was joined again after a login, and reseek
+             *     stopped trying: it is not joined until someone joins it
+             */
+            refused: boolean;
+            /**
              * Format: int32
              * @description messages after the read marker, not ours and not hidden
              */

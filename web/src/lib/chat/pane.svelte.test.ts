@@ -83,7 +83,8 @@ describe("a room's pane opened by a link", () => {
             userCount: 3,
             lastMessageAt: null,
             lastMessage: null,
-            lastReadId: 3
+            lastReadId: 3,
+            refused: false
           }
         ];
       }

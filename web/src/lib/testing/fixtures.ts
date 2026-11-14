@@ -49,6 +49,7 @@ export const joinedRoom = (name: string, fields: Partial<JoinedRoom> = {}): Join
   lastMessageAt: null,
   lastMessage: null,
   lastReadId: 0,
+  refused: false,
   ...fields
 });
 

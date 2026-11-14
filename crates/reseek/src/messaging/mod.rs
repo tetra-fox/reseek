@@ -130,6 +130,9 @@ pub struct Messaging {
   session: Mutex<Option<i64>>,
   /// the username the last login was made with, noted as the login is handled
   session_user: Mutex<Option<String>>,
+  /// canceled when the server session of the last login ends, so work started for that login
+  /// stops with it
+  session_ends: Mutex<CancellationToken>,
   /// the work started on the way, so the stop waits for it
   tasks: TaskTracker,
   /// what a message search is tried against before it runs
@@ -182,6 +185,7 @@ impl Messaging {
       unread: unread::Unread::default(),
       session: Mutex::new(None),
       session_user: Mutex::new(None),
+      session_ends: Mutex::new(CancellationToken::new()),
       tasks: TaskTracker::new(),
       probe,
       status: away::Status::default(),
@@ -310,6 +314,7 @@ impl Messaging {
       Event::PrivateMessageReceived(message) => self.received(message).await,
       Event::LoggedIn { username, .. } => self.session_started(username).await,
       Event::Disconnected { at, .. } => {
+        lock(&self.session_ends).cancel();
         self.session_ended(at.into()).await;
         self.rooms_disconnected();
         self.status_disconnected();

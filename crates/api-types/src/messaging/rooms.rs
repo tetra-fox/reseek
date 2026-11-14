@@ -116,6 +116,9 @@ pub struct JoinedRoom {
   pub last_message: Option<RoomMessage>,
   /// the `localId` of the newest message shown as read, 0 before any was
   pub last_read_id: i64,
+  /// the server refused the room each time it was joined again after a login, and reseek
+  /// stopped trying: it is not joined until someone joins it
+  pub refused: bool,
 }
 
 /// A room from the server's room list, as `GET /rooms/available` lists it.
