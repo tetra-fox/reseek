@@ -57,16 +57,19 @@ const settle = () => vi.advanceTimersByTimeAsync(0);
 describe("Live", () => {
   let unauthorized: ReturnType<typeof vi.fn<() => void>>;
   let withheld: ReturnType<typeof vi.fn<() => void>>;
+  let roleChanged: ReturnType<typeof vi.fn<() => Promise<void>>>;
   let notices: string[];
   const make = (fetcher: typeof fetch) => {
     unauthorized = vi.fn<() => void>();
     withheld = vi.fn<() => void>();
+    roleChanged = vi.fn<() => Promise<void>>(async () => {});
     notices = [];
     return new Live({
       fetch: fetcher,
       url: (topics, reopen) => `/live?topics=${topics.join(",")}${reopen ? "&reopen=true" : ""}`,
       unauthorized,
       withheld,
+      roleChanged,
       notice: (text) => notices.push(text)
     });
   };
@@ -174,6 +177,19 @@ describe("Live", () => {
     expect(withheld).toHaveBeenCalledOnce();
     expect(unauthorized).not.toHaveBeenCalled();
     expect(other.status).toBe("off");
+  });
+
+  it("opens again from the last frame once the session was read for a changed role", async () => {
+    const server = fakeServer();
+    const live = make(server.fetcher);
+    live.start();
+    server.opened[0].send(hello(1) + frameText(2, "bye", { reason: "roleChanged" }));
+    await settle();
+    expect(roleChanged).toHaveBeenCalledOnce();
+    expect(withheld).not.toHaveBeenCalled();
+    expect(unauthorized).not.toHaveBeenCalled();
+    expect(server.opened).toHaveLength(2);
+    expect(server.opened[1].headers["Last-Event-ID"]).toBe(`${EPOCH}-1`);
   });
 
   it("reconnects after a goodbye for any other reason", async () => {

@@ -27,14 +27,8 @@
   ownProfile.need();
 
   const logout = async () => {
-    const outcome = await session.logout();
-    if (!outcome.ok) {
-      toast(`Could not log out: ${outcome.error}`, "error");
-      return;
-    }
-    // an identity provider's own logout page ends its session too
-    if (outcome.data) window.location.href = outcome.data;
-    else app.signedOut();
+    const error = await app.signOut();
+    if (error) toast(`Could not log out: ${error}`, "error");
   };
 </script>
 

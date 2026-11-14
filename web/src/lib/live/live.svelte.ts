@@ -1,4 +1,4 @@
-import { accessWithheld, root, sessionGone } from "#lib/api/client.js";
+import { accessWithheld, principalChanged, root, sessionGone } from "#lib/api/client.js";
 import { toast } from "#lib/feedback/toast.svelte.js";
 
 import {
@@ -34,8 +34,10 @@ type Deps = {
   url: (topics: Topic[], reopen: boolean) => string;
   /** the stream was refused 401 or said goodbye for that reason: the session is gone */
   unauthorized: () => void;
-  /** the session goes on, but its user has no role, or too low a one, right now */
+  /** the session goes on, but its user has no role right now */
   withheld: () => void;
+  /** the principal's role changed; resolves once the session was read again */
+  roleChanged: () => Promise<void>;
   /** a line the user should see about the connection */
   notice: (text: string, kind: "info" | "error") => void;
 };
@@ -46,6 +48,7 @@ const defaults = (): Deps => ({
     `${root()}/api/v0/live?topics=${topics.map(encodeURIComponent).join(",")}${reopen ? "&reopen=true" : ""}`,
   unauthorized: sessionGone,
   withheld: accessWithheld,
+  roleChanged: principalChanged,
   notice: (text, kind) => toast(text, kind)
 });
 
@@ -268,6 +271,7 @@ export class Live {
       this.#replacing = null;
       if (end.kind === "unauthorized") return this.#unauthorized();
       if (end.kind === "withheld") return this.#withheld();
+      if (end.kind === "roleChanged") return this.#roleChanged();
       if (end.kind === "rejected") return this.#rejected(end);
       // the new topics failed to open. The old stream has dropped its frames since the change
       // began, so it is closed and a stream for the new topics opens from the last frame taken,
@@ -282,6 +286,7 @@ export class Live {
     this.#stream = null;
     if (end.kind === "unauthorized") return this.#unauthorized();
     if (end.kind === "withheld") return this.#withheld();
+    if (end.kind === "roleChanged") return this.#roleChanged();
     if (end.kind === "rejected") return this.#rejected(end);
     // the stream for the new topics replays from the last frame too, so it is the one being
     // opened now, and a retry is only waited for while no stream is open or opening
@@ -302,6 +307,22 @@ export class Live {
   #withheld() {
     this.stop();
     this.#deps.withheld();
+  }
+
+  /**
+   * The principal's role changed: once the session is read again, which updates what the pages
+   * show, the stream opens again at the new role from the last frame taken. Reading the session
+   * may sign out or withhold instead, which stops the store
+   */
+  #roleChanged() {
+    this.#stream?.close();
+    this.#replacing?.close();
+    this.#stream = null;
+    this.#replacing = null;
+    this.status = "connecting";
+    void this.#deps.roleChanged().then(() => {
+      if (this.#running && !this.#stream) this.#open(true);
+    });
   }
 
   /**

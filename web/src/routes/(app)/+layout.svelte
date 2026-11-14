@@ -17,6 +17,7 @@
   import LostBanner from "#lib/components/shell/LostBanner.svelte";
   import ShortcutsSheet from "#lib/components/shell/ShortcutsSheet.svelte";
   import Sidebar from "#lib/components/shell/Sidebar.svelte";
+  import Withheld from "#lib/components/shell/Withheld.svelte";
   import SendFilesDialog from "#lib/components/transfers/SendFilesDialog.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import BlockDialog from "#lib/components/users/BlockDialog.svelte";
@@ -228,13 +229,8 @@
   <CommandPalette />
   <ShortcutsSheet />
 {:else if app.phase === "withheld"}
-  <!-- the session is kept and checked again every few seconds; the app comes back by itself -->
   <div class="flex min-h-svh items-center justify-center p-6">
-    <ErrorSegment
-      caption="No access right now"
-      detail="This page comes back by itself once your access returns"
-      retry={() => void app.bootstrap()}
-      retryLabel="Check now" />
+    <Withheld />
   </div>
 {:else if app.phase === "lost"}
   <div class="flex min-h-svh items-center justify-center p-6">

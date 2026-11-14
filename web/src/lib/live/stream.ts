@@ -49,8 +49,10 @@ export const ordered = (topics: Iterable<Topic>): Topic[] =>
 /** How one stream ended, which decides what the store does next */
 export type End =
   | { kind: "unauthorized" }
-  /** the session goes on but its user has no role, or too low a one, right now */
+  /** the session goes on but its user has no role right now */
   | { kind: "withheld" }
+  /** the principal's role changed; a stream opened again follows the new one */
+  | { kind: "roleChanged" }
   /** the server refused the stream for this principal or set of topics; polling takes over */
   | { kind: "refused"; status: number; retryAfterMs: number | null }
   /**
@@ -180,7 +182,9 @@ export class Stream {
     if (frame.type === "bye") {
       const why = frame.data.reason;
       return this.#end(
-        why === "unauthorized" || why === "withheld" ? { kind: why } : { kind: "lost" }
+        why === "unauthorized" || why === "withheld" || why === "roleChanged"
+          ? { kind: why }
+          : { kind: "lost" }
       );
     }
     if (this.dispatching) this.#callbacks.frame(frame, id);

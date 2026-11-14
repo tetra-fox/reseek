@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { app, WITHHELD_CHECK_MS } from "./app.svelte";
 import { FALLBACK_MS, live } from "./live/live.svelte";
+import { session } from "./session.svelte";
 import { fakeNetwork } from "./testing/network";
 import { time } from "./testing/tabs";
 import { browserTabs, SETTLE_MS, Tabs } from "./ui/tabs";
@@ -180,6 +181,75 @@ describe("the app's bootstrap", () => {
     sessionAnswer = Response.json({ error: "Authentication required" }, { status: 401 });
     await vi.advanceTimersByTimeAsync(WITHHELD_CHECK_MS);
     expect(app.phase).toBe("login");
+  });
+
+  /** Boots to the app over `net`, whose stream brings the state and the options */
+  const booted = async (net: ReturnType<typeof fakeNetwork>, role: string) => {
+    const booting = app.bootstrap();
+    await vi.advanceTimersByTimeAsync(SETTLE_MS);
+    net.frame("hello", { principal: { name: "alice", role } } as never);
+    net.frame("application.state", { user: {} } as never);
+    net.frame("application.options", { values: {}, revision: "r" } as never);
+    await booting;
+    expect(app.phase).toBe("app");
+  };
+
+  /** How often `GET /session` was asked */
+  const sessionChecks = (net: ReturnType<typeof fakeNetwork>) =>
+    net.requests.filter((r) => r.url.pathname.endsWith("/api/v0/session")).length;
+
+  it("reads the session again when the role changes, and stays in the app", async () => {
+    let role = "Administrator";
+    const net = fakeNetwork((url) =>
+      url.pathname.endsWith("/api/v0/session") ? { name: "alice", role, session: null } : undefined
+    );
+    await booted(net, role);
+    expect(session.role).toBe("Administrator");
+    role = "ReadOnly";
+    net.frame("bye", { reason: "roleChanged" } as never);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(session.role).toBe("ReadOnly");
+    expect(app.phase).toBe("app");
+    // the stream opened again, at the new role
+    const opened = vi
+      .mocked(fetch)
+      .mock.calls.filter(([input]) =>
+        String(input instanceof Request ? input.url : input).includes("/live")
+      );
+    expect(opened).toHaveLength(2);
+  });
+
+  it("checks a session with no role on one timer, stops its stream, and drops the timer when it leaves", async () => {
+    const withheld = { status: 403, body: { error: "access_withheld" } };
+    let answer: unknown = { name: "alice", role: "ReadOnly", session: null };
+    const net = fakeNetwork((url) =>
+      url.pathname.endsWith("/api/v0/session") ? answer : undefined
+    );
+    await booted(net, "ReadOnly");
+    expect(live.status).toBe("connected");
+    answer = withheld;
+    // two requests refused at once
+    app.withheld();
+    app.withheld();
+    expect(live.status).toBe("off");
+    const before = sessionChecks(net);
+    await vi.advanceTimersByTimeAsync(WITHHELD_CHECK_MS);
+    expect(sessionChecks(net) - before).toBe(1);
+
+    for (const leave of [() => app.signedOut(), () => app.close()]) {
+      app.withheld();
+      leave();
+      const left = sessionChecks(net);
+      await vi.advanceTimersByTimeAsync(WITHHELD_CHECK_MS * 2);
+      expect(sessionChecks(net)).toBe(left);
+    }
+
+    app.withheld();
+    answer = { status: 401, body: { error: "Authentication required" } };
+    await app.bootstrap();
+    const started = sessionChecks(net);
+    await vi.advanceTimersByTimeAsync(WITHHELD_CHECK_MS * 2);
+    expect(sessionChecks(net)).toBe(started);
   });
 
   it("leaves the sound to the tabs that are signed in while it shows the login", async () => {

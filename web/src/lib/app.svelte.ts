@@ -1,7 +1,7 @@
 import { activity } from "#lib/activity/activity.svelte.js";
 import { jobs as analysisJobs } from "#lib/analysis/jobs.svelte.js";
 import { marks } from "#lib/analysis/marks.svelte.js";
-import { api, onUnauthorized, onWithheld, type Schemas } from "#lib/api/client.js";
+import { api, onRoleChanged, onUnauthorized, onWithheld, type Schemas } from "#lib/api/client.js";
 import { browser } from "#lib/browse/browse.svelte.js";
 import { chat } from "#lib/chat/chat.svelte.js";
 import type { OptionKey } from "#lib/config/keys.js";
@@ -81,6 +81,7 @@ class App {
     );
     onUnauthorized(() => this.signedOut());
     onWithheld(() => this.withheld());
+    onRoleChanged(() => this.roleChanged());
     // a tab's focus counts toward playing the sounds only while its stream brings the frames
     $effect.root(() => {
       $effect(() => {
@@ -211,6 +212,31 @@ class App {
     if (found === "out") return this.signedOut();
     this.#withheldCheck = setTimeout(() => void this.#checkWithheld(), WITHHELD_CHECK_MS);
   }
+
+  /**
+   * The principal's role changed: the session is read again, so the pages show what the new role
+   * may do; a session gone or with no role meanwhile goes where it would
+   */
+  async roleChanged() {
+    const boot = this.#boot;
+    const found = await session.check();
+    if (boot !== this.#boot) return;
+    if (found === "out") this.signedOut();
+    else if (found === "withheld") this.withheld();
+  }
+
+  /**
+   * Ends the session: to the identity provider's logout page when it has one, else to the login.
+   * Why not, when it could not be ended
+   */
+  signOut = async (): Promise<string | null> => {
+    const outcome = await session.logout();
+    if (!outcome.ok) return outcome.error;
+    // an identity provider's own logout page ends its session too
+    if (outcome.data) window.location.href = outcome.data;
+    else this.signedOut();
+    return null;
+  };
 
   /** The session is gone: everything kept for it goes, and the login shows */
   signedOut() {

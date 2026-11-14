@@ -29,6 +29,7 @@ export const isWithheld = (body: unknown): boolean =>
 
 let unauthorized: () => void = () => {};
 let withheld: () => void = () => {};
+let roleChanged: () => Promise<void> = async () => {};
 
 /** What to do when a request outside the session routes is answered 401: the session is gone */
 export const onUnauthorized = (handler: () => void) => {
@@ -40,11 +41,19 @@ export const onWithheld = (handler: () => void) => {
   withheld = handler;
 };
 
+/** What to do when the event stream says the principal's role changed */
+export const onRoleChanged = (handler: () => Promise<void>) => {
+  roleChanged = handler;
+};
+
 /** Says the session is gone, for answers that don't go through `api`, like the event stream */
 export const sessionGone = () => unauthorized();
 
 /** Says the session has no role right now, for answers that don't go through `api` */
 export const accessWithheld = () => withheld();
+
+/** Says the principal's role changed; resolves once the session was read again */
+export const principalChanged = () => roleChanged();
 
 api.use({
   async onResponse({ request, response }) {
