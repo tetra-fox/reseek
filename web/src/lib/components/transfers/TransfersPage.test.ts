@@ -34,12 +34,18 @@ describe("the transfers table", () => {
   let component: ReturnType<typeof mount> | null = null;
   let hostPane: ReturnType<typeof mount> | null = null;
   let listing: Transfer[] = [];
+  // a test that fakes scrolling puts these back here, which runs even when it times out
+  const scrollTop = Object.getOwnPropertyDescriptor(Element.prototype, "scrollTop")!;
+  const scrollHeight = Object.getOwnPropertyDescriptor(Element.prototype, "scrollHeight")!;
 
   beforeEach(() => {
     vi.useFakeTimers();
     Object.assign(views.download, defaults("download"), { layout: "list" });
   });
   afterEach(() => {
+    Object.defineProperty(Element.prototype, "scrollTop", scrollTop);
+    Object.defineProperty(Element.prototype, "scrollHeight", scrollHeight);
+    remember("transfers.download", null);
     session.principal = null;
     if (component) unmount(component);
     if (hostPane) unmount(hostPane);
@@ -144,8 +150,6 @@ describe("the transfers table", () => {
     // jsdom keeps no scroll offset and lays out no content: each box keeps the offset it is
     // given, over content taller than any offset here
     const offsets = new WeakMap<Element, number>();
-    const own = Object.getOwnPropertyDescriptor(Element.prototype, "scrollTop")!;
-    const ownHeight = Object.getOwnPropertyDescriptor(Element.prototype, "scrollHeight")!;
     Object.defineProperty(Element.prototype, "scrollHeight", { configurable: true, value: 1e5 });
     Object.defineProperty(Element.prototype, "scrollTop", {
       configurable: true,
@@ -156,41 +160,35 @@ describe("the transfers table", () => {
         offsets.set(this, top);
       }
     });
-    try {
-      const name = (n: number) => `x\\${n + 100}.flac`;
-      listing = Array.from({ length: 40 }, (_, n) => transfer({ filename: name(n * 2) }));
-      await start();
-      // a scroll the table did not make itself, which ends any return to where an earlier test
-      // left it
-      grid().scrollTop = 36 * 20 + 10;
-      grid().dispatchEvent(new Event("scroll"));
-      await flushFaked();
-      const left = grid().scrollTop;
-      unmount(component!);
-      unmount(hostPane!);
+    const name = (n: number) => `x\\${n + 100}.flac`;
+    listing = Array.from({ length: 40 }, (_, n) => transfer({ filename: name(n * 2) }));
+    await start();
+    // a scroll the table did not make itself, which ends any return to where an earlier test
+    // left it
+    grid().scrollTop = 36 * 20 + 10;
+    grid().dispatchEvent(new Event("scroll"));
+    await flushFaked();
+    const left = grid().scrollTop;
+    unmount(component!);
+    unmount(hostPane!);
 
-      // five rows that sort before the one at the top came while the screen was away
-      listing = [
-        ...Array.from({ length: 5 }, (_, n) => transfer({ filename: name(n * 2 + 1) })),
-        ...listing
-      ];
-      await start();
-      expect(grid().scrollTop - left).toBe(5 * 36);
+    // five rows that sort before the one at the top came while the screen was away
+    listing = [
+      ...Array.from({ length: 5 }, (_, n) => transfer({ filename: name(n * 2 + 1) })),
+      ...listing
+    ];
+    await start();
+    expect(grid().scrollTop - left).toBe(5 * 36);
 
-      // left at the top, it opens at the top again, over the rows that came meanwhile
-      grid().scrollTop = 0;
-      grid().dispatchEvent(new Event("scroll"));
-      await flushFaked();
-      unmount(component!);
-      unmount(hostPane!);
-      listing = [transfer({ filename: name(-1) }), ...listing];
-      await start();
-      expect(grid().scrollTop).toBe(0);
-    } finally {
-      Object.defineProperty(Element.prototype, "scrollTop", own);
-      Object.defineProperty(Element.prototype, "scrollHeight", ownHeight);
-      remember("transfers.download", null);
-    }
+    // left at the top, it opens at the top again, over the rows that came meanwhile
+    grid().scrollTop = 0;
+    grid().dispatchEvent(new Event("scroll"));
+    await flushFaked();
+    unmount(component!);
+    unmount(hostPane!);
+    listing = [transfer({ filename: name(-1) }), ...listing];
+    await start();
+    expect(grid().scrollTop).toBe(0);
   });
 
   describe("keys", () => {
