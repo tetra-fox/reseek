@@ -535,6 +535,34 @@ async fn an_import_counts_what_it_added_and_skipped() {
 }
 
 #[tokio::test]
+async fn an_import_that_does_not_read_is_logged_without_its_values() {
+  let app = app(CONFIG, &[]).await;
+  let (logs, _capturing) = crate::testing::captured_logs();
+  let blocks = json!([{ "username": 4815162342_u64 }]);
+  let answer = app
+    .send(request(
+      "POST",
+      "/api/v0/users/blocked/import",
+      Some(blocks),
+    ))
+    .await;
+  assert_eq!(answer.status, 400);
+  let logged = logs.snapshot();
+  assert!(
+    logged
+      .iter()
+      .any(|line| line.message.contains("[0].username does not fit")),
+    "{logged:?}"
+  );
+  assert!(
+    !logged
+      .iter()
+      .any(|line| line.message.contains("4815162342")),
+    "{logged:?}"
+  );
+}
+
+#[tokio::test]
 async fn forgetting_a_user_drops_their_block_and_purges_their_transfers() {
   let app = app(CONFIG, &[]).await;
   app

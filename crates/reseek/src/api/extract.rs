@@ -10,6 +10,7 @@ use axum::http::request::Parts;
 use axum::response::{IntoResponse, Response};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
+use serde_json::error::Category;
 
 use super::error::ApiError;
 
@@ -85,10 +86,23 @@ fn is_json(content_type: &str) -> bool {
     || (essence.starts_with("application/") && essence.ends_with("+json"))
 }
 
-fn read_json<T: DeserializeOwned>(bytes: &[u8]) -> Result<T, ApiError> {
+/// `bytes` read as the JSON of `T`, refused with what was wrong.
+pub(in crate::api) fn read_json<T: DeserializeOwned>(bytes: &[u8]) -> Result<T, ApiError> {
   let reader = &mut serde_json::Deserializer::from_slice(bytes);
-  serde_path_to_error::deserialize(reader)
-    .map_err(|e| ApiError::invalid("Invalid request body", described(e.path(), e.inner())))
+  serde_path_to_error::deserialize(reader).map_err(|e| {
+    // serde's text can quote the value it refused, which may be a password, so the log names
+    // only where the fault is and its kind
+    let at = e.path().to_string();
+    let subject = if at == "." { "the body" } else { &at };
+    let wrong = match e.inner().classify() {
+      Category::Syntax => "is not JSON",
+      Category::Data => "does not fit what the route takes",
+      Category::Eof => "is cut off",
+      Category::Io => "was not read",
+    };
+    ApiError::invalid("Invalid request body", described(e.path(), e.inner()))
+      .logged_with(format!("{subject} {wrong}"))
+  })
 }
 
 /// A query read as `T`. A parameter may be repeated for a list, and one with an empty value,

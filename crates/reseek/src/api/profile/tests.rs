@@ -432,3 +432,21 @@ async fn removing_a_picture_a_read_only_file_sets_under_an_override_is_refused()
   assert_eq!(after["sources"], uploaded["sources"], "nothing changed");
   assert!(app.state.paths.data.join("profile/picture.jpg").exists());
 }
+
+#[tokio::test]
+async fn a_new_password_that_does_not_read_is_not_logged() {
+  let app = app(crate::testing::TRUSTED, &[]).await;
+  let (logs, _capturing) = crate::testing::captured_logs();
+  let change = json!({ "password": 4815162342_u64 });
+  let answer = app
+    .send(request("PUT", "/api/v0/application/password", Some(change)))
+    .await;
+  assert_eq!(answer.status, 400);
+  let logged = logs.snapshot();
+  assert!(
+    !logged
+      .iter()
+      .any(|line| line.message.contains("4815162342")),
+    "{logged:?}"
+  );
+}

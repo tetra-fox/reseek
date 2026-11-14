@@ -15,6 +15,8 @@ pub struct ApiError {
   status: StatusCode,
   error: String,
   detail: Option<String>,
+  /// what the log says in place of `detail`, for a detail that repeats what the client sent
+  logged_detail: Option<String>,
   /// the full reason of a 500, logged and not sent
   internal: Option<String>,
   /// the handler logged the failure itself, so the response does not log it again
@@ -29,6 +31,7 @@ impl ApiError {
       status,
       error: error.into(),
       detail,
+      logged_detail: None,
       internal: None,
       logged: false,
       retry_after: None,
@@ -165,6 +168,13 @@ impl ApiError {
     e
   }
 
+  /// The same error, logged with `detail` in place of the one sent: for a detail that repeats
+  /// what the client sent, which may be a secret.
+  pub fn logged_with(mut self, detail: impl Into<String>) -> Self {
+    self.logged_detail = Some(detail.into());
+    self
+  }
+
   /// The same error, which the handler has logged itself.
   pub fn logged(mut self) -> Self {
     self.logged = true;
@@ -209,7 +219,8 @@ impl IntoResponse for ApiError {
       (_, true) => {}
       (Some(reason), false) => tracing::error!(%status, error = reason, "request failed"),
       (None, false) => {
-        tracing::debug!(%status, error = self.error, detail = self.detail, "request refused");
+        let detail = self.logged_detail.as_ref().or(self.detail.as_ref());
+        tracing::debug!(%status, error = self.error, detail, "request refused");
       }
     }
     let retry_after = self.retry_after;

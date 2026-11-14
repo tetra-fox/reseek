@@ -17,7 +17,7 @@ use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
 use crate::api::error::ApiError;
-use crate::api::extract::{Json, NamedUser, Query, essence};
+use crate::api::extract::{Json, NamedUser, Query, essence, read_json};
 use crate::api::validate;
 use crate::app::AppState;
 use crate::auth::{Administrator, AnyRole, Authorized, ReadWrite};
@@ -193,9 +193,7 @@ fn block_import(headers: &HeaderMap, body: &[u8]) -> Result<BlockImport, ApiErro
         .collect();
       Ok(BlockImport::Names(names))
     }
-    "application/json" => serde_json::from_slice(body)
-      .map(BlockImport::Blocks)
-      .map_err(|e| ApiError::invalid("Invalid request body", e.to_string())),
+    "application/json" => read_json(body).map(BlockImport::Blocks),
     _ => Err(ApiError::unsupported_media(
       "The list must be text/plain or application/json",
     )),

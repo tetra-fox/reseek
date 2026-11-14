@@ -345,6 +345,15 @@ pub async fn load_agent_host(
     .unwrap();
 }
 
+/// Every line logged on this thread, at any level, while the guard is held, as the daemon's log
+/// buffer keeps it.
+pub fn captured_logs() -> (std::sync::Arc<LogBuffer>, tracing::subscriber::DefaultGuard) {
+  use tracing_subscriber::layer::SubscriberExt;
+  let buffer = std::sync::Arc::new(LogBuffer::default());
+  let subscriber = tracing_subscriber::registry().with(crate::logging::BufferLayer(buffer.clone()));
+  (buffer, tracing::subscriber::set_default(subscriber))
+}
+
 /// An address outside every trusted network, for [`TestApp::send_from`].
 pub const OUTSIDE: &str = "192.0.2.1:1";
 

@@ -612,6 +612,47 @@ mod tests {
     let answer = app.send_from(OUTSIDE, broken).await;
     assert_eq!(answer.status, 400);
     assert_eq!(answer.json()["error"], "Could not read the request body");
+
+    let (logs, _capturing) = crate::testing::captured_logs();
+    let typed = json!({ "username": "reseek", "password": 4815162342_u64 });
+    let answer = app
+      .send_from(OUTSIDE, request("POST", "/api/v0/session", Some(typed)))
+      .await;
+    assert_eq!(answer.status, 400);
+    let detail = answer.json()["detail"].as_str().unwrap().to_string();
+    assert!(
+      detail.contains("4815162342"),
+      "the client is told: {detail}"
+    );
+    let logged = logs.snapshot();
+    assert!(
+      logged.iter().any(|line| line
+        .message
+        .contains("detail=password does not fit what the route takes")),
+      "{logged:?}"
+    );
+    assert!(
+      !logged
+        .iter()
+        .any(|line| line.message.contains("4815162342")),
+      "the password is not logged: {logged:?}"
+    );
+
+    let (logs, _capturing) = crate::testing::captured_logs();
+    let missing = json!({ "username": "reseek" });
+    let answer = app
+      .send_from(OUTSIDE, request("POST", "/api/v0/session", Some(missing)))
+      .await;
+    assert_eq!(answer.status, 400);
+    let detail = answer.json()["detail"].as_str().unwrap().to_string();
+    assert!(detail.contains("missing field `password`"), "{detail}");
+    let logged = logs.snapshot();
+    assert!(
+      logged.iter().any(|line| line
+        .message
+        .contains("detail=the body does not fit what the route takes")),
+      "{logged:?}"
+    );
   }
 
   #[tokio::test]
