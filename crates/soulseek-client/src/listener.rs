@@ -23,15 +23,19 @@ static ACCEPT_ERRORS: LogLimiter = LogLimiter::new();
 /// the socket.
 pub(crate) struct Listener {
   address: SocketAddr,
+  /// started for a connect that retries failed ones, so its start and stop are told at debug
+  retry: bool,
   _stop: DropGuard,
   task: JoinHandle<()>,
 }
 
 impl Listener {
-  /// Binds `address` and starts accepting, handing every accepted socket to `on_accept`.
+  /// Binds `address` and starts accepting, handing every accepted socket to `on_accept`, for a
+  /// connect that is a `retry` of failed ones when it is.
   pub(crate) fn start(
     address: SocketAddr,
     backlog: u32,
+    retry: bool,
     on_accept: impl FnMut(TcpStream, SocketAddr) + Send + 'static,
   ) -> Result<Self, ClientError> {
     let listener = bind(address, backlog).map_err(|error| ClientError::Listen {
@@ -42,19 +46,33 @@ impl Listener {
     })?;
     let stop = CancellationToken::new();
     let span = tracing::info_span!("listener", %address);
-    span.in_scope(|| tracing::info!("listening for peer connections"));
+    span.in_scope(|| {
+      if retry {
+        tracing::debug!("listening for peer connections");
+      } else {
+        tracing::info!("listening for peer connections");
+      }
+    });
     let task = tokio::spawn(accept_loop(listener, stop.clone(), on_accept).instrument(span));
     Ok(Self {
       address,
+      retry,
       _stop: stop.drop_guard(),
       task,
     })
+  }
+
+  /// The connect it was started for logged in: the session it serves ends at info, whatever the
+  /// connect was.
+  pub(crate) fn logged_in(&mut self) {
+    self.retry = false;
   }
 
   /// stops accepting and waits until the socket is closed, so the address can be bound again
   pub(crate) async fn stop(self) {
     let Self {
       address,
+      retry,
       _stop,
       task,
     } = self;
@@ -62,7 +80,11 @@ impl Listener {
     if let Err(error) = task.await {
       tracing::error!(%address, %error, "listener task failed");
     }
-    tracing::info!(%address, "stopped listening for peer connections");
+    if retry {
+      tracing::debug!(%address, "stopped listening for peer connections");
+    } else {
+      tracing::info!(%address, "stopped listening for peer connections");
+    }
   }
 }
 

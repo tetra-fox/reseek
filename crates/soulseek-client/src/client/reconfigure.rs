@@ -77,16 +77,16 @@ impl Client {
     }
     // bound next to the old one when the port differs; on the same port the old one must
     // close first, and comes back if the new one still cannot bind
-    let (moved, error) = match self.start_listener(new) {
+    let (moved, error) = match self.start_listener(new, false) {
       Ok(listener) => {
         running.stop().await;
         (listener, None)
       }
       Err(_) if old.listen_port == new.listen_port => {
         running.stop().await;
-        match self.start_listener(new) {
+        match self.start_listener(new, false) {
           Ok(listener) => (listener, None),
-          Err(error) => match self.start_listener(old) {
+          Err(error) => match self.start_listener(old, false) {
             Ok(listener) => (listener, Some(error)),
             Err(restore) => {
               tracing::error!(%error, %restore, "the listener could not be moved or restored");
