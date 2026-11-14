@@ -62,8 +62,18 @@ pub(crate) struct SearchResponder {
   /// connection requests a connection has answered, awaited or late, so no other connection
   /// is taken for them while answers may still be kept under them
   answered: Mutex<BoundedCache<u32, ()>>,
-  /// how many answers wait for a connection to each searcher
-  waiting: Mutex<HashMap<String, usize>>,
+  /// the answers waiting for a connection to each searcher
+  waiting: Mutex<HashMap<String, Waiters>>,
+}
+
+/// The answers waiting for a connection to one searcher.
+#[derive(Default)]
+struct Waiters {
+  /// how many
+  count: usize,
+  /// the connection requests their attempts made while under way, each attempt that replaced
+  /// another adding its own
+  requests: Vec<u32>,
 }
 
 impl SearchResponder {
@@ -131,13 +141,13 @@ impl SearchResponder {
 
   /// counts an answer waiting for a connection to `username` until the returned guard is dropped
   fn wait_for(&self, username: &str) -> Waiting<'_> {
-    *crate::lock(&self.waiting)
+    crate::lock(&self.waiting)
       .entry(username.to_owned())
-      .or_default() += 1;
+      .or_default()
+      .count += 1;
     Waiting {
       responder: self,
       username: username.to_owned(),
-      request: None,
     }
   }
 
@@ -189,26 +199,26 @@ impl SearchResponder {
 }
 
 /// One answer waiting for a connection to its searcher. The last one for a searcher to be done
-/// forgets the request it rode on: the attempt, its refusal or its late connection.
+/// forgets every request the answers to them rode on: the attempts, their refusals and their
+/// late connections.
 struct Waiting<'a> {
   responder: &'a SearchResponder,
   username: String,
-  /// the connection request the answer rode on, once its attempt failed
-  request: Option<u32>,
 }
 
 impl Drop for Waiting<'_> {
   fn drop(&mut self) {
     let mut waiting = crate::lock(&self.responder.waiting);
-    let count = waiting
+    let waiters = waiting
       .get_mut(&self.username)
       .expect("a waiting answer is counted");
-    *count -= 1;
-    if *count > 0 {
+    waiters.count -= 1;
+    if waiters.count > 0 {
       return;
     }
+    let requests = std::mem::take(&mut waiters.requests);
     waiting.remove(&self.username);
-    if let Some(request) = self.request {
+    for request in requests {
       crate::lock(&self.responder.refused).remove(&request);
       crate::lock(&self.responder.arrived).remove(&request);
       crate::lock(&self.responder.riding).remove(&request);
@@ -219,8 +229,15 @@ impl Drop for Waiting<'_> {
 impl Waiting<'_> {
   /// The answer waits on the attempt that had the server relay the connection request
   /// `request`, which a connection answering it late is known by from now on.
-  fn rides_on(&mut self, request: u32) {
-    self.request = Some(request);
+  fn rides_on(&self, request: u32) {
+    let mut waiting = crate::lock(&self.responder.waiting);
+    let requests = &mut waiting
+      .get_mut(&self.username)
+      .expect("a waiting answer is counted")
+      .requests;
+    if !requests.contains(&request) {
+      requests.push(request);
+    }
     crate::lock(&self.responder.riding).insert(request, self.username.clone());
   }
 }
@@ -260,7 +277,7 @@ impl Client {
         return false;
       }
     };
-    let mut waiting = self.responder().wait_for(username);
+    let waiting = self.responder().wait_for(username);
     let reached = self
       .reach(
         username,
@@ -274,7 +291,6 @@ impl Client {
     let conn = match reached {
       Ok(conn) => conn,
       Err(Unreached { error, request }) => {
-        waiting.request = request;
         let delivery = || {
           Event::SearchResponseDeliveryFailed(SearchDelivery {
             username: username.to_owned(),
@@ -780,7 +796,7 @@ mod tests {
       .unwrap()
       .local_addr()
       .unwrap();
-    let mut waiting = client.responder().wait_for("carol");
+    let waiting = client.responder().wait_for("carol");
     // the attempt fails at once, since the client is not logged in
     let reached = client
       .reach(
@@ -811,10 +827,26 @@ mod tests {
     drop(waiting);
   }
 
+  #[test]
+  fn the_requests_of_replaced_attempts_are_forgotten_with_the_last_answer_waiting() {
+    let responder = SearchResponder::new(10);
+    let riding = |responder: &SearchResponder| crate::lock(&responder.riding).len();
+    let first = responder.wait_for("carol");
+    // the attempt on request 1 was replaced by one on request 2
+    first.rides_on(1);
+    first.rides_on(2);
+    let second = responder.wait_for("carol");
+    second.rides_on(3);
+    drop(second);
+    assert_eq!(riding(&responder), 3, "an answer still waits on them");
+    drop(first);
+    assert_eq!(riding(&responder), 0);
+  }
+
   #[tokio::test]
   async fn a_request_is_claimed_for_its_searcher_once() {
     let responder = SearchResponder::new(3);
-    let mut waiting = responder.wait_for("carol");
+    let waiting = responder.wait_for("carol");
     waiting.rides_on(7);
     assert_eq!(responder.claim(7).as_deref(), Some("carol"));
     // someone else connecting with the same token is not taken for carol
@@ -838,7 +870,7 @@ mod tests {
       .unwrap();
     let cancel = CancellationToken::new();
     // an answer to carol's search waits on the attempt to reach her
-    let mut waiting = client.responder().wait_for("carol");
+    let waiting = client.responder().wait_for("carol");
     let mut reaching = Box::pin(client.reach("carol", Some(nowhere), &cancel, |request| {
       waiting.rides_on(request);
     }));
@@ -870,7 +902,7 @@ mod tests {
     drop(waiting);
     // a later answer finds the connection made; the request it was made with is done
     let mut ridden = Vec::new();
-    let mut later = client.responder().wait_for("carol");
+    let later = client.responder().wait_for("carol");
     let again = client
       .reach("carol", None, &cancel, |request| {
         ridden.push(request);
