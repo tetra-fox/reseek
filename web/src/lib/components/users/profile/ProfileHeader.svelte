@@ -99,6 +99,11 @@
   };
 </script>
 
+<!-- figures joined by dots, the line breaking only between them -->
+{#snippet facts(list: string[])}{#each list as fact, i (i)}{#if i}{" "}{/if}<span
+      class="whitespace-nowrap">{fact}{i < list.length - 1 ? " ·" : ""}</span
+    >{/each}{/snippet}
+
 <section class="flex flex-col gap-4">
   <div class="flex flex-wrap items-start gap-4">
     <Avatar {name} pictureUrl={pictureOf(name, p)} link={false} class="size-16 text-2xl" />
@@ -145,13 +150,15 @@
         {/if}
         {#if p.buddy}<Badge tone="info">{BUDDY.badge}</Badge>{/if}
       </div>
-      <!-- wraps as words do, so how long ago moves to the next line whole -->
+      <!-- wraps between figures, so a figure, and how long ago, moves to the next line whole -->
       <p class="flex flex-wrap items-center gap-x-1.5 text-sm">
         {#if stats}
-          {plural(stats.fileCount, "file", "files")} ·
-          {plural(stats.directoryCount, "folder", "folders")} ·
-          {formatSpeed(stats.averageSpeed)} ·
-          {plural(stats.uploadCount, "upload", "uploads")}
+          {@render facts([
+            plural(stats.fileCount, "file", "files"),
+            plural(stats.directoryCount, "folder", "folders"),
+            formatSpeed(stats.averageSpeed),
+            plural(stats.uploadCount, "upload", "uploads")
+          ])}
         {:else}
           <span class="text-fg-muted">{SHARES_UNKNOWN}</span>
         {/if}
@@ -172,11 +179,11 @@
             .join(", ")}
         </p>
         <p class="text-xs text-fg-muted">
-          {plural(p.figures.downloads.succeeded, "download", "downloads")} ({formatBytes(
-            p.figures.downloads.bytes
-          )}) · {plural(p.figures.uploads.succeeded, "upload", "uploads")} ({formatBytes(
-            p.figures.uploads.bytes
-          )}) · {plural(p.figures.messages.in + p.figures.messages.out, "message", "messages")}
+          {@render facts([
+            `${plural(p.figures.downloads.succeeded, "download", "downloads")} (${formatBytes(p.figures.downloads.bytes)})`,
+            `${plural(p.figures.uploads.succeeded, "upload", "uploads")} (${formatBytes(p.figures.uploads.bytes)})`,
+            plural(p.figures.messages.in + p.figures.messages.out, "message", "messages")
+          ])}
         </p>
       {/if}
     </div>

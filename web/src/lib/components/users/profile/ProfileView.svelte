@@ -3,6 +3,8 @@
   import CircleXIcon from "@lucide/svelte/icons/circle-x";
 
   import Avatar from "#lib/components/users/Avatar.svelte";
+  import { formatCount } from "#lib/format.js";
+  import { fold } from "#lib/text.js";
 
   import Linked from "./Linked.svelte";
 
@@ -23,6 +25,10 @@
 
   let { name, pictureUrl, src, alt, description, uploadSlots, freeUploadSlot, queueLength }: Props =
     $props();
+
+  // a description past a screenful is folded until the rest is asked for
+  let unfolded = $state(false);
+  const folded = $derived(unfolded ? null : fold(description, 4000, 40));
 </script>
 
 <div class="flex flex-col gap-4 sm:flex-row">
@@ -30,7 +36,11 @@
   <div class="flex min-w-0 flex-1 flex-col gap-3">
     {#if description}
       <p class="cursor-text text-sm wrap-anywhere whitespace-pre-wrap">
-        <Linked text={description} />
+        <Linked text={folded === null ? description : `${folded}…`} />{#if folded !== null}<button
+            type="button"
+            class="ml-1 text-xs text-accent hover:underline"
+            onclick={() => (unfolded = true)}>Show more</button
+          >{/if}
       </p>
     {:else}
       <p class="text-sm text-fg-muted">No profile text</p>
@@ -48,11 +58,11 @@
       </div>
       <div class="flex items-center gap-1">
         <dt class="text-fg-muted">Upload slots</dt>
-        <dd class="tabular-nums">{uploadSlots}</dd>
+        <dd class="tabular-nums">{formatCount(uploadSlots)}</dd>
       </div>
       <div class="flex items-center gap-1">
         <dt class="text-fg-muted">Queue length</dt>
-        <dd class="tabular-nums">{queueLength}</dd>
+        <dd class="tabular-nums">{formatCount(queueLength)}</dd>
       </div>
     </dl>
   </div>
