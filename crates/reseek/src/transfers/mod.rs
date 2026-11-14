@@ -290,6 +290,10 @@ mod tests {
            PlaceInQueue = 3 WHERE Id = ?1",
           [lost[0].0.to_string()],
         )?;
+        // a lost row whose history is as long as it is kept
+        for _ in 0..store::HISTORY_KEPT {
+          store::entered(conn, lost[2].0, TransferStates::QueuedRemotely, at(1))?;
+        }
         // the queued row was last heard of when the peer queued it
         store::entered(conn, lost[1].0, TransferStates::QueuedRemotely, at(7))
       })
@@ -357,6 +361,13 @@ mod tests {
         "{}",
         record.username
       );
+      if id == lost[2].0 {
+        assert_eq!(
+          history.len(),
+          store::HISTORY_KEPT as usize,
+          "only the newest entries are kept"
+        );
+      }
     }
     assert_eq!(
       migrated.write(whole(kept_ids.clone())).await.unwrap(),
