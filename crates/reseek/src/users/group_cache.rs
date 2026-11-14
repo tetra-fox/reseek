@@ -284,14 +284,44 @@ impl Directory {
   }
 
   /// The groups `username` is in, after asking the server for their statistics and their
-  /// status when it has said neither yet, or always with `force`. A question that fails is
-  /// logged and what is known stands, so a user who could not be asked about is neither
-  /// privileged nor a leecher.
+  /// status when it has said neither yet, or always with `force`; asking makes their row. A
+  /// question that fails is logged and what is known stands, so a user who could not be asked
+  /// about is neither privileged nor a leecher.
   pub async fn fetch_placement(
     self: &Arc<Self>,
     client: &Client,
     username: &str,
     force: bool,
+  ) -> Placement {
+    self.asked_placement(client, username, force, true).await
+  }
+
+  /// The groups `username` is in, to let them in when they are in any of `allowed`. When what
+  /// is known puts them in none of those and the server's word could, it is asked first as
+  /// [`Directory::fetch_placement`] asks, without making their row: a user refused is no reason
+  /// to know them, and the name may be one they picked for the occasion.
+  pub async fn placement_letting_in(
+    self: &Arc<Self>,
+    client: &Client,
+    username: &str,
+    allowed: &[String],
+  ) -> Placement {
+    let placement = self.placement(username);
+    if allowed.iter().any(|group| placement.is_in(group))
+      || !allowed.iter().any(|group| groups::decided_by_server(group))
+    {
+      return placement;
+    }
+    self.asked_placement(client, username, false, false).await
+  }
+
+  /// [`Directory::fetch_placement`], making the user's row when it asks only with `makes_row`.
+  async fn asked_placement(
+    self: &Arc<Self>,
+    client: &Client,
+    username: &str,
+    force: bool,
+    makes_row: bool,
   ) -> Placement {
     let known = self
       .groups
@@ -299,7 +329,12 @@ impl Directory {
       .is_some_and(|facts| facts.statistics.is_some() || facts.presence.is_some());
     if !known || force {
       self.groups.update(username, true, |_| {});
-      if let Err(e) = self.statistics_of(client, username).await {
+      let statistics = if makes_row {
+        self.statistics_of(client, username).await
+      } else {
+        self.statistics_reported(client, username).await
+      };
+      if let Err(e) = statistics {
         warn!(username, error = %e, "statistics for the user's groups not fetched");
       }
       if let Err(e) = self.status_of(client, username).await {

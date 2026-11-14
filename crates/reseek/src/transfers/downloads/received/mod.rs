@@ -28,7 +28,7 @@ use super::destination::local_name;
 use super::enqueue::{check, download_filters};
 use super::jobs::job_name;
 use super::{Downloads, FileRequest, Group};
-use crate::config::{DEFAULT_GROUP, LEECHERS_GROUP, PRIVILEGED_GROUP, Received};
+use crate::config::{DEFAULT_GROUP, Received};
 use crate::db::timestamp;
 use crate::jobs::NewJob;
 use crate::safety::Os;
@@ -99,16 +99,10 @@ impl Downloads {
     }
     let options = self.config.current();
     let received = &options.values.transfers.download.received;
-    let mut placement = self.users.placement(username);
-    // only the server's word puts a user in privileged or leechers, so when those may send, a
-    // sender no group lets in yet is asked about first, which fetches only what is not known
-    let decided_by_server = |group: &String| group == PRIVILEGED_GROUP || group == LEECHERS_GROUP;
-    if !received.from.iter().any(|group| placement.is_in(group))
-      && received.from.iter().any(decided_by_server)
-    {
-      let client = self.network.client();
-      placement = self.users.fetch_placement(client, username, false).await;
-    }
+    let placement = self
+      .users
+      .placement_letting_in(self.network.client(), username, &received.from)
+      .await;
     if let Some(reason) = refusal(received, |group| placement.is_in(group), size) {
       return refused(reason);
     }

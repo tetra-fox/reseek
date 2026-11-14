@@ -163,6 +163,12 @@ const LIMIT_FIELDS: [LimitField; 9] = [
   limit_field!(Weekly, Failures, weekly.failures),
 ];
 
+/// Whether the server's word decides who is in the group `name`: the smart groups but default,
+/// which holds everyone.
+pub fn decided_by_server(name: &str) -> bool {
+  name == PRIVILEGED_GROUP || name == LEECHERS_GROUP
+}
+
 /// The group `name` as the API shows it: a built-in group, a user-defined group of `options`,
 /// or the name of one it does not have.
 pub fn describe(options: &Options, name: &str) -> UserGroup {

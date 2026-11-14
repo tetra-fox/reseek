@@ -134,6 +134,49 @@ async fn a_sender_nothing_is_known_of_yet_is_asked_about_before_being_refused() 
 }
 
 #[tokio::test]
+async fn a_sender_asked_about_and_refused_is_not_put_in_the_directory() {
+  use soulseek_proto::server::UserStatus;
+  use soulseek_proto::{ServerRequest, ServerResponse, UserPresence};
+
+  let config = format!("{TRUSTED}[transfers.download.received]\nfrom = [\"privileged\"]\n");
+  let app = crate::testing::soulseek::app(&config).await;
+  // bob, whose name is the sender's to pick, is not privileged
+  let server = crate::testing::soulseek::Server::start(|request| match request {
+    ServerRequest::GetStatus(asked) => vec![ServerResponse::GetStatus(UserStatus {
+      username: asked.username.clone(),
+      presence: UserPresence::Online,
+      is_privileged: false,
+    })],
+    _ => Vec::new(),
+  })
+  .await;
+  server.login(&app).await;
+  let localhost = IpAddr::from(std::net::Ipv4Addr::LOCALHOST);
+  let users = &app.state.users;
+  let refused = app
+    .state
+    .downloads
+    .receive("bob", localhost, "@@s\\spam.flac", 3)
+    .await;
+  assert!(
+    matches!(refused, Err(ClientError::TransferRejected(_))),
+    "{refused:?}"
+  );
+  // the writer takes touches in order, so once a row made after them is there, any touch of
+  // bob's is written
+  users.touch("carol", crate::users::Touch::Asked).await;
+  let known = |name: &'static str| async move { users.profile(name).await.unwrap().user.known };
+  tokio::time::timeout(std::time::Duration::from_secs(5), async {
+    while !known("carol").await {
+      tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+  })
+  .await
+  .expect("the touch writer never wrote");
+  assert!(!known("bob").await, "the refused sender has a row");
+}
+
+#[tokio::test]
 async fn a_sender_no_group_the_server_decides_could_let_in_is_refused_without_asking() {
   let config = format!("{TRUSTED}[transfers.download.received]\nfrom = [\"buddies\"]\n");
   let app = crate::testing::soulseek::app(&config).await;
