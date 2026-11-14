@@ -311,7 +311,8 @@ export interface paths {
         };
         /**
          * Where the provider sends the browser back to: checks the login, signs the user in with a
-         *     session cookie and returns them to the page they came from.
+         *     session cookie, ending the one the browser had before, and returns them to the page they came
+         *     from.
          */
         get: operations["callback"];
         put?: never;

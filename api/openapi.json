@@ -961,7 +961,7 @@
         "tags": [
           "auth"
         ],
-        "summary": "Where the provider sends the browser back to: checks the login, signs the user in with a\nsession cookie and returns them to the page they came from.",
+        "summary": "Where the provider sends the browser back to: checks the login, signs the user in with a\nsession cookie, ending the one the browser had before, and returns them to the page they came\nfrom.",
         "operationId": "callback",
         "parameters": [
           {

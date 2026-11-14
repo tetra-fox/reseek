@@ -161,12 +161,9 @@ async fn login(
       ip: Some(client.ip.to_string()),
       user_agent: presented.user_agent(),
     },
+    replaced.map(|Extension(RequestSession(replaced))| replaced),
   )
   .await?;
-  if let Some(Extension(RequestSession(replaced))) = replaced {
-    let by = Some(session.subject.clone());
-    end_sessions(&app, vec![replaced.id], by, SessionRevokeReason::Logout).await?;
-  }
   let scope = Scope::new(&app.url_base, client.https);
   Ok(
     (
@@ -255,7 +252,7 @@ async fn providers(
 )]
 async fn logout(
   State(app): State<AppState>,
-  Extension(Authentication(principal)): Extension<Authentication>,
+  Extension(Authentication { principal, .. }): Extension<Authentication>,
   Extension(presented): Extension<Presented>,
   session: Option<Extension<RequestSession>>,
 ) -> Result<Response, ApiError> {

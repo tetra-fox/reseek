@@ -88,10 +88,10 @@ fn by_principal_or_link(
   authentication: &Authentication,
   query: &ContentQuery,
 ) -> Result<Option<Principal>, ApiError> {
-  match (&authentication.0, &query.token) {
+  match (&authentication.principal, &query.token) {
     (Some(principal), _) => Ok(Some(principal.clone())),
     (None, Some(_)) => Ok(None),
-    (None, None) => Err(ApiError::unauthorized("Authentication required")),
+    (None, None) => Err(authentication.refusal()),
   }
 }
 

@@ -5,7 +5,7 @@
 //! forwarded identity, a trusted network. A token or key that is presented but not valid fails
 //! the request at once rather than falling through to a weaker way in; a session cookie that is
 //! not valid is cleared and the next ways are tried. A session whose user the configuration
-//! gives no role right now is kept, and answered 403 to anything but signing in or out. A
+//! gives no role right now is kept, and answered 403 where a principal is needed. A
 //! request that changes something on the strength of the session cookie alone must come from a
 //! page of this site, and no request let in by a trusted network or a proxy's forwarded identity
 //! may come from a page of another site.
@@ -55,10 +55,6 @@ use sessions::StoredSession;
 /// The prefix of an API token.
 pub const TOKEN_PREFIX: &str = "slsk_";
 
-/// What a session whose user has no role right now may still post to: signing in, which
-/// replaces it, and signing out.
-const WITHHELD_ROUTES: [&str; 2] = ["/api/v0/session", "/api/v0/session/logout"];
-
 /// What the daemon keeps to tell who a request is: the authentication database, the key its
 /// cookies are made with, the failure limits and the local accounts.
 pub struct Auth {
@@ -89,9 +85,26 @@ impl Auth {
   }
 }
 
-/// The principal of a request, `None` when it presented nothing that identifies it.
+/// Who a request is.
 #[derive(Clone, Debug)]
-pub struct Authentication(pub Option<Principal>);
+pub struct Authentication {
+  /// the principal, `None` when the request presented nothing that identifies it
+  pub principal: Option<Principal>,
+  /// it came with a session whose user the configuration gives no role right now
+  pub withheld: bool,
+}
+
+impl Authentication {
+  /// The answer to a request that needs a principal and has none: 403 for a session whose user
+  /// has no role right now, which goes on, else 401.
+  pub fn refusal(&self) -> ApiError {
+    if self.withheld {
+      ApiError::withheld()
+    } else {
+      ApiError::unauthorized("Authentication required")
+    }
+  }
+}
 
 /// The browser session a request came with, when its cookie was valid.
 #[derive(Clone, Debug)]
@@ -112,11 +125,6 @@ pub async fn authenticate(
     Ok(identified) => identified,
     Err(e) => return e.into_response(),
   };
-  let signs_in_or_out =
-    request.method() == axum::http::Method::POST && WITHHELD_ROUTES.contains(&request.uri().path());
-  if identified.withheld && !signs_in_or_out {
-    return ApiError::withheld().into_response();
-  }
   let headers = request.headers();
   let client = &presented.client;
   // a browser on a trusted network, or behind a proxy that signs it in from its own cookies, is
@@ -141,9 +149,10 @@ pub async fn authenticate(
     tracing::Span::current().record("principal", principal.subject.as_str());
   }
   request.extensions_mut().insert(presented.client.clone());
-  request
-    .extensions_mut()
-    .insert(Authentication(identified.principal));
+  request.extensions_mut().insert(Authentication {
+    principal: identified.principal,
+    withheld: identified.withheld,
+  });
   if let Some(session) = identified.session {
     request.extensions_mut().insert(RequestSession(session));
   }
@@ -213,14 +222,13 @@ impl<S: Send + Sync, R: MinimumRole> FromRequestParts<S> for Authorized<R> {
   type Rejection = ApiError;
 
   async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, ApiError> {
-    let principal = match parts.extensions.get::<Authentication>() {
-      Some(Authentication(Some(principal))) => principal.clone(),
-      Some(Authentication(None)) => return Err(ApiError::unauthorized("Authentication required")),
-      None => {
-        return Err(ApiError::internal(
-          "a route that needs a role is not authenticated",
-        ));
-      }
+    let Some(authentication) = parts.extensions.get::<Authentication>() else {
+      return Err(ApiError::internal(
+        "a route that needs a role is not authenticated",
+      ));
+    };
+    let Some(principal) = authentication.principal.clone() else {
+      return Err(authentication.refusal());
     };
     if principal.role < R::ROLE {
       return Err(ApiError::forbidden(format!(

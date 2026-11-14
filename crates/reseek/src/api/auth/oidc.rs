@@ -25,7 +25,7 @@ use crate::auth::oidc::logout::{NotTaken, check_token, end_session_url};
 use crate::auth::oidc::{Provider, external_base, subject_of};
 use crate::auth::sessions::{self, NewSession, Origin};
 use crate::auth::{
-  Administrator, Authorized, Presented, end_sessions, session_cookie, start_session,
+  Administrator, Authorized, Presented, RequestSession, end_sessions, session_cookie, start_session,
 };
 
 static CALLBACK_FAILED: LogLimiter = LogLimiter::new();
@@ -87,7 +87,8 @@ async fn login(
 }
 
 /// Where the provider sends the browser back to: checks the login, signs the user in with a
-/// session cookie and returns them to the page they came from.
+/// session cookie, ending the one the browser had before, and returns them to the page they came
+/// from.
 #[utoipa::path(
   get, path = "/auth/oidc/{name}/callback", tag = "auth", params(
     ("name" = String, Path, description = "the provider's name in the configuration"),
@@ -104,6 +105,7 @@ async fn login(
 async fn callback(
   State(app): State<AppState>,
   Extension(presented): Extension<Presented>,
+  replaced: Option<Extension<RequestSession>>,
   Path(name): Path<String>,
   Query(query): Query<OidcCallbackQuery>,
   headers: axum::http::HeaderMap,
@@ -225,6 +227,7 @@ async fn callback(
       ip: Some(client.ip.to_string()),
       user_agent: presented.user_agent(),
     },
+    replaced.map(|Extension(RequestSession(replaced))| replaced),
   )
   .await?;
   drop(signing_in);
@@ -923,6 +926,38 @@ mod tests {
     std::fs::write(app.dir.path().join("config.toml"), "").unwrap();
     app.state.config.reload().await.unwrap();
     assert_eq!(me(&app, &cookie).await.status, 403, "the provider is gone");
+  }
+
+  #[tokio::test]
+  async fn a_provider_sign_in_ends_the_session_the_browser_had() {
+    let (issuer, app) = setup("readonly").await;
+    let sign_in = async |code: &str, had: Option<&str>| {
+      let started = start(&app, "/").await;
+      let nonce = started.params["nonce"].clone();
+      grant(
+        &issuer,
+        &started,
+        code,
+        json!({ "sub": "u1", "nonce": nonce }),
+      );
+      let started = match had {
+        Some(cookie) => Started {
+          params: started.params.clone(),
+          cookie: format!("{}; {cookie}", started.cookie),
+        },
+        None => started,
+      };
+      set_cookie(&back(&app, &started, code).await.headers, "reseek_session").unwrap()
+    };
+    let first = sign_in("c1", None).await;
+    assert_eq!(me(&app, &first).await.status, 200);
+    let second = sign_in("c2", Some(&first)).await;
+    assert_eq!(me(&app, &second).await.status, 200);
+    assert_eq!(
+      me(&app, &first).await.status,
+      401,
+      "the new session replaced it"
+    );
   }
 
   #[tokio::test]

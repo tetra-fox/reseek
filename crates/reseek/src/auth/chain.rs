@@ -321,6 +321,8 @@ pub async fn page_session(
       ip: Some(presented.client.ip.to_string()),
       user_agent: presented.user_agent(),
     },
+    // a valid cookie would have been kept above
+    None,
   )
   .await?;
   cookies.push(session_cookie(app, &session, &scope));
@@ -431,11 +433,13 @@ pub fn idle(app: &AppState) -> chrono::Duration {
   sessions::lifetime(app.config.current().values.web.authentication.session_idle)
 }
 
-/// Makes a session for someone who just signed in and raises `SessionCreated`.
+/// Makes a session for someone who just signed in and raises `SessionCreated`. The session the
+/// browser signed in with before, `replaced`, is ended, as the new one's cookie takes its place.
 pub async fn start_session(
   app: &AppState,
   presented: &Presented,
   new: NewSession,
+  replaced: Option<StoredSession>,
 ) -> Result<StoredSession, ApiError> {
   let role = new.role;
   let session = sessions::create(&app.auth.db, new)
@@ -454,6 +458,10 @@ pub async fn start_session(
     role,
     ip: Some(presented.client.ip.to_string()),
   }));
+  if let Some(replaced) = replaced {
+    let by = Some(session.subject.clone());
+    end_sessions(app, vec![replaced.id], by, SessionRevokeReason::Logout).await?;
+  }
   Ok(session)
 }
 
