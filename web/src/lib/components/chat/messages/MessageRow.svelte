@@ -68,9 +68,16 @@
   }: Props = $props();
 
   let shownHidden = $state(false);
-  /** a mouse or a pen has come to the row, which then mounts its tooltips */
+  /** a mouse, a pen or the keys have come to the row, which then mounts its tooltips */
   let awake = $state(false);
   const pointed = wakeOnPointer(() => (awake = true));
+  /**
+   * The keys wake the row as they put focus on it, before Tab reaches its actions: an action
+   * woken on its own focus is drawn anew, which takes the focus out of the toolbar it hides with
+   */
+  const focused = (e: FocusEvent & { currentTarget: HTMLElement }) => {
+    if (e.target === e.currentTarget && e.currentTarget.matches(":focus-visible")) awake = true;
+  };
   const action = $derived(notice ? null : actionOf(m.text));
   const text = $derived(action ?? m.text);
 
@@ -131,6 +138,7 @@
   role="article"
   onkeydown={keydown}
   onpointerenter={pointed}
+  onfocusin={focused}
   class={[
     "group/message relative grid gap-x-2.5 border-l-2 pr-3 pl-2.5",
     notice ? "grid-cols-[4rem_minmax(0,1fr)]" : "grid-cols-[2.25rem_minmax(0,1fr)]",
