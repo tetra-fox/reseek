@@ -41,7 +41,7 @@
   import { session } from "#lib/session.svelte.js";
   import { CHAT } from "#lib/ui/bindings.js";
   import { clock } from "#lib/ui/clock.svelte.js";
-  import { inControl, keysAria, keysSpoken, keyStep, keysText } from "#lib/ui/keys.js";
+  import { inControl, keysAria, keysSpoken, keyStep } from "#lib/ui/keys.js";
   import { disclose } from "#lib/ui/motion.js";
   import { nameColor } from "#lib/users/colors.js";
   import { pictureOf } from "#lib/users/profile.svelte.js";
@@ -344,7 +344,7 @@
           {#if movable}
             <!-- the press is taken in the capture phase, so the tooltip's own pointerdown still
                  closes it -->
-            <Tooltip text={`Drag to reorder, or press ${keysText(CHAT.movePin)}`}>
+            <Tooltip text="Drag to reorder" keys={CHAT.movePin}>
               {#snippet child({ props })}
                 <button
                   {...props}
