@@ -112,7 +112,7 @@
   </div>
 
   {#if description}
-    <p class="line-clamp-3 text-xs whitespace-pre-line text-fg">{description}</p>
+    <p class="line-clamp-3 text-xs wrap-anywhere whitespace-pre-line text-fg">{description}</p>
   {/if}
 
   {#if !user && !own}
