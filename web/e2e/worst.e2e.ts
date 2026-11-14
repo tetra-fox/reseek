@@ -40,24 +40,26 @@ const drawnWhole = (page: Page, part: string) =>
   }, part);
 
 /**
- * The figures of `texts` the content area draws over more than one line, each found within a
- * text of its own
+ * The figures of `texts` the content area draws over more than one line, each looked for within a
+ * text of its own; one found in no text is named as missing
  */
 const brokenFigures = (page: Page, texts: string[]) =>
   page.locator("[data-content]").evaluate((area, texts) => {
     const broken: string[] = [];
     for (const text of texts) {
       const walker = document.createTreeWalker(area, NodeFilter.SHOW_TEXT);
-      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      let found = false;
+      for (let node = walker.nextNode(); node && !found; node = walker.nextNode()) {
         const at = node.textContent!.indexOf(text);
         if (at < 0) continue;
+        found = true;
         const range = document.createRange();
         range.setStart(node, at);
         range.setEnd(node, at + text.length);
         const lines = new Set([...range.getClientRects()].map((r) => Math.round(r.top)));
         if (lines.size !== 1) broken.push(text);
-        break;
       }
+      if (!found) broken.push(`${text} (missing)`);
     }
     return broken;
   }, texts);
