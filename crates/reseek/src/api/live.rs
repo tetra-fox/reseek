@@ -558,10 +558,13 @@ mod tests {
     );
   }
 
-  #[tokio::test]
+  // paused time moves on once every task waits, a database call among them, so a use recorded
+  // by a task of its own is in before the sleep below ends. A session's uses are wall-clock times
+  // in the database, which paused time does not move, so the session is moved back instead
+  #[tokio::test(start_paused = true)]
   async fn a_session_holding_only_a_stream_goes_idle() {
-    use std::time::Duration;
-    let idle = Duration::from_secs(2);
+    use chrono::{Duration, Utc};
+    let idle = Duration::seconds(2);
     let app = app("[web.authentication]\nsession_idle = \"2s\"\n", &[]).await;
     let login = app
       .send_from(
@@ -573,7 +576,6 @@ mod tests {
         ),
       )
       .await;
-    let signed_in = tokio::time::Instant::now();
     let cookie = crate::testing::set_cookie(&login.headers, "reseek_session").unwrap();
     let id = cookie.split_once('=').unwrap().1.split_once('.').unwrap().0;
     let last_seen = async || {
@@ -583,9 +585,25 @@ mod tests {
         .unwrap()
         .last_seen_at
     };
-    let at_login = last_seen().await;
+    // as if the session had last been used `ago`
+    let used_ago = async |ago: Duration| {
+      let (id, at) = (id.to_string(), crate::db::timestamp(Utc::now() - ago));
+      app
+        .state
+        .auth
+        .db
+        .write(move |conn| {
+          conn.execute(
+            "UPDATE sessions SET last_seen_at = ?1 WHERE id = ?2",
+            rusqlite::params![at, id],
+          )
+        })
+        .await
+        .unwrap();
+    };
     // past the least gap between two recorded uses, a tenth of the idle limit
-    tokio::time::sleep(idle / 4).await;
+    used_ago(idle / 4).await;
+    let before = last_seen().await;
     let mut stream = app
       .stream_from(
         OUTSIDE,
@@ -612,14 +630,13 @@ mod tests {
       crate::live::Topic::Application.role(),
     );
     assert!(check().await);
-    // a use would be recorded by a task of its own
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     assert_eq!(
       last_seen().await,
-      at_login,
+      before,
       "neither the stream's opening nor its check is a use"
     );
-    tokio::time::sleep_until(signed_in + idle + Duration::from_millis(200)).await;
+    used_ago(idle + Duration::milliseconds(200)).await;
     assert!(!check().await, "the session went idle under the stream");
   }
 
