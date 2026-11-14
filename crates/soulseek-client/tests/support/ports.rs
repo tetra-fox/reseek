@@ -44,13 +44,14 @@ fn claim(port: u16) -> bool {
     std::env::temp_dir()
   }
   .join("soulseek-test-ports");
-  std::fs::create_dir_all(&dir).unwrap();
+  std::fs::create_dir_all(&dir).unwrap_or_else(|e| unshared(&dir, &dir, e));
+  let path = dir.join(port.to_string());
   let file = std::fs::OpenOptions::new()
     .create(true)
     .truncate(false)
     .write(true)
-    .open(dir.join(port.to_string()))
-    .unwrap();
+    .open(&path)
+    .unwrap_or_else(|e| unshared(&dir, &path, e));
   match file.try_lock() {
     Ok(()) => {
       CLAIMS
@@ -62,6 +63,16 @@ fn claim(port: u16) -> bool {
     Err(std::fs::TryLockError::WouldBlock) => false,
     Err(std::fs::TryLockError::Error(e)) => panic!("port {port} could not be claimed: {e}"),
   }
+}
+
+/// Fails the test on `path`, in the claims directory `dir`, which this user could not write.
+fn unshared(dir: &std::path::Path, path: &std::path::Path, e: std::io::Error) -> ! {
+  panic!(
+    "{}: {e}. The test runs of every user on this machine claim their ports in {}; when another \
+     user made it, remove it or let this user write to it and to the files in it",
+    path.display(),
+    dir.display()
+  )
 }
 
 /// The number that places this process in [`PORTS`]. nextest gives each test running at once a
