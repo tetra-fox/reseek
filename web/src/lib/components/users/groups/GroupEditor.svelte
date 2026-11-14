@@ -24,6 +24,7 @@
     audienceOf,
     BUDDIES,
     DEFAULT,
+    groupOption,
     groupPatch,
     type GroupSummary,
     LEECHERS,
@@ -32,9 +33,12 @@
     ORDER,
     settingNames,
     STRATEGIES,
+    type ThresholdKey,
     type Upload,
     UPLOAD_COUNTS,
     uploadDraft,
+    uploadGroup,
+    type UploadKey,
     uploadOf,
     USER_DEFINED,
     VISIBLE_TO,
@@ -92,6 +96,8 @@
 
   /** a user-defined group or a new one, whose name and color are ours */
   const own = start.own;
+  /** a built-in group's own upload settings, whose options a file may hold */
+  const builtin = own ? null : uploadGroup(start.name);
   /** everyone's settings, whose not set is the global transfer settings */
   const everyone = start.name === DEFAULT;
   /** the group can be shown shares only some groups see */
@@ -118,27 +124,22 @@
    * why a built-in group's setting can't be cleared here, for one a file holds; a user-defined
    * group is written whole, which clears what it leaves out
    */
-  const held = (key: string) =>
-    own
-      ? null
-      : clearing(
-          view,
-          key in start.draft
-            ? `transfers.groups.${start.name}.upload.${key}`
-            : `transfers.groups.leechers.thresholds.${key}`
-        );
+  const held = (key: UploadKey | ThresholdKey) =>
+    builtin && clearing(view, groupOption(builtin, key));
   /** the label of a setting the form has emptied though a file holds it */
-  const emptiedHeld = () =>
-    [
+  const emptiedHeld = () => {
+    const fields: { key: UploadKey | ThresholdKey; label: string; text: string }[] = [
       ...UPLOAD_COUNTS.map((f) => ({ key: f.key, label: f.label, text: draft[f.key] })),
       { key: "strategy", label: "Queue order", text: draft.strategy },
       ...(start.name === LEECHERS
         ? [
-            { key: "files", label: "Files", text: files },
-            { key: "directories", label: "Folders", text: directories }
+            { key: "files" as const, label: "Files", text: files },
+            { key: "directories" as const, label: "Folders", text: directories }
           ]
         : [])
-    ].find((f) => !f.text.trim() && held(f.key));
+    ];
+    return fields.find((f) => !f.text.trim() && held(f.key));
+  };
 
   /** what an empty field means: a lower group's, or for everyone the global setting */
   const unset = (key: string) => {

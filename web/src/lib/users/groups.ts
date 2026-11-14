@@ -17,11 +17,11 @@ export const ORDER: OptionKey = "transfers.groups.order";
 /** The group of the users the server calls privileged, who go before everyone */
 export const PRIVILEGED: Builtin = "privileged";
 /** The group of our buddies, whose members only the buddy list changes */
-export const BUDDIES: Builtin = "buddies";
+export const BUDDIES = "buddies" satisfies Builtin;
 /** The group of the users who share too little, which has share thresholds */
-export const LEECHERS: Builtin = "leechers";
+export const LEECHERS = "leechers" satisfies Builtin;
 /** The group everyone is in, below every other, which holds what no group above sets */
-export const DEFAULT: Builtin = "default";
+export const DEFAULT = "default" satisfies Builtin;
 
 /** The names a user-defined group cannot take; the type check fails unless it lists them all */
 const BUILTIN: string[] = Object.keys({
@@ -123,9 +123,16 @@ type LimitMeasure = Schemas["LimitMeasure"];
 const LIMIT_WINDOWS: LimitWindow[] = ["queued", "daily", "weekly"];
 const LIMIT_MEASURES: LimitMeasure[] = ["files", "megabytes", "failures"];
 
+/** A setting of a group's uploads, by its dotted key inside them */
+export type UploadKey =
+  | "strategy"
+  | "slots"
+  | "speed_limit"
+  | `limits.${LimitWindow}.${LimitMeasure}`;
+
 /** A count a group can set: its dotted key inside the upload settings, and what `0` means */
 export type UploadField = {
-  key: string;
+  key: Exclude<UploadKey, "strategy">;
   label: string;
   /** what `0` is called in a summary */
   none: string;
@@ -171,7 +178,7 @@ export const UPLOAD_COUNTS: UploadField[] = [
     text: (n) => `${n} KiB/s`
   },
   ...LIMIT_WINDOWS.flatMap((window) =>
-    LIMIT_MEASURES.map((measure) => ({
+    LIMIT_MEASURES.map((measure): UploadField => ({
       key: `limits.${window}.${measure}`,
       label: `${capital(WINDOW_WORDS[window])} ${measure}`,
       none: limitText(window, measure, null),
@@ -188,7 +195,25 @@ export const STRATEGIES: Record<string, string> = {
 };
 
 /** Every setting of a group's uploads, by its dotted key */
-const UPLOAD_KEYS = ["strategy", ...UPLOAD_COUNTS.map((f) => f.key)];
+const UPLOAD_KEYS: UploadKey[] = ["strategy", ...UPLOAD_COUNTS.map((f) => f.key)];
+
+/** A share threshold of the leechers' group */
+export type ThresholdKey = "files" | "directories";
+
+/** A built-in group that has upload settings of its own */
+type UploadGroup = typeof BUDDIES | typeof LEECHERS | typeof DEFAULT;
+
+const UPLOAD_GROUPS: UploadGroup[] = [BUDDIES, LEECHERS, DEFAULT];
+
+/** The built-in group with upload settings of its own named `name`, if it is one */
+export const uploadGroup = (name: string): UploadGroup | null =>
+  UPLOAD_GROUPS.find((g) => g === name) ?? null;
+
+/** The option that holds a built-in group's upload setting, or one of the leechers' thresholds */
+export const groupOption = (group: UploadGroup, key: UploadKey | ThresholdKey): OptionKey =>
+  key === "files" || key === "directories"
+    ? `transfers.groups.leechers.thresholds.${key}`
+    : `transfers.groups.${group}.upload.${key}`;
 
 /**
  * The draft of a group's upload settings: the text each field's input holds, empty for one not
