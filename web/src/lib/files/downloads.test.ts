@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Schemas } from "#lib/api/client.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 
-import { downloadFolderPlan, downloadPlan, enqueueJob } from "./downloads";
+import { downloadFolderPlan, downloadPlan, enqueueJob, enqueueSelection } from "./downloads";
 
 const file = (filename: string, size = 10): Schemas["File"] => ({
   filename,
@@ -67,6 +67,31 @@ describe("downloading a selection", () => {
     expect(plan(["/x.flac"], () => "/", "/")).toEqual([[null, ["/x.flac"]]]);
     expect(plan(["/x.flac", "/home/y.flac"], () => "/", "/")).toEqual([
       [null, ["/x.flac", "/home/y.flac"]]
+    ]);
+  });
+});
+
+describe("downloading a selection of several users", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("keeps each user's folders below the deepest one holding their files in each share", async () => {
+    const net = fakeNetwork(() => ({ id: "j", groups: [] }));
+    await enqueueSelection(
+      [
+        { username: "alice", file: file("@@a\\Music\\Album\\CD1\\01.flac") },
+        { username: "bob", file: file("/home/bob/Album/01.flac") },
+        { username: "alice", file: file("@@a\\Music\\Album\\CD2\\01.flac") },
+        { username: "alice", file: file("@@b\\Video\\x.mkv") }
+      ],
+      "s1"
+    );
+    const body = net.requests[0].body as {
+      groups: { username: string; folder: string | null; files: unknown[] }[];
+    };
+    expect(body.groups.map((g) => [g.username, g.folder, g.files.length])).toEqual([
+      ["alice", "@@a\\Music\\Album", 2],
+      ["alice", "@@b\\Video", 1],
+      ["bob", "/home/bob/Album", 1]
     ]);
   });
 });

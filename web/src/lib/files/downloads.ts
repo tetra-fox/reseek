@@ -5,7 +5,7 @@ import { plural } from "#lib/format.js";
 import { keepCurrent } from "#lib/live/keep.svelte.js";
 import { call } from "#lib/request.js";
 import { downloads, fileKey } from "#lib/transfers/transfers.svelte.js";
-import { commonFolder, type Separator } from "#lib/tree/folders.js";
+import { commonFolder, type Separator, separatorOf } from "#lib/tree/folders.js";
 
 export type EnqueueItem = Schemas["EnqueueDownloadFile"];
 
@@ -203,6 +203,15 @@ export const downloadPlan = (
   });
 };
 
+/** The groups of a plan for `username`'s files as the job asks for them */
+const requestsOf = (username: string, plan: DownloadGroup[], searchId?: string): Request[] =>
+  plan.map((group) => ({
+    username,
+    files: group.files.map((f) => asItem(f)),
+    searchId,
+    folder: group.folder ?? undefined
+  }));
+
 /**
  * Enqueues the groups of a plan for one user's files as one download job, found by the search
  * `searchId` when they came from one
@@ -211,12 +220,36 @@ export const enqueuePlan = (
   username: string,
   plan: DownloadGroup[],
   searchId?: string
-): Promise<Enqueued> =>
-  enqueueJob(
-    plan.map((group) => ({
-      username,
-      files: group.files.map((f) => asItem(f)),
-      searchId,
-      folder: group.folder ?? undefined
-    }))
+): Promise<Enqueued> => enqueueJob(requestsOf(username, plan, searchId));
+
+/** The share a path is in: its first folder, with the separators before it */
+const shareOf = (path: string, separator: Separator) => {
+  let start = 0;
+  while (path[start] === separator) start++;
+  const cut = path.indexOf(separator, start);
+  return cut === -1 ? path.slice(0, start) : path.slice(0, cut);
+};
+
+/**
+ * Enqueues files of several users, such as a selection of search results, as one download job:
+ * each user's files split by `downloadPlan` with a top folder per share, so they keep their
+ * folders as a folder's own download does
+ */
+export const enqueueSelection = (
+  picked: { username: string; file: Schemas["File"] }[],
+  searchId?: string
+): Promise<Enqueued> => {
+  const byUser = new Map<string, Schemas["File"][]>();
+  for (const { username, file } of picked) {
+    const listed = byUser.get(username);
+    if (listed) listed.push(file);
+    else byUser.set(username, [file]);
+  }
+  return enqueueJob(
+    [...byUser].flatMap(([username, files]) => {
+      const separator = separatorOf(files[0].filename);
+      const plan = downloadPlan(files, (path) => shareOf(path, separator), separator);
+      return requestsOf(username, plan, searchId);
+    })
   );
+};

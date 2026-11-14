@@ -521,6 +521,42 @@ describe("search results", () => {
     });
   });
 
+  it("download a folder from its menu, and a user's results, keeping their folders", async () => {
+    session.principal = { name: "a", role: "Administrator", session: null } as never;
+    app.state = { server: { isConnected: true }, user: { username: "me" } } as never;
+    const album = response("alice", 1, [
+      sharedFile("@@alice\\Music\\Album\\CD1\\01.flac"),
+      sharedFile("@@alice\\Music\\Album\\CD2\\01.flac")
+    ]);
+    const net = await open([album]);
+    net.frame("search.response", { searchId: ID, response: album });
+    await streamed();
+    const folders = () =>
+      net.requests
+        .filter((r) => r.url.pathname.endsWith("/transfers/downloads/jobs"))
+        .map((r) =>
+          (r.body as { groups: { folder: string | null }[] }).groups.map((g) => g.folder)
+        );
+    const line = [...document.querySelectorAll("[data-line]")].find((l) =>
+      l.getAttribute("data-line")!.endsWith("@@alice\\Music\\Album")
+    )!;
+    line.dispatchEvent(
+      new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 5, clientY: 5 })
+    );
+    await flushFaked();
+    [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+      .find((i) => i.textContent?.trim() === "Download folder")!
+      .click();
+    await flushFaked();
+    expect(folders()).toEqual([["@@alice\\Music\\Album"]]);
+
+    [...document.querySelectorAll<HTMLButtonElement>("button")]
+      .find((b) => b.textContent?.trim() === "Download all")!
+      .click();
+    await flushFaked();
+    expect(folders()[1], "the deepest folder holding them").toEqual(["@@alice\\Music\\Album"]);
+  });
+
   it("keep every preset removed in a row off, and undo only the one undone", async () => {
     session.principal = { name: "a", role: "Administrator", session: null } as never;
     const presets = ["Big", "No small files", "FLAC"].map((name) => ({ name, filter: name }));

@@ -19,7 +19,7 @@
   import { FILE_ACTIONS as A } from "#lib/files/actions.js";
   import type { AllFiles } from "#lib/files/allfiles.svelte.js";
   import type { FileColumn } from "#lib/files/columns.js";
-  import { asItem, type Enqueued, enqueueJob, followDownloads } from "#lib/files/downloads.js";
+  import { type Enqueued, enqueueSelection, followDownloads } from "#lib/files/downloads.js";
   import { badgeCount, formatBytes, formatSpeed, getFileName, plural } from "#lib/format.js";
   import { inspector } from "#lib/inspector/inspector.svelte.js";
   import { heldOrder } from "#lib/lists/interaction.svelte.js";
@@ -122,22 +122,12 @@
     }
   });
 
-  /** Enqueues rows as one job, one group per user, and says what came of it */
-  const download = (list: ResultRow[]): Promise<Enqueued> => {
-    const byUser = new Map<string, ResultRow[]>();
-    for (const r of list) {
-      const mine = byUser.get(r.username);
-      if (mine) mine.push(r);
-      else byUser.set(r.username, [r]);
-    }
-    return enqueueJob(
-      [...byUser].map(([username, mine]) => ({
-        username,
-        files: mine.map((r) => asItem(r.file)),
-        searchId
-      }))
+  /** Enqueues rows as one job that keeps each user's folders */
+  const download = (list: ResultRow[]): Promise<Enqueued> =>
+    enqueueSelection(
+      list.map((r) => ({ username: r.username, file: r.file })),
+      searchId
     );
-  };
   /** Downloads rows and says what came of it in a toast */
   const downloadNow = async (list: ResultRow[]) => {
     const outcome = await download(list);

@@ -26,11 +26,10 @@
   import type { AllFiles } from "#lib/files/allfiles.svelte.js";
   import { fileColumns, fileTemplate, fileWidth } from "#lib/files/columns.js";
   import {
-    asItem,
     downloadFolderPlan,
     type Enqueued,
-    enqueueJob,
     enqueuePlan,
+    enqueueSelection,
     followDownloads
   } from "#lib/files/downloads.js";
   import { formatAttributes, getFileName, plural } from "#lib/format.js";
@@ -163,23 +162,12 @@
     ontick: (yes: boolean) => tick(node, yes)
   });
 
-  /** Downloads files as one job, one group per user, and says what came of it */
-  const download = (files: Item[]): Promise<Enqueued> => {
-    const byUser = new Map<string, Item[]>();
-    for (const f of files) {
-      if (f.locked) continue;
-      const listed = byUser.get(f.owner);
-      if (listed) listed.push(f);
-      else byUser.set(f.owner, [f]);
-    }
-    return enqueueJob(
-      [...byUser].map(([username, mine]) => ({
-        username,
-        files: mine.map((f) => asItem(f)),
-        searchId
-      }))
+  /** Downloads files as one job that keeps each user's folders, and says what came of it */
+  const download = (files: Item[]): Promise<Enqueued> =>
+    enqueueSelection(
+      files.filter((f) => !f.locked).map((f) => ({ username: f.owner, file: f })),
+      searchId
     );
-  };
   const tell = (outcome: Enqueued) =>
     toast(outcome.text, outcome.kind === "done" ? "info" : "error");
   const downloadNow = async (files: Item[]) => tell(await download(files));
