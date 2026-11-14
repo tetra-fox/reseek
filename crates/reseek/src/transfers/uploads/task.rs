@@ -122,11 +122,18 @@ impl Uploads {
       Ok(Locating::NotShared) => {
         let gone = ClientError::NotFound(FILE_GONE.to_string());
         self.fail(&mut record, &gone, None).await;
-        // the answer a request for a file not shared gets, so the peer stops waiting for it
-        let filename = record.filename.as_str().into();
-        return client
-          .deny_upload(&record.username, filename, NOT_SHARED.to_string())
-          .await;
+        // the answer a request for a file not shared gets, so the peer stops waiting for it; sent
+        // on a task of its own, so the upload leaves the queue without waiting for the peer
+        let (username, filename) = (record.username.clone(), record.filename.as_str().into());
+        self.tasks.spawn(
+          async move {
+            client
+              .deny_upload(&username, filename, NOT_SHARED.to_string())
+              .await;
+          }
+          .in_current_span(),
+        );
+        return;
       }
       // the agent is asked for the file again when the upload's turn comes, and the peer is
       // told the upload failed when it cannot send it then
