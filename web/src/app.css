@@ -70,6 +70,10 @@
   --color-success: oklch(0.64 0.15 155);
   --color-success-soft: oklch(0.955 0.035 155);
   --color-success-soft-fg: oklch(0.44 0.11 155);
+  /* text in the warning and success colours. The fills are too light to read as text on a light
+     surface, so it takes the soft tones' text there */
+  --color-warning-text: var(--color-warning-soft-fg);
+  --color-success-text: var(--color-success-soft-fg);
   --color-info: oklch(0.58 0.13 250);
   --color-info-soft: oklch(0.955 0.025 250);
   --color-info-soft-fg: oklch(0.45 0.13 250);
@@ -298,6 +302,8 @@
   --color-success: oklch(0.73 0.15 155);
   --color-success-soft: oklch(0.27 0.055 155);
   --color-success-soft-fg: oklch(0.86 0.1 155);
+  --color-warning-text: var(--color-warning);
+  --color-success-text: var(--color-success);
   --color-info: oklch(0.7 0.11 250);
   --color-info-soft: oklch(0.27 0.05 250);
   --color-info-soft-fg: oklch(0.86 0.07 250);

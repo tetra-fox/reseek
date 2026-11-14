@@ -127,14 +127,14 @@
     {#if write}
       <Button
         variant={s?.pendingReconnect ? "secondary" : "outline"}
-        class={s?.pendingReconnect ? "text-warning" : undefined}
+        class={s?.pendingReconnect ? "text-warning-text" : undefined}
         disabled={busy.running || !s}
         onclick={reconnect}><UnplugIcon />Reconnect</Button>
     {/if}
     {#if control}
       <Button
         variant="outline"
-        class={s?.pendingRestart ? "text-warning" : undefined}
+        class={s?.pendingRestart ? "text-warning-text" : undefined}
         disabled={busy.running || !s}
         onclick={restart}><RotateCwIcon />Restart</Button>
       <Button variant="danger" disabled={busy.running || !s} onclick={shutDown}
@@ -154,11 +154,12 @@
         <dt>Latest</dt>
         <dd>
           {s.version.latest ?? "Not checked"}
-          {#if s.version.isUpdateAvailable}<span class="text-warning">(update available)</span>{/if}
+          {#if s.version.isUpdateAvailable}<span class="text-warning-text">(update available)</span
+            >{/if}
         </dd>
         {#if s.pendingRestart || s.pendingReconnect}
           <dt>Pending</dt>
-          <dd class="text-warning">
+          <dd class="text-warning-text">
             {s.pendingRestart && s.pendingReconnect
               ? "Restart and reconnect"
               : s.pendingRestart

@@ -82,7 +82,7 @@
   <div class="flex items-center gap-2">
     <Button size="sm" disabled={!changed} onclick={() => void save()}>Save judgment</Button>
     {#if saved && !changed}
-      <span class="flex items-center gap-1 text-sm text-success" role="status"
+      <span class="flex items-center gap-1 text-sm text-success-text" role="status"
         ><CheckIcon class="size-4" />Saved</span>
     {:else if report.override}
       <span class="text-xs text-fg-muted">Saved {dateTime(report.override.at)}</span>

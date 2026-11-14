@@ -72,7 +72,7 @@
         class="font-mono text-xs"
         aria-describedby={pasted.unread ? "add-unread" : undefined} />
       {#if pasted.unread}
-        <span id="add-unread" class="text-xs text-warning">
+        <span id="add-unread" class="text-xs text-warning-text">
           {plural(pasted.unread, "line", "lines")} could not be read
         </span>
       {/if}

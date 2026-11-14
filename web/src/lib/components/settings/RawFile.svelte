@@ -207,7 +207,7 @@
       <span class="flex items-center gap-1 text-fg-muted"
         ><Spinner class="size-3.5" />Checking...</span>
     {:else if validation?.valid && dirty}
-      <span class="text-success">Valid</span>
+      <span class="text-success-text">Valid</span>
     {/if}
     {#if writable}
       <div class="ml-auto flex gap-inline">

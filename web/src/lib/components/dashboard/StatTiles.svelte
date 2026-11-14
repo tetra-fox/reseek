@@ -32,8 +32,8 @@
   );
   const TONES = {
     muted: "text-fg-muted",
-    success: "text-success",
-    warning: "text-warning",
+    success: "text-success-text",
+    warning: "text-warning-text",
     danger: "text-danger"
   };
 </script>

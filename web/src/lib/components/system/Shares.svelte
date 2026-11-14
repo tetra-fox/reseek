@@ -208,7 +208,7 @@
     {:else}
       <Button
         variant={scan.scanPending ? "secondary" : "primary"}
-        class={scan.scanPending ? "text-warning" : undefined}
+        class={scan.scanPending ? "text-warning-text" : undefined}
         disabled={busy.running}
         onclick={() =>
           void busy.run(() => call(() => api.PUT("/api/v0/shares", { params: { query: {} } })))}>

@@ -79,7 +79,7 @@
       <Spinner class="size-3" />Saving
     {:else if tick}
       <span
-        class="flex items-center gap-1 text-success"
+        class="flex items-center gap-1 text-success-text"
         transition:fade={{ duration: motionFast() }}><CheckIcon class="size-3.5" />Saved</span>
     {:else if saving.state === "failed"}
       <span class="text-danger">{saving.error}</span>

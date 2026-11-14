@@ -238,7 +238,7 @@
                     <button
                       {...props}
                       type="button"
-                      class="flex items-center gap-1 rounded-badge px-1.5 text-xs text-success hover:underline"
+                      class="flex items-center gap-1 rounded-badge px-1.5 text-xs text-success-text hover:underline"
                       onclick={() => enter(room.name)}
                       ><CheckIcon class="size-3.5" /><span class="max-sm:sr-only">Joined</span
                       ></button>
