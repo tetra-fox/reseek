@@ -78,13 +78,15 @@ pub struct Flags {
 pub struct Paths {
   /// Configuration directory, which holds the configuration files. Set only through the
   /// environment or the command line.
-  #[cascade(env = "RESEEK_CONFIG_DIR", cli = "--config-dir")]
+  #[cascade(env = "RESEEK_CONFIG_DIR", cli = "--config-dir", path)]
   pub config: Option<PathBuf>,
-  /// Data directory, which holds database backups and the default downloads directory.
-  #[cascade(env = "RESEEK_DATA_DIR", cli = "--data-dir")]
+  /// Data directory, which holds database backups and the default downloads directory. A relative
+  /// path counts from the file that sets it.
+  #[cascade(env = "RESEEK_DATA_DIR", cli = "--data-dir", path)]
   pub data: Option<PathBuf>,
   /// Cache directory, which holds the share index and the copies of it sent to the controller.
-  #[cascade(env = "RESEEK_CACHE_DIR", cli = "--cache-dir")]
+  /// A relative path counts from the file that sets it.
+  #[cascade(env = "RESEEK_CACHE_DIR", cli = "--cache-dir", path)]
   pub cache: Option<PathBuf>,
 }
 
@@ -94,8 +96,8 @@ pub struct Paths {
 pub struct Directories {
   /// Directory the controller's finished downloads are copied to, and the one
   /// `shares.share_downloads` shares. Defaults to `downloads` in the data directory. A
-  /// directory set here must exist.
-  #[cascade(env = "RESEEK_DOWNLOADS_DIR", cli = "-o|--downloads")]
+  /// directory set here must exist. A relative path counts from the file that sets it.
+  #[cascade(env = "RESEEK_DOWNLOADS_DIR", cli = "-o|--downloads", path)]
   pub downloads: Option<PathBuf>,
 }
 

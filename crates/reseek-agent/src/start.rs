@@ -121,24 +121,28 @@ fn downloads(options: &Options, data: &Path) -> (PathBuf, PathBuf) {
 
 /// The configuration files: `config.toml` in the configuration directory, or the files given,
 /// then every `config.d/*.toml` beside the first; as the directory and the names in it.
-fn config_files(given: &[PathBuf], config_dir: PathBuf) -> (PathBuf, Vec<String>) {
-  let Some((first, rest)) = given.split_first() else {
-    return (
-      config_dir,
-      vec!["config.toml".to_string(), "config.d/*.toml".to_string()],
-    );
+/// Relative paths count from the working directory; why one cannot be made absolute when it
+/// cannot.
+fn config_files(given: &[PathBuf], config_dir: &Path) -> Result<(PathBuf, Vec<String>), String> {
+  let absolute = |path: &Path| {
+    std::path::absolute(path).map_err(|e| format!("{} has no absolute path: {e}", path.display()))
   };
-  let first = std::path::absolute(first).unwrap_or_else(|_| first.clone());
-  let dir = first.parent().map_or(config_dir, Path::to_path_buf);
+  let Some((first, rest)) = given.split_first() else {
+    return Ok((
+      absolute(config_dir)?,
+      vec!["config.toml".to_string(), "config.d/*.toml".to_string()],
+    ));
+  };
+  let first = absolute(first)?;
+  let dir = first
+    .parent()
+    .map_or_else(|| absolute(config_dir), |dir| Ok(dir.to_path_buf()))?;
   let mut names = vec![first.display().to_string()];
-  names.extend(rest.iter().map(|path| {
-    std::path::absolute(path)
-      .unwrap_or_else(|_| path.clone())
-      .display()
-      .to_string()
-  }));
+  for path in rest {
+    names.push(absolute(path)?.display().to_string());
+  }
   names.push("config.d/*.toml".to_string());
-  (dir, names)
+  Ok((dir, names))
 }
 
 /// Loads the configuration, starts logging and serves until a signal stops the agent.
@@ -156,7 +160,13 @@ fn run(invocation: Invocation) -> ExitCode {
     eprintln!("Invalid configuration: no home directory to keep paths.config in");
     return ExitCode::FAILURE;
   };
-  let (dir, names) = config_files(&invocation.config_files, config_dir);
+  let (dir, names) = match config_files(&invocation.config_files, &config_dir) {
+    Ok(files) => files,
+    Err(e) => {
+      eprintln!("The configuration files could not be found: {e}");
+      return ExitCode::FAILURE;
+    }
+  };
   // the first options validated are the ones the agent starts with
   let started = OnceLock::new();
   let checked = defaults.clone();
@@ -328,4 +338,37 @@ fn stop_on_signals(shutdown: CancellationToken) {
       std::process::exit(1);
     }
   });
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn config_files_given_relative_count_from_the_working_directory() {
+    let here = std::env::current_dir().unwrap();
+    let (dir, names) = config_files(&["etc/agent.toml".into()], Path::new("/etc")).unwrap();
+    assert_eq!(dir, here.join("etc"));
+    assert_eq!(names[0], here.join("etc/agent.toml").display().to_string());
+    let (dir, _) = config_files(&[], Path::new("conf")).unwrap();
+    assert_eq!(dir, here.join("conf"));
+    assert!(config_files(&["".into()], Path::new("/etc")).is_err());
+  }
+
+  #[test]
+  fn a_relative_directory_in_a_file_counts_from_the_file() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+      dir.path().join("config.toml"),
+      "[directories]\ndownloads = \"dl\"\n[paths]\ndata = \"../data\"\n",
+    )
+    .unwrap();
+    let loaded = Layers::<Options>::new()
+      .files(dir.path(), ["config.toml"])
+      .load()
+      .unwrap();
+    let options = loaded.values;
+    assert_eq!(options.directories.downloads, Some(dir.path().join("dl")));
+    assert_eq!(options.paths.data, Some(dir.path().join("../data")));
+  }
 }
