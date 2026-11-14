@@ -9,6 +9,7 @@ use std::sync::OnceLock;
 
 use cascade::{Layers, Schema, Watch, Watcher};
 use directories::ProjectDirs;
+use reseek_shares::config_files::ConfigFiles;
 use reseek_shares::log_format::{Clock, Line};
 use reseek_shares::{Setup, Shares};
 use tokio_util::sync::CancellationToken;
@@ -119,32 +120,6 @@ fn downloads(options: &Options, data: &Path) -> (PathBuf, PathBuf) {
   (given.unwrap_or_else(|| default.clone()), default)
 }
 
-/// The configuration files: `config.toml` in the configuration directory, or the files given,
-/// then every `config.d/*.toml` beside the first; as the directory and the names in it.
-/// Relative paths count from the working directory, and one that cannot be made absolute is
-/// refused.
-fn config_files(given: &[PathBuf], config_dir: &Path) -> Result<(PathBuf, Vec<String>), String> {
-  let absolute = |path: &Path| {
-    std::path::absolute(path).map_err(|e| format!("{} has no absolute path: {e}", path.display()))
-  };
-  let Some((first, rest)) = given.split_first() else {
-    return Ok((
-      absolute(config_dir)?,
-      vec!["config.toml".to_string(), "config.d/*.toml".to_string()],
-    ));
-  };
-  let first = absolute(first)?;
-  let dir = first
-    .parent()
-    .map_or_else(|| absolute(config_dir), |dir| Ok(dir.to_path_buf()))?;
-  let mut names = vec![first.display().to_string()];
-  for path in rest {
-    names.push(absolute(path)?.display().to_string());
-  }
-  names.push("config.d/*.toml".to_string());
-  Ok((dir, names))
-}
-
 /// Loads the configuration, starts logging and serves until a signal stops the agent.
 fn run(invocation: Invocation) -> ExitCode {
   let defaults = Defaults::new(invocation.app_dir.as_deref());
@@ -160,10 +135,10 @@ fn run(invocation: Invocation) -> ExitCode {
     eprintln!("Invalid configuration: no home directory to keep paths.config in");
     return ExitCode::FAILURE;
   };
-  let (dir, names) = match config_files(&invocation.config_files, &config_dir) {
+  let files = match ConfigFiles::new(&invocation.config_files, &config_dir) {
     Ok(files) => files,
     Err(e) => {
-      eprintln!("The configuration files could not be found: {e}");
+      eprintln!("{e}");
       return ExitCode::FAILURE;
     }
   };
@@ -172,7 +147,7 @@ fn run(invocation: Invocation) -> ExitCode {
   let checked = defaults.clone();
   let layers = Layers::<Options>::new()
     .env(env)
-    .files(&dir, names)
+    .files(&files.dir, files.names)
     .cli(invocation.flags)
     .validate(move |options: &Options| {
       // without a home directory both downloads paths are the same, so the check of a
@@ -345,17 +320,6 @@ mod tests {
   use super::*;
 
   #[test]
-  fn config_files_given_relative_count_from_the_working_directory() {
-    let here = std::env::current_dir().unwrap();
-    let (dir, names) = config_files(&["etc/agent.toml".into()], Path::new("/etc")).unwrap();
-    assert_eq!(dir, here.join("etc"));
-    assert_eq!(names[0], here.join("etc/agent.toml").display().to_string());
-    let (dir, _) = config_files(&[], Path::new("conf")).unwrap();
-    assert_eq!(dir, here.join("conf"));
-    assert!(config_files(&["".into()], Path::new("/etc")).is_err());
-  }
-
-  #[test]
   fn a_relative_directory_in_a_file_counts_from_the_file() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(
@@ -369,6 +333,10 @@ mod tests {
       .unwrap();
     let options = loaded.values;
     assert_eq!(options.directories.downloads, Some(dir.path().join("dl")));
-    assert_eq!(options.paths.data, Some(dir.path().join("../data")));
+    assert_eq!(
+      options.paths.data,
+      Some(dir.path().parent().unwrap().join("data")),
+      "its `..` resolved by name"
+    );
   }
 }

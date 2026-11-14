@@ -12,7 +12,6 @@ cascade.workspace = true
 reseek-relay-proto.workspace = true
 reseek-shares.workspace = true
 reseek-tls.workspace = true
-soulseek-client.workspace = true
 
 base64.workspace = true
 directories.workspace = true

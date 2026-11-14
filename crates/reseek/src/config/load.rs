@@ -10,6 +10,7 @@ use cascade::{Layers, Overrides, Schema};
 use super::Options;
 use super::validate::{Context, validate};
 use crate::paths::Defaults;
+pub use reseek_shares::config_files::ConfigFiles;
 
 /// The variable that marks the configuration files as managed by a tool, such as `Nix`.
 pub const MANAGED_BY: &str = "RESEEK_CONFIG_MANAGED_BY";
@@ -24,52 +25,6 @@ const NOT_OPTIONS: &[&str] = &[
 
 /// Variables starting with this are build information nothing reads.
 const BUILD_INFO_PREFIX: &str = "RESEEK_DOCKER_";
-
-/// Where the configuration files are: a directory and the files in it, in the order they
-/// apply.
-#[derive(Clone, Debug, PartialEq)]
-pub struct ConfigFiles {
-  /// the directory the names are relative to; the `config.d` drop-ins are in it
-  pub dir: PathBuf,
-  /// the files, then the drop-in pattern
-  pub names: Vec<String>,
-}
-
-impl ConfigFiles {
-  /// `config.toml` in `config_dir`, or the files given on the command line, followed by every
-  /// `config.d/*.toml` next to the first of them. Relative paths count from the working
-  /// directory, and one that cannot be made absolute is refused.
-  pub fn new(given: &[PathBuf], config_dir: &Path) -> Result<Self, String> {
-    let absolute = |path: &Path| {
-      std::path::absolute(path).map_err(|e| format!("{} has no absolute path: {e}", path.display()))
-    };
-    let Some((first, rest)) = given.split_first() else {
-      return Ok(Self {
-        dir: absolute(config_dir)?,
-        names: vec!["config.toml".to_string(), "config.d/*.toml".to_string()],
-      });
-    };
-    let first = absolute(first)?;
-    let dir = first
-      .parent()
-      .map_or_else(|| absolute(config_dir), |dir| Ok(dir.to_path_buf()))?;
-    let name = |path: &Path| match path.strip_prefix(&dir) {
-      Ok(relative) => relative.display().to_string(),
-      Err(_) => path.display().to_string(),
-    };
-    let mut names = vec![name(&first)];
-    for path in rest {
-      names.push(name(&absolute(path)?));
-    }
-    names.push("config.d/*.toml".to_string());
-    Ok(Self { dir, names })
-  }
-
-  /// The first file, which is where a new configuration is written.
-  pub fn first(&self) -> PathBuf {
-    self.dir.join(&self.names[0])
-  }
-}
 
 /// Everything the layers are read from.
 pub struct Sources {
@@ -181,29 +136,6 @@ pub fn unknown_variables(schema: &Schema, env: &[(OsString, OsString)]) -> Vec<S
 mod tests {
   use super::*;
 
-  #[test]
-  fn given_files_come_first_then_the_drop_ins_next_to_the_first() {
-    let files = ConfigFiles::new(&[], Path::new("/home/u/.config/reseek")).unwrap();
-    assert_eq!(files.names, ["config.toml", "config.d/*.toml"]);
-    assert_eq!(
-      files.first(),
-      Path::new("/home/u/.config/reseek/config.toml")
-    );
-    let files = ConfigFiles::new(
-      &[
-        "/etc/reseek/config.toml".into(),
-        "/run/secrets/reseek.toml".into(),
-      ],
-      Path::new("/var/lib/reseek"),
-    )
-    .unwrap();
-    assert_eq!(files.dir, Path::new("/etc/reseek"));
-    assert_eq!(
-      files.names,
-      ["config.toml", "/run/secrets/reseek.toml", "config.d/*.toml"]
-    );
-  }
-
   /// A watcher over `config.toml` in `dir` holding `text`.
   fn watching(dir: &Path, text: &str) -> cascade::Watcher<Options> {
     std::fs::write(dir.join("config.toml"), text).unwrap();
@@ -264,15 +196,33 @@ mod tests {
     );
   }
 
+  /// The command line names the configuration through `..`, as `--config-file ../conf/x.toml`
+  /// from another directory does
+  #[cfg(unix)]
   #[test]
-  fn config_files_given_relative_count_from_the_working_directory() {
+  fn a_config_file_named_through_dot_dot_counts_its_paths_from_its_directory() {
+    let dir = tempfile::tempdir().unwrap();
+    let conf = dir.path().join("conf");
+    std::fs::create_dir_all(conf.join("dl")).unwrap();
+    std::fs::write(
+      conf.join("reseek.toml"),
+      "[directories]\ndownloads = \"dl\"\n",
+    )
+    .unwrap();
     let here = std::env::current_dir().unwrap();
-    let files =
-      ConfigFiles::new(&["etc/reseek.toml".into()], Path::new("/var/lib/reseek")).unwrap();
-    assert_eq!(files.first(), here.join("etc/reseek.toml"));
-    let files = ConfigFiles::new(&[], Path::new("conf")).unwrap();
-    assert_eq!(files.dir, here.join("conf"));
-    assert!(ConfigFiles::new(&["".into()], Path::new("/etc")).is_err());
+    let up = "../".repeat(here.components().count() - 1);
+    let through = |path: &Path| format!("{up}{}", path.strip_prefix("/").unwrap().display());
+    let given = PathBuf::from(through(&conf.join("reseek.toml")));
+    let sources = Sources {
+      env: Vec::new(),
+      files: ConfigFiles::new(&[given], dir.path()).unwrap(),
+      cli: vec![("--config-dir".into(), through(&conf))],
+    };
+    let defaults = Defaults::new(Some(dir.path()));
+    let watcher = cascade::Watcher::new(layers(&sources, &defaults, None)).unwrap();
+    let paths = defaults.resolve(&watcher.current().values).unwrap();
+    assert_eq!(paths.downloads, conf.join("dl"));
+    assert_eq!(paths.config, conf);
   }
 
   #[test]

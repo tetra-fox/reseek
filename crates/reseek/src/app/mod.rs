@@ -527,7 +527,7 @@ fn run(invocation: Invocation, assets: Assets) -> u8 {
   let files = match ConfigFiles::new(&invocation.config_files, &config_dir) {
     Ok(files) => files,
     Err(e) => {
-      eprintln!("The configuration files could not be found: {e}");
+      eprintln!("{e}");
       return EXIT_FILESYSTEM;
     }
   };

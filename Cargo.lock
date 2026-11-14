@@ -3466,7 +3466,6 @@ dependencies = [
  "rustls",
  "serde",
  "serde_json",
- "soulseek-client",
  "tempfile",
  "thiserror 2.0.21",
  "tokio",

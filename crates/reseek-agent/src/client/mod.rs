@@ -21,8 +21,7 @@ use std::time::Duration;
 
 use cascade::Watcher;
 use reseek_relay_proto::frames::close;
-use reseek_shares::{Shares, backoff, lock};
-use soulseek_client::Outage;
+use reseek_shares::{Outage, Shares, backoff, lock};
 use tokio::sync::Notify;
 use tokio::sync::broadcast::error::RecvError;
 use tokio_util::sync::CancellationToken;
@@ -195,8 +194,8 @@ impl AgentClient {
     }
   }
 
-  /// Logs a dial that failed with `error`, warned about once until it fails another way or a
-  /// dial succeeds.
+  /// Logs a dial that failed with `error`, warned about once for each way it fails until a dial
+  /// succeeds.
   fn dial_failed(&self, error: &str) {
     warn_once(
       &self.dial_warned,

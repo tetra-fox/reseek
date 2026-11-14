@@ -11,8 +11,9 @@
 //!
 //! The crate also holds what the share index is built on and the daemon shares: the SQLite
 //! databases ([`db`]), the entries a walk leaves out ([`entries`]), the patterns users write
-//! ([`patterns`]), how a loop that keeps failing waits before it tries again ([`backoff`]),
-//! the line the daemon's and the agent's logs are written in ([`log_format`]), [`lock`] and
+//! ([`patterns`]), how a loop that keeps failing waits before it tries again ([`backoff`]) and
+//! warns about an outage ([`Outage`]), where the configuration files are ([`config_files`]), the
+//! line the daemon's and the agent's logs are written in ([`log_format`]), [`lock`] and
 //! [`traverses`].
 
 #![warn(missing_docs)]
@@ -20,6 +21,7 @@
 mod attributes;
 pub mod backoff;
 mod browse;
+pub mod config_files;
 pub mod db;
 pub mod entries;
 mod folders;
@@ -67,6 +69,7 @@ pub use repository::SCHEMA;
 pub use reseek_relay_proto::LOCAL_HOST;
 use scanner::{Outcome, Settings};
 use share::Share;
+pub use soulseek_client::Outage;
 pub use visibility::View;
 
 /// Failed share queries, which arrive at the network's search rate.
