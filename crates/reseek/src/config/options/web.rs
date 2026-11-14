@@ -21,8 +21,13 @@ pub struct Web {
     apply = "restart"
   )]
   pub ip_address: Option<String>,
-  /// Absolute path of an additional Unix domain socket to listen on.
-  #[cascade(env = "RESEEK_HTTP_SOCKET", cli = "--http-socket", apply = "restart")]
+  /// Additional Unix domain socket to listen on. A relative path counts from the file that sets it.
+  #[cascade(
+    env = "RESEEK_HTTP_SOCKET",
+    cli = "--http-socket",
+    apply = "restart",
+    path
+  )]
   pub socket: Option<PathBuf>,
   /// Path under which the daemon is served behind a reverse proxy, such as `/reseek`.
   #[cascade(env = "RESEEK_URL_BASE", cli = "--url-base", apply = "restart")]
@@ -122,14 +127,16 @@ impl Default for Https {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Certificate {
-  /// PEM file with the certificate chain, used with `key`.
-  #[cascade(env = "RESEEK_HTTPS_CERT", cli = "--https-cert")]
+  /// PEM file with the certificate chain, used with `key`. A relative path counts from the file
+  /// that sets it.
+  #[cascade(env = "RESEEK_HTTPS_CERT", cli = "--https-cert", path)]
   pub cert: Option<PathBuf>,
-  /// PEM file with the private key for `cert`.
-  #[cascade(env = "RESEEK_HTTPS_KEY", cli = "--https-key")]
+  /// PEM file with the private key for `cert`. A relative path counts from the file that sets it.
+  #[cascade(env = "RESEEK_HTTPS_KEY", cli = "--https-key", path)]
   pub key: Option<PathBuf>,
-  /// PKCS#12 file with the certificate and its key, used when `cert` is not set.
-  #[cascade(env = "RESEEK_HTTPS_CERT_PFX", cli = "--https-cert-pfx")]
+  /// PKCS#12 file with the certificate and its key, used when `cert` is not set. A relative path
+  /// counts from the file that sets it.
+  #[cascade(env = "RESEEK_HTTPS_CERT_PFX", cli = "--https-cert-pfx", path)]
   pub pfx: Option<PathBuf>,
   /// Password of the PKCS#12 file.
   #[cascade(

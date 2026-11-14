@@ -174,7 +174,9 @@ pub struct Oidc {
   pub session_ttl: Duration,
   /// Logout at the provider.
   pub logout: OidcLogout,
-  /// PEM file with an additional certificate authority, for a private provider.
+  /// PEM file with an additional certificate authority, for a private provider. A relative path
+  /// counts from the file that sets it.
+  #[cascade(path)]
   pub ca_certificate: Option<PathBuf>,
   /// Refuses an `http://` issuer that is not on this machine.
   pub require_https: bool,

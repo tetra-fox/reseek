@@ -194,8 +194,8 @@ pub struct Blacklist {
   pub enabled: bool,
   /// Blocklist file in CIDR, P2P or DAT format, read again when a blocklist setting changes. Listed
   /// users also have their private messages dropped and room messages hidden, once their address is
-  /// known.
-  #[cascade(env = "RESEEK_BLACKLIST_FILE", cli = "--blacklist-file")]
+  /// known. A relative path counts from the file that sets it.
+  #[cascade(env = "RESEEK_BLACKLIST_FILE", cli = "--blacklist-file", path)]
   pub file: Option<std::path::PathBuf>,
 }
 

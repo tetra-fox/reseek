@@ -37,29 +37,32 @@ pub struct ConfigFiles {
 
 impl ConfigFiles {
   /// `config.toml` in `config_dir`, or the files given on the command line, followed by every
-  /// `config.d/*.toml` next to the first of them.
-  pub fn new(given: &[PathBuf], config_dir: &Path) -> Self {
-    let Some((first, rest)) = given.split_first() else {
-      return Self {
-        dir: config_dir.to_path_buf(),
-        names: vec!["config.toml".to_string(), "config.d/*.toml".to_string()],
-      };
+  /// `config.d/*.toml` next to the first of them. Relative paths count from the working
+  /// directory; why one cannot be made absolute when it cannot.
+  pub fn new(given: &[PathBuf], config_dir: &Path) -> Result<Self, String> {
+    let absolute = |path: &Path| {
+      std::path::absolute(path).map_err(|e| format!("{} has no absolute path: {e}", path.display()))
     };
-    let first = std::path::absolute(first).unwrap_or_else(|_| first.clone());
+    let Some((first, rest)) = given.split_first() else {
+      return Ok(Self {
+        dir: absolute(config_dir)?,
+        names: vec!["config.toml".to_string(), "config.d/*.toml".to_string()],
+      });
+    };
+    let first = absolute(first)?;
     let dir = first
       .parent()
-      .map_or_else(|| config_dir.to_path_buf(), Path::to_path_buf);
+      .map_or_else(|| absolute(config_dir), |dir| Ok(dir.to_path_buf()))?;
     let name = |path: &Path| match path.strip_prefix(&dir) {
       Ok(relative) => relative.display().to_string(),
       Err(_) => path.display().to_string(),
     };
     let mut names = vec![name(&first)];
-    names.extend(rest.iter().map(|path| {
-      let path = std::path::absolute(path).unwrap_or_else(|_| path.clone());
-      name(&path)
-    }));
+    for path in rest {
+      names.push(name(&absolute(path)?));
+    }
     names.push("config.d/*.toml".to_string());
-    Self { dir, names }
+    Ok(Self { dir, names })
   }
 
   /// The first file, which is where a new configuration is written.
@@ -88,23 +91,22 @@ impl Sources {
       .and_then(|(_, value)| value.to_str().map(str::to_string))
       .filter(|value| !value.is_empty())
   }
+}
 
-  /// The configuration directory the environment or the command line names.
-  pub fn config_dir(&self) -> Option<PathBuf> {
-    let flag = self
-      .cli
+/// The configuration directory the command line's option flags `cli` or the environment `env`
+/// name.
+pub fn given_config_dir(env: &[(OsString, OsString)], cli: &[(String, String)]) -> Option<PathBuf> {
+  let flag = cli
+    .iter()
+    .rev()
+    .find(|(flag, _)| flag == "--config-dir")
+    .map(|(_, value)| PathBuf::from(value));
+  flag.or_else(|| {
+    env
       .iter()
-      .rev()
-      .find(|(flag, _)| flag == "--config-dir")
-      .map(|(_, value)| PathBuf::from(value));
-    flag.or_else(|| {
-      self
-        .env
-        .iter()
-        .find(|(name, _)| name == "RESEEK_CONFIG_DIR")
-        .map(|(_, value)| PathBuf::from(value))
-    })
-  }
+      .find(|(name, _)| name == "RESEEK_CONFIG_DIR")
+      .map(|(_, value)| PathBuf::from(value))
+  })
 }
 
 /// The layers of `sources`, validated, with `overrides` on top when given.
@@ -181,7 +183,7 @@ mod tests {
 
   #[test]
   fn given_files_come_first_then_the_drop_ins_next_to_the_first() {
-    let files = ConfigFiles::new(&[], Path::new("/home/u/.config/reseek"));
+    let files = ConfigFiles::new(&[], Path::new("/home/u/.config/reseek")).unwrap();
     assert_eq!(files.names, ["config.toml", "config.d/*.toml"]);
     assert_eq!(
       files.first(),
@@ -193,7 +195,8 @@ mod tests {
         "/run/secrets/reseek.toml".into(),
       ],
       Path::new("/var/lib/reseek"),
-    );
+    )
+    .unwrap();
     assert_eq!(files.dir, Path::new("/etc/reseek"));
     assert_eq!(
       files.names,
@@ -206,7 +209,7 @@ mod tests {
     std::fs::write(dir.join("config.toml"), text).unwrap();
     let sources = Sources {
       env: Vec::new(),
-      files: ConfigFiles::new(&[], dir),
+      files: ConfigFiles::new(&[], dir).unwrap(),
       cli: Vec::new(),
     };
     cascade::Watcher::new(layers(&sources, &Defaults::new(Some(dir)), None)).unwrap()
@@ -236,6 +239,43 @@ mod tests {
   }
 
   #[test]
+  fn a_relative_directory_in_a_file_counts_from_the_file() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir(dir.path().join("dl")).unwrap();
+    std::fs::write(
+      dir.path().join("config.toml"),
+      "[directories]\ndownloads = \"dl\"\n",
+    )
+    .unwrap();
+    let sources = Sources {
+      env: Vec::new(),
+      files: ConfigFiles::new(&[], dir.path()).unwrap(),
+      cli: vec![("--config-dir".into(), "conf".into())],
+    };
+    let defaults = Defaults::new(Some(dir.path()));
+    let watcher = cascade::Watcher::new(layers(&sources, &defaults, None)).unwrap();
+    let options = &watcher.current().values;
+    let paths = defaults.resolve(options).unwrap();
+    assert_eq!(paths.downloads, dir.path().join("dl"));
+    assert_eq!(
+      paths.config,
+      std::env::current_dir().unwrap().join("conf"),
+      "one given on the command line counts from the working directory"
+    );
+  }
+
+  #[test]
+  fn config_files_given_relative_count_from_the_working_directory() {
+    let here = std::env::current_dir().unwrap();
+    let files =
+      ConfigFiles::new(&["etc/reseek.toml".into()], Path::new("/var/lib/reseek")).unwrap();
+    assert_eq!(files.first(), here.join("etc/reseek.toml"));
+    let files = ConfigFiles::new(&[], Path::new("conf")).unwrap();
+    assert_eq!(files.dir, here.join("conf"));
+    assert!(ConfigFiles::new(&["".into()], Path::new("/etc")).is_err());
+  }
+
+  #[test]
   fn the_relay_agent_mode_is_refused_with_a_pointer_to_the_agent_program() {
     let dir = tempfile::tempdir().unwrap();
     for mode in ["agent", "Debug"] {
@@ -246,7 +286,7 @@ mod tests {
       .unwrap();
       let sources = Sources {
         env: Vec::new(),
-        files: ConfigFiles::new(&[], dir.path()),
+        files: ConfigFiles::new(&[], dir.path()).unwrap(),
         cli: Vec::new(),
       };
       let defaults = Defaults::new(Some(dir.path()));
@@ -261,7 +301,7 @@ mod tests {
     }
     let sources = Sources {
       env: vec![("RESEEK_RELAY_MODE".into(), "agent".into())],
-      files: ConfigFiles::new(&[], dir.path()),
+      files: ConfigFiles::new(&[], dir.path()).unwrap(),
       cli: Vec::new(),
     };
     std::fs::write(dir.path().join("config.toml"), "").unwrap();

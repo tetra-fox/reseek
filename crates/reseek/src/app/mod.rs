@@ -12,7 +12,6 @@ pub(crate) mod tasks;
 
 use std::ffi::OsString;
 use std::io::Write;
-use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -518,19 +517,25 @@ fn one_shot(text: &str) -> ExitCode {
 fn run(invocation: Invocation, assets: Assets) -> u8 {
   let env: Vec<(OsString, OsString)> = std::env::vars_os().collect();
   let defaults = Defaults::new(invocation.app_dir.as_deref());
-  let mut sources = Sources {
-    env,
-    files: ConfigFiles::new(&[], &PathBuf::new()),
-    cli: invocation.flags,
-  };
-  let config_dir = match defaults.config_dir(sources.config_dir()) {
+  let config_dir = match defaults.config_dir(load::given_config_dir(&env, &invocation.flags)) {
     Ok(dir) => dir,
     Err(e) => {
       eprintln!("{e}");
       return EXIT_FILESYSTEM;
     }
   };
-  sources.files = ConfigFiles::new(&invocation.config_files, &config_dir);
+  let files = match ConfigFiles::new(&invocation.config_files, &config_dir) {
+    Ok(files) => files,
+    Err(e) => {
+      eprintln!("The configuration files could not be found: {e}");
+      return EXIT_FILESYSTEM;
+    }
+  };
+  let sources = Sources {
+    env,
+    files,
+    cli: invocation.flags,
+  };
 
   // a first load, before the data directory that holds the overrides is known
   let options = match load::layers(&sources, &defaults, None).load() {

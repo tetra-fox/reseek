@@ -20,7 +20,7 @@ fn main() {
   std::fs::write(dir.path().join("config.toml"), "").expect("an empty config.toml");
   let sources = Sources {
     env: Vec::new(),
-    files: ConfigFiles::new(&[], dir.path()),
+    files: ConfigFiles::new(&[], dir.path()).unwrap(),
     cli: Vec::new(),
   };
   let layers = load::layers(&sources, &Defaults::new(Some(dir.path())), None);

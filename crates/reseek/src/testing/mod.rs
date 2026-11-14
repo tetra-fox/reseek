@@ -75,7 +75,7 @@ async fn start(dir: tempfile::TempDir, env: &[(&str, &str)]) -> TestApp {
       .chain(&[("RESEEK_NO_VERSION_CHECK", "true")])
       .map(|(k, v)| (OsString::from(k), OsString::from(v)))
       .collect(),
-    files: ConfigFiles::new(&[], dir.path()),
+    files: ConfigFiles::new(&[], dir.path()).unwrap(),
     cli: Vec::new(),
   };
   let overrides = Overrides::load(dir.path().join("overrides.toml")).unwrap();
@@ -111,7 +111,7 @@ pub fn state() -> StateOwner {
   let defaults = Defaults::new(Some(dir.path()));
   let sources = Sources {
     env: Vec::new(),
-    files: ConfigFiles::new(&[], dir.path()),
+    files: ConfigFiles::new(&[], dir.path()).unwrap(),
     cli: Vec::new(),
   };
   let loaded = Watcher::new(load::layers(&sources, &defaults, None))

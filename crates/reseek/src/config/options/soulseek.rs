@@ -40,8 +40,9 @@ pub struct Soulseek {
   /// Profile text shown to other users.
   #[cascade(env = "RESEEK_SLSK_DESCRIPTION", cli = "--slsk-description")]
   pub description: String,
-  /// Profile picture shown to other users. JPEG, GIF or BMP.
-  #[cascade(env = "RESEEK_SLSK_PICTURE", cli = "--slsk-picture")]
+  /// Profile picture shown to other users. JPEG, GIF or BMP. A relative path counts from the file
+  /// that sets it.
+  #[cascade(env = "RESEEK_SLSK_PICTURE", cli = "--slsk-picture", path)]
   pub picture: Option<PathBuf>,
   /// Your interests and dislikes, used to suggest similar users and interests.
   pub interests: SoulseekInterests,
