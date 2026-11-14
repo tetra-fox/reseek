@@ -98,6 +98,64 @@ async fn offers_that_come_together_are_held_to_the_files_one_address_may_send() 
   assert_eq!(taken, 2, "{answers:?}");
 }
 
+#[tokio::test]
+async fn a_sender_nothing_is_known_of_yet_is_asked_about_before_being_refused() {
+  use soulseek_proto::server::{GetPeerAddressResponse, UserStatus};
+  use soulseek_proto::{ServerRequest, ServerResponse, UserPresence};
+
+  let config = format!("{TRUSTED}[transfers.download.received]\nfrom = [\"privileged\"]\n");
+  let app = crate::testing::soulseek::app(&config).await;
+  // alice is privileged when asked; as after a restart, nothing was said of her before
+  let server = crate::testing::soulseek::Server::start(|request| match request {
+    ServerRequest::GetStatus(asked) => vec![ServerResponse::GetStatus(UserStatus {
+      username: asked.username.clone(),
+      presence: UserPresence::Online,
+      is_privileged: true,
+    })],
+    ServerRequest::GetPeerAddress(asked) => {
+      vec![ServerResponse::GetPeerAddress(GetPeerAddressResponse {
+        username: asked.username.clone(),
+        ip: std::net::Ipv4Addr::LOCALHOST,
+        port: 2234,
+        obfuscation: None,
+      })]
+    }
+    _ => Vec::new(),
+  })
+  .await;
+  server.login(&app).await;
+  let localhost = IpAddr::from(std::net::Ipv4Addr::LOCALHOST);
+  let taken = app
+    .state
+    .downloads
+    .receive("alice", localhost, "@@s\\gift.flac", 3)
+    .await;
+  assert!(taken.is_ok(), "{taken:?}");
+}
+
+#[tokio::test]
+async fn a_sender_no_group_the_server_decides_could_let_in_is_refused_without_asking() {
+  let config = format!("{TRUSTED}[transfers.download.received]\nfrom = [\"buddies\"]\n");
+  let app = crate::testing::soulseek::app(&config).await;
+  // a status asked of this server is never answered
+  let server = crate::testing::soulseek::Server::silent().await;
+  server.login(&app).await;
+  let localhost = IpAddr::from(std::net::Ipv4Addr::LOCALHOST);
+  let refused = tokio::time::timeout(
+    std::time::Duration::from_secs(2),
+    app
+      .state
+      .downloads
+      .receive("bob", localhost, "@@s\\spam.flac", 3),
+  )
+  .await
+  .expect("the server was asked about a sender no answer could let in");
+  assert!(
+    matches!(refused, Err(ClientError::TransferRejected(_))),
+    "{refused:?}"
+  );
+}
+
 #[test]
 fn buddies_behind_one_address_each_send_their_own_files_but_strangers_share_one_count() {
   let senders = Arc::new(Mutex::new(Senders::default()));

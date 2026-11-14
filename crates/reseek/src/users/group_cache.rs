@@ -289,10 +289,10 @@ impl Directory {
     if !known || force {
       self.groups.update(username, true, |_| {});
       if let Err(e) = self.statistics_of(client, username).await {
-        warn!(username, error = %e, "statistics for the upload groups not fetched");
+        warn!(username, error = %e, "statistics for the user's groups not fetched");
       }
       if let Err(e) = self.status_of(client, username).await {
-        warn!(username, error = %e, "status for the upload groups not fetched");
+        warn!(username, error = %e, "status for the user's groups not fetched");
       }
     }
     let placement = self.placement(username);

@@ -1,13 +1,13 @@
-//! Files other users send us without being asked. The client holds such an offer while we
-//! decide: the file is taken when its sender is in one of the groups `transfers.download.received`
-//! lets send files, under a name their address confirms unless everyone may, the file is no
-//! larger than allowed and not one the download filters skip, the sender is sending fewer files
-//! than allowed (counted by the address they send from when their name is not checked), no
-//! download of the file from them is unfinished and none was canceled within the hour. A file
-//! taken is downloaded like any other, but always at the size it was offered with and never in
-//! place of a file. The files one sender sends close together are one job they started, whose
-//! downloads' first tries take the offers; a file whose job cannot be listed is refused, since
-//! the job is what marks its download as sent unasked.
+//! Files other users send us without being asked. The client holds such an offer while we decide:
+//! the file is taken when its sender is in one of the groups `transfers.download.received` lets
+//! send files, the server asked about them first when its word could put them in one, under a name
+//! their address confirms unless everyone may, the file is no larger than allowed and not one the
+//! download filters skip, the sender is sending fewer files than allowed (counted by the address
+//! they send from when their name is not checked), no download of the file from them is unfinished
+//! and none was canceled within the hour. A file taken is downloaded like any other, but always at
+//! the size it was offered with and never in place of a file. The files one sender sends close
+//! together are one job they started, whose downloads' first tries take the offers; a file whose
+//! job cannot be listed is refused, since the job is what marks its download as sent unasked.
 
 mod senders;
 
@@ -28,7 +28,7 @@ use super::destination::local_name;
 use super::enqueue::{check, download_filters};
 use super::jobs::job_name;
 use super::{Downloads, FileRequest, Group};
-use crate::config::{DEFAULT_GROUP, Received};
+use crate::config::{DEFAULT_GROUP, LEECHERS_GROUP, PRIVILEGED_GROUP, Received};
 use crate::db::timestamp;
 use crate::jobs::NewJob;
 use crate::safety::Os;
@@ -99,7 +99,16 @@ impl Downloads {
     }
     let options = self.config.current();
     let received = &options.values.transfers.download.received;
-    let placement = self.users.placement(username);
+    let mut placement = self.users.placement(username);
+    // only the server's word puts a user in privileged or leechers, so when those may send, a
+    // sender no group lets in yet is asked about first, which fetches only what is not known
+    let decided_by_server = |group: &String| group == PRIVILEGED_GROUP || group == LEECHERS_GROUP;
+    if !received.from.iter().any(|group| placement.is_in(group))
+      && received.from.iter().any(decided_by_server)
+    {
+      let client = self.network.client();
+      placement = self.users.fetch_placement(client, username, false).await;
+    }
     if let Some(reason) = refusal(received, |group| placement.is_in(group), size) {
       return refused(reason);
     }
