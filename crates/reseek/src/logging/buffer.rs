@@ -128,19 +128,16 @@ impl Visit for Fields {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use tracing_subscriber::layer::SubscriberExt;
 
   #[test]
   fn the_buffer_keeps_the_last_hundred_records_with_their_fields() {
-    let buffer = Arc::new(LogBuffer::default());
-    let subscriber = tracing_subscriber::registry().with(BufferLayer(buffer.clone()));
+    let (buffer, capturing) = crate::testing::captured_logs();
     let mut new = buffer.subscribe();
-    tracing::subscriber::with_default(subscriber, || {
-      for n in 0..CAPACITY + 5 {
-        tracing::info!(n, sub = "local", "scanned");
-      }
-      tracing::warn!(error = %"boom", "share root unreadable");
-    });
+    for n in 0..CAPACITY + 5 {
+      tracing::info!(n, sub = "local", "scanned");
+    }
+    tracing::warn!(error = %"boom", "share root unreadable");
+    drop(capturing);
     let records = buffer.snapshot();
     assert_eq!(records.len(), CAPACITY);
     assert_eq!(records[0].message, "scanned n=6");

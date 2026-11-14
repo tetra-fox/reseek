@@ -332,13 +332,9 @@ mod tests {
 
   #[test]
   fn a_panic_is_a_500_whose_log_line_has_the_panic_message() {
-    use tracing_subscriber::layer::SubscriberExt;
-    let buffer = std::sync::Arc::new(crate::logging::LogBuffer::default());
-    let subscriber =
-      tracing_subscriber::registry().with(crate::logging::BufferLayer(buffer.clone()));
-    let answer = tracing::subscriber::with_default(subscriber, || {
-      panicked(Box::new(String::from("index out of bounds")))
-    });
+    let (buffer, capturing) = crate::testing::captured_logs();
+    let answer = panicked(Box::new(String::from("index out of bounds")));
+    drop(capturing);
     assert_eq!(answer.status(), StatusCode::INTERNAL_SERVER_ERROR);
     let records = buffer.snapshot();
     assert!(
