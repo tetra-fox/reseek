@@ -382,6 +382,14 @@ impl<'c> AsyncHttpClient<'c> for ProviderHttp {
         .execute(request.try_into().map_err(Box::new)?)
         .await
         .map_err(Box::new)?;
+      // a server error is the provider failing rather than answering, so callers take it as a
+      // provider they could not reach
+      if response.status().is_server_error() {
+        return Err(HttpClientError::Other(format!(
+          "the provider answered {}",
+          response.status()
+        )));
+      }
       let mut answer = openidconnect::http::Response::builder()
         .status(response.status())
         .version(response.version());

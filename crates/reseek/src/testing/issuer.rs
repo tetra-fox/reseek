@@ -55,6 +55,10 @@ struct Shared {
   signed_userinfo: Mutex<bool>,
   /// the token endpoint holds its answers until released
   tokens_held: Mutex<bool>,
+  /// the token endpoint answers every request with this status and no body
+  tokens_failing: Mutex<Option<StatusCode>>,
+  /// where discovery says the token endpoint is, when not here
+  token_endpoint: Mutex<Option<String>>,
   /// a token request arrived while answers are held
   token_asked: tokio::sync::Notify,
   /// held token answers may go
@@ -80,6 +84,8 @@ impl Issuer {
       userinfo: Mutex::new(json!({})),
       signed_userinfo: Mutex::new(false),
       tokens_held: Mutex::new(false),
+      tokens_failing: Mutex::new(None),
+      token_endpoint: Mutex::new(None),
       token_asked: tokio::sync::Notify::new(),
       tokens_released: tokio::sync::Notify::new(),
     });
@@ -137,6 +143,16 @@ impl Issuer {
     self.shared.tokens_released.notify_one();
   }
 
+  /// Answers token requests with `status` and no body from now on.
+  pub fn fail_tokens(&self, status: StatusCode) {
+    *self.shared.tokens_failing.lock().unwrap() = Some(status);
+  }
+
+  /// Names `url` as the token endpoint in discovery documents read from now on.
+  pub fn move_token_endpoint(&self, url: &str) {
+    *self.shared.token_endpoint.lock().unwrap() = Some(url.to_string());
+  }
+
   /// `claims` signed as a JWT with the provider's key.
   pub fn sign(&self, claims: &Value) -> String {
     self.shared.sign(claims)
@@ -183,10 +199,11 @@ impl Shared {
 
 async fn discovery(State(shared): State<Arc<Shared>>) -> Json<Value> {
   let url = &shared.url;
+  let token = shared.token_endpoint.lock().unwrap().clone();
   Json(json!({
     "issuer": url,
     "authorization_endpoint": format!("{url}/authorize"),
-    "token_endpoint": format!("{url}/token"),
+    "token_endpoint": token.unwrap_or_else(|| format!("{url}/token")),
     "userinfo_endpoint": format!("{url}/userinfo"),
     "jwks_uri": format!("{url}/jwks"),
     "end_session_endpoint": format!("{url}/logout"),
@@ -210,6 +227,9 @@ async fn token(
   headers: HeaderMap,
   Form(form): Form<HashMap<String, String>>,
 ) -> Response {
+  if let Some(status) = *shared.tokens_failing.lock().unwrap() {
+    return status.into_response();
+  }
   let refuse =
     |error: &str| (StatusCode::BAD_REQUEST, Json(json!({ "error": error }))).into_response();
   let basic = format!(

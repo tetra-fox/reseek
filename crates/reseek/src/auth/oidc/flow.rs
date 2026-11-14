@@ -11,8 +11,8 @@ use chrono::Utc;
 use openidconnect::core::{CoreAuthenticationFlow, CoreGenderClaim, CoreJwsSigningAlgorithm};
 use openidconnect::{
   AuthorizationCode, ClaimsVerificationError, CsrfToken, IdTokenClaims, Nonce, OAuth2TokenResponse,
-  PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope, SignatureVerificationError,
-  TokenResponse,
+  PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, RequestTokenError, Scope,
+  SignatureVerificationError, TokenResponse,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -121,7 +121,8 @@ pub struct Claims {
 pub enum NotSignedIn {
   /// the provider refused the code, or what it sent did not check out
   Refused(String),
-  /// the provider's signing keys could not be read to check the ID token
+  /// the token endpoint could not be reached or failed, or the provider's signing keys could
+  /// not be read to check the ID token
   Unavailable(String),
 }
 
@@ -148,7 +149,16 @@ pub async fn exchange(
     .set_pkce_verifier(PkceCodeVerifier::new(login.verifier.clone()))
     .request_async(provider.http())
     .await
-    .map_err(|e| format!("the token endpoint refused the code: {}", error_chain(&e)))?;
+    .map_err(|e| match e {
+      RequestTokenError::Request(_) => NotSignedIn::Unavailable(format!(
+        "the token endpoint could not be reached: {}",
+        error_chain(&e)
+      )),
+      _ => NotSignedIn::Refused(format!(
+        "the token endpoint refused the code: {}",
+        error_chain(&e)
+      )),
+    })?;
   let id_token = response
     .id_token()
     .ok_or_else(|| "the provider sent no ID token".to_string())?

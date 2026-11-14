@@ -373,8 +373,8 @@ async fn test(
   }))
 }
 
-/// The 503 for a provider whose discovery document, or the signing keys a login needs, cannot
-/// be read, logged with why.
+/// The 503 for a provider whose discovery document, token endpoint or signing keys a login
+/// needs cannot be reached, logged with why.
 fn unavailable(name: &str, error: &str) -> ApiError {
   if let Some(suppressed) = PROVIDER_DOWN.allow() {
     warn!(
@@ -809,6 +809,44 @@ mod tests {
       assert_eq!(expired().await.status, 400);
     }
     assert_eq!(expired().await.status, 429);
+  }
+
+  #[tokio::test]
+  async fn a_token_endpoint_that_fails_or_cannot_be_reached_counts_no_failed_login() {
+    // bound and not listening, so the port refuses connections and nothing else takes it
+    let held = tokio::net::TcpSocket::new_v4().unwrap();
+    held.bind("127.0.0.1:0".parse().unwrap()).unwrap();
+    let closed = format!("http://{}/token", held.local_addr().unwrap());
+    for broken in ["cannot be reached", "answers 502"] {
+      let (issuer, app) = setup("readonly").await;
+      match broken {
+        "cannot be reached" => issuer.move_token_endpoint(&closed),
+        _ => issuer.fail_tokens(axum::http::StatusCode::BAD_GATEWAY),
+      }
+      for n in 0..6 {
+        let started = start(&app, "/").await;
+        let answer = back(&app, &started, &format!("c{n}")).await;
+        assert_eq!(answer.status, 503, "{broken}: {:?}", answer.body);
+        assert_eq!(
+          answer.json()["error"],
+          "The identity provider is unavailable"
+        );
+      }
+      let expired = || {
+        app.send_from(
+          OUTSIDE,
+          request(
+            "GET",
+            "/api/v0/auth/oidc/home/callback?code=x&state=y",
+            None,
+          ),
+        )
+      };
+      for _ in 0..5 {
+        assert_eq!(expired().await.status, 400, "{broken}");
+      }
+      assert_eq!(expired().await.status, 429, "{broken}");
+    }
   }
 
   #[tokio::test]
