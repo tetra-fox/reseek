@@ -346,7 +346,7 @@ impl Directory {
       username,
       queue = placement.queue,
       speed = placement.speed,
-      "upload groups"
+      "user's groups"
     );
     placement
   }
@@ -379,7 +379,7 @@ impl Directory {
     Ok(self.statistics_fetched(username, &fetched.stats).await)
   }
 
-  /// Asks the server for `username`'s statistics now and keeps them for the upload groups,
+  /// Asks the server for `username`'s statistics now and keeps them for the user's groups,
   /// leaving the user's row to the caller.
   pub(super) async fn statistics_untouched(
     &self,
@@ -398,7 +398,7 @@ impl Directory {
     taken
   }
 
-  /// Statistics we asked for, kept for the upload groups.
+  /// Statistics we asked for, kept for the user's groups.
   async fn statistics_kept(&self, username: &str, stats: &UserStats) -> StatisticsSnapshot {
     let taken = snapshot(stats);
     self

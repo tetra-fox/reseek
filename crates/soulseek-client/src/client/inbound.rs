@@ -43,8 +43,8 @@ impl Client {
 
   /// A peer connected because the server relayed one of our requests: a solicitation still
   /// waiting takes it, or it is the searcher answers ride on the request for, who gets those
-  /// kept now and the rest as they come to be kept. One that comes after its solicitor stopped waiting is taken as
-  /// [`Client::late_answer`] says. Anything else is closed.
+  /// kept now and the rest as they come to be kept. One that comes after its solicitor stopped
+  /// waiting is taken as [`Client::late_answer`] says. Anything else is closed.
   async fn pierced(&self, token: u32, conn: Conn) -> Result<(), ClientError> {
     if let Some((solicitation, answer)) = self.peers().solicitations.take(token) {
       let conn = match answer {
