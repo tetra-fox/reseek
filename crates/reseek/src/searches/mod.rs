@@ -667,9 +667,15 @@ mod tests {
       reached(SearchScopeType::Buddies, &[]).is_err(),
       "no buddy known online"
     );
-    users.privileged_listed(&["alice".to_string(), "bob".to_string()]);
-    users.status_received("alice", api_types::users::UserPresence::Away, false);
-    users.status_received("bob", api_types::users::UserPresence::Offline, false);
+    users
+      .privileged_listed(&["alice".to_string(), "bob".to_string()])
+      .await;
+    users
+      .status_received("alice", api_types::users::UserPresence::Away, false)
+      .await;
+    users
+      .status_received("bob", api_types::users::UserPresence::Offline, false)
+      .await;
     assert_eq!(
       reached(SearchScopeType::Buddies, &[]).unwrap().subjects,
       ["alice"]

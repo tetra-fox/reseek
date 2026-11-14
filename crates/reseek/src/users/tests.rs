@@ -772,20 +772,32 @@ async fn a_buddys_presence_moved_while_disconnected_is_told_once_whichever_reply
     .set_groups("alice", vec!["friends".into()])
     .await
     .unwrap();
-  users.status_received("alice", UserPresence::Online, false);
+  users
+    .status_received("alice", UserPresence::Online, false)
+    .await;
   users.session_ended();
-  users.status_received("bob", UserPresence::Online, false);
-  let first = users.status_received("alice", UserPresence::Offline, false);
+  users
+    .status_received("bob", UserPresence::Online, false)
+    .await;
+  let first = users
+    .status_received("alice", UserPresence::Offline, false)
+    .await;
   assert_eq!(
     first.previous, None,
     "told of here, not again by the caller"
   );
-  let again = users.status_received("alice", UserPresence::Offline, false);
+  let again = users
+    .status_received("alice", UserPresence::Offline, false)
+    .await;
   assert_eq!(again.previous, Some(UserPresence::Offline));
   // the reply to our own request is taken by the watch before the event reaches the directory
   users.session_ended();
-  users.status_fetched("alice", UserPresence::Online, false);
-  let event = users.status_received("alice", UserPresence::Online, false);
+  users
+    .status_fetched("alice", UserPresence::Online, false)
+    .await;
+  let event = users
+    .status_received("alice", UserPresence::Online, false)
+    .await;
   assert_eq!(event.previous, Some(UserPresence::Online));
   users.presence_moved("alice", UserPresence::Online, UserPresence::Away);
   let mut told = Vec::new();
@@ -883,7 +895,9 @@ async fn a_status_request_given_up_leaves_the_next_pushed_status_unasked() {
   let asking = users.status_of(client, "alice");
   let given_up = tokio::time::timeout(std::time::Duration::from_millis(100), asking).await;
   assert!(given_up.is_err());
-  let pushed = users.status_received("alice", UserPresence::Away, false);
+  let pushed = users
+    .status_received("alice", UserPresence::Away, false)
+    .await;
   assert!(
     !pushed.asked,
     "taken as the answer to a request given up on"
@@ -955,6 +969,94 @@ async fn a_status_asked_that_grants_privileges_pushes_the_users_summary() {
 #[tokio::test]
 async fn a_status_asked_of_a_user_privileged_in_an_earlier_run_pushes_their_summary() {
   a_status_asked_moves_alice(true).await;
+}
+
+/// The next summary `stream` pushes.
+async fn next_pushed(stream: &mut crate::testing::Stream) -> Value {
+  let pushed = tokio::time::timeout(
+    std::time::Duration::from_secs(5),
+    stream.until("users.updated"),
+  )
+  .await
+  .expect("no summary was pushed");
+  pushed.last().unwrap().data.clone()
+}
+
+#[tokio::test]
+async fn what_the_server_says_unasked_that_moves_a_users_groups_pushes_their_summary() {
+  use soulseek_proto::server::UserStats;
+
+  let app = app(CONFIG, &[]).await;
+  let users = &app.state.users;
+  users.set_notes("alice", "kind".into()).await.unwrap();
+  let mut stream = app
+    .stream_from(
+      "127.0.0.1:1",
+      request("GET", "/api/v0/live?topics=users", None),
+    )
+    .await;
+  stream.until("hello").await;
+  users.privileged_listed(&["alice".to_string()]).await;
+  assert_eq!(next_pushed(&mut stream).await["isPrivileged"], true);
+  // alice is not watched
+  users
+    .status_received("alice", UserPresence::Online, false)
+    .await;
+  assert_eq!(next_pushed(&mut stream).await["isPrivileged"], false);
+  users
+    .statistics_received("alice", &UserStats::default())
+    .await;
+  let groups = next_pushed(&mut stream).await["groups"].clone();
+  assert!(
+    groups
+      .as_array()
+      .unwrap()
+      .iter()
+      .any(|g| g["name"] == "leechers"),
+    "{groups}"
+  );
+  // a presence alone moves no group
+  users
+    .status_received("alice", UserPresence::Away, false)
+    .await;
+  users.set_notes("alice", "kinder".into()).await.unwrap();
+  assert_eq!(next_pushed(&mut stream).await["notes"], "kinder");
+}
+
+#[tokio::test]
+async fn a_status_asked_of_a_user_without_a_row_pushes_nothing() {
+  use soulseek_proto::server::UserStatus;
+  use soulseek_proto::{ServerRequest, ServerResponse};
+
+  let app = crate::testing::soulseek::app(CONFIG).await;
+  let server = crate::testing::soulseek::Server::start(|request| match request {
+    ServerRequest::GetStatus(asked) => vec![ServerResponse::GetStatus(UserStatus {
+      username: asked.username.clone(),
+      presence: soulseek_proto::UserPresence::Online,
+      is_privileged: true,
+    })],
+    _ => Vec::new(),
+  })
+  .await;
+  server.login(&app).await;
+  let users = &app.state.users;
+  let mut stream = app
+    .stream_from(
+      "127.0.0.1:1",
+      request("GET", "/api/v0/live?topics=users", None),
+    )
+    .await;
+  stream.until("hello").await;
+  users
+    .status_of(app.state.network.client(), "bob")
+    .await
+    .unwrap();
+  users.set_notes("alice", "kind".into()).await.unwrap();
+  assert_eq!(
+    next_pushed(&mut stream).await["username"],
+    "alice",
+    "bob has no row to show"
+  );
 }
 
 #[tokio::test]
@@ -1741,7 +1843,9 @@ async fn a_row_made_for_a_user_nobody_watches_has_no_presence() {
   let app = app(CONFIG, &[]).await;
   let users = &app.state.users;
   // what the server said of her once, as an answer to a question about her
-  users.status_fetched("alice", UserPresence::Online, false);
+  users
+    .status_fetched("alice", UserPresence::Online, false)
+    .await;
   users
     .change("alice", Change::Notes("met in #indie".into()))
     .await

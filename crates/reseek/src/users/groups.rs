@@ -211,6 +211,16 @@ fn leeches(options: &Options, statistics: Option<&StatisticsSnapshot>) -> bool {
   })
 }
 
+/// Whether a user's facts going from `before` to `after` move the groups they are shown in under
+/// `options`: the first word on them in this run, from which their groups are worked out from
+/// the facts rather than their row, or a change of privileges or of whether they share too
+/// little.
+pub fn moves(options: &Options, before: &Facts, after: &Facts) -> bool {
+  (!before.heard() && after.heard())
+    || before.privileged != after.privileged
+    || leeches(options, before.statistics.as_ref()) != leeches(options, after.statistics.as_ref())
+}
+
 /// The groups of a user with `facts`, our buddy when `buddy`, under `options`: privileged,
 /// leechers and buddies when they are in them, then the groups we put them in by name.
 pub fn place(options: &Options, facts: &Facts, buddy: bool) -> Placement {

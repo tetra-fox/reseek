@@ -3,7 +3,8 @@
 //! their statistics with when they came, and the groups we put them in. A user enters on a
 //! fetch, a watch or the server's list of privileged users, and every user we put in a group is
 //! loaded at startup; nobody leaves. What the server pushes on its own is taken only for users
-//! known already.
+//! known already. Whatever it says that moves the groups a user with a row is shown in pushes
+//! their summary.
 //!
 //! The server pushes a watched user's presence, never their statistics, so those are asked for
 //! again when the presence changes on its own, when a user's page is opened or a transfer with
@@ -337,29 +338,46 @@ impl Directory {
     username: &str,
   ) -> Result<StatisticsSnapshot, ClientError> {
     let fetched = client.get_user_statistics(username).await?;
-    Ok(self.statistics_kept(username, &fetched.stats))
+    Ok(self.statistics_kept(username, &fetched.stats).await)
   }
 
   /// Statistics the server gave: kept, and filled into the user's row when there is one.
   async fn statistics_fetched(&self, username: &str, stats: &UserStats) -> StatisticsSnapshot {
-    let taken = self.statistics_kept(username, stats);
+    let taken = self.statistics_kept(username, stats).await;
     let touch = Touch::Statistics(taken.statistics.clone());
     self.touch(username, touch).await;
     taken
   }
 
   /// Statistics we asked for, kept for the upload groups.
-  fn statistics_kept(&self, username: &str, stats: &UserStats) -> StatisticsSnapshot {
+  async fn statistics_kept(&self, username: &str, stats: &UserStats) -> StatisticsSnapshot {
     let taken = snapshot(stats);
-    self.groups.update(username, true, |facts| {
-      facts.statistics = Some(taken.clone());
-    });
+    self
+      .learned(username, true, |facts| {
+        facts.statistics = Some(taken.clone());
+      })
+      .await;
     taken
   }
 
-  /// Asks the server for `username`'s status now and keeps it, pushing the summary of a user
-  /// with a row whose groups it moves. The reply is also raised as a status change, which
-  /// [`Directory::status_received`] then knows we asked for.
+  /// Changes what the server said of `username` with `change`, making their entry when `create`
+  /// or when it exists, and pushes the summary of a user with a row whose groups it moves.
+  async fn learned(&self, username: &str, create: bool, change: impl FnOnce(&mut Facts)) {
+    let options = self.config.current();
+    let mut moved = false;
+    self.groups.update(username, create, |facts| {
+      let before = facts.clone();
+      change(facts);
+      moved = groups::moves(&options.values, &before, facts);
+    });
+    if moved && self.known.has(username) {
+      self.forget(username);
+      self.push(username).await;
+    }
+  }
+
+  /// Asks the server for `username`'s status now and keeps it. The reply is also raised as a
+  /// status change, which [`Directory::status_received`] then knows we asked for.
   pub async fn status_of(
     &self,
     client: &Client,
@@ -369,34 +387,30 @@ impl Directory {
     let status = client.get_user_status(username).await?;
     asking.answered();
     let presence = UserPresence::from(status.presence);
-    if self.status_fetched(username, presence, status.is_privileged) && self.known.has(username) {
-      self.forget(username);
-      self.push(username).await;
-    }
+    self
+      .status_fetched(username, presence, status.is_privileged)
+      .await;
     Ok(UserStatus {
       presence,
       is_privileged: status.is_privileged,
     })
   }
 
-  /// The status we asked for of `username`, kept; says whether it moves the groups they are
-  /// shown in, as the first word on them in this run or a change of privileges. The same reply
-  /// is also raised as a status change, and either may be taken first, so both tell of a change
-  /// missed while disconnected.
-  pub(super) fn status_fetched(
+  /// The status we asked for of `username`, kept. The same reply is also raised as a status
+  /// change, and either may be taken first, so both tell of a change missed while disconnected.
+  pub(super) async fn status_fetched(
     &self,
     username: &str,
     presence: UserPresence,
     is_privileged: bool,
-  ) -> bool {
+  ) {
     self.tell_missed(username, presence);
-    let mut moved = false;
-    self.groups.update(username, true, |facts| {
-      moved = !facts.heard() || facts.privileged != is_privileged;
-      facts.presence = Some(presence);
-      facts.privileged = is_privileged;
-    });
-    moved
+    self
+      .learned(username, true, |facts| {
+        facts.presence = Some(presence);
+        facts.privileged = is_privileged;
+      })
+      .await;
   }
 
   /// Tells of a buddy's move from the presence we knew when the last server session ended to
@@ -555,11 +569,11 @@ impl Directory {
   }
 
   /// Every user on the server's list of privileged users is privileged from now on.
-  pub fn privileged_listed(&self, usernames: &[String]) {
+  pub async fn privileged_listed(&self, usernames: &[String]) {
     for username in usernames {
       self
-        .groups
-        .update(username, true, |facts| facts.privileged = true);
+        .learned(username, true, |facts| facts.privileged = true)
+        .await;
     }
     debug!(users = usernames.len(), "privileged users listed");
   }
@@ -569,40 +583,46 @@ impl Directory {
   /// this session, or none when this is the first word on a buddy after a reconnect, whose
   /// change while we were not connected is told of here unless our own request's reply was
   /// taken first.
-  pub fn status_received(
+  pub async fn status_received(
     &self,
     username: &str,
     presence: UserPresence,
     is_privileged: bool,
   ) -> StatusReceived {
     let first = self.tell_missed(username, presence);
+    let asked = {
+      let mut asked = lock(&self.groups.asked);
+      match asked.get_mut(username) {
+        Some(count) => {
+          *count -= 1;
+          if *count == 0 {
+            asked.remove(username);
+          }
+          true
+        }
+        None => false,
+      }
+    };
     let mut previous = None;
-    self.groups.update(username, false, |facts| {
-      previous = facts.presence.replace(presence);
-      facts.privileged = is_privileged;
-    });
+    self
+      .learned(username, false, |facts| {
+        previous = facts.presence.replace(presence);
+        facts.privileged = is_privileged;
+      })
+      .await;
     if first {
       previous = None;
     }
-    let mut asked = lock(&self.groups.asked);
-    let asked = match asked.get_mut(username) {
-      Some(count) => {
-        *count -= 1;
-        if *count == 0 {
-          asked.remove(username);
-        }
-        true
-      }
-      None => false,
-    };
     StatusReceived { asked, previous }
   }
 
   /// Statistics the server sent of `username` on its own: kept when we know them.
-  pub fn statistics_received(&self, username: &str, stats: &UserStats) {
-    self.groups.update(username, false, |facts| {
-      facts.statistics = Some(snapshot(stats));
-    });
+  pub async fn statistics_received(&self, username: &str, stats: &UserStats) {
+    self
+      .learned(username, false, |facts| {
+        facts.statistics = Some(snapshot(stats));
+      })
+      .await;
   }
 
   /// Whether the server watches `username` for us in this session.

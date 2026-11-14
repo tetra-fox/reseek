@@ -366,10 +366,13 @@ async fn handle(app: &AppState, event: Event, session: &mut Session) {
     Event::UserStatisticsChanged(statistics) => {
       app
         .users
-        .statistics_received(&statistics.username, &statistics.stats);
+        .statistics_received(&statistics.username, &statistics.stats)
+        .await;
     }
-    Event::PrivilegedUserListReceived(usernames) => app.users.privileged_listed(&usernames),
-    Event::PrivilegeNotificationReceived { username, .. } => privileges_granted(app, username),
+    Event::PrivilegedUserListReceived(usernames) => app.users.privileged_listed(&usernames).await,
+    Event::PrivilegeNotificationReceived { username, .. } => {
+      privileges_granted(app, username).await;
+    }
     Event::RoomListReceived(list) => app.messaging.room_list_received(list).await,
     // the transfer, search, room, user and distributed engines follow these themselves, and the
     // rest change nothing the daemon keeps
@@ -416,7 +419,8 @@ async fn user_status(app: &AppState, status: &soulseek_proto::server::UserStatus
   app.messaging.member_status(username, presence);
   let received = app
     .users
-    .status_received(username, presence, status.is_privileged);
+    .status_received(username, presence, status.is_privileged)
+    .await;
   if !app.users.is_watched(username) {
     return;
   }
@@ -437,9 +441,12 @@ async fn user_status(app: &AppState, status: &soulseek_proto::server::UserStatus
 
 /// The server says `username` was granted privileges: they are privileged from now on, and when
 /// they are us, our own privileges are read again so the time we have shows at once.
-fn privileges_granted(app: &AppState, username: String) {
+async fn privileges_granted(app: &AppState, username: String) {
   debug!(username, "privileges granted");
-  app.users.privileged_listed(std::slice::from_ref(&username));
+  app
+    .users
+    .privileged_listed(std::slice::from_ref(&username))
+    .await;
   if app.network.client().username().as_deref() != Some(username.as_str()) {
     return;
   }
