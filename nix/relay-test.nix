@@ -379,13 +379,11 @@ pkgs.testers.runNixOSTest {
         def shared(listing: Any) -> set[str]:
             return {d["name"] + "\\" + f["filename"] for d in listing["directories"] for f in d["files"]}
 
+        # the controller's state shows the agent only once its browse caches count as behind
+        # it, so this one browse is answered from a listing with the agent's files
+        listing = api(peer, f"users/{user(users['controller'])}/browse")
         expected = {remote(path) for path in agent_files}
-        until(
-            peer,
-            "the peer seeing the agent's files",
-            lambda listing: shared(listing) == expected,
-            f"users/{user(users['controller'])}/browse",
-        )
+        assert shared(listing) == expected, f"the peer sees {sorted(shared(listing))}"
 
     with subtest("the peer downloads a small file and a large one with the bytes intact"):
         wanted = ["Album/01 small.flac", "Album/Disc 2/02 large.flac", "Ünïcödé Ärtist/03 späces & ñ.flac"]
