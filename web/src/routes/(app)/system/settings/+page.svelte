@@ -73,16 +73,27 @@
 
   // the search over every option is ?q=, which links from elsewhere use and System comes back
   // to; what is typed goes into the address once typing pauses
+  const addressed = $derived(query.get("q") ?? "");
   // svelte-ignore state_referenced_locally
-  let typed = $state(query.get("q") ?? "");
+  let typed = $state(addressed);
   const q = $derived(typed.trim());
+  /** the search the box last put in the address, or took from it */
+  // svelte-ignore state_referenced_locally
+  let written = addressed;
+  // a link to this page with another search, as from the palette while already on it, puts
+  // its search in the box
+  $effect(() => {
+    if (addressed === written) return;
+    written = addressed;
+    typed = addressed;
+  });
   $effect(() => {
     const text = q;
-    if (text === untrack(() => query.get("q") ?? "")) return;
-    const timer = setTimeout(
-      () => rewrite((next) => (text ? next.set("q", text) : next.delete("q"))),
-      TYPING_PAUSE
-    );
+    if (text === untrack(() => addressed)) return;
+    const timer = setTimeout(() => {
+      written = text;
+      rewrite((next) => (text ? next.set("q", text) : next.delete("q")));
+    }, TYPING_PAUSE);
     return () => clearTimeout(timer);
   });
   /** how many options each section shows for the search */

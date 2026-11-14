@@ -69,6 +69,28 @@ test("finds options by search, follows the section in view and gathers unsaved c
   await expect(bar).toBeHidden();
 });
 
+test("a link here with another search, as from the palette, puts it in the box", async ({
+  page
+}) => {
+  await visit(page, "/system/settings");
+  const box = page.getByRole("searchbox", { name: "Search settings" });
+  await box.fill("highlight words");
+  await expect(page).toHaveURL(/q=highlight/);
+  // a link with a search of its own
+  await page.goto("./#/system/settings?q=description");
+  await expect(box).toHaveValue("description");
+  await expect(page.locator('[id="soulseek.description"]')).toBeVisible();
+  // a section from the palette, whose link has no search, shows the whole page at it
+  await page.keyboard.press("ControlOrMeta+k");
+  await page
+    .getByRole("combobox", { name: "Go to a screen, user, room or setting, or search" })
+    .fill("Logging");
+  await page.getByRole("option", { name: "Logging Settings" }).click();
+  await expect(box).toHaveValue("");
+  await expect(page.locator("#logging")).toBeInViewport();
+  await expect(page).not.toHaveURL(/q=/);
+});
+
 test("says what auto stands for while the option holds it", async ({ page }) => {
   await visit(page, "/system/settings");
   const workers = page.locator('[id="analysis.workers"]');
