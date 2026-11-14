@@ -76,6 +76,19 @@ describe("a text selection", () => {
     expect(keys(chat.rows)).toEqual(["b"]);
   });
 
+  it("holds removals in its list only while the pointer is pressed in it", () => {
+    const chat = list();
+    const other = list();
+    detached.push(chat.detach, other.detach);
+    chat.element.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    chat.rows.remove("a");
+    other.rows.remove("a");
+    expect(keys(chat.rows)).toEqual(["a", "b"]);
+    expect(keys(other.rows)).toEqual(["b"]);
+    window.dispatchEvent(new PointerEvent("pointerup"));
+    expect(keys(chat.rows)).toEqual(["b"]);
+  });
+
   it("stops watching for activity once the selection leaves its list", () => {
     const chat = list();
     detached.push(chat.detach);
