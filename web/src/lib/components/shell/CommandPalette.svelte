@@ -26,7 +26,7 @@
   import { screenHref } from "#lib/shell/screens.svelte.js";
   import { shortcuts } from "#lib/shell/shortcuts.svelte.js";
   import { APP } from "#lib/ui/bindings.js";
-  import { isPressed, keysText, TYPING_PAUSE } from "#lib/ui/keys.js";
+  import { type Binding, isPressed, keysSpoken, keysText, TYPING_PAUSE } from "#lib/ui/keys.js";
   import { reach, USER_ACTIONS } from "#lib/users/actions.js";
 
   /** One thing the palette can do: go to a screen, a user, a room, a setting, a search */
@@ -37,6 +37,8 @@
     label: string;
     /** muted text after the label */
     hint?: string;
+    /** the keys that do the same, shown after the label */
+    keys?: Binding;
     /** more words it is found by, such as a setting's key */
     keywords?: string;
     run: () => void;
@@ -68,7 +70,7 @@
         id: "activity",
         group: "Screens",
         label: activityPrefs.open ? "Close activity log" : "Activity log",
-        hint: keysText(APP.activity),
+        keys: APP.activity,
         keywords: "browsing searches queued uploads log network",
         run: () => (activityPrefs.open = !activityPrefs.open)
       },
@@ -76,7 +78,7 @@
         id: "shortcuts",
         group: "Screens",
         label: "Keyboard shortcuts",
-        hint: keysText(APP.shortcuts),
+        keys: APP.shortcuts,
         keywords: "keys keyboard hotkeys bindings help",
         run: () => shortcuts.show(palette.from)
       },
@@ -239,11 +241,19 @@
                   {#each entries as entry (entry.id)}
                     <Command.Item
                       value={paletteValue(entry.label, entry.id)}
-                      keywords={[entry.hint ?? "", entry.keywords ?? ""]}
+                      keywords={[
+                        entry.hint ?? (entry.keys ? keysText(entry.keys) : ""),
+                        entry.keywords ?? ""
+                      ]}
                       onSelect={() => run(entry)}
                       class="flex h-9 items-center gap-2 rounded-control px-2.5 text-sm data-selected:bg-hover">
                       <span class="truncate">{entry.label}</span>
-                      {#if entry.hint}
+                      {#if entry.keys}
+                        <!-- drawn as signs, read as words -->
+                        <span class="ml-auto shrink-0 text-xs text-fg-muted" aria-hidden="true"
+                          >{keysText(entry.keys)}</span
+                        ><span class="sr-only">{keysSpoken(entry.keys)}</span>
+                      {:else if entry.hint}
                         <span class="ml-auto shrink-0 text-xs text-fg-muted">{entry.hint}</span>
                       {/if}
                     </Command.Item>

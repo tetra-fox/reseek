@@ -173,3 +173,15 @@ test("fades between screens without morphing the content area", async ({ page })
     expect(to, s).toBe(from);
   }
 });
+
+test("reads a shortcut's keys as words where it draws them as signs", async ({ page }) => {
+  await visit(page, "/dashboard");
+  const activity = page.getByRole("button", { name: "Activity", exact: true });
+  await activity.hover();
+  await expect(activity).toHaveAccessibleDescription(
+    "Activity log: browses, searches and downloads by other users Control+J"
+  );
+  await page.keyboard.press("ControlOrMeta+k");
+  await expect(page.getByRole("option", { name: "Activity log Control+J" })).toBeVisible();
+  await expect(page.getByRole("option", { name: "Keyboard shortcuts ?" })).toBeVisible();
+});

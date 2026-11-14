@@ -4,12 +4,15 @@
   import { createAttachmentKey } from "svelte/attachments";
 
   import { type Side, tether } from "#lib/components/ui/TooltipHost.svelte";
+  import type { Binding } from "#lib/ui/keys.js";
 
   type Props = {
     /** no tooltip when it's missing */
     text: string | undefined;
     /** which side of the element it opens on */
     side?: Side;
+    /** the keys that do what the element does, named after the text */
+    keys?: Binding;
     /**
      * for a static element in a dense list, such as a timestamp on every line: it stays out of the
      * tab order. Any other static element with a tooltip is a tab stop, so the keys can show it
@@ -34,6 +37,7 @@
   let {
     text,
     side = "top",
+    keys,
     dense = false,
     spoken = false,
     clipped = false,
@@ -66,7 +70,7 @@
      comes and goes. The spoken text follows it without a line break, which would render as a space -->
 {#if dormant}{@render render({ props: {} })}{:else}<Tooltip.Trigger
     {tether}
-    payload={{ text: text ?? "", side }}
+    payload={{ text: text ?? "", side, keys }}
     disabled={text === undefined || (clipped && !cut)}>
     {#snippet child({ props })}
       <!-- type is for bits-ui's own button, and disabled only means there's nothing to show -->

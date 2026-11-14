@@ -17,7 +17,7 @@
   import { session } from "#lib/session.svelte.js";
   import { REPOSITORY } from "#lib/shell/project.js";
   import { APP } from "#lib/ui/bindings.js";
-  import { keysAria, keysText } from "#lib/ui/keys.js";
+  import { keysAria } from "#lib/ui/keys.js";
 
   import Logo from "./Logo.svelte";
   import SpeedLimits from "./SpeedLimits.svelte";
@@ -120,8 +120,7 @@
       {/snippet}
     </Tooltip>
   {/if}
-  <Tooltip
-    text={`Activity log: browses, searches and downloads by other users (${keysText(APP.activity)})`}>
+  <Tooltip text="Activity log: browses, searches and downloads by other users" keys={APP.activity}>
     {#snippet child({ props })}
       <button
         {...props}

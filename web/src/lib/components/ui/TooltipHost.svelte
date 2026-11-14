@@ -1,13 +1,14 @@
 <script lang="ts" module>
   import { Tooltip } from "bits-ui";
 
+  import { type Binding, keysSpoken, keysText } from "#lib/ui/keys.js";
   import { safeArea } from "#lib/ui/safearea.svelte.js";
 
   export type Side = "top" | "right" | "bottom" | "left";
 
   // the app has one tooltip, mounted once in the root layout. every Tooltip trigger tethers to it
-  // and passes its text and side as the payload
-  export const tether = Tooltip.createTether<{ text: string; side: Side }>();
+  // and passes its text, its side and the keys it names as the payload
+  export const tether = Tooltip.createTether<{ text: string; side: Side; keys?: Binding }>();
 </script>
 
 <!-- bits-ui's default 700ms is slow for the collapsed sidebar, where the tooltip is the only label.
@@ -23,7 +24,10 @@
           sideOffset={4}
           collisionPadding={safeArea.padding(8)}
           class="z-50 max-w-[min(24rem,calc(100vw-1rem))] origin-(--bits-tooltip-content-transform-origin) rounded-control border bg-overlay px-2 py-1 text-xs wrap-anywhere whitespace-pre-line text-fg shadow-raised data-[state=closed]:animate-popover-out data-[state=delayed-open]:animate-popover-in">
-          {payload?.text}
+          <!-- the keys are drawn as signs and read as words -->
+          {payload?.text}{#if payload?.keys}{" "}<span aria-hidden="true"
+              >({keysText(payload.keys)})</span
+            ><span class="sr-only">{keysSpoken(payload.keys)}</span>{/if}
         </Tooltip.Content>
       </Tooltip.Portal>
     {/snippet}
