@@ -211,7 +211,8 @@ impl MinimumRole for Administrator {
 }
 
 /// The principal of a request that has at least the role `R`: a request without one is
-/// answered 401, one whose role is too low 403.
+/// answered 401, or 403 `access_withheld` when its session's user has no role right now, and
+/// one whose role is too low 403.
 pub struct Authorized<R> {
   /// the principal
   pub principal: Principal,

@@ -556,3 +556,27 @@ async fn what_cannot_be_served_plainly_is_refused_with_the_reason() {
     .await;
   assert_eq!(flac.status, 415);
 }
+
+#[tokio::test]
+async fn a_file_asked_for_by_a_session_whose_user_has_no_role_now_is_withheld() {
+  use crate::testing::{OUTSIDE, set_cookie};
+  let viewer = "[web.authentication.local.users.viewer]\npassword = \"look\"\n";
+  let app = with_files(viewer).await;
+  let login = json!({ "username": "viewer", "password": "look" });
+  let signed = app
+    .send_from(OUTSIDE, request("POST", "/api/v0/session", Some(login)))
+    .await;
+  let cookie = set_cookie(&signed.headers, "reseek_session").unwrap();
+  let uri = format!(
+    "/api/v0/files/downloads/files/{}/content",
+    b64("Album/01.flac")
+  );
+  let asked = || app.send_from(OUTSIDE, with(request("GET", &uri, None), "cookie", &cookie));
+  assert_eq!(asked().await.status, 200);
+  // the viewer removed from the configuration
+  std::fs::write(app.dir.path().join("config.toml"), "").unwrap();
+  app.state.config.reload().await.unwrap();
+  let withheld = asked().await;
+  assert_eq!(withheld.status, 403, "{:?}", withheld.body);
+  assert_eq!(withheld.json()["error"], "access_withheld");
+}
