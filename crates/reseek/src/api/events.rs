@@ -67,10 +67,10 @@ async fn raise(
   State(app): State<AppState>,
   admin: Authorized<Administrator>,
   Path(name): Path<String>,
-  body: Option<Json<Option<String>>>,
+  body: Option<Json<String>>,
 ) -> Result<Response, ApiError> {
   let event_type = raisable(&name)?;
-  let disambiguator = body.and_then(|Json(text)| text).unwrap_or_default();
+  let disambiguator = body.map(|Json(text)| text).unwrap_or_default();
   let record = app
     .services
     .events

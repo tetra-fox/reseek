@@ -639,6 +639,11 @@ async fn a_buddy_change_keeps_what_it_leaves_out_and_sets_what_they_see() {
     json!({ "notifyPresence": true }),
     "left out, kept"
   );
+  assert_eq!(
+    buddy(Some(Value::Null)).await,
+    json!({ "notifyPresence": true }),
+    "null is no change"
+  );
   let (status, _) = app.call("PUT", "/api/v0/users/me/buddy", None).await;
   assert_eq!(status, 409, "our own account is no buddy");
   let (status, _) = app.call("DELETE", "/api/v0/users/alice/buddy", None).await;

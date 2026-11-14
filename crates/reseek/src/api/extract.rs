@@ -14,7 +14,7 @@ use serde::de::DeserializeOwned;
 use super::error::ApiError;
 
 /// A JSON body read as `T`, or a JSON response. A body needs `Content-Type: application/json`;
-/// `Option<Json<T>>` takes an empty body as none.
+/// `Option<Json<T>>` takes an empty body or `null` as none.
 pub struct Json<T>(pub T);
 
 impl<S: Send + Sync, T: DeserializeOwned> FromRequest<S> for Json<T> {
@@ -34,7 +34,7 @@ impl<S: Send + Sync, T: DeserializeOwned> OptionalFromRequest<S> for Json<T> {
     if bytes.iter().all(u8::is_ascii_whitespace) {
       return Ok(None);
     }
-    read_json(&bytes).map(|value| Some(Json(value)))
+    read_json::<Option<T>>(&bytes).map(|value| value.map(Json))
   }
 }
 
