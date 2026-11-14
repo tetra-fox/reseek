@@ -20,8 +20,8 @@
     <Popover.Content
       align="end"
       sideOffset={6}
-      collisionPadding={safeArea.padding(0)}
-      class="z-50 w-[min(30rem,calc(100vw-2rem))] rounded-card border bg-overlay p-4 text-sm shadow-raised outline-none data-[state=closed]:animate-popover-out data-[state=open]:animate-popover-in">
+      collisionPadding={safeArea.padding(8)}
+      class="z-50 max-h-(--bits-popover-content-available-height) w-[min(30rem,calc(100vw-2rem))] overflow-y-auto rounded-card border bg-overlay p-4 text-sm shadow-raised outline-none data-[state=closed]:animate-popover-out data-[state=open]:animate-popover-in">
       <p class="mb-2 text-fg-muted">
         Every word must appear in the path. A file with no bitrate or other attribute passes that
         attribute's filter.

@@ -185,3 +185,25 @@ test("reads a shortcut's keys as words where it draws them as signs", async ({ p
   await expect(page.getByRole("option", { name: "Activity log Control+J" })).toBeVisible();
   await expect(page.getByRole("option", { name: "Keyboard shortcuts ?" })).toBeVisible();
 });
+
+for (const [name, viewport] of [
+  ["a laptop", { width: 1280, height: 720 }],
+  ["a phone", { width: 390, height: 844 }]
+] as const) {
+  test(`fits the filter syntax in the window on ${name}`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await fakeSearch(page);
+    await visit(page, "/dashboard");
+    await open(page, `/searches/${SEARCH_ID}`);
+    await page.getByRole("button", { name: "Filter syntax" }).click();
+    const help = page.getByText("Every word must appear").locator("xpath=..");
+    await expect(help).toBeVisible();
+    const box = (await help.boundingBox())!;
+    expect(box.y).toBeGreaterThanOrEqual(0);
+    expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
+    // what does not fit scrolls inside it, down to the last token
+    const last = help.locator("dd").last();
+    await last.scrollIntoViewIfNeeded();
+    await expect(last).toBeInViewport();
+  });
+}
