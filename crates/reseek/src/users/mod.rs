@@ -88,8 +88,8 @@ pub struct Directory {
   messaging: Database,
   /// the Soulseek client, once the network is built
   client: OnceLock<Client>,
-  /// the statistics fetched again and the buddies watched in the background, and the status
-  /// requests running to their end, so the stop waits for them
+  /// the statistics fetched again and the buddies watched in the background, so the stop waits
+  /// for them
   tasks: TaskTracker,
   config: Watcher<Options>,
   /// the daemon's state, which says which speed limits are in force
@@ -247,8 +247,7 @@ impl Directory {
     }
   }
 
-  /// Waits, at shutdown, for the statistics being fetched again, the buddies being watched and
-  /// the status requests under way.
+  /// Waits, at shutdown, for the statistics being fetched again and the buddies being watched.
   pub async fn stop(&self) {
     self.tasks.close();
     if tokio::time::timeout(STOPPING, self.tasks.wait())
@@ -257,7 +256,7 @@ impl Directory {
     {
       debug!(
         running = self.tasks.len(),
-        "statistics, watches or status requests still under way at shutdown"
+        "statistics or watches still under way at shutdown"
       );
     }
   }

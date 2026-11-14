@@ -117,11 +117,11 @@ impl Client {
         );
       }
       R::GetStatus(status) => {
-        self.complete(
-          user_key(ServerCode::GetStatus, &status.username),
+        let asked = self.inner.waiter.complete(
+          &user_key(ServerCode::GetStatus, &status.username),
           status.clone(),
         );
-        self.emit(Event::UserStatusChanged(status));
+        self.emit(Event::UserStatusChanged { status, asked });
       }
       R::SayInChatRoom(said) => self.emit(Event::RoomMessageReceived {
         room_name: said.room,

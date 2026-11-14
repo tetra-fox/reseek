@@ -1,6 +1,6 @@
 //! Server messages soulfind never sends, delivered by a scripted server: privilege notifications,
 //! the distributed tree's tuning values, the shapes older or newer servers send, codes nothing
-//! handles, malformed frames and unread bytes.
+//! handles, malformed frames and unread bytes, and statuses timed against our requests for them.
 
 use crate::support::{Logs, Session, options};
 use soulseek_client::{ClientOptions, Event, ServerInfo};
@@ -244,4 +244,85 @@ async fn a_private_message_keeps_its_line_breaks() {
     })
     .await;
   assert_eq!(received.message, "four\nfive");
+}
+
+/// bob's status as the server sends it, asked for or not
+fn bob_is(presence: soulseek_proto::UserPresence) -> ServerResponse {
+  ServerResponse::GetStatus(UserStatus {
+    username: "bob".into(),
+    presence,
+    is_privileged: false,
+  })
+}
+
+/// The presence of the next status of bob `session` raises, and whether it was asked for.
+async fn bob_raised(session: &mut Session) -> (soulseek_proto::UserPresence, bool) {
+  session
+    .event(|event| match event {
+      Event::UserStatusChanged { status, asked } if status.username == "bob" => {
+        Some((status.presence, asked))
+      }
+      _ => None,
+    })
+    .await
+}
+
+fn asks_for_bob(request: ServerRequest) -> Option<()> {
+  matches!(request, ServerRequest::GetStatus(asked) if asked.username == "bob").then_some(())
+}
+
+#[tokio::test]
+async fn a_status_is_raised_as_asked_only_while_a_request_for_it_waits() {
+  use soulseek_proto::UserPresence;
+
+  let mut session = Session::start().await;
+  let client = session.client.clone();
+  let mut asking = Box::pin(client.get_user_status("bob"));
+  tokio::select! {
+    biased;
+    _ = &mut asking => panic!("answered before the server was asked"),
+    () = session.server.request_matching(asks_for_bob) => {}
+  }
+  session.server.send(&bob_is(UserPresence::Online)).await;
+  assert_eq!(bob_raised(&mut session).await, (UserPresence::Online, true));
+  assert_eq!(asking.await.unwrap().presence, UserPresence::Online);
+
+  // a request given up stops waiting as it is dropped, so what comes next is pushed
+  let mut given_up = Box::pin(client.get_user_status("bob"));
+  tokio::select! {
+    biased;
+    _ = &mut given_up => panic!("answered before the server was asked"),
+    () = session.server.request_matching(asks_for_bob) => {}
+  }
+  drop(given_up);
+  session.server.send(&bob_is(UserPresence::Away)).await;
+  assert_eq!(bob_raised(&mut session).await, (UserPresence::Away, false));
+}
+
+#[tokio::test]
+async fn of_two_status_requests_one_dropped_after_its_reply_leaves_the_others_reply_asked() {
+  use soulseek_proto::UserPresence;
+
+  let mut session = Session::start().await;
+  let client = session.client.clone();
+  let mut first = Box::pin(client.get_user_status("bob"));
+  let mut second = Box::pin(client.get_user_status("bob"));
+  for asking in [&mut first, &mut second] {
+    tokio::select! {
+      biased;
+      _ = asking => panic!("answered before the server was asked"),
+      () = session.server.request_matching(asks_for_bob) => {}
+    }
+  }
+  // the first request's reply comes and is raised before the request is polled again
+  session.server.send(&bob_is(UserPresence::Online)).await;
+  assert_eq!(bob_raised(&mut session).await, (UserPresence::Online, true));
+  drop(first);
+  session.server.send(&bob_is(UserPresence::Online)).await;
+  assert_eq!(
+    bob_raised(&mut session).await,
+    (UserPresence::Online, true),
+    "the second request's reply is raised as pushed"
+  );
+  assert_eq!(second.await.unwrap().presence, UserPresence::Online);
 }

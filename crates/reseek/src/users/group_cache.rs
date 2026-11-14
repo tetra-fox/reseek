@@ -22,7 +22,6 @@ use chrono::Utc;
 use reseek_shares::lock;
 use soulseek_client::{Client, ClientError, LogLimiter};
 use soulseek_proto::server::UserStats;
-use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, info, trace, warn};
 
 use super::groups::{self, Facts, Placement};
@@ -95,8 +94,6 @@ pub struct GroupCache {
   watching: Turns,
   /// how many watches of each user completed, so a caller that waited for another's knows
   watches: Mutex<HashMap<String, u64>>,
-  /// how many replies to our own status requests are still to come, by user
-  asked: Arc<Mutex<HashMap<String, u32>>>,
   /// the users whose statistics are being asked for again
   refetching: Mutex<HashSet<String>>,
   /// the presence of each buddy as we knew it when a server session ended, until a status of
@@ -161,53 +158,8 @@ pub struct Unwatched {
 
 /// What a status the server sent tells beside itself.
 pub struct StatusReceived {
-  /// it answered our own request
-  pub asked: bool,
   /// the user's presence before it, when it was known in this server session
   pub previous: Option<UserPresence>,
-}
-
-/// One status request of ours, counted in `asked` from the start. One that ends without its
-/// reply, failed or given up by its caller, gives its count back: no reply of its own comes to
-/// count it off, and the next status the server pushes would be taken for one.
-struct Asking {
-  asked: Arc<Mutex<HashMap<String, u32>>>,
-  username: String,
-  /// its reply came, and the reply's event counts it off
-  answered: bool,
-}
-
-impl Asking {
-  fn new(asked: &Arc<Mutex<HashMap<String, u32>>>, username: &str) -> Self {
-    *lock(asked).entry(username.to_string()).or_default() += 1;
-    Self {
-      asked: asked.clone(),
-      username: username.to_string(),
-      answered: false,
-    }
-  }
-
-  /// The reply came; its event counts the request off.
-  fn answered(mut self) {
-    self.answered = true;
-  }
-}
-
-impl Drop for Asking {
-  fn drop(&mut self) {
-    if self.answered {
-      return;
-    }
-    let mut asked = lock(&self.asked);
-    // the end of the session clears every count
-    let Some(count) = asked.get_mut(&self.username) else {
-      return;
-    };
-    *count -= 1;
-    if *count == 0 {
-      asked.remove(&self.username);
-    }
-  }
 }
 
 /// Statistics as the server said them, now.
@@ -426,33 +378,13 @@ impl Directory {
   }
 
   /// Asks the server for `username`'s status now and keeps it. The reply is also raised as a
-  /// status change, which [`Directory::status_received`] then knows we asked for.
+  /// status change, which the client marks as asked for when this call took it.
   pub async fn status_of(
     &self,
     client: &Client,
     username: &str,
   ) -> Result<UserStatus, ClientError> {
-    let asking = Asking::new(&self.groups.asked, username);
-    // the request runs to its end on a task of its own, and a caller that gives up cancels it,
-    // which still returns a reply that had come, so its count is left for the reply's event
-    let given_up = CancellationToken::new();
-    let _gives_up = given_up.clone().drop_guard();
-    let (client, name) = (client.clone(), username.to_string());
-    let asked = self.tasks.spawn(
-      async move {
-        let status = client.get_user_status(&name, &given_up).await;
-        if status.is_ok() {
-          asking.answered();
-        }
-        status
-      }
-      .in_current_span(),
-    );
-    let status = match asked.await {
-      Ok(status) => status?,
-      Err(e) if e.is_panic() => std::panic::resume_unwind(e.into_panic()),
-      Err(e) => return Err(ClientError::client(e.to_string(), None)),
-    };
+    let status = client.get_user_status(username).await?;
     let presence = UserPresence::from(status.presence);
     self
       .status_fetched(username, presence, status.is_privileged)
@@ -645,11 +577,10 @@ impl Directory {
     debug!(users = usernames.len(), "privileged users listed");
   }
 
-  /// A status the server sent of `username`: kept when we know them, and counted off when it
-  /// answered our own request. Says whether we asked for it and the presence known before in
-  /// this session, or none when this is the first word on a buddy after a reconnect, whose
-  /// change while we were not connected is told of here unless our own request's reply was
-  /// taken first.
+  /// A status the server sent of `username`: kept when we know them. Says the presence known
+  /// before in this session, or none when this is the first word on a buddy after a reconnect,
+  /// whose change while we were not connected is told of here unless our own request's reply
+  /// was taken first.
   pub async fn status_received(
     &self,
     username: &str,
@@ -657,19 +588,6 @@ impl Directory {
     is_privileged: bool,
   ) -> StatusReceived {
     let first = self.tell_missed(username, presence);
-    let asked = {
-      let mut asked = lock(&self.groups.asked);
-      match asked.get_mut(username) {
-        Some(count) => {
-          *count -= 1;
-          if *count == 0 {
-            asked.remove(username);
-          }
-          true
-        }
-        None => false,
-      }
-    };
     let mut previous = None;
     self
       .learned(username, false, |facts| {
@@ -680,7 +598,7 @@ impl Directory {
     if first {
       previous = None;
     }
-    StatusReceived { asked, previous }
+    StatusReceived { previous }
   }
 
   /// Statistics the server sent of `username` on its own: kept when we know them.
@@ -727,7 +645,6 @@ impl Directory {
   /// on them is told of.
   pub fn session_ended(&self) {
     self.groups.watched().clear();
-    lock(&self.groups.asked).clear();
     let known: HashMap<String, UserPresence> = self
       .buddy_names()
       .into_iter()
@@ -778,30 +695,5 @@ impl Directory {
     self.groups.update(username, create, |facts| {
       facts.memberships = memberships;
     });
-  }
-}
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  #[test]
-  fn an_answered_status_request_stays_counted_for_its_reply_and_one_given_up_does_not() {
-    let asked = Arc::new(Mutex::new(HashMap::new()));
-    Asking::new(&asked, "alice").answered();
-    assert_eq!(
-      lock(&asked).get("alice"),
-      Some(&1),
-      "the reply's event counts it off"
-    );
-    drop(Asking::new(&asked, "alice"));
-    assert_eq!(
-      lock(&asked).get("alice"),
-      Some(&1),
-      "only the answered one is left"
-    );
-    lock(&asked).clear();
-    drop(Asking::new(&asked, "alice"));
-    assert!(lock(&asked).is_empty());
   }
 }

@@ -362,7 +362,7 @@ async fn handle(app: &AppState, event: Event, session: &mut Session) {
       username,
       message,
     } => app.messaging.public_message(room_name, username, message),
-    Event::UserStatusChanged(status) => user_status(app, &status).await,
+    Event::UserStatusChanged { status, asked } => user_status(app, &status, asked).await,
     Event::UserStatisticsChanged(statistics) => {
       app
         .users
@@ -408,14 +408,14 @@ async fn handle(app: &AppState, event: Event, session: &mut Session) {
 }
 
 /// A user's presence, which the server sends for watched users, for room members and in reply
-/// to our own requests. A watched user's row, when they have one, is touched with it, which
-/// pushes their summary, and their statistics are asked for again when the server sent it on
-/// its own, since it pushes their presence and not what they share; a buddy whose presence it
-/// moved is told of.
-async fn user_status(app: &AppState, status: &soulseek_proto::server::UserStatus) {
+/// to our own requests, `asked`. A watched user's row, when they have one, is touched with it,
+/// which pushes their summary, and their statistics are asked for again when the server sent it
+/// on its own, since it pushes their presence and not what they share; a buddy whose presence
+/// it moved is told of.
+async fn user_status(app: &AppState, status: &soulseek_proto::server::UserStatus, asked: bool) {
   let username = &status.username;
   let presence = UserPresence::from(status.presence);
-  trace!(username, ?presence, "user status changed");
+  trace!(username, ?presence, asked, "user status changed");
   app.messaging.member_status(username, presence);
   let received = app
     .users
@@ -429,7 +429,7 @@ async fn user_status(app: &AppState, status: &soulseek_proto::server::UserStatus
     is_privileged: status.is_privileged,
   };
   app.users.touch(username, touch).await;
-  if !received.asked {
+  if !asked {
     app.users.refetch_statistics(username);
     if let Some(previous) = received.previous
       && previous != presence

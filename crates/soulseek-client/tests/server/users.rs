@@ -10,7 +10,6 @@ use soulseek_proto::server::{
   GetPeerAddressRequest, GetPeerAddressResponse, PeerAddressObfuscation,
 };
 use soulseek_proto::{RoomType, ServerCode, ServerRequest, UserPresence};
-use tokio_util::sync::CancellationToken;
 
 #[tokio::test]
 async fn the_address_of_an_online_user_and_of_an_unknown_one() {
@@ -98,31 +97,34 @@ async fn status_is_raised_when_asked_for_and_when_a_watched_user_goes_away() {
   };
   let bob = server.login("bob", options()).await;
   let mut alice = server.login("alice", options()).await;
-  let status = alice
-    .client
-    .get_user_status(&bob.username, &CancellationToken::new())
-    .await
-    .unwrap();
+  let status = alice.client.get_user_status(&bob.username).await.unwrap();
   assert_eq!(status.username, bob.username);
   assert_eq!(status.presence, UserPresence::Online);
   assert!(!status.is_privileged);
   let raised = alice
     .event(|event| match event {
-      Event::UserStatusChanged(raised) if raised.username == status.username => Some(raised),
+      Event::UserStatusChanged {
+        status: raised,
+        asked,
+      } if raised.username == status.username => Some((raised, asked)),
       _ => None,
     })
     .await;
-  assert_eq!(raised, status);
+  assert_eq!(raised, (status.clone(), true));
 
   alice.client.watch_user(&bob.username).await.unwrap();
   bob.client.set_status(UserPresence::Away).await.unwrap();
   let pushed = alice
     .event(|event| match event {
-      Event::UserStatusChanged(pushed) if pushed.username == status.username => Some(pushed),
+      Event::UserStatusChanged {
+        status: pushed,
+        asked,
+      } if pushed.username == status.username => Some((pushed, asked)),
       _ => None,
     })
     .await;
-  assert_eq!(pushed.presence, UserPresence::Away);
+  assert_eq!(pushed.0.presence, UserPresence::Away);
+  assert!(!pushed.1, "pushed, not asked for");
 }
 
 #[tokio::test]

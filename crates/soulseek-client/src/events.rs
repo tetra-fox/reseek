@@ -61,8 +61,9 @@ pub enum Event {
   },
   /// every privileged user, pushed after login
   PrivilegedUserListReceived(Vec<String>),
-  /// a user's presence, asked for or pushed for a watched user or a room member
-  UserStatusChanged(UserStatus),
+  /// a user's presence, asked for or pushed for a watched user or a room member; `asked` when
+  /// a request of ours for it was still waiting and took it as its answer
+  UserStatusChanged { status: UserStatus, asked: bool },
   /// a user's statistics, asked for or pushed for a member of a room we are in
   UserStatisticsChanged(UserStatistics),
   /// the server reports that a user could not connect to us for a connection request we made;
