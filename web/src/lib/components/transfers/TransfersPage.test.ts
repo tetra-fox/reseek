@@ -304,6 +304,19 @@ describe("the transfers table", () => {
       expect(row(b.id)).toBeNull();
     });
 
+    it("name a job's users as usernames in its header", async () => {
+      Object.assign(views.download, { layout: "tree", groupBy: "job" });
+      listing = [
+        transfer({ username: "alice", jobId: "J1" }),
+        transfer({ username: "bob", jobId: "J1" })
+      ];
+      await start();
+      const header = row("job:J1")!;
+      expect(header.textContent.replace(/\s+/g, " ")).toContain("Downloads from alice and bob");
+      const names = [...header.querySelectorAll("a")].map((a) => a.textContent);
+      expect(names).toEqual(["alice", "bob"]);
+    });
+
     it("select only the group's transfers still listed", async () => {
       const a = transfer({ filename: "x\\a.flac" });
       const b = transfer({ filename: "x\\b.mp3" });

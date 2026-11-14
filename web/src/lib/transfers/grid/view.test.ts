@@ -90,6 +90,9 @@ describe("the transfers view", () => {
       ["job:none", "Other downloads", [old.id]]
     ]);
     expect(groups[0].siblings).toHaveLength(5);
+    // the header names the users apart from the rest, so each is a username of its own
+    expect(groups[3].job).toEqual({ name: "Downloads", from: ["alice", "bob"] });
+    expect(groups[4].job).toBeUndefined();
   });
 
   it("gives a folder every transfer below it, and its siblings for Alt-click", () => {

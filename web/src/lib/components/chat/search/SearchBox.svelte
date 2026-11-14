@@ -5,7 +5,7 @@
   import SearchIcon from "@lucide/svelte/icons/search";
   import UsersRoundIcon from "@lucide/svelte/icons/users-round";
 
-  import { chatName, SERVER } from "#lib/chat/notices.js";
+  import { chatName, isNotices, SERVER } from "#lib/chat/notices.js";
   import { foundHref, resultsHref } from "#lib/chat/route.js";
   import {
     dropdown,
@@ -19,6 +19,7 @@
   import Marked from "#lib/components/ui/Marked.svelte";
   import * as Suggest from "#lib/components/ui/suggest/suggest.js";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
+  import NameText from "#lib/components/users/NameText.svelte";
   import UserEntry from "#lib/components/users/UserEntry.svelte";
   import { ago, dateTime } from "#lib/format.js";
   import { chatHref, roomHref } from "#lib/nav.js";
@@ -151,8 +152,11 @@
         <Suggest.Item value={hitValue(hit)}>
           <span class="flex min-w-0 flex-1 flex-col gap-0.5">
             <span class="flex items-baseline gap-2 text-xs text-fg-muted">
+              <!-- a name in an option, which a click picks, is the name's text, not a link -->
               <span class="min-w-0 truncate font-medium">
-                {chat.kind === "room" ? `#${chat.name}, ${hit.username}` : chatName(chat)}
+                {#if chat.kind === "room"}#{chat.name}, <NameText
+                    name={hit.username} />{:else if isNotices(chat)}{chatName(chat)}{:else}<NameText
+                    name={chat.name} />{/if}
               </span>
               <Tooltip text={dateTime(hit.timestamp)} dense>
                 {#snippet child({ props })}

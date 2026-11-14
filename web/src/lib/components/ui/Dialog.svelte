@@ -6,11 +6,13 @@
   import Button from "#lib/components/ui/Button.svelte";
   import Scrim from "#lib/components/ui/Scrim.svelte";
   import { cn } from "#lib/ui/cn.js";
+  import { firstTabbable } from "#lib/ui/untabbable.js";
 
   type Props = {
     open: boolean;
     title: string;
-    description?: string;
+    /** a snippet for one with a username, which renders as one */
+    description?: string | Snippet;
     /** under the body, for the dialog's buttons */
     footer?: Snippet;
     /**
@@ -34,6 +36,11 @@
     class: className,
     children
   }: Props = $props();
+
+  let content = $state<HTMLElement | null>(null);
+  let head = $state<HTMLElement | null>(null);
+  let body = $state<HTMLElement | null>(null);
+  let foot = $state<HTMLElement | null>(null);
 </script>
 
 <!-- a centered box over the page, closed by Esc, the overlay or its close button unless busy -->
@@ -41,8 +48,17 @@
   <Dialog.Portal>
     <Scrim />
     <Dialog.Content
+      bind:ref={content}
       escapeKeydownBehavior={busy ? "ignore" : "close"}
       interactOutsideBehavior={busy ? "ignore" : "close"}
+      onOpenAutoFocus={(e) => {
+        // a link in the description, as a username is, never takes the first focus: it starts in
+        // the body, then the buttons under it, else on the dialog itself
+        if (!head || !firstTabbable(head)) return;
+        e.preventDefault();
+        const to = [body, foot].map((part) => part && firstTabbable(part)).find(Boolean);
+        (to ?? content)?.focus();
+      }}
       onCloseAutoFocus={(e) => {
         const to = returnTo?.();
         if (!to?.isConnected) return;
@@ -53,17 +69,22 @@
         "fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100svh-var(--safe-t)-var(--safe-b)-2rem)] w-[min(28rem,calc(100vw-2rem))] max-w-(--safe-w) -translate-x-1/2 -translate-y-1/2 flex-col rounded-card border bg-surface shadow-raised outline-none data-[state=closed]:animate-popover-out data-[state=open]:animate-popover-in",
         className
       )}>
-      <div class="flex flex-col gap-1 py-4 pr-14 pl-5">
+      <div bind:this={head} class="flex flex-col gap-1 py-4 pr-14 pl-5">
         <Dialog.Title class="text-base font-medium wrap-anywhere">{title}</Dialog.Title>
         {#if description}
-          <Dialog.Description class="text-sm text-fg-muted">{description}</Dialog.Description>
+          <Dialog.Description class="text-sm text-fg-muted"
+            >{#if typeof description === "string"}{description}{:else}{@render description()}{/if}</Dialog.Description>
         {/if}
       </div>
-      <div class="flex min-h-0 flex-1 flex-col gap-group overflow-y-auto px-5 pb-4">
+      <div
+        bind:this={body}
+        class="flex min-h-0 flex-1 flex-col gap-group overflow-y-auto px-5 pb-4">
         {@render children()}
       </div>
       {#if footer}
-        <div class="flex flex-wrap items-center justify-end gap-inline border-t px-5 py-3">
+        <div
+          bind:this={foot}
+          class="flex flex-wrap items-center justify-end gap-inline border-t px-5 py-3">
           {@render footer()}
         </div>
       {/if}

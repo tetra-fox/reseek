@@ -64,4 +64,27 @@ describe("every file in a search result's folder", () => {
     button("Download").click();
     expect(await asked(net)).toEqual([["s1", null]]);
   });
+
+  it("names who they come from as a username, which shows a name's edge spaces", () => {
+    component = mount(FolderFiles, {
+      target: document.body,
+      props: { open: true, username: "dj ", folder: "@@a\\Music", files: [], connected: false }
+    });
+    flushSync();
+    const dialog = document.querySelector('[role="dialog"]')!;
+    const description = document.getElementById(dialog.getAttribute("aria-describedby")!)!;
+    const name = description.querySelector("a")!;
+    expect(name.getAttribute("aria-label")).toBe("dj ");
+    expect(name.textContent).toBe("dj·");
+  });
+
+  it("opens with the keys in the filter box, not on the name above it", async () => {
+    component = mount(FolderFiles, {
+      target: document.body,
+      props: { open: true, username: "alice", folder: "@@a\\Music", files: [], connected: false }
+    });
+    await vi.waitFor(() =>
+      expect(document.activeElement?.getAttribute("aria-label")).toBe("Filter")
+    );
+  });
 });

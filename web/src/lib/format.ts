@@ -237,11 +237,20 @@ export const formatAttributes = (file: {
 /** The last part of a remote path, after its last backslash or slash */
 export const getFileName = (path: string): string => path.split("\\").pop()!.split("/").pop()!;
 
-/** Who files came from, in words: one or two names, or the first and how many others */
-export const fromWhom = (usernames: string[]) =>
+/**
+ * Who files came from, in parts: one or two names, joined by "and", or the first and the words
+ * for how many others
+ */
+export const namedOf = (usernames: string[]) =>
   usernames.length <= 2
-    ? usernames.join(" and ")
-    : `${usernames[0]} and ${usernames.length - 1} others`;
+    ? { names: usernames, others: "" }
+    : { names: usernames.slice(0, 1), others: ` and ${usernames.length - 1} others` };
+
+/** Who files came from, in words */
+export const fromWhom = (usernames: string[]) => {
+  const { names, others } = namedOf(usernames);
+  return names.join(" and ") + others;
+};
 
 /**
  * The directory part of a remote path, by the separator it uses: `/` when it has one, else `\`.

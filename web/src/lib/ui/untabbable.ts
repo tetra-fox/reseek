@@ -2,6 +2,12 @@ import { on } from "svelte/events";
 
 const FOCUSABLE = "a[href],button,input,select,textarea,summary,[tabindex]";
 
+/** The first control in `node` that Tab stops on: in the tab order and enabled */
+export const firstTabbable = (node: HTMLElement): HTMLElement | null =>
+  [...node.querySelectorAll<HTMLElement>(FOCUSABLE)].find(
+    (e) => e.tabIndex >= 0 && !e.matches(":disabled")
+  ) ?? null;
+
 /**
  * For `{@attach}` on a copy of controls the keys reach elsewhere, one hidden from assistive
  * technology: its controls still answer the pointer but stay out of the tab order, as they come

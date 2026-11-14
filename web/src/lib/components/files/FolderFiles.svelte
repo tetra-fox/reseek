@@ -6,6 +6,7 @@
   import Button from "#lib/components/ui/Button.svelte";
   import Dialog from "#lib/components/ui/Dialog.svelte";
   import Input from "#lib/components/ui/Input.svelte";
+  import Username from "#lib/components/users/Username.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { fileColumns, fileTemplate, fileWidth } from "#lib/files/columns.js";
   import {
@@ -99,11 +100,10 @@
     ondownload={write ? () => void downloadFolder(node.path, itemsUnder(node)) : undefined} />
 {/snippet}
 
-<Dialog
-  bind:open
-  title={folder}
-  description={`Every file in this folder and its subfolders, from ${username}`}
-  class="w-[min(56rem,calc(100vw-2rem))]">
+<Dialog bind:open title={folder} class="w-[min(56rem,calc(100vw-2rem))]">
+  {#snippet description()}
+    Every file in this folder and its subfolders, from <Username name={username} />
+  {/snippet}
   <Input bind:value={text} type="search" placeholder="Filter files" aria-label="Filter" />
   <FileTree
     {lines}

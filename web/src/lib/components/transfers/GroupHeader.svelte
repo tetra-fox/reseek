@@ -11,7 +11,7 @@
   import Progress from "#lib/components/ui/Progress.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import Username from "#lib/components/users/Username.svelte";
-  import { formatBytes, formatCount, formatDuration, plural } from "#lib/format.js";
+  import { formatBytes, formatCount, formatDuration, namedOf, plural } from "#lib/format.js";
   import { groupProgress } from "#lib/transfers/grid/progress.js";
   import type { Group } from "#lib/transfers/grid/view.js";
   import { type GroupHandlers, groupActions } from "#lib/transfers/groupActions.js";
@@ -88,6 +88,11 @@
           </span>
         {/snippet}
       </Tooltip>
+    {:else if group.job}
+      {@const { names, others } = namedOf(group.job.from)}
+      <span class="truncate font-medium"
+        >{`${group.job.name} from `}{#each names as name, i (name)}{#if i}{" and "}{/if}<Username
+            {name} />{/each}{others}</span>
     {:else}
       <span class="truncate font-medium">{group.label}</span>
     {/if}

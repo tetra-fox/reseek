@@ -106,6 +106,8 @@ export type Group = {
   transfers: Transfer[];
   /** a folder's remote path */
   folder?: string;
+  /** a download job's name and the users its files come from, which its label joins with "from" */
+  job?: { name: string; from: string[] };
   /** the keys of the groups beside it, itself included, which Alt-click opens or closes with it */
   siblings: string[];
   /** the keys of the groups inside it, at every depth, which Ctrl-click opens or closes with it */
@@ -134,22 +136,21 @@ export type SortKey =
 
 /**
  * A download job's name from its downloads: its one file, else the folder holding every file
- * when they come from one user, else who they came from
+ * when they come from one user, else "Downloads"; and the users they come from
  */
-const jobLabel = (list: Transfer[]) => {
-  const who = fromWhom([...new Set(list.map((t) => t.username))]);
-  if (list.length === 1) return `${getFileName(list[0].filename)} from ${who}`;
+const jobOf = (list: Transfer[]) => {
+  const from = [...new Set(list.map((t) => t.username))];
+  if (list.length === 1) return { name: getFileName(list[0].filename), from };
   const separator = separatorOf(list[0].filename);
-  const folder = list.every((t) => t.username === list[0].username)
-    ? commonFolder(
-        list.map((t) => t.filename),
-        separator
-      )
-    : "";
+  const folder =
+    from.length === 1
+      ? commonFolder(
+          list.map((t) => t.filename),
+          separator
+        )
+      : "";
   // a folder at the top of a share names the share, not what was picked from it
-  return folder.includes(separator)
-    ? `${getFileName(folder)} from ${who}`
-    : `Downloads from ${who}`;
+  return { name: folder.includes(separator) ? getFileName(folder) : "Downloads", from };
 };
 
 const bucket = <K>(rows: Transfer[], key: (t: Transfer) => K) => {
@@ -253,12 +254,14 @@ export const layout = (
     }
   } else {
     const jobs = [...bucket(sorted, (t) => t.jobId ?? null)];
-    const siblings = jobs.map(([job]) => `job:${job ?? "none"}`);
-    for (const [job, list] of jobs) {
+    const siblings = jobs.map(([id]) => `job:${id ?? "none"}`);
+    for (const [id, list] of jobs) {
+      const job = id ? jobOf(list) : undefined;
       add({
         kind: "job",
-        key: `job:${job ?? "none"}`,
-        label: job ? jobLabel(list) : "Other downloads",
+        key: `job:${id ?? "none"}`,
+        label: job ? `${job.name} from ${fromWhom(job.from)}` : "Other downloads",
+        job,
         username: list[0].username,
         depth: 0,
         transfers: list,
