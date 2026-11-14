@@ -294,6 +294,12 @@ export const ancestors = (path: string, listing: Listing, separator: Separator):
   return found;
 };
 
+/** A folder line's tick: how many of the files the line offers are ticked, of how many */
+type Tick = { on: number; of: number };
+
+/** Whether a folder line is ticked: it offers files and every one of them is ticked */
+export const tickedWhole = ({ on, of }: Tick) => of > 0 && on === of;
+
 /**
  * How many of the selected items are under each folder, by the folder's key: each selected id, a
  * path or a `scopedKey`, counts once for every folder its path is in. Costs the selection's size

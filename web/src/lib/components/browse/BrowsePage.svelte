@@ -45,6 +45,7 @@
     parentOf,
     type RemoteFile,
     tickedCounts,
+    tickedWhole,
     treeLines
   } from "#lib/tree/folders.js";
   import { TYPING_PAUSE } from "#lib/ui/keys.js";
@@ -228,11 +229,10 @@
   const topOf = (at: string) =>
     ancestors(at, browser.tree, browser.separator)[0] ?? getFileName(at);
 
-  /** Whether the line of the folder `path` is ticked: every file under it that it offers is */
-  const tickedWhole = (path: string) => {
+  /** Whether the line of the folder `path` is ticked */
+  const lineTicked = (path: string) => {
     const node = browser.tree.byPath.get(path);
-    const state = node && tickOf(node);
-    return !!state && state.of > 0 && state.on === state.of;
+    return !!node && tickedWhole(tickOf(node));
   };
 
   /**
@@ -374,7 +374,7 @@
           {depth}
           tick={state.of
             ? {
-                checked: state.on === state.of,
+                checked: tickedWhole(state),
                 indeterminate: state.on > 0 && state.on < state.of,
                 ontick: (on) =>
                   browser.tick(
@@ -403,7 +403,7 @@
     {#if chosen.length}
       <SelectionBar
         files={chosen}
-        ondownload={write ? () => download(chosen, tickedWhole) : undefined}
+        ondownload={write ? () => download(chosen, lineTicked) : undefined}
         onclear={() => browser.selected.clear()} />
     {/if}
   {/if}

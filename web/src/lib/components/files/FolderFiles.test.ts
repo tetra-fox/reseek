@@ -18,7 +18,9 @@ describe("every file in a search result's folder", () => {
   });
 
   /** Opens the dialog on a two-folder album found by the search "s1" */
-  const open = () => {
+  const open = (
+    files = [sharedFile("@@a\\Album\\cover.jpg"), sharedFile("@@a\\Album\\CD1\\01.flac")]
+  ) => {
     session.principal = { name: "me", role: "Administrator" } as never;
     const net = fakeNetwork((url) =>
       url.pathname.endsWith("/transfers/downloads/jobs") ? { id: "j", groups: [] } : undefined
@@ -29,7 +31,7 @@ describe("every file in a search result's folder", () => {
         open: true,
         username: "alice",
         folder: "@@a\\Album",
-        files: [sharedFile("@@a\\Album\\cover.jpg"), sharedFile("@@a\\Album\\CD1\\01.flac")],
+        files,
         connected: true,
         searchId: "s1"
       }
@@ -65,6 +67,20 @@ describe("every file in a search result's folder", () => {
   it("downloads a folder whose line is ticked in it, though it holds only files", async () => {
     const net = open();
     document.querySelector<HTMLElement>("[aria-label='Select every file in CD1']")!.click();
+    flushSync();
+    button("Download").click();
+    expect(await asked(net)).toEqual([["s1", "@@a\\Album\\CD1"]]);
+  });
+
+  it("downloads a ticked folder in it when the filter hides some of its files", async () => {
+    const net = open(
+      ["cover.jpg", "CD1\\01.flac", "CD1\\02.mp3"].map((name) => sharedFile(`@@a\\Album\\${name}`))
+    );
+    document.querySelector<HTMLElement>("[aria-label='Select every file in CD1']")!.click();
+    flushSync();
+    const filter = document.querySelector<HTMLInputElement>("[aria-label='Filter']")!;
+    filter.value = "flac";
+    filter.dispatchEvent(new Event("input", { bubbles: true }));
     flushSync();
     button("Download").click();
     expect(await asked(net)).toEqual([["s1", "@@a\\Album\\CD1"]]);

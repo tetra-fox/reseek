@@ -25,6 +25,7 @@
     itemsUnder,
     separatorOf,
     tickedCounts,
+    tickedWhole,
     treeLines
   } from "#lib/tree/folders.js";
   import { viewport } from "#lib/ui/viewport.svelte.js";
@@ -83,7 +84,8 @@
   });
   const columns = $derived(fileColumns({ quality: true, phone: viewport.phone }));
   const chosen = $derived(shown.filter((f) => selected.has(f.filename)));
-  const ticked = $derived(tickedCounts(selected));
+  /** the ticked files under each folder, of those the filter keeps */
+  const ticked = $derived(tickedCounts(chosen.map((f) => f.filename)));
   const separator = $derived(separatorOf(folder));
 
   const tell = (result: Enqueued) => toast(result.text, result.kind === "done" ? "info" : "error");
@@ -94,11 +96,10 @@
     of: node.count
   });
 
-  /** Whether the line of the folder `path` is ticked: every file under it the filter keeps is */
-  const tickedWhole = (path: string) => {
+  /** Whether the line of the folder `path` is ticked */
+  const lineTicked = (path: string) => {
     const node = byPath.get(path);
-    const state = node && tickOf(node);
-    return !!state && state.of > 0 && state.on === state.of;
+    return !!node && tickedWhole(tickOf(node));
   };
 
   /**
@@ -153,7 +154,7 @@
         open={expansion.isOpen(node.key)}
         {depth}
         tick={{
-          checked: tickedWhole(node.path),
+          checked: tickedWhole(state),
           indeterminate: state.on > 0 && state.on < state.of,
           ontick: (on) => {
             for (const f of itemsUnder(node)) {
@@ -191,7 +192,7 @@
   {#if write && chosen.length}
     <SelectionBar
       files={chosen}
-      ondownload={() => download(chosen, tickedWhole)}
+      ondownload={() => download(chosen, lineTicked)}
       onclear={() => selected.clear()} />
   {/if}
   {#snippet footer()}
