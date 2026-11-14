@@ -352,7 +352,7 @@ async fn a_downloader_that_resets_after_the_last_byte_fails_the_upload_and_is_to
   let error = running.result().await.unwrap_err();
   assert_eq!(
     error.to_string(),
-    "Transfer failed: the downloader reset the connection before reading every byte"
+    "Transfer failed: the downloader reset the connection after the last byte was written"
   );
   assert!(bob.quiet_for(Duration::from_millis(200)).await);
 }

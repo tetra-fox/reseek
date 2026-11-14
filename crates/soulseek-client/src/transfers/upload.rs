@@ -393,7 +393,9 @@ impl Upload {
       Linger::Reset => {
         return Err(ClientError::connection(
           ConnectionErrorKind::RemoteClosed,
-          format!("Transfer failed: {DOWNLOADER} reset the connection before reading every byte"),
+          format!(
+            "Transfer failed: {DOWNLOADER} reset the connection after the last byte was written"
+          ),
         ));
       }
     }
