@@ -166,6 +166,17 @@ describe("browse listings", () => {
     ]);
   });
 
+  it("keep a file's figures that can't be true as unknown, as a search does", () => {
+    const wrapped = 4_294_967_295;
+    const odd = { ...remote("odd.flac"), length: wrapped, bitRate: wrapped, sampleRate: wrapped };
+    const fine = { ...remote("fine.flac"), length: 300, bitRate: 0, sampleRate: 44_100 };
+    const [root] = listingTree([{ name: "a", fileCount: 2, files: [odd, fine] }], "\\").roots;
+    expect(root.items.map((f) => [f.length, f.bitRate, f.sampleRate])).toEqual([
+      [300, 0, 44_100],
+      [null, null, null]
+    ]);
+  });
+
   it("show every way to a match when filtering, open, with the items kept", () => {
     const { roots } = listingTree(
       [dir("a"), dir("a\\b"), dir("a\\b\\target", ["x.flac", "y.mp3"]), dir("a\\c"), dir("d")],

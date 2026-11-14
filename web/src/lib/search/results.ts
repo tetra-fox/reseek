@@ -1,6 +1,6 @@
 import type { Schemas } from "#lib/api/client.js";
+import { withKnownAttributes } from "#lib/files/attributes.js";
 import { filterResponse, type Filters } from "#lib/files/filters.js";
-import { withKnownLength } from "#lib/files/remote.js";
 import { HIDE_DEFAULTS, LONG_QUEUE, type ResultSort } from "#lib/settings.svelte.js";
 
 export type SearchResponse = Schemas["SearchResponse"];
@@ -10,13 +10,13 @@ export type SearchFile = Schemas["File"];
 export type Result = { key: string; response: SearchResponse };
 
 /**
- * A response as the page keeps it, every file's length that says more than a week unknown, so
- * the files show, sort and filter as files with no length
+ * A response as the page keeps it, every file's figures that can't be true unknown, so the files
+ * show, sort and filter as files without them
  */
 export const readResponse = (response: SearchResponse): SearchResponse => ({
   ...response,
-  files: response.files.map(withKnownLength),
-  lockedFiles: response.lockedFiles.map(withKnownLength)
+  files: response.files.map(withKnownAttributes),
+  lockedFiles: response.lockedFiles.map(withKnownAttributes)
 });
 
 /**

@@ -1,4 +1,5 @@
 import type { Schemas } from "#lib/api/client.js";
+import { withKnownAttributes } from "#lib/files/attributes.js";
 import { getDirectoryName, getFileName } from "#lib/format.js";
 
 /**
@@ -228,8 +229,9 @@ export const detectSeparator = (directories: { name: string }[]): Separator => {
 /**
  * The folders of a browse as a tree, in the order the user listed them, each folder a level of
  * its own. A folder whose parent isn't listed is a root: levels the listing skips are not made up.
- * A folder's files, each with its full path, are made and sorted by name the first time they are
- * read, so a share of many folders costs nothing for the folders never opened
+ * A folder's files, each with its full path and the figures a search believes, are made and
+ * sorted by name the first time they are read, so a share of many folders costs nothing for the
+ * folders never opened
  */
 export const listingTree = (directories: RemoteDirectory[], separator: Separator): Listing => {
   const byPath: Listing["byPath"] = new Map();
@@ -244,7 +246,9 @@ export const listingTree = (directories: RemoteDirectory[], separator: Separator
       label: getFileName(d.name),
       get items() {
         files ??= d.files
-          .map((f) => ({ ...f, filename: d.name + separator + f.filename, locked }))
+          .map((f) =>
+            withKnownAttributes({ ...f, filename: d.name + separator + f.filename, locked })
+          )
           .sort((a, b) => getFileName(a.filename).localeCompare(getFileName(b.filename)));
         return files;
       },
