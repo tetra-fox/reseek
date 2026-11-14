@@ -18,7 +18,6 @@
   import { clock } from "#lib/ui/clock.svelte.js";
   import { canManage, configBlocked, reach, setBuddy, USER_ACTIONS } from "#lib/users/actions.js";
   import { blockEnd } from "#lib/users/block.svelte.js";
-  import { nameColor } from "#lib/users/colors.js";
   import { BUDDIES, PRIVILEGED, queueOf } from "#lib/users/groups.js";
   import { firstLines, ownProfile, pictureOf, SHARES_UNKNOWN } from "#lib/users/profile.svelte.js";
   import { type UserSummary, users } from "#lib/users/users.svelte.js";
@@ -26,7 +25,7 @@
 
   import Avatar from "./Avatar.svelte";
   import GroupBadge from "./GroupBadge.svelte";
-  import NameText from "./NameText.svelte";
+  import Username from "./Username.svelte";
 
   type Props = {
     name: string;
@@ -97,15 +96,10 @@
     <Avatar {name} {pictureUrl} src={draft?.src} link={!draft} class="size-12" />
     <div class="flex min-w-0 flex-col">
       {#if draft}
-        <span class="font-mono font-medium wrap-anywhere" dir="auto" style:color={nameColor(name)}
-          ><NameText {name} /></span>
+        <Username plain {name} wrap />
       {:else}
-        <a
-          href={userHref(name)}
-          class="font-mono font-medium wrap-anywhere underline-offset-2 hover:underline"
-          dir="auto"
-          aria-label={name}
-          style:color={nameColor(name)}><NameText {name} /></a>
+        <a href={userHref(name)} class="group" aria-label={name}
+          ><Username plain {name} wrap class="underline-offset-2 group-hover:underline" /></a>
       {/if}
       <span class="flex items-center gap-1.5 text-xs text-fg-muted">
         <span class={["size-2 rounded-full", presence.dot]}></span>

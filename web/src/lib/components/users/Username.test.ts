@@ -5,6 +5,8 @@ import { interaction } from "#lib/lists/interaction.svelte.js";
 import { userSummary } from "#lib/testing/fixtures.js";
 import { CLOSE_DELAY_MS, OPEN_DELAY_MS } from "#lib/users/hover.svelte.js";
 
+import UserCard from "./UserCard.svelte";
+import UserEntry from "./UserEntry.svelte";
 import Username from "./Username.svelte";
 
 const summary = userSummary("alice", {
@@ -142,5 +144,49 @@ describe("a username", () => {
     await vi.advanceTimersByTimeAsync(0);
     flushSync();
     expect(card()).toBeNull();
+  });
+});
+
+describe("a name's look", () => {
+  const name = " dj shadow ";
+  afterEach(() => (document.body.innerHTML = ""));
+
+  /** A box of its own under the body */
+  const place = () => document.body.appendChild(document.createElement("div"));
+
+  /** The element a name's text is drawn in, under `root` */
+  const drawn = (root: ParentNode) =>
+    [...root.querySelectorAll<HTMLElement>("[dir=auto]")].find((e) =>
+      e.textContent.includes("dj shadow")
+    );
+
+  it("is the same in a card, a menu and a picker's entry as anywhere else", async () => {
+    const [plainBox, cardBox, entryBox, linkBox] = [place(), place(), place(), place()];
+    const mounted = [
+      mount(Username, { target: plainBox, props: { name, plain: true } }),
+      mount(UserCard, { target: cardBox, props: { name, user: undefined, onblock: () => {} } }),
+      mount(UserEntry, { target: entryBox, props: { user: { name }, text: "dj" } }),
+      mount(Username, { target: linkBox, props: { name } })
+    ];
+    flushSync();
+    linkBox
+      .querySelector("a")!
+      .dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+    flushSync();
+    await vi.waitFor(() => expect(document.querySelector('[role="menu"]')).not.toBeNull());
+
+    const look = drawn(plainBox)!;
+    // the spaces at its ends show as dots
+    expect(look.textContent).toBe("·dj shadow·");
+    for (const shown of [cardBox, document.querySelector('[role="menu"]')!, entryBox]) {
+      const text = drawn(shown);
+      expect(text?.getAttribute("style")).toBe(look.getAttribute("style"));
+      expect(text?.classList.contains("font-medium")).toBe(true);
+      expect(text?.classList.contains("font-mono")).toBe(false);
+    }
+    expect(drawn(cardBox)!.textContent).toBe("·dj shadow·");
+    // a picker's entry marks what was typed in the name
+    expect(entryBox.querySelector("mark")?.textContent).toBe("dj");
+    for (const component of mounted) unmount(component);
   });
 });

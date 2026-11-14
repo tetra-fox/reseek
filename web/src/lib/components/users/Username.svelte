@@ -2,6 +2,7 @@
   import { goto } from "$app/navigation";
   import CopyIcon from "@lucide/svelte/icons/copy";
   import { DropdownMenu, Popover } from "bits-ui";
+  import type { Snippet } from "svelte";
   import type { HTMLAttributes } from "svelte/elements";
 
   import { SERVER } from "#lib/chat/notices.js";
@@ -42,10 +43,22 @@
      * picks, a tooltip
      */
     plain?: boolean;
+    /** a plain name breaks onto more lines rather than being cut, as the head of a card does */
+    wrap?: boolean;
+    /** a plain name's text drawn another way, as with what a search matched marked */
+    children?: Snippet;
     class?: string;
   };
 
-  let { name, folder, card = false, plain = false, class: className }: Props = $props();
+  let {
+    name,
+    folder,
+    card = false,
+    plain = false,
+    wrap = false,
+    children,
+    class: className
+  }: Props = $props();
 
   const me = Symbol("username");
   let link = $state<HTMLAnchorElement | null>(null);
@@ -144,7 +157,7 @@
   /** the name's own look, as a link or as text; the server's name has no color of a user's */
   const look: HTMLAttributes<HTMLElement> = $derived({
     dir: "auto",
-    class: "truncate font-medium",
+    class: wrap ? "font-medium wrap-anywhere" : "truncate font-medium",
     style: name === SERVER ? undefined : `color: ${nameColor(name)}`
   });
 
@@ -154,11 +167,18 @@
   };
 </script>
 
-<!-- a name as text: a plain one, or where the name the server's notices come from turns up, as
-     in the events, which is no user. Written with nothing between its tags, so text around it, as
-     in a tooltip, reads on from the name without a space -->
+<!-- a name as text, written with nothing between its tags, so text around it, as in a tooltip,
+     reads on from the name without a space -->
+{#snippet text(boxClass?: string)}<span class={cn(box, boxClass)}
+    ><span {...look}
+      >{#if children}{@render children()}{:else}<NameText {name} />{/if}</span
+    ></span
+  >{/snippet}
+
+<!-- a plain name, or where the name the server's notices come from turns up, as in the events,
+     which is no user -->
 {#if plain || name === SERVER}
-  <span class={cn(box, className)}><span {...look}><NameText {name} /></span></span>
+  {@render text(className)}
 {:else}
   <!-- a name takes only its text's width: its menu opens from a right-click, a long press,
        Shift+F10 or the card's More button, never from a control beside it -->
@@ -241,7 +261,7 @@
                     ? "bg-warning"
                     : "bg-fg-subtle/50"
               ]}></span>
-            <span class="truncate font-mono font-medium" style:color={nameColor(name)}>{name}</span>
+            {@render text()}
             {#if queue}<span class="ml-auto"><GroupBadge group={queue} queue /></span>{/if}
           </div>
           <Menu.Separator />

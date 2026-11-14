@@ -30,6 +30,7 @@
   import Notice from "#lib/components/ui/Notice.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import Avatar from "#lib/components/users/Avatar.svelte";
+  import Username from "#lib/components/users/Username.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { ago, badgeCount, formatCount, plural } from "#lib/format.js";
   import { freezesWhileUsed, heldOrder } from "#lib/lists/interaction.svelte.js";
@@ -43,7 +44,6 @@
   import { clock } from "#lib/ui/clock.svelte.js";
   import { inControl, keysAria, keysSpoken, keyStep } from "#lib/ui/keys.js";
   import { disclose } from "#lib/ui/motion.js";
-  import { nameColor } from "#lib/users/colors.js";
   import { pictureOf } from "#lib/users/profile.svelte.js";
   import { users } from "#lib/users/users.svelte.js";
 
@@ -377,11 +377,10 @@
                         ><MiddleTruncate text={t.name} /></span>
                     {/snippet}
                   </Tooltip>
+                {:else if person}
+                  <Username plain name={t.name} class="text-sm" />
                 {:else}
-                  <span
-                    class="truncate text-sm font-medium"
-                    dir="auto"
-                    style:color={person ? nameColor(t.name) : undefined}>{chatName(t)}</span>
+                  <span class="truncate text-sm font-medium">{chatName(t)}</span>
                 {/if}
                 {#if notify === "none" || summary?.muted}<BellOffIcon
                     class="size-3 shrink-0 text-fg-subtle"
