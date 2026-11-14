@@ -4,6 +4,7 @@ import type { Schemas } from "#lib/api/client.js";
 import { app } from "#lib/app.svelte.js";
 import { toasts } from "#lib/feedback/toast.svelte.js";
 import { fakeNetwork } from "#lib/testing/network.js";
+import { bus, time } from "#lib/testing/tabs.js";
 import { browserTabs, SETTLE_MS, Tabs } from "#lib/ui/tabs.js";
 import { SUMMARY_TTL_MS, users } from "#lib/users/users.svelte.js";
 
@@ -16,7 +17,18 @@ import {
   type NotifyOptions
 } from "./notify.svelte";
 
+/** this tab among the tabs of the browser, which share `channel` and read `clock` */
+const browser = vi.hoisted(() => ({ tabs: null as Tabs | null }));
+
 vi.mock("$app/navigation", () => ({ goto: vi.fn() }));
+vi.mock("#lib/ui/tabs.js", async (actual) => ({
+  ...(await actual<typeof import("#lib/ui/tabs.js")>()),
+  browserTabs: () => browser.tabs
+}));
+
+const channel = bus();
+const clock = time();
+browser.tabs = new Tabs(channel(), performance.timeOrigin, clock.now);
 
 const options: NotifyOptions = {
   onlyWhenHidden: true,
@@ -102,7 +114,9 @@ describe("what a mode delivers", () => {
         return Response.json({ error: "Too many streams" }, { status: 429 });
       })
     );
-    await app.bootstrap();
+    const booting = app.bootstrap();
+    clock.pass(SETTLE_MS);
+    await booting;
     expect(app.phase).toBe("app");
     vi.unstubAllGlobals();
   });
@@ -186,51 +200,46 @@ describe("what a mode delivers", () => {
     expect(played).toHaveBeenCalledOnce();
   });
 
-  it("plays the sound only in the tab of the browser focused last", async () => {
+  it("plays the sound only in the tab of the browser focused last", () => {
     app.options = { chat: { notifications: { only_when_hidden: false } } } as never;
-    const pause = () => new Promise((done) => setTimeout(done, 20));
-    // another tab on the channel the tabs share, opened after this one and then focused
-    const channel = new BroadcastChannel("reseek-tabs");
-    const other = new Tabs(channel, performance.timeOrigin + 60_000);
+    // another tab, opened after this one and then focused
+    const end = channel();
+    const other = new Tabs(end, performance.timeOrigin + 60_000, clock.now);
     other.join();
     other.connected(true);
     other.focus();
     // past its settle, in which the others rank it nothing yet
-    await new Promise((done) => setTimeout(done, SETTLE_MS + 20));
+    clock.pass(SETTLE_MS);
     notifier.other("sound", "Download finished", "", "download:1", "/downloads");
     expect(played).not.toHaveBeenCalled();
     // it closes, and the sound comes back here
     other.leave();
-    channel.close();
-    await pause();
+    end.onmessage = null;
     later();
     notifier.other("sound", "Download finished", "", "download:2", "/downloads");
     expect(played).toHaveBeenCalledOnce();
   });
 
-  it("plays nothing anywhere while the tab focused last is looked at", async () => {
+  it("plays nothing anywhere while the tab focused last is looked at", () => {
     // only while hidden, the default. Another tab, hidden, was focused before this one
-    const pause = () => new Promise((done) => setTimeout(done, 20));
-    const channel = new BroadcastChannel("reseek-tabs");
-    const other = new Tabs(channel, performance.timeOrigin + 60_000);
+    const end = channel();
+    const other = new Tabs(end, performance.timeOrigin + 60_000, clock.now);
     other.join();
     other.connected(true);
     other.focus();
-    await pause();
+    clock.pass(SETTLE_MS);
     // this tab, its stream following, is focused and looked at: it leads, and stays quiet
     const here = browserTabs()!;
     here.connected(true);
     here.focus();
-    await pause();
     expect([here.leads(), document.visibilityState]).toEqual([true, "visible"]);
     notifier.other("both", "Download finished", "", "download:1", "/downloads");
     expect(played).not.toHaveBeenCalled();
     // and the hidden tab doesn't lead, so it plays nothing in this one's place
     expect(other.leads()).toBe(false);
     other.leave();
-    channel.close();
+    end.onmessage = null;
     here.connected(false);
-    await pause();
   });
 
   it("plays one sound for a burst of messages", () => {
