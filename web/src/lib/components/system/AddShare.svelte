@@ -16,6 +16,7 @@
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import AudiencePicker from "#lib/components/users/groups/AudiencePicker.svelte";
   import { editability, managerOf } from "#lib/config/editability.js";
+  import type { OptionKey } from "#lib/config/keys.js";
   import { valueAt } from "#lib/config/sections.js";
   import { writeFromPage } from "#lib/config/write.js";
   import { Busy } from "#lib/feedback/busy.svelte.js";
@@ -130,8 +131,10 @@
   /** another share goes by the same alias, which the daemon refuses */
   const aliasTaken = $derived.by(() => {
     if (!chosen || taken) return false;
-    const downloads = (valueAt(data?.values, "directories.downloads") ?? null) as string | null;
-    const shareDownloads = valueAt(data?.values, "shares.share_downloads") === true;
+    const downloads = (valueAt(data?.values, "directories.downloads" satisfies OptionKey) ??
+      null) as string | null;
+    const shareDownloads =
+      valueAt(data?.values, "shares.share_downloads" satisfies OptionKey) === true;
     return takenAliases(entries, shareDownloads, downloads).has(shareAlias.toLowerCase());
   });
   /** who sees a share of that alias now, which the new share is seen by too */

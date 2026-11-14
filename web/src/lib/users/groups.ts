@@ -1,4 +1,5 @@
 import type { Schemas } from "#lib/api/client.js";
+import type { OptionKey } from "#lib/config/keys.js";
 import { valueAt as at } from "#lib/config/sections.js";
 import { listText, plural } from "#lib/format.js";
 import { same } from "#lib/lists/keyed.svelte.js";
@@ -8,11 +9,11 @@ export type UserGroup = Schemas["UserGroup"];
 type Builtin = Schemas["BuiltinGroup"];
 
 /** The option that holds the user-defined groups by name */
-export const USER_DEFINED = "transfers.groups.user_defined";
+export const USER_DEFINED: OptionKey = "transfers.groups.user_defined";
 /** The option that holds, for each share not everyone sees, the groups that see it */
-export const VISIBLE_TO = "shares.visible_to";
+export const VISIBLE_TO: OptionKey = "shares.visible_to";
 /** The option that holds the groups in the order they go, all but the privileged */
-export const ORDER = "transfers.groups.order";
+export const ORDER: OptionKey = "transfers.groups.order";
 /** The group of the users the server calls privileged, who go before everyone */
 export const PRIVILEGED: Builtin = "privileged";
 /** The group of our buddies, whose members only the buddy list changes */
@@ -363,7 +364,7 @@ export const groupPatch = (
       if (text === was[key]) continue;
       const n = countIn(text, label, 1);
       if (typeof n === "string") return { error: n };
-      const option = `transfers.groups.leechers.thresholds.${key}`;
+      const option = `transfers.groups.leechers.thresholds.${key}` satisfies OptionKey;
       if (n === null) unset.push(option);
       else set[option] = n;
     }

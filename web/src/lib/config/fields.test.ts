@@ -36,7 +36,7 @@ describe("the settings forms", () => {
     const named = new Set(fields.map((f) => f.key));
     // the groups page edits the groups, their order, their settings and who sees each share
     const onGroupsPage = (key: string) =>
-      [ORDER, USER_DEFINED, VISIBLE_TO].includes(key) ||
+      new Set<string>([ORDER, USER_DEFINED, VISIBLE_TO]).has(key) ||
       /^transfers\.groups\.(default|buddies|leechers)\.upload\./.test(key) ||
       key.startsWith("transfers.groups.leechers.thresholds.");
     expect(

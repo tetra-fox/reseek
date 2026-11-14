@@ -11,6 +11,7 @@
   import Textarea from "#lib/components/ui/Textarea.svelte";
   import UserCard from "#lib/components/users/UserCard.svelte";
   import { editability } from "#lib/config/editability.js";
+  import type { OptionKey } from "#lib/config/keys.js";
   import { valueAt } from "#lib/config/sections.js";
   import { changedText, changedUnder } from "#lib/config/write.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
@@ -33,7 +34,7 @@
   import ProfileView from "./ProfileView.svelte";
 
   /** the option that holds the profile text */
-  const DESCRIPTION = "soulseek.description";
+  const DESCRIPTION: OptionKey = "soulseek.description";
 
   // everything about our own profile: what others are sent and the account behind it, with how
   // others see it always in view, beside the editors or above them on a phone
@@ -48,10 +49,12 @@
 
   const profile = $derived(ownProfile.data);
   const name = $derived(ownName() ?? "");
-  const remote = $derived(valueAt(view.data?.values, "remote_configuration") === true);
+  const remote = $derived(
+    valueAt(view.data?.values, "remote_configuration" satisfies OptionKey) === true
+  );
   const textEdit = $derived(view.data ? editability(view.data, DESCRIPTION, "page") : null);
   const pictureEdit = $derived(
-    view.data ? editability(view.data, "soulseek.picture", "page") : null
+    view.data ? editability(view.data, "soulseek.picture" satisfies OptionKey, "page") : null
   );
   const canText = $derived(admin && remote && !!textEdit && textEdit.mode !== "locked");
   const canPicture = $derived(admin && remote && !!pictureEdit && pictureEdit.mode !== "locked");
@@ -60,7 +63,7 @@
     admin && remote && !!interestsEdit && interestsEdit.mode !== "locked"
   );
   const passwordEdit = $derived(
-    view.data ? editability(view.data, "soulseek.password", "page") : null
+    view.data ? editability(view.data, "soulseek.password" satisfies OptionKey, "page") : null
   );
   const canPassword = $derived(admin && remote && !!passwordEdit && passwordEdit.mode !== "locked");
   // the server takes a new password at once, so the one in the configuration stops working

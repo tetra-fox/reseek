@@ -1,5 +1,6 @@
 import type { Schemas } from "#lib/api/client.js";
 import { app } from "#lib/app.svelte.js";
+import type { OptionKey } from "#lib/config/keys.js";
 import { changedText, changedUnder, patchOverrides } from "#lib/config/write.js";
 import type { Outcome } from "#lib/request.js";
 import { fields } from "#lib/stored.svelte.js";
@@ -8,7 +9,7 @@ import { fields } from "#lib/stored.svelte.js";
 export type Preset = { name: string; filter: string };
 
 /** The option the presets are kept in, one list replaced whole */
-export const PRESETS_KEY = "search.filter_presets";
+export const PRESETS_KEY: OptionKey = "search.filter_presets";
 
 /** The presets in the options in effect, those that can't be read left out */
 export const presetsOf = (options: Schemas["OptionsDocument"]["values"] | null): Preset[] => {
