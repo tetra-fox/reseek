@@ -62,10 +62,27 @@ describe("downloading a selection", () => {
 
   it("sends files that are in no folder in none", () => {
     expect(plan(["a.flac", "b.flac"], () => "")).toEqual([[null, ["a.flac", "b.flac"]]]);
+    // a file at a peer's root is below no folder but the root
+    expect(plan(["\\x.flac"], () => "\\")).toEqual([[null, ["\\x.flac"]]]);
+    expect(plan(["/x.flac"], () => "/", "/")).toEqual([[null, ["/x.flac"]]]);
+    expect(plan(["/x.flac", "/home/y.flac"], () => "/", "/")).toEqual([
+      [null, ["/x.flac", "/home/y.flac"]]
+    ]);
   });
 });
 
 describe("downloading a folder", () => {
+  it("sends a peer's root as the folder of the files below it", () => {
+    const root = (name: string, files: string[], separator: "\\" | "/") =>
+      downloadFolderPlan(
+        name,
+        files.map((f) => file(f)),
+        separator
+      ).map((g) => g.folder);
+    expect(root("/", ["/x.flac", "/home/y.flac"], "/")).toEqual(["/"]);
+    expect(root("\\", ["\\x.flac"], "\\")).toEqual(["\\"]);
+  });
+
   const folder = (name: string, files: string[]) =>
     downloadFolderPlan(
       name,

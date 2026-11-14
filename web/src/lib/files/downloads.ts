@@ -125,6 +125,20 @@ export type DownloadGroup = {
   folder: string | null;
 };
 
+/** What a path below the folder `name` starts with: the folder and a separator, a root as it is */
+const prefixOf = (name: string, separator: Separator) =>
+  name.endsWith(separator) ? name : name + separator;
+
+/**
+ * The folder `name` when every file is below it, else null: a file at a peer's root, such as
+ * `\x.flac`, is in no folder below the root
+ */
+const folderOf = (name: string, files: Schemas["File"][], separator: Separator) => {
+  const prefix = prefixOf(name, separator);
+  const below = (path: string) => path.length > prefix.length && path.startsWith(prefix);
+  return name && files.every((f) => below(f.filename)) ? name : null;
+};
+
 /**
  * Files under the folder `name` in the order they download: those directly in it first, then
  * each folder's below it together
@@ -134,7 +148,7 @@ const inOrder = (
   files: Schemas["File"][],
   separator: Separator
 ): Schemas["File"][] => {
-  const prefix = name + separator;
+  const prefix = prefixOf(name, separator);
   const groups = new Map<string, Schemas["File"][]>();
   for (const file of files) {
     const relative = file.filename.startsWith(prefix)
@@ -159,7 +173,9 @@ export const downloadFolderPlan = (
   name: string,
   files: Schemas["File"][],
   separator: Separator
-): DownloadGroup[] => [{ files: inOrder(name, files, separator), folder: name }];
+): DownloadGroup[] => [
+  { files: inOrder(name, files, separator), folder: folderOf(name, files, separator) }
+];
 
 /**
  * Selected files as the groups that download them: the files under each top folder, which
@@ -183,7 +199,7 @@ export const downloadPlan = (
       grouped.map((f) => f.filename),
       separator
     );
-    return { files: inOrder(name, grouped, separator), folder: name || null };
+    return { files: inOrder(name, grouped, separator), folder: folderOf(name, grouped, separator) };
   });
 };
 
