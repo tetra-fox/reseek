@@ -2,9 +2,10 @@
 //! the mentions of us marked and counted unread, the history and the pinned chats are kept
 //! through a restart that joins the room again with the gap the restart left in it; the rooms we
 //! were in are joined again after a restart until we leave them, and one taken by a private room
-//! is forgotten, while a room joined only because the configuration listed it is not; a room
-//! joined twice is joined once, left and joined again, and refused while logged out; the
-//! server's room list is asked for once a minute at most; and each message said is one event.
+//! stays listed with its history and is tried again, while a room joined only because the
+//! configuration listed it is not; a room joined twice is joined once, left and joined again, and
+//! refused while logged out; the server's room list is asked for once a minute at most; and each
+//! message said is one event.
 
 mod support;
 
@@ -166,6 +167,15 @@ async fn a_room_is_joined_once_left_and_joined_again_but_not_while_logged_out() 
   assert_eq!(refused.status().map(|s| s.as_u16()), Some(409));
 }
 
+/// Whether `room` is among the rooms `api` lists, and then whether it is marked refused.
+async fn listed(api: &Client, room: &str) -> Option<bool> {
+  let rooms = api.joined_rooms().await.unwrap();
+  rooms
+    .into_iter()
+    .find(|listed| listed.name == room)
+    .map(|listed| listed.refused)
+}
+
 #[tokio::test]
 async fn the_rooms_we_were_in_are_joined_again_after_a_restart_until_left() {
   let Some(server) = soulfind::server() else {
@@ -180,6 +190,14 @@ async fn the_rooms_we_were_in_are_joined_again_after_a_restart_until_left() {
   for room in [&kept, &left, &taken] {
     api.join_room(room, false).await.unwrap().expect("joined");
   }
+  api.say(&taken, "before the restart").await.unwrap();
+  history_when(&api, &taken, "said", |history| {
+    history
+      .messages
+      .iter()
+      .any(|m| m.message == "before the restart")
+  })
+  .await;
   api.leave_room(&left).await.unwrap();
   api.shut_down().await.unwrap();
   let mut stopped = running;
@@ -198,17 +216,30 @@ async fn the_rooms_we_were_in_are_joined_again_after_a_restart_until_left() {
     logged_in(s) && s.rooms.contains(&kept)
   })
   .await;
-  running
-    .process
-    .printed_line(&["can no longer be joined; forgotten", &taken])
-    .await;
+  // the room refused stays listed, not joined, while it is tried again
+  // its refused mark after the last try: a_room_refused_after_a_reconnect_is_tried_twice_more_then_left_to_join
+  let started = Instant::now();
+  while listed(&api, &taken).await.is_none() {
+    assert!(
+      started.elapsed() < PATIENCE,
+      "the refused room is not listed"
+    );
+    tokio::time::sleep(Duration::from_millis(50)).await;
+  }
+  assert!(!api.application().await.unwrap().rooms.contains(&taken));
+  history_when(&api, &taken, "kept", |history| {
+    history
+      .messages
+      .iter()
+      .any(|m| m.message == "before the restart")
+  })
+  .await;
   api.join_room(&last, false).await.unwrap().expect("joined");
   api.shut_down().await.unwrap();
   let mut stopped = running;
   stopped.process.child.wait().unwrap();
 
-  // the rooms are joined again in the order they were joined, so the last one comes after
-  // any attempt at the forgotten one
+  // the refused room is still ours and tried again after the next start; the left one is not
   let running = daemon(dir.path(), &server, &name, &[]);
   let api = signed_in(&running).await;
   let state = until(&api, "in both rooms again", |s| {
@@ -216,9 +247,10 @@ async fn the_rooms_we_were_in_are_joined_again_after_a_restart_until_left() {
   })
   .await;
   assert_eq!(state.rooms, [kept, last], "the left room stays left");
+  assert_eq!(listed(&api, &left).await, None, "the left room stays left");
   assert!(
-    !running.process.printed().contains(&taken),
-    "the forgotten room is not tried again"
+    listed(&api, &taken).await.is_some(),
+    "the refused room is tried again"
   );
 }
 
