@@ -266,6 +266,7 @@ mod tests {
     use soulseek_proto::ServerResponse;
     use soulseek_proto::server::NewPassword;
 
+    let (logs, _capturing) = crate::testing::captured_logs();
     let mut server = Server::start(|request| match request {
       ServerRequest::NewPassword(asked) => vec![ServerResponse::NewPassword(NewPassword {
         new_password: asked.new_password.clone(),
@@ -308,7 +309,12 @@ mod tests {
     set("soulseek.username", "other").await;
     assert_eq!(server.received(login).await, "other");
     logged_in().await;
-    assert!(!app.state.state.current().pending_reconnect);
+    let flagged = logs.snapshot().into_iter().any(|record| {
+      record
+        .message
+        .starts_with("One or more updated Soulseek options requires")
+    });
+    assert!(!flagged, "a change that logs in again is not flagged");
 
     // the server changed the password of the session, which goes on
     let change = json!({ "password": "n3w-password" });
