@@ -42,8 +42,8 @@ impl Client {
   }
 
   /// A peer connected because the server relayed one of our requests: a solicitation still
-  /// waiting takes it, or it is the searcher an undelivered answer was kept for, who gets the
-  /// answer now. One that comes after its solicitor stopped waiting is taken as
+  /// waiting takes it, or it is the searcher answers ride on the request for, who gets those
+  /// kept now and the rest as they come to be kept. One that comes after its solicitor stopped waiting is taken as
   /// [`Client::late_answer`] says. Anything else is closed.
   async fn pierced(&self, token: u32, conn: Conn) -> Result<(), ClientError> {
     if let Some((solicitation, answer)) = self.peers().solicitations.take(token) {
@@ -57,7 +57,7 @@ impl Client {
       };
       return self.late_answer(token, &solicitation, conn).await;
     }
-    if let Some(username) = self.responder().kept_for(token) {
+    if let Some(username) = self.responder().searcher_for(token) {
       self.add_or_update_message_connection(&username, conn, Via::Indirect.kind())?;
       self.try_respond_cached(token).await;
       return Ok(());

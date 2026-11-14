@@ -57,18 +57,20 @@ impl Client {
     cancel: &CancellationToken,
   ) -> Result<MessageConn, ClientError> {
     self
-      .reach(username, endpoint, cancel)
+      .reach(username, endpoint, cancel, |_| {})
       .await
       .map_err(|unreached| unreached.error)
   }
 
   /// [`Client::message_connection`] that, when it fails, also names the connection request the
-  /// server relayed for the attempt it waited on, which the user may still act on late
+  /// server relayed for the attempt it waited on, which the user may still act on late. Each
+  /// attempt of ours it waits on is told to `waits_on` by its request as the wait starts.
   pub(crate) async fn reach(
     &self,
     username: &str,
     endpoint: Option<SocketAddr>,
     cancel: &CancellationToken,
+    mut waits_on: impl FnMut(u32),
   ) -> Result<MessageConn, Unreached> {
     let unreached = |error| Unreached {
       error,
@@ -95,6 +97,9 @@ impl Client {
         }
       };
       let (id, request) = (entry.id, entry.request);
+      if let Some(request) = request {
+        waits_on(request);
+      }
       let conn = tokio::select! {
         biased;
         () = cancel.cancelled() => return Err(unreached(ClientError::Canceled)),

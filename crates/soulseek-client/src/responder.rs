@@ -3,7 +3,9 @@
 //! server at once. An answer that cannot be delivered is kept for a few minutes under the token
 //! of that connection request, so it still reaches a searcher who acts on the request late;
 //! answers that waited on one attempt are kept together under its request, and one that comes to
-//! be kept after the searcher's late connection took the others goes out on that connection.
+//! be kept after the searcher's late connection took the others goes out on that connection. A
+//! request is known as the searcher's from the moment an answer waits on its attempt, so a late
+//! connection that comes before any answer is kept under it is taken too.
 //! How many requests wait for an answer at once is the resolver's to bound.
 
 use std::collections::HashMap;
@@ -53,6 +55,9 @@ pub(crate) struct SearchResponder {
   /// so an answer that comes to be kept after goes out at once; taken with `undelivered` held,
   /// and forgotten once the last answer waiting on the searcher is done
   arrived: Mutex<BoundedCache<u32, ()>>,
+  /// the connection requests whose attempts answers wait on, with their searcher; forgotten
+  /// once the last answer waiting on the searcher is done
+  riding: Mutex<BoundedCache<u32, String>>,
   /// how many answers wait for a connection to each searcher
   waiting: Mutex<HashMap<String, usize>>,
 }
@@ -64,6 +69,7 @@ impl SearchResponder {
       next_kept: AtomicU64::new(0),
       refused: Mutex::new(BoundedCache::new(cache_size as usize, KEEP_UNDELIVERED)),
       arrived: Mutex::new(BoundedCache::new(cache_size as usize, KEEP_UNDELIVERED)),
+      riding: Mutex::new(BoundedCache::new(cache_size as usize, KEEP_UNDELIVERED)),
       waiting: Mutex::new(HashMap::new()),
     }
   }
@@ -130,12 +136,14 @@ impl SearchResponder {
     }
   }
 
-  /// the searcher the undelivered answers kept under `response_token` are for
-  pub(crate) fn kept_for(&self, response_token: u32) -> Option<String> {
-    self
+  /// the searcher answers ride on the connection request `response_token` for: answers kept
+  /// under it, or waiting on its attempt
+  pub(crate) fn searcher_for(&self, response_token: u32) -> Option<String> {
+    let kept = self
       .undelivered()
       .find(|(rode_on, _)| *rode_on == response_token)
-      .map(|kept| kept.username.clone())
+      .map(|kept| kept.username.clone());
+    kept.or_else(|| crate::lock(&self.riding).get(&response_token).cloned())
   }
 
   /// follows a change of the cache bound
@@ -143,11 +151,12 @@ impl SearchResponder {
     self.undelivered().set_capacity(cache_size as usize);
     crate::lock(&self.refused).set_capacity(cache_size as usize);
     crate::lock(&self.arrived).set_capacity(cache_size as usize);
+    crate::lock(&self.riding).set_capacity(cache_size as usize);
   }
 }
 
 /// One answer waiting for a connection to its searcher. The last one for a searcher to be done
-/// forgets the refusal or the late connection of the request it rode on.
+/// forgets the request it rode on: the attempt, its refusal or its late connection.
 struct Waiting<'a> {
   responder: &'a SearchResponder,
   username: String,
@@ -169,7 +178,17 @@ impl Drop for Waiting<'_> {
     if let Some(request) = self.request {
       crate::lock(&self.responder.refused).remove(&request);
       crate::lock(&self.responder.arrived).remove(&request);
+      crate::lock(&self.responder.riding).remove(&request);
     }
+  }
+}
+
+impl Waiting<'_> {
+  /// The answer waits on the attempt that had the server relay the connection request
+  /// `request`, which a connection answering it late is known by from now on.
+  fn rides_on(&mut self, request: u32) {
+    self.request = Some(request);
+    crate::lock(&self.responder.riding).insert(request, self.username.clone());
   }
 }
 
@@ -209,10 +228,17 @@ impl Client {
       }
     };
     let mut waiting = self.responder().wait_for(username);
-    let conn = match self
-      .reach(username, Some(endpoint), &CancellationToken::new())
-      .await
-    {
+    let reached = self
+      .reach(
+        username,
+        Some(endpoint),
+        &CancellationToken::new(),
+        |request| {
+          waiting.rides_on(request);
+        },
+      )
+      .await;
+    let conn = match reached {
       Ok(conn) => conn,
       Err(Unreached { error, request }) => {
         waiting.request = request;
@@ -687,9 +713,15 @@ mod tests {
         .await
     );
     assert_eq!(client.undelivered_search_responses(), 0);
+    assert_eq!(answers_read(&mut carol, 2).await, [1, 2]);
+  }
+
+  /// What carol's message connection `carol` reads, as the tokens of the search answers on it,
+  /// once `count` came.
+  async fn answers_read(carol: &mut TcpStream, count: usize) -> Vec<u32> {
     let mut buffer = Vec::new();
     let mut tokens = Vec::new();
-    while tokens.len() < 2 {
+    while tokens.len() < count {
       if let Some((_, consumed)) = frame::split(FrameKind::Peer, &buffer, &Limits::DEFAULT).unwrap()
       {
         let frame: Vec<u8> = buffer.drain(..consumed).collect();
@@ -704,7 +736,52 @@ mod tests {
       assert!(read > 0, "the connection closed after {tokens:?}");
       buffer.extend_from_slice(&chunk[..read]);
     }
-    assert_eq!(tokens, [1, 2]);
+    tokens
+  }
+
+  #[tokio::test]
+  async fn a_searcher_who_acts_late_before_any_answer_is_kept_is_known_and_gets_it() {
+    use crate::options::ConnectionOptions;
+    use crate::peers::Via;
+
+    let client = Client::new(ClientOptions {
+      enable_listener: false,
+      ..ClientOptions::default()
+    })
+    .unwrap();
+    let nowhere = std::net::TcpListener::bind("127.0.0.1:0")
+      .unwrap()
+      .local_addr()
+      .unwrap();
+    let mut waiting = client.responder().wait_for("carol");
+    // the attempt fails at once, since the client is not logged in
+    let reached = client
+      .reach(
+        "carol",
+        Some(nowhere),
+        &CancellationToken::new(),
+        |request| {
+          waiting.rides_on(request);
+        },
+      )
+      .await;
+    let request = reached.err().unwrap().request.unwrap();
+    // carol acts on the request now, before the answer is kept: what the connection is taken as
+    let searcher = client.responder().searcher_for(request);
+    assert_eq!(searcher.as_deref(), Some("carol"));
+    let (conn, mut carol) = crate::conn::tests::pair(ConnectionOptions::default()).await;
+    client
+      .add_or_update_message_connection("carol", conn, Via::Indirect.kind())
+      .unwrap();
+    client.try_respond_cached(request).await;
+    let unreached = ClientError::Timeout("carol".into());
+    assert!(
+      client
+        .keep_undelivered(request, for_carol(1), &unreached)
+        .await
+    );
+    assert_eq!(answers_read(&mut carol, 1).await, [1]);
+    drop(waiting);
   }
 
   #[tokio::test]
