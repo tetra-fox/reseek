@@ -25,7 +25,15 @@ describe("status icons", () => {
     ]) {
       // press is a control's tint inside a hovered line, and a sidebar link's while pressed
       const under: Record<string, number> = { ...rows(block) };
-      for (const name of ["page", "surface-muted", "overlay", "press", "warning-soft"]) {
+      const surfaces = [
+        "page",
+        "surface-muted",
+        "overlay",
+        "press",
+        "warning-soft",
+        "success-soft"
+      ];
+      for (const name of surfaces) {
         under[name] = luminance(shown(token(block, name)));
       }
       for (const icon of ["success-icon", "warning-icon", "danger"]) {
