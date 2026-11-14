@@ -6638,7 +6638,9 @@ export interface components {
                 /**
                  * Format: int32
                  * @description the last place in the peer's queue the peer reported for a download, null when not asked
-                 *     or once the download left the peer's queue
+                 *     or once the download left the peer's queue. Null for an upload, whose place in our queue
+                 *     moves whenever an upload starts or ends: `GET /api/v0/transfers/uploads/{username}/{id}/why`
+                 *     gives it
                  */
                 placeInQueue?: number | null;
                 /**
@@ -8300,7 +8302,9 @@ export interface components {
             /**
              * Format: int32
              * @description the last place in the peer's queue the peer reported for a download, null when not asked
-             *     or once the download left the peer's queue
+             *     or once the download left the peer's queue. Null for an upload, whose place in our queue
+             *     moves whenever an upload starts or ends: `GET /api/v0/transfers/uploads/{username}/{id}/why`
+             *     gives it
              */
             placeInQueue?: number | null;
             /**

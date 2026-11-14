@@ -189,7 +189,9 @@ pub struct Transfer {
   /// the average speed in bytes per second, 0 until the first sample
   pub average_speed: f64,
   /// the last place in the peer's queue the peer reported for a download, null when not asked
-  /// or once the download left the peer's queue
+  /// or once the download left the peer's queue. Null for an upload, whose place in our queue
+  /// moves whenever an upload starts or ends: `GET /api/v0/transfers/uploads/{username}/{id}/why`
+  /// gives it
   pub place_in_queue: Option<u32>,
   /// why the transfer failed, null when it did not
   pub exception: Option<String>,
