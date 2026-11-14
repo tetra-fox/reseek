@@ -38,7 +38,7 @@ pub struct ConfigFiles {
 impl ConfigFiles {
   /// `config.toml` in `config_dir`, or the files given on the command line, followed by every
   /// `config.d/*.toml` next to the first of them. Relative paths count from the working
-  /// directory; why one cannot be made absolute when it cannot.
+  /// directory, and one that cannot be made absolute is refused.
   pub fn new(given: &[PathBuf], config_dir: &Path) -> Result<Self, String> {
     let absolute = |path: &Path| {
       std::path::absolute(path).map_err(|e| format!("{} has no absolute path: {e}", path.display()))

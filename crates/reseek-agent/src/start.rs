@@ -121,8 +121,8 @@ fn downloads(options: &Options, data: &Path) -> (PathBuf, PathBuf) {
 
 /// The configuration files: `config.toml` in the configuration directory, or the files given,
 /// then every `config.d/*.toml` beside the first; as the directory and the names in it.
-/// Relative paths count from the working directory; why one cannot be made absolute when it
-/// cannot.
+/// Relative paths count from the working directory, and one that cannot be made absolute is
+/// refused.
 fn config_files(given: &[PathBuf], config_dir: &Path) -> Result<(PathBuf, Vec<String>), String> {
   let absolute = |path: &Path| {
     std::path::absolute(path).map_err(|e| format!("{} has no absolute path: {e}", path.display()))
