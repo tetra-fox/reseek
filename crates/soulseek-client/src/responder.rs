@@ -821,6 +821,10 @@ mod tests {
     assert_eq!(responder.claim(7), None);
     drop(waiting);
     assert_eq!(responder.claim(7), None);
+    // carol answered 8 in time, but the connection failed after, so the answer is kept under it
+    responder.answered(8);
+    assert!(responder.keep(8, for_carol(1)).is_none());
+    assert_eq!(responder.claim(8), None);
   }
 
   #[tokio::test]
