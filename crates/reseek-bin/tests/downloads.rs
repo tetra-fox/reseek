@@ -367,6 +367,57 @@ async fn a_download_a_stop_interrupted_resumes_after_the_next_start() {
   resumed(&api, dir.path(), &peer, job, first).await;
 }
 
+/// A download asked for in a folder lands in the folder's tree, after a pattern that names no
+/// directory of the file.
+#[tokio::test]
+async fn a_download_asked_for_in_a_folder_lands_in_its_tree() {
+  let Some(server) = soulfind::server() else {
+    return;
+  };
+  let (uploader, mut requests) = uploader(&server).await;
+  let dir = tempfile::tempdir().unwrap();
+  let (_daemon, api) = started(dir.path(), &server, &soulfind::username("daemon")).await;
+  let pattern = OptionsPatch {
+    set: BTreeMap::from([(
+      "transfers.download.destination.subdirectory".to_string(),
+      json!("${SOURCE_USERNAME}"),
+    )]),
+    unset: Vec::new(),
+    expires_in: None,
+    revision: None,
+  };
+  api.patch_options(&pattern).await.unwrap();
+  let one = file(&scratch(), "one.flac", SIZE);
+  let peer = uploader.username.clone();
+  let remote = "@@share\\album\\cd1\\01 song.flac";
+  let request = EnqueueDownloadJobRequest {
+    groups: vec![EnqueueDownloadGroup {
+      username: peer.clone(),
+      files: vec![EnqueueDownloadFile {
+        filename: remote.to_string(),
+        size: SIZE as u64,
+      }],
+      destination: None,
+      folder: Some("@@share\\album".to_string()),
+      search_id: None,
+    }],
+  };
+  let answer = api.enqueue_download_job(&request).await.unwrap();
+  let id = answer.groups[0].enqueued[0].id;
+  serve(&uploader, &mut requests, remote, &one).await;
+  let done = download_when(&api, &peer, id, "moved", |t| t.local_path.is_some()).await;
+  let landed = dir
+    .path()
+    .join("data")
+    .join("downloads")
+    .join(&peer)
+    .join("album")
+    .join("cd1")
+    .join("01 song.flac");
+  assert_eq!(done.local_path.as_deref(), Some(landed.to_str().unwrap()));
+  assert_eq!(std::fs::read(&landed).unwrap(), content(SIZE));
+}
+
 /// The analysis report of the download `id` from `username`, `None` before there is one.
 async fn report(api: &Client, username: &str, id: Uuid) -> Option<AudioAnalysis> {
   let query = AnalysisReportQuery { windows: false };
