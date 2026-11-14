@@ -2,6 +2,7 @@
   import { goto } from "$app/navigation";
   import CopyIcon from "@lucide/svelte/icons/copy";
   import { DropdownMenu, Popover } from "bits-ui";
+  import type { HTMLAttributes } from "svelte/elements";
 
   import { SERVER } from "#lib/chat/notices.js";
   import * as Menu from "#lib/components/ui/menu/menu.js";
@@ -140,6 +141,12 @@
 
   /** the box a name sits in, no wider than its text or than the room it has */
   const box = "inline-flex max-w-full min-w-0 items-center align-baseline";
+  /** the name's own look, as a link or as text; the server's name has no color of a user's */
+  const look: HTMLAttributes<HTMLElement> = $derived({
+    dir: "auto",
+    class: "truncate font-medium",
+    style: name === SERVER ? undefined : `color: ${nameColor(name)}`
+  });
 
   const blockOrAsk = () => {
     shown = null;
@@ -147,56 +154,46 @@
   };
 </script>
 
-<!-- a plain name is written with nothing between its tags, so text around it, as in a tooltip,
-     reads on from the name without a space -->
-{#if plain}
-  <span class={cn(box, className)}
-    ><span
-      dir="auto"
-      class="truncate font-medium"
-      style:color={name === SERVER ? undefined : nameColor(name)}><NameText {name} /></span
-    ></span>
+<!-- a name as text: a plain one, or where the name the server's notices come from turns up, as
+     in the events, which is no user. Written with nothing between its tags, so text around it, as
+     in a tooltip, reads on from the name without a space -->
+{#if plain || name === SERVER}
+  <span class={cn(box, className)}><span {...look}><NameText {name} /></span></span>
 {:else}
   <!-- a name takes only its text's width: its menu opens from a right-click, a long press,
        Shift+F10 or the card's More button, never from a control beside it -->
   <span class={cn(box, className)}>
-    {#if name === SERVER}
-      <!-- where the name the server's notices come from turns up, as in the events: no user -->
-      <span class="truncate font-medium">{name}</span>
-    {:else}
-      <a
-        bind:this={link}
-        href={userHref(name)}
-        dir="auto"
-        aria-label={name.trim() === name ? undefined : name}
-        class="truncate font-medium underline-offset-2 hover:underline"
-        style:color={nameColor(name)}
-        onpointerenter={enter}
-        onpointerleave={leave}
-        onpointerdown={down}
-        onpointerup={() => clearTimeout(timer)}
-        onclick={(e) => {
-          // the click that ends a long press only opened the menu
-          if (pressed) e.preventDefault();
-          pressed = false;
-          // a modified click still opens the profile where the browser puts it
-          if (!card || e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
-          e.preventDefault();
-          if (active === "card" && clicked) hide();
-          else show("card", false, true);
-        }}
-        ondblclick={(e) => {
-          if (!card || !readWrite) return;
-          e.preventDefault();
-          hide();
-          void goto(to.message);
-        }}
-        oncontextmenu={(e) => {
-          e.preventDefault();
-          show("menu");
-        }}
-        onkeydown={keydown}><NameText {name} /></a>
-    {/if}
+    <a
+      bind:this={link}
+      href={userHref(name)}
+      {...look}
+      aria-label={name.trim() === name ? undefined : name}
+      class={[look.class, "underline-offset-2 hover:underline"]}
+      onpointerenter={enter}
+      onpointerleave={leave}
+      onpointerdown={down}
+      onpointerup={() => clearTimeout(timer)}
+      onclick={(e) => {
+        // the click that ends a long press only opened the menu
+        if (pressed) e.preventDefault();
+        pressed = false;
+        // a modified click still opens the profile where the browser puts it
+        if (!card || e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
+        e.preventDefault();
+        if (active === "card" && clicked) hide();
+        else show("card", false, true);
+      }}
+      ondblclick={(e) => {
+        if (!card || !readWrite) return;
+        e.preventDefault();
+        hide();
+        void goto(to.message);
+      }}
+      oncontextmenu={(e) => {
+        e.preventDefault();
+        show("menu");
+      }}
+      onkeydown={keydown}><NameText {name} /></a>
 
     <!-- the card and the menu render elsewhere through portals; kept inside the flex box, whose
        whitespace between children is not drawn, the name has no space after it -->
