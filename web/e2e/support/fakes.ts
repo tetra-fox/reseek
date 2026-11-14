@@ -403,20 +403,22 @@ export const dir = (name: string, files: string[]) =>
   }) satisfies Schemas["Directory"];
 
 /**
- * Answers a browse of carol's shares with `directories`, never asking the daemon, so no other test
- * sees her. Her profile is left to the daemon, which has not heard of her
+ * Answers a browse of `username`'s shares with `directories`, never asking the daemon, so no other
+ * test sees them. Their profile is left to the daemon, or to a route set before this one
  */
-export const carolShares = (
+export const sharesOf = (
   page: Page,
+  username: string,
   directories: Schemas["Directory"][],
   lockedDirectories: Schemas["Directory"][] = []
-) =>
-  page.route(
-    (url) => url.pathname.includes("/api/v0/users/carol/"),
+) => {
+  const base = `/api/v0/users/${encodeURIComponent(username)}/`;
+  return page.route(
+    (url) => url.pathname.includes(base),
     (route) => {
       const { pathname } = new URL(route.request().url());
-      if (pathname.endsWith("/carol/profile")) return route.fallback();
-      if (!pathname.endsWith("/carol/browse")) {
+      if (pathname.endsWith(`${base}profile`)) return route.fallback();
+      if (!pathname.endsWith(`${base}browse`)) {
         return route.fulfill({ status: 404, json: { error: "not found" } });
       }
       return route.fulfill({
@@ -429,6 +431,14 @@ export const carolShares = (
       });
     }
   );
+};
+
+/** Answers a browse of carol's shares with `directories`; the daemon has not heard of her */
+export const carolShares = (
+  page: Page,
+  directories: Schemas["Directory"][],
+  lockedDirectories: Schemas["Directory"][] = []
+) => sharesOf(page, "carol", directories, lockedDirectories);
 
 /** Answers a browse of carol's shares with three folders */
 export const fakeBrowse = (page: Page) =>
