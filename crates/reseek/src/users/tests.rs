@@ -1244,6 +1244,44 @@ async fn a_status_that_moves_a_watched_users_groups_pushes_them_once_with_their_
 }
 
 #[tokio::test]
+async fn our_own_status_ask_of_a_watched_user_leaves_the_push_to_the_touch() {
+  let app = crate::testing::soulseek::app(CONFIG).await;
+  let users = &app.state.users;
+  users.set_buddy("alice", Default::default()).await.unwrap();
+  let online = || alice_is(soulseek_proto::UserPresence::Online);
+  let server = crate::testing::soulseek::Server::start(move |request| match request {
+    soulseek_proto::ServerRequest::WatchUser(_) => vec![online().1],
+    soulseek_proto::ServerRequest::GetStatus(_) => vec![online().0],
+    _ => Vec::new(),
+  })
+  .await;
+  server.login(&app).await;
+  tokio::time::timeout(std::time::Duration::from_secs(5), async {
+    while alice(&app).await["presence"] != "Online" {
+      tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+  })
+  .await
+  .expect("the buddy was never watched");
+  // what the watch touched is written and pushed before the stream opens
+  tokio::time::sleep(touch::WINDOW * 2).await;
+  let mut stream = app
+    .stream_from(
+      "127.0.0.1:1",
+      request("GET", "/api/v0/live?topics=users", None),
+    )
+    .await;
+  stream.until("hello").await;
+  // the reply to our own ask, which moves her into the privileged group; its event, which would
+  // touch her row, is not raised here
+  users
+    .status_fetched("alice", UserPresence::Away, true)
+    .await;
+  let pushed = tokio::time::timeout(touch::WINDOW, stream.until("users.updated")).await;
+  assert!(pushed.is_err(), "pushed before her row took the status");
+}
+
+#[tokio::test]
 async fn forgetting_a_watched_user_unwatches_them_and_a_later_status_makes_no_row() {
   use soulseek_proto::ServerRequest;
 
