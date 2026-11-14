@@ -165,6 +165,40 @@ pub struct StatusReceived {
   pub previous: Option<UserPresence>,
 }
 
+/// One status request of ours, counted in `asked` from the start. One that fails, or is dropped
+/// before its reply as by a caller's timeout, gives its count back: no reply of its own comes to
+/// count it off, and the next status the server pushes would be taken for one.
+struct Asking<'a> {
+  asked: &'a Mutex<HashMap<String, u32>>,
+  username: &'a str,
+}
+
+impl<'a> Asking<'a> {
+  fn new(asked: &'a Mutex<HashMap<String, u32>>, username: &'a str) -> Self {
+    *lock(asked).entry(username.to_string()).or_default() += 1;
+    Self { asked, username }
+  }
+
+  /// The reply came; its event counts the request off.
+  fn answered(self) {
+    std::mem::forget(self);
+  }
+}
+
+impl Drop for Asking<'_> {
+  fn drop(&mut self) {
+    let mut asked = lock(self.asked);
+    // the end of the session clears every count
+    let Some(count) = asked.get_mut(self.username) else {
+      return;
+    };
+    *count -= 1;
+    if *count == 0 {
+      asked.remove(self.username);
+    }
+  }
+}
+
 /// Statistics as the server said them, now.
 fn snapshot(stats: &UserStats) -> StatisticsSnapshot {
   StatisticsSnapshot {
@@ -331,24 +365,9 @@ impl Directory {
     client: &Client,
     username: &str,
   ) -> Result<UserStatus, ClientError> {
-    *lock(&self.groups.asked)
-      .entry(username.to_string())
-      .or_default() += 1;
-    let fetched = client.get_user_status(username).await;
-    let status = match fetched {
-      Ok(status) => status,
-      Err(e) => {
-        // no reply comes that would be counted off
-        let mut asked = lock(&self.groups.asked);
-        if let Some(count) = asked.get_mut(username) {
-          *count = count.saturating_sub(1);
-          if *count == 0 {
-            asked.remove(username);
-          }
-        }
-        return Err(e);
-      }
-    };
+    let asking = Asking::new(&self.groups.asked, username);
+    let status = client.get_user_status(username).await?;
+    asking.answered();
     let presence = UserPresence::from(status.presence);
     self.status_fetched(username, presence, status.is_privileged);
     Ok(UserStatus {
@@ -659,5 +678,30 @@ impl Directory {
     self.groups.update(username, create, |facts| {
       facts.memberships = memberships;
     });
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn an_answered_status_request_stays_counted_for_its_reply_and_one_given_up_does_not() {
+    let asked = Mutex::new(HashMap::new());
+    Asking::new(&asked, "alice").answered();
+    assert_eq!(
+      lock(&asked).get("alice"),
+      Some(&1),
+      "the reply's event counts it off"
+    );
+    drop(Asking::new(&asked, "alice"));
+    assert_eq!(
+      lock(&asked).get("alice"),
+      Some(&1),
+      "only the answered one is left"
+    );
+    lock(&asked).clear();
+    drop(Asking::new(&asked, "alice"));
+    assert!(lock(&asked).is_empty());
   }
 }

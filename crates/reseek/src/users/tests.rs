@@ -796,6 +796,83 @@ async fn a_buddys_presence_moved_while_disconnected_is_told_once_whichever_reply
 }
 
 #[tokio::test]
+async fn a_buddy_online_across_a_reconnect_is_told_of_no_change() {
+  use soulseek_proto::ServerRequest;
+
+  let app = crate::testing::soulseek::app(CONFIG).await;
+  let (seen, mut received) = tokio::sync::mpsc::unbounded_channel();
+  app.state.events.subscribe(
+    "test",
+    Some(EventType::BuddyPresenceChanged),
+    move |record| {
+      let seen = seen.clone();
+      async move {
+        seen.send(record).unwrap();
+        Ok(())
+      }
+    },
+  );
+  let users = &app.state.users;
+  let notify = BuddyChange {
+    notify_presence: Some(true),
+  };
+  users.set_buddy("alice", notify).await.unwrap();
+  let online = || alice_is(soulseek_proto::UserPresence::Online);
+  let server = crate::testing::soulseek::Server::start(move |request| match request {
+    ServerRequest::WatchUser(_) => vec![online().1],
+    ServerRequest::GetStatus(_) => vec![online().0],
+    _ => Vec::new(),
+  })
+  .await;
+  let watched = || async {
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+      while !users.is_watched("alice") || alice_cached(&app).await["status"].is_null() {
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+      }
+    })
+    .await
+    .expect("the buddy was never watched");
+  };
+  server.login(&app).await;
+  watched().await;
+  server.drop_session(&app).await;
+  server.login(&app).await;
+  watched().await;
+  // a change pushed after the login's watch is the first one told
+  server.send(vec![alice_is(soulseek_proto::UserPresence::Away).0]);
+  let record = tokio::time::timeout(std::time::Duration::from_secs(5), received.recv())
+    .await
+    .unwrap()
+    .unwrap();
+  let Event::BuddyPresenceChanged(changed) = &record.event else {
+    panic!("{:?}", record.event);
+  };
+  assert_eq!(
+    (changed.previous, changed.presence),
+    (UserPresence::Online, UserPresence::Away),
+    "online before the reconnect and after it is no change"
+  );
+}
+
+#[tokio::test]
+async fn a_status_request_given_up_leaves_the_next_pushed_status_unasked() {
+  let app = crate::testing::soulseek::app(CONFIG).await;
+  // alice's status is never answered
+  let server = crate::testing::soulseek::Server::silent().await;
+  server.login(&app).await;
+  let users = &app.state.users;
+  let client = app.state.network.client();
+  let asking = users.status_of(client, "alice");
+  let given_up = tokio::time::timeout(std::time::Duration::from_millis(100), asking).await;
+  assert!(given_up.is_err());
+  let pushed = users.status_received("alice", UserPresence::Away, false);
+  assert!(
+    !pushed.asked,
+    "taken as the answer to a request given up on"
+  );
+}
+
+#[tokio::test]
 async fn two_buddy_changes_made_at_once_both_hold() {
   let app = app(CONFIG, &[]).await;
   let users = &app.state.users;
