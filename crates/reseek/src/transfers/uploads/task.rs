@@ -123,13 +123,17 @@ impl Uploads {
         let gone = ClientError::NotFound(FILE_GONE.to_string());
         self.fail(&mut record, &gone, None).await;
         // the answer a request for a file not shared gets, so the peer stops waiting for it; sent
-        // on a task of its own, so the upload leaves the queue without waiting for the peer
+        // on a task of its own, so the upload leaves the queue without waiting for the peer, and
+        // given up when the upload is canceled or the daemon stops
         let (username, filename) = (record.username.clone(), record.filename.as_str().into());
+        let (cancel, stop) = (cancel.clone(), self.shutdown.clone());
         self.tasks.spawn(
           async move {
-            client
-              .deny_upload(&username, filename, NOT_SHARED.to_string())
-              .await;
+            tokio::select! {
+              () = cancel.cancelled() => debug!("the peer is not told the file is gone; canceled"),
+              () = stop.cancelled() => debug!("the peer is not told the file is gone; stopping"),
+              () = client.deny_upload(&username, filename, NOT_SHARED.to_string()) => {}
+            }
           }
           .in_current_span(),
         );
