@@ -53,9 +53,9 @@ async fn an_uploader_that_closes_early_fails_the_download_and_the_bytes_stay() {
   drop(transfer);
   let destination = running.destination.clone();
   let error = running.result().await.unwrap_err();
-  assert!(
-    matches!(&error, ClientError::Connection { message, .. } if message.starts_with("Transfer failed")),
-    "{error:?}"
+  assert_eq!(
+    error.to_string(),
+    "Transfer failed: the uploader closed the connection"
   );
   assert_eq!(std::fs::read(destination).unwrap(), content(20_000));
 }

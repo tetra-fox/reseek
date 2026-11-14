@@ -32,6 +32,9 @@ use crate::error::ClientError;
 use crate::peers::write_peer;
 use crate::waiter::WaitKey;
 
+/// the peer of a download, as a failure names it
+const UPLOADER: &str = "the uploader";
+
 /// the wait for the uploader's offer to send the file
 type OfferWait = Pin<Box<dyn Future<Output = Result<TransferRequest, ClientError>> + Send>>;
 
@@ -465,7 +468,7 @@ impl Download {
         .stop
         .run(write.write_all(&start.to_le_bytes()))
         .await
-        .map_err(|error| io::connection_failure(handle, error))?;
+        .map_err(|error| io::connection_failure(handle, error, UPLOADER))?;
       self.tracker.emit_state(TransferState::InProgress, None)?;
       self.tracker.emit_progress(start);
       tracing::info!(size, start, "download started");
@@ -483,7 +486,7 @@ impl Download {
         .stop
         .run(received)
         .await
-        .map_err(|error| io::connection_failure(handle, error))
+        .map_err(|error| io::connection_failure(handle, error, UPLOADER))
     }
     .await;
     if self.options.dispose_output_stream_on_completion

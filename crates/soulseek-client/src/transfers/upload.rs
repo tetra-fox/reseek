@@ -33,6 +33,9 @@ use crate::waiter::WaitKey;
 /// how long telling the peer about an upload that did not succeed may take
 const COURTESY_BUDGET: Duration = Duration::from_secs(5);
 
+/// the peer of an upload, as a failure names it
+const DOWNLOADER: &str = "the downloader";
+
 impl Client {
   /// Uploads a file and returns its final snapshot. The upload runs on a task of its own: it
   /// stops when `cancel` fires, not when this future is dropped.
@@ -307,7 +310,7 @@ impl Upload {
     let (mut read, mut write) = conn.into_split()?;
     let mut offset = [0; 8];
     self.stop.run(read.read_exact(&mut offset)).await.map_err(
-      |error| match io::connection_failure(handle, error) {
+      |error| match io::connection_failure(handle, error, DOWNLOADER) {
         error @ (ClientError::Timeout(_) | ClientError::Canceled) => error,
         error => ClientError::Message {
           kind: MessageErrorKind::Read,
@@ -348,7 +351,7 @@ impl Upload {
       .stop
       .run(sent)
       .await
-      .map_err(|error| io::connection_failure(handle, error))?;
+      .map_err(|error| io::connection_failure(handle, error, DOWNLOADER))?;
     drop(source);
     match io::linger(&mut read, self.options.maximum_linger_time, &cancel).await {
       Linger::Closed | Linger::Forced => {}

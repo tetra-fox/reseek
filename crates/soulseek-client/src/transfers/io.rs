@@ -13,7 +13,7 @@ use tokio_util::sync::CancellationToken;
 use super::options::{DownloadSink, Governor, Reporter, UploadSource};
 use super::record::Tracker;
 use crate::bucket::{INTERVAL, TokenBucket};
-use crate::conn::{ConnHandle, ConnReadHalf, ConnState, ConnWriteHalf};
+use crate::conn::{ConnHandle, ConnReadHalf, ConnState, ConnWriteHalf, closed_by_remote};
 use crate::error::{ClientError, ConnectionErrorKind};
 
 /// How fast one transfer may go: its governor, then the speed limit of its direction
@@ -185,20 +185,30 @@ pub(super) async fn linger(
 }
 
 /// What an I/O failure on a transfer connection comes to: the reason the connection closed,
-/// when it closed under the operation (its inactivity timeout, a cancel), else the failure
-pub(super) fn connection_failure(handle: &ConnHandle, error: ClientError) -> ClientError {
+/// when it closed under the operation (its inactivity timeout, a cancel), else the failure. A
+/// remote that ended or reset the connection is named, `remote` being who it is ("the
+/// downloader"); whether it canceled, quit or crashed, the socket does not tell.
+pub(super) fn connection_failure(
+  handle: &ConnHandle,
+  error: ClientError,
+  remote: &str,
+) -> ClientError {
   if !matches!(error, ClientError::Connection { .. }) {
     return error;
   }
   let ConnState::Disconnected(reason) = handle.state() else {
     return error;
   };
+  let failed = |text: String| {
+    ClientError::connection(
+      ConnectionErrorKind::Other,
+      format!("Transfer failed: {text}"),
+    )
+  };
   match reason.error {
     Some(ClientError::Timeout(message)) => ClientError::Timeout(message),
     Some(ClientError::Canceled) => ClientError::Canceled,
-    _ => ClientError::connection(
-      ConnectionErrorKind::Other,
-      format!("Transfer failed: {}", reason.message),
-    ),
+    Some(error) if closed_by_remote(&error) => failed(format!("{remote} closed the connection")),
+    _ => failed(reason.message),
   }
 }

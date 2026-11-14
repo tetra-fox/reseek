@@ -293,6 +293,33 @@ async fn a_downloader_that_closes_early_fails_the_upload_and_may_queue_the_file_
 }
 
 #[tokio::test]
+async fn a_downloader_that_closes_or_resets_mid_file_is_said_to_have_closed_it() {
+  for reset in [false, true] {
+    let mut scripted = Scripted::start().await;
+    let running = upload(&scripted, "@@share\\left.mp3", |request| {
+      request.options.governor = Some(first_chunk_only());
+    });
+    let mut bob = scripted.connected().await;
+    let mut transfer = accepted(&mut scripted, &mut bob, "@@share\\left.mp3").await;
+    transfer.send(&0u64.to_le_bytes()).await;
+    assert_eq!(transfer.raw(1000).await, content(1000));
+    if reset {
+      // with no linger the close resets the connection, as a close with unread bytes does
+      socket2::SockRef::from(&transfer.stream)
+        .set_linger(Some(Duration::ZERO))
+        .unwrap();
+    }
+    drop(transfer);
+    let error = running.result().await.unwrap_err();
+    assert_eq!(
+      error.to_string(),
+      "Transfer failed: the downloader closed the connection",
+      "reset: {reset}"
+    );
+  }
+}
+
+#[tokio::test]
 async fn an_upload_that_fails_after_the_server_session_was_lost_still_tells_the_downloader() {
   let mut scripted = Scripted::start().await;
   let running = upload(&scripted, "@@share\\outage.mp3", |request| {

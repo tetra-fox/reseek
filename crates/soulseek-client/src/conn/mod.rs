@@ -242,12 +242,7 @@ impl ConnReadHalf {
       read = self.half.read(buf) => read,
     };
     match read {
-      Ok(0) if len > 0 => Err(read_failed(
-        handle,
-        len,
-        "Remote connection closed".into(),
-        None,
-      )),
+      Ok(0) if len > 0 => Err(remote_closed(handle, len)),
       Ok(read) => {
         handle.touch();
         Ok(read)
@@ -299,14 +294,7 @@ async fn read_exact<R: AsyncRead + Unpin>(
       read = reader.read(&mut buf[total..end]) => read,
     };
     match read {
-      Ok(0) => {
-        return Err(read_failed(
-          handle,
-          len,
-          "Remote connection closed".into(),
-          None,
-        ));
-      }
+      Ok(0) => return Err(remote_closed(handle, len)),
       Ok(read) => {
         total += read;
         handle.touch();
@@ -331,6 +319,30 @@ fn read_error(
     Some(source) => ClientError::connection_from(ConnectionErrorKind::Read, message, source),
     None => ClientError::connection(ConnectionErrorKind::Read, message),
   }
+}
+
+/// The remote closed the connection before `len` bytes came
+fn remote_closed(handle: &ConnHandle, len: usize) -> ClientError {
+  let ended = std::io::Error::from(std::io::ErrorKind::UnexpectedEof);
+  read_failed(handle, len, "Remote connection closed".into(), Some(ended))
+}
+
+/// Whether `error`, a failed read or write, means the remote end closed the connection: it
+/// ended the stream, or reset it, which a write after the reset reports as a broken pipe
+pub(crate) fn closed_by_remote(error: &ClientError) -> bool {
+  let ClientError::Connection {
+    source: Some(source),
+    ..
+  } = error
+  else {
+    return false;
+  };
+  source
+    .downcast_ref::<std::io::Error>()
+    .is_some_and(|error| {
+      use std::io::ErrorKind::{BrokenPipe, ConnectionReset, UnexpectedEof};
+      matches!(error.kind(), UnexpectedEof | ConnectionReset | BrokenPipe)
+    })
 }
 
 fn read_failed(
@@ -440,8 +452,28 @@ pub(crate) mod tests {
       error.to_string().ends_with("Remote connection closed"),
       "{error}"
     );
+    assert!(closed_by_remote(&error));
     let reason = conn.handle().disconnected().await;
     assert_eq!(reason.message, "Read error: Remote connection closed");
+  }
+
+  #[test]
+  fn a_reset_is_the_remote_closing_and_a_lost_network_is_not() {
+    use std::io::ErrorKind::*;
+    for (kind, closed) in [
+      (ConnectionReset, true),
+      (BrokenPipe, true),
+      (TimedOut, false),
+      (HostUnreachable, false),
+      (NetworkUnreachable, false),
+    ] {
+      let error = ClientError::connection_from(
+        ConnectionErrorKind::Write,
+        "Failed to write",
+        std::io::Error::from(kind),
+      );
+      assert_eq!(closed_by_remote(&error), closed, "{kind:?}");
+    }
   }
 
   #[tokio::test]
