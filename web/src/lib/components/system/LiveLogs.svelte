@@ -17,7 +17,7 @@
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import { formatCount } from "#lib/format.js";
   import { type ActiveFilter, typedFilter } from "#lib/lists/filtered.js";
-  import { Freeze, freezesWhileUsed, interaction } from "#lib/lists/interaction.svelte.js";
+  import { Freeze, freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
@@ -37,7 +37,7 @@
 
   /** lines Clear took away, still matched so a reload does not bring them back */
   let cleared: Line[] = [];
-  const freeze = new Freeze(interaction);
+  const freeze = new Freeze();
   /** how many lines the list keeps: all of them while the user holds it */
   const cap = () => (freeze.frozen ? undefined : MAX);
 

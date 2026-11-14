@@ -28,7 +28,7 @@
   import { formatCount, listText, plural } from "#lib/format.js";
   import { useInspector } from "#lib/inspector/inspector.svelte.js";
   import { type ActiveFilter, clearThen, typedFilter } from "#lib/lists/filtered.js";
-  import { Freeze, interaction } from "#lib/lists/interaction.svelte.js";
+  import { Freeze } from "#lib/lists/interaction.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
   import { href } from "#lib/nav.js";
@@ -70,7 +70,7 @@
   $effect(() => () => results.close());
 
   /** what holds the results still, in the list or the tree */
-  const freeze = new Freeze(interaction);
+  const freeze = new Freeze();
   keepCurrent(
     () => {
       if (!searches.starting.has(id)) void searches.fetch(id);

@@ -3,14 +3,16 @@ import { untrack } from "svelte";
 /**
  * What holds lists still while the user is in the middle of something they must not move under,
  * and the work waiting for it to end. While it holds, lists take appends only and keep removed
- * rows until it ends. A list's own freeze follows `interaction` as well, which holds every list
+ * rows until it ends. A list's own freeze, made with no argument, follows `interaction` as well,
+ * which holds every list
  */
 export class Freeze {
   #holds = $state(0);
   #thawed: (() => void)[] = [];
   #outer: Freeze | null;
 
-  constructor(outer: Freeze | null = null) {
+  // the default is read when a list's freeze is made, after `interaction` below, which passes null
+  constructor(outer: Freeze | null = interaction) {
     this.#outer = outer;
   }
 
@@ -41,7 +43,7 @@ export class Freeze {
 }
 
 /** Holds every list: a hover card, or a menu open from a line */
-export const interaction = new Freeze();
+export const interaction = new Freeze(null);
 
 /**
  * Keeps a list's order while `freeze` holds it: the lines keep the places they had and new ones

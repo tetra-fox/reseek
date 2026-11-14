@@ -1,6 +1,6 @@
 import { SvelteMap, SvelteSet } from "svelte/reactivity";
 
-import { Freeze, interaction } from "./interaction.svelte";
+import { Freeze } from "./interaction.svelte";
 
 /** Whether two values from the API are the same, looking inside arrays and objects */
 export const same = (a: unknown, b: unknown): boolean => {
@@ -58,7 +58,7 @@ export class Keyed<T extends object> {
   /** the last turn begun before the list was emptied, whose reads are older than it */
   #cleared = 0;
 
-  constructor(key: (row: T) => string, freeze = new Freeze(interaction)) {
+  constructor(key: (row: T) => string, freeze = new Freeze()) {
     this.#key = key;
     this.freeze = freeze;
   }

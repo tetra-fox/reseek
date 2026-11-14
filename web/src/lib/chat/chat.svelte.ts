@@ -1,5 +1,5 @@
 import { api, byRoom, byUser, type Schemas } from "#lib/api/client.js";
-import { Freeze, interaction } from "#lib/lists/interaction.svelte.js";
+import { Freeze } from "#lib/lists/interaction.svelte.js";
 import { Keyed } from "#lib/lists/keyed.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { call } from "#lib/request.js";
@@ -32,7 +32,7 @@ export const paneOf = (key: string): { kind: "user" | "room"; name: string } => 
  */
 class Chat {
   /** holds the chat list still, which shows the conversations and the rooms as one */
-  readonly freeze = new Freeze(interaction);
+  readonly freeze = new Freeze();
   /** the open conversations, by peer */
   readonly conversations = new Keyed<Conversation>((c) => c.username, this.freeze);
   /** the joined rooms, by name */

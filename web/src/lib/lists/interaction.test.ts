@@ -89,7 +89,7 @@ describe("a text selection", () => {
 
 describe("a list's freeze", () => {
   it("follows what holds every list, and runs what waited once both let go", () => {
-    const freeze = new Freeze(interaction);
+    const freeze = new Freeze();
     const run = vi.fn();
     const everyList = interaction.hold();
     expect(freeze.frozen).toBe(true);
