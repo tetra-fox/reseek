@@ -363,7 +363,7 @@ mod tests {
     let path = dir.path().join("config.toml");
     let file = |port: u16, a: &str, gone: &str, more: &str| {
       let text = format!(
-        "[server]\nport = {port}\n[api_keys.a]\n{a}\n[api_keys.gone]\nkey = \"{gone}\"\n{more}"
+        "[server]\nport = {port}\n[api_keys.a]\n{a}\n[api_keys.gone]\nkey = \"{gone}\"\nrole = \"keeper\"\n{more}"
       );
       fs::write(&path, text).unwrap();
     };
@@ -416,7 +416,7 @@ mod tests {
     watcher.reload().await.unwrap();
     assert_eq!(
       names(&watcher),
-      ["a:a2:admin", "b:b1:reader", "gone:g2:"],
+      ["a:a2:admin", "b:b1:reader", "gone:g2:keeper"],
       "a key the file moves under the runtime layer's change takes the file's value, and an \
        entry deleted at run time comes back when the file changes it"
     );
@@ -429,7 +429,7 @@ mod tests {
     );
 
     watcher.remove_override("api_keys", None).await.unwrap();
-    assert_eq!(names(&watcher), ["a:a2:admin", "gone:g2:"]);
+    assert_eq!(names(&watcher), ["a:a2:admin", "gone:g2:keeper"]);
   }
 
   #[tokio::test]
