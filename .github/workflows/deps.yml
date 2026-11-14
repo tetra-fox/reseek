@@ -14,6 +14,8 @@ jobs:
   test:
     if: github.actor == 'dependabot[bot]'
     runs-on: ubuntu-latest
+    # the three ci jobs' checks one after another: 20 to 46 minutes
+    timeout-minutes: 120
     permissions:
       contents: read
       pull-requests: read
@@ -63,6 +65,7 @@ jobs:
 
   merge:
     needs: test
+    timeout-minutes: 10
     if: >-
       needs.test.outputs.update-type != 'version-update:semver-major'
       && contains(fromJSON('["cargo", "npm_and_yarn", "docker"]'), needs.test.outputs.ecosystem)

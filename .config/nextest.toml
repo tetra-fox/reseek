@@ -1,0 +1,5 @@
+# a test still running after a minute is reported as slow, and after three it is killed and
+# fails, so a hung test ends the run instead of holding it until the ci job's own limit. the
+# slowest tests take under 20 s on a ci runner
+[profile.default]
+slow-timeout = { period = "60s", terminate-after = 3 }

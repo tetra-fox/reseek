@@ -26,6 +26,8 @@ jobs:
         recipes: ["lint test", "web-e2e"]
     name: ci (${{ matrix.recipes }})
     runs-on: ubuntu-latest
+    # each half takes 11 to 16 minutes with a warm cache; a cold one builds everything first
+    timeout-minutes: 45
     env:
       SOULFIND_REQUIRED: "1"
       CARGO_INCREMENTAL: "0"
@@ -46,6 +48,8 @@ jobs:
   nix:
     if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
+    # 7 to 16 minutes, 33 when the package's dependencies were not in cachix
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-nix
@@ -60,6 +64,8 @@ jobs:
   vm:
     if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
+    # 10 to 16 minutes
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # install-nix-action opens /dev/kvm to the build users, and nix then counts kvm among its
