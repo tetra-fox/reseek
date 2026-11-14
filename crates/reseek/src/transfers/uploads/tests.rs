@@ -531,3 +531,21 @@ async fn a_forecast_for_someone_not_queued_asks_nobody_about_them() {
     .await;
   assert!(!asked, "the stranger's statistics were asked for");
 }
+
+#[tokio::test]
+async fn a_queued_user_the_cache_does_not_know_is_asked_about_again() {
+  use soulseek_proto::ServerRequest;
+
+  let app = crate::testing::soulseek::app("").await;
+  let mut server = crate::testing::soulseek::Server::silent().await;
+  server.login(&app).await;
+  // bob's upload waits in the queue, and the cache knows nothing of him
+  let uploads = &app.state.uploads;
+  uploads.queue.enqueue(Uuid::new_v4(), "bob", SHARED);
+  assert_eq!(uploads.queue.place("bob", SHARED), Some(1));
+  server
+    .received(|request| {
+      matches!(request, ServerRequest::GetUserStats(asked) if asked.username == "bob").then_some(())
+    })
+    .await;
+}
