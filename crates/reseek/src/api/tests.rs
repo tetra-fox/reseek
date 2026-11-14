@@ -446,3 +446,36 @@ async fn requests_are_checked_before_any_service_is_asked() {
   let wrong_type = with(wrong_type, "content-type", "text/plain");
   assert_eq!(app.send(wrong_type).await.status, 415);
 }
+
+#[tokio::test]
+async fn a_transfer_listing_refuses_a_state_it_does_not_know_naming_every_one_it_does() {
+  use api_types::transfers::{TransferStateCategory, TransferStates};
+
+  let app = app(CONFIG, &[]).await;
+  let names: Vec<&str> = TransferStateCategory::ALL
+    .map(TransferStateCategory::as_str)
+    .into_iter()
+    .chain(TransferStates::ALL.map(TransferStates::as_str))
+    .collect();
+  for direction in ["downloads", "uploads"] {
+    let uri = format!("/api/v0/transfers/{direction}/list?state=Failed&state=Bogus");
+    let answer = app.send(request("GET", &uri, None)).await;
+    assert_eq!(answer.status, 400, "{uri}");
+    let body = answer.json();
+    assert!(body["error"].is_string(), "{uri}");
+    let detail = body["detail"].as_str().unwrap_or_default();
+    assert!(detail.contains("`Bogus`"), "{detail}");
+    for name in &names {
+      assert!(detail.contains(&format!("`{name}`")), "{name}: {detail}");
+    }
+    for name in &names {
+      let value: String = form_urlencoded::byte_serialize(name.as_bytes()).collect();
+      let uri = format!("/api/v0/transfers/{direction}/list?state={value}");
+      assert_eq!(
+        app.send(request("GET", &uri, None)).await.status,
+        200,
+        "{uri}"
+      );
+    }
+  }
+}

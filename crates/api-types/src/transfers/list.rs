@@ -69,7 +69,7 @@ pub struct TransferQuery {
 }
 
 /// A named set of transfer states.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum TransferStateCategory {
   /// `Requested` and every `Queued` state
   Queued,
@@ -87,15 +87,116 @@ pub enum TransferStateCategory {
   Cancelled,
 }
 
+impl TransferStateCategory {
+  /// Every category.
+  pub const ALL: [Self; 7] = [
+    Self::Queued,
+    Self::InProgress,
+    Self::Completed,
+    Self::Successful,
+    Self::Failed,
+    Self::Errored,
+    Self::Cancelled,
+  ];
+
+  /// The category as it is written.
+  pub fn as_str(self) -> &'static str {
+    match self {
+      Self::Queued => "Queued",
+      Self::InProgress => "InProgress",
+      Self::Completed => "Completed",
+      Self::Successful => "Successful",
+      Self::Failed => "Failed",
+      Self::Errored => "Errored",
+      Self::Cancelled => "Cancelled",
+    }
+  }
+}
+
+impl std::str::FromStr for TransferStateCategory {
+  type Err = String;
+
+  fn from_str(text: &str) -> Result<Self, Self::Err> {
+    Self::ALL
+      .into_iter()
+      .find(|category| category.as_str() == text)
+      .ok_or_else(|| unknown("transfer state category", text, Self::ALL.map(Self::as_str)))
+  }
+}
+
+impl Serialize for TransferStateCategory {
+  fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+    serializer.serialize_str(self.as_str())
+  }
+}
+
+impl<'de> Deserialize<'de> for TransferStateCategory {
+  fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+    let text = <std::borrow::Cow<'de, str>>::deserialize(deserializer)?;
+    text.parse().map_err(serde::de::Error::custom)
+  }
+}
+
+impl utoipa::PartialSchema for TransferStateCategory {
+  fn schema() -> utoipa::openapi::RefOr<utoipa::openapi::schema::Schema> {
+    utoipa::openapi::ObjectBuilder::new()
+      .schema_type(utoipa::openapi::schema::Type::String)
+      .description(Some("A named set of transfer states."))
+      .enum_values(Some(Self::ALL.map(Self::as_str)))
+      .into()
+  }
+}
+
+impl ToSchema for TransferStateCategory {}
+
 /// A transfer state filter: a category name such as `"Failed"`, or an exact state such as
 /// `"Queued, Remotely"`. A name that is both, such as `"InProgress"`, is the category.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, ToSchema)]
 #[serde(untagged)]
 pub enum TransferStateFilter {
   /// every state in the category
   Category(TransferStateCategory),
   /// exactly this state
   State(TransferStates),
+}
+
+impl std::str::FromStr for TransferStateFilter {
+  type Err = String;
+
+  fn from_str(text: &str) -> Result<Self, Self::Err> {
+    if let Ok(category) = text.parse() {
+      return Ok(Self::Category(category));
+    }
+    if let Ok(state) = text.parse() {
+      return Ok(Self::State(state));
+    }
+    let categories = TransferStateCategory::ALL.map(TransferStateCategory::as_str);
+    let states = TransferStates::ALL
+      .map(TransferStates::as_str)
+      .into_iter()
+      .filter(|state| !categories.contains(state));
+    Err(unknown(
+      "transfer state",
+      text,
+      categories.into_iter().chain(states),
+    ))
+  }
+}
+
+impl<'de> Deserialize<'de> for TransferStateFilter {
+  fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+    let text = <std::borrow::Cow<'de, str>>::deserialize(deserializer)?;
+    text.parse().map_err(serde::de::Error::custom)
+  }
+}
+
+/// The refusal of `text`, which is no `what`, naming every one of `valid`.
+fn unknown<'a>(what: &str, text: &str, valid: impl IntoIterator<Item = &'a str>) -> String {
+  let valid: Vec<String> = valid.into_iter().map(|name| format!("`{name}`")).collect();
+  format!(
+    "unknown {what} `{text}`, expected one of {}",
+    valid.join(", ")
+  )
 }
 
 /// What the flat transfer listing is sorted by.
@@ -133,7 +234,8 @@ pub enum SortOrder {
 #[into_params(parameter_in = Query)]
 pub struct TransferListQuery {
   /// only transfers in one of these states or categories, any state when empty; repeat the
-  /// parameter for several
+  /// parameter for several. A name that is neither is refused, and the refusal names every
+  /// valid one
   #[serde(default)]
   pub state: Vec<TransferStateFilter>,
   /// only transfers with this peer

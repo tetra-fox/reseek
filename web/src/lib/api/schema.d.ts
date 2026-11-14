@@ -18028,7 +18028,8 @@ export interface operations {
             query?: {
                 /**
                  * @description only transfers in one of these states or categories, any state when empty; repeat the
-                 *     parameter for several
+                 *     parameter for several. A name that is neither is refused, and the refusal names every
+                 *     valid one
                  */
                 state?: components["schemas"]["TransferStateFilter"][];
                 /** @description only transfers with this peer */
@@ -19515,7 +19516,8 @@ export interface operations {
             query?: {
                 /**
                  * @description only transfers in one of these states or categories, any state when empty; repeat the
-                 *     parameter for several
+                 *     parameter for several. A name that is neither is refused, and the refusal names every
+                 *     valid one
                  */
                 state?: components["schemas"]["TransferStateFilter"][];
                 /** @description only transfers with this peer */
