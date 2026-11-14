@@ -86,23 +86,32 @@ fn is_json(content_type: &str) -> bool {
     || (essence.starts_with("application/") && essence.ends_with("+json"))
 }
 
-/// `bytes` read as the JSON of `T`, refused with what was wrong.
+/// `bytes` read as the JSON of `T`, refused with what was wrong; anything after the JSON is
+/// refused too.
 pub(in crate::api) fn read_json<T: DeserializeOwned>(bytes: &[u8]) -> Result<T, ApiError> {
   let reader = &mut serde_json::Deserializer::from_slice(bytes);
-  serde_path_to_error::deserialize(reader).map_err(|e| {
-    // serde's text can quote the value it refused, which may be a password, so the log names
-    // only where the fault is and its kind
-    let at = e.path().to_string();
-    let subject = if at == "." { "the body" } else { &at };
-    let wrong = match e.inner().classify() {
-      Category::Syntax => "is not JSON",
-      Category::Data => "does not fit what the route takes",
-      Category::Eof => "is cut off",
-      Category::Io => "was not read",
-    };
-    ApiError::invalid("Invalid request body", described(e.path(), e.inner()))
-      .logged_with(format!("{subject} {wrong}"))
-  })
+  let value = serde_path_to_error::deserialize(&mut *reader)
+    .map_err(|e| refused_body(&e.path().to_string(), e.inner()))?;
+  reader.end().map_err(|e| refused_body(".", &e))?;
+  Ok(value)
+}
+
+/// The refusal of a body whose fault is at `at`. The log names the fault's kind, not serde's
+/// text, which can quote a password, and names `at` only for a value that does not fit: a body
+/// that is not JSON can fail inside a key the client made up.
+fn refused_body(at: &str, error: &serde_json::Error) -> ApiError {
+  let wrong = match error.classify() {
+    Category::Syntax => "is not JSON",
+    Category::Data => "does not fit what the route takes",
+    Category::Eof => "is cut off",
+    Category::Io => "was not read",
+  };
+  let subject = match error.classify() {
+    Category::Data if at != "." => at,
+    _ => "the body",
+  };
+  ApiError::invalid("Invalid request body", described(at, error))
+    .logged_with(format!("{subject} {wrong}"))
 }
 
 /// A query read as `T`. A parameter may be repeated for a list, and one with an empty value,
@@ -130,13 +139,18 @@ fn read_query<T: DeserializeOwned>(query: &str) -> Result<T, ApiError> {
     .collect::<Vec<_>>()
     .join("&");
   let reader = serde_html_form::Deserializer::from_bytes(given.as_bytes());
-  serde_path_to_error::deserialize(reader)
-    .map_err(|e| ApiError::invalid("Invalid query", described(e.path(), e.inner())))
+  serde_path_to_error::deserialize(reader).map_err(|e| {
+    // serde's text can quote a value, which the request's logged path has masked where secret;
+    // the parameter is one the route takes, as any other is ignored
+    let at = e.path().to_string();
+    let subject = if at == "." { "the query" } else { &at };
+    ApiError::invalid("Invalid query", described(&at, e.inner()))
+      .logged_with(format!("{subject} does not fit what the route takes"))
+  })
 }
 
-/// `inner`, after the field it is about when there is one.
-fn described(path: &serde_path_to_error::Path, inner: &impl std::fmt::Display) -> String {
-  let at = path.to_string();
+/// `inner`, after the field `at` it is about when there is one.
+fn described(at: &str, inner: &impl std::fmt::Display) -> String {
   if at == "." {
     inner.to_string()
   } else {
@@ -259,6 +273,51 @@ mod tests {
       error.detail().unwrap_or_default().starts_with("offset: "),
       "{error:?}"
     );
+  }
+
+  /// What refusing with `error` logs.
+  fn logged(error: ApiError) -> String {
+    let (logs, _capturing) = crate::testing::captured_logs();
+    drop(error.into_response());
+    let lines: Vec<String> = logs.snapshot().into_iter().map(|l| l.message).collect();
+    lines.join("\n")
+  }
+
+  #[test]
+  fn a_body_with_anything_after_its_json_is_not_json() {
+    for body in [&b"{} x"[..], b"{}{}", b"[1] 2"] {
+      let error = read_json::<serde_json::Value>(body).unwrap_err();
+      assert_eq!(error.status(), 400);
+      assert!(logged(error).contains("the body is not JSON"));
+    }
+    assert!(read_json::<serde_json::Value>(b" {} \n").is_ok());
+  }
+
+  #[test]
+  fn a_refused_body_logs_no_text_the_client_made_up() {
+    // a key the route does not take, broken inside its value
+    let error =
+      read_json::<api_types::auth::session::LoginRequest>(br#"{"hunter2": [}"#).unwrap_err();
+    let text = logged(error);
+    assert!(text.contains("the body is not JSON"), "{text}");
+    assert!(!text.contains("hunter2"), "{text}");
+    let error = read_json::<api_types::auth::session::LoginRequest>(br#"{"password": 4815162342}"#)
+      .unwrap_err();
+    let text = logged(error);
+    assert!(text.contains("password does not fit"), "{text}");
+    assert!(!text.contains("4815162342"), "{text}");
+  }
+
+  #[test]
+  fn a_refused_query_logs_the_parameter_and_not_its_value() {
+    let error = read_query::<TransferListQuery>("sort=hunter2").unwrap_err();
+    assert!(
+      error.detail().unwrap_or_default().contains("hunter2"),
+      "{error:?}"
+    );
+    let text = logged(error);
+    assert!(text.contains("sort does not fit"), "{text}");
+    assert!(!text.contains("hunter2"), "{text}");
   }
 
   #[test]
