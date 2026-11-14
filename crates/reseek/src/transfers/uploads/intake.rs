@@ -5,7 +5,8 @@
 //! last ones accepted, a new request is dropped, since its peer would have given up by then.
 //! A request for a file not shared, or shared and gone from disk, is refused, and so is one
 //! past the limits of its user's group, unless the user is privileged. A request for a file of a
-//! relay agent that is configured but away is failed instead, so the peer asks again.
+//! relay agent that cannot say now whether it has it, being away, loading its shares or slow to
+//! answer, is failed instead, so the peer asks again.
 
 use std::collections::{BTreeSet, HashMap};
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
@@ -142,6 +143,17 @@ pub(super) enum Refusal {
   Later,
   /// something here failed; the peer is told only that
   Failed(ClientError),
+}
+
+/// Where a requested file stands.
+pub(super) enum Locating {
+  /// shared and on disk
+  Found(Located),
+  /// not shared, or gone from disk
+  NotShared,
+  /// a relay agent's that cannot say now whether it has it: away, loading its shares, or too
+  /// slow to answer
+  Later,
 }
 
 /// A shared file found on disk.
@@ -341,12 +353,10 @@ impl Uploads {
     filename: &str,
     sees: &BTreeSet<String>,
   ) -> Result<Located, Refusal> {
-    let Some(located) = self.locate(sees, filename).await.map_err(Refusal::Failed)? else {
-      return Err(if self.agent_away(sees, filename).await {
-        Refusal::Later
-      } else {
-        Refusal::Peer(NOT_SHARED)
-      });
+    let located = match self.locate(sees, filename).await.map_err(Refusal::Failed)? {
+      Locating::Found(located) => located,
+      Locating::NotShared => return Err(Refusal::Peer(NOT_SHARED)),
+      Locating::Later => return Err(Refusal::Later),
     };
     let client = self.client().map_err(Refusal::Failed)?;
     let placement = self.users.fetch_placement(&client, username, false).await;
@@ -374,15 +384,16 @@ impl Uploads {
     }
   }
 
-  /// Where the shared file `filename` is, with its size on disk; `None` when it is not shared,
-  /// is in a share the groups `sees` do not see, or is gone from disk. A local file gone, or whose size changed, asks the shares for a
-  /// scan; one that changed is taken at its size on disk. A relay agent's file is taken at its
-  /// indexed size when the options trust agents' listings, else the agent is asked.
+  /// Where the shared file `filename` is, with its size on disk; not shared when it is in no
+  /// share, in a share the groups `sees` do not see, or gone from disk. A local file gone, or
+  /// whose size changed, asks the shares for a scan; one that changed is taken at its size on
+  /// disk. A relay agent's file is taken at its indexed size when the options trust agents'
+  /// listings, else the agent is asked.
   pub(super) async fn locate(
     &self,
     sees: &BTreeSet<String>,
     filename: &str,
-  ) -> Result<Option<Located>, ClientError> {
+  ) -> Result<Locating, ClientError> {
     let view = self.shares.view(sees);
     let resolved = self
       .shares
@@ -390,8 +401,11 @@ impl Uploads {
       .await
       .map_err(|e| ClientError::client(format!("the share index could not be read: {e}"), None))?;
     let Some(resolved) = resolved else {
+      if self.agent_away(sees, filename).await {
+        return Ok(Locating::Later);
+      }
       trace!(filename, "requested file not shared");
-      return Ok(None);
+      return Ok(Locating::NotShared);
     };
     if resolved.host != LOCAL_HOST {
       return Ok(self.locate_on_agent(filename, resolved).await);
@@ -409,7 +423,7 @@ impl Uploads {
           );
         }
         self.scan_needed().await;
-        return Ok(None);
+        return Ok(Locating::NotShared);
       }
     };
     if size != resolved.size {
@@ -424,12 +438,12 @@ impl Uploads {
       }
       self.scan_needed().await;
     }
-    Ok(Some(Located { resolved, size }))
+    Ok(Locating::Found(Located { resolved, size }))
   }
 
-  /// The relay agent's file `filename`, `resolved` from its index; `None` when its agent is not
-  /// ready, or says the file is gone, or does not answer in time.
-  async fn locate_on_agent(&self, filename: &str, resolved: Resolved) -> Option<Located> {
+  /// The relay agent's file `filename`, `resolved` from its index: not shared when the agent
+  /// says it is gone, later when the agent is not ready or does not answer in time.
+  async fn locate_on_agent(&self, filename: &str, resolved: Resolved) -> Locating {
     let relay = self
       .relay
       .as_ref()
@@ -437,16 +451,18 @@ impl Uploads {
     let agent = resolved.host.as_str();
     if !relay.ready(agent) {
       debug!(agent, filename, "the agent holding the file is not ready");
-      return None;
+      return Locating::Later;
     }
     if self.trusts_agents {
       let size = resolved.size;
-      return Some(Located { resolved, size });
+      return Locating::Found(Located { resolved, size });
     }
-    let (exists, length) = relay.file_info(agent, filename).await?;
+    let Some((exists, length)) = relay.file_info(agent, filename).await else {
+      return Locating::Later;
+    };
     if !exists || length == 0 {
       debug!(agent, filename, "The file could not be located on Agent");
-      return None;
+      return Locating::NotShared;
     }
     if length != resolved.size {
       warn!(
@@ -457,7 +473,7 @@ impl Uploads {
         "The file's size differs between the share and disk. A share scan should be performed"
       );
     }
-    Some(Located {
+    Locating::Found(Located {
       resolved,
       size: length,
     })

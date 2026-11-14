@@ -539,3 +539,158 @@ async fn a_kicked_agents_file_in_flight_stops_and_the_upload_reading_it_fails() 
     std::io::ErrorKind::ConnectionAborted
   );
 }
+
+/// A controller with the agent `nas` configured, which has `file_info` to say whether it has a
+/// file, and loopback trusted for the API.
+async fn controller_asking_within(file_info: &str) -> (crate::testing::TestApp, Arc<Controller>) {
+  let config = format!(
+    "[relay]\nenabled = true\nmode = \"controller\"\n\
+     [relay.controller_timeouts]\nfile_info = \"{file_info}\"\n\
+     [relay.agents.nas]\ninstance_name = \"nas\"\nsecret = \"{SECRET}\"\n\
+     [web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n"
+  );
+  let app = app(&config, &[]).await;
+  let controller = app.state.relay.controller.clone().unwrap();
+  (app, controller)
+}
+
+/// The file `nas` shares, which its index holds.
+const AGENT_FILE: &str = "Agent\\a.flac";
+
+/// Loads into `controller` the index of `nas`, which holds [`AGENT_FILE`], and marks the agent,
+/// logged in already, ready.
+async fn agent_ready(controller: &Controller) {
+  crate::testing::load_agent_host(&controller.shares, "nas", "Agent").await;
+  lock(&controller.registry)
+    .agents
+    .get_mut("nas")
+    .unwrap()
+    .record
+    .ready = true;
+}
+
+/// The id of the next file info request the socket sends, waited for.
+async fn file_info_request(from: &mut mpsc::Receiver<Message>) -> Uuid {
+  tokio::time::timeout(Duration::from_secs(10), async {
+    loop {
+      let asked = written(from).iter().find_map(|m| {
+        let Message::Text(text) = m else {
+          return None;
+        };
+        let envelope = frames::decode(text.as_str()).unwrap();
+        matches!(envelope.message, RelayMessage::FileInfoRequest { .. })
+          .then(|| envelope.id.unwrap())
+      });
+      if let Some(id) = asked {
+        return id;
+      }
+      tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+  })
+  .await
+  .expect("the agent is asked about the file")
+}
+
+/// The agent's answer `id` to a file info request.
+fn file_info(id: Uuid, exists: bool, length: u64) -> Result<Message, axum::Error> {
+  let answer = frames::encode(Some(id), RelayMessage::FileInfo { exists, length });
+  Ok(Message::Text(answer.into()))
+}
+
+/// What a peer asking `app` for [`AGENT_FILE`] is told.
+async fn asked(app: &crate::testing::TestApp) -> Result<(), soulseek_client::ClientError> {
+  use crate::network::resolvers::tests::{edges, from};
+  crate::network::resolvers::enqueue_download(
+    &edges(app),
+    "alice",
+    from("198.51.100.7"),
+    &soulseek_proto::RemoteFilename::from(AGENT_FILE),
+  )
+  .await
+}
+
+/// An agent that is logged in but does not say in time whether it has a file gets the peer
+/// told to ask again; one that says it does not have it gets the file refused as not shared.
+#[tokio::test]
+async fn a_file_its_agent_is_slow_to_find_has_the_peer_ask_again() {
+  let (app, controller) = controller_asking_within("100ms").await;
+  let (to_socket, mut from_socket, _served) =
+    log_in(&controller, [127, 0, 0, 1].into(), SECRET).await;
+  agent_ready(&controller).await;
+
+  let slow = asked(&app).await;
+  assert!(
+    matches!(slow, Err(soulseek_client::ClientError::DownloadUnavailable)),
+    "{slow:?}"
+  );
+
+  let patient = BTreeMap::from([(
+    "relay.controller_timeouts.file_info".to_string(),
+    serde_json::json!("10s"),
+  )]);
+  app
+    .state
+    .config
+    .set_overrides(patient, Vec::new(), "test", Lasts::UntilRestart, None)
+    .await
+    .unwrap();
+  // the request the slow ask left unanswered
+  file_info_request(&mut from_socket).await;
+  let refused = {
+    let asking = asked(&app);
+    tokio::pin!(asking);
+    let id = tokio::select! {
+      id = file_info_request(&mut from_socket) => id,
+      answer = &mut asking => panic!("answered before the agent: {answer:?}"),
+    };
+    to_socket.send(file_info(id, false, 0)).await.unwrap();
+    asking.await
+  };
+  assert!(
+    matches!(&refused, Err(soulseek_client::ClientError::DownloadEnqueue(reason)) if reason == "File not shared."),
+    "{refused:?}"
+  );
+}
+
+/// An upload accepted while its agent had the file, whose agent leaves before the upload's task
+/// asks it again, is not failed as gone: the client runs it, and the agent is asked for the
+/// file when its turn comes. The daemon here is logged out, so the client's upload ends at once.
+#[tokio::test]
+async fn an_upload_whose_agent_leaves_before_its_task_starts_is_left_to_its_turn() {
+  let (app, controller) = controller_asking_within("10s").await;
+  let (to_socket, mut from_socket, _served) =
+    log_in(&controller, [127, 0, 0, 1].into(), SECRET).await;
+  agent_ready(&controller).await;
+  let sending = tokio::spawn({
+    let uploads = app.state.uploads.clone();
+    async move { uploads.send("alice", vec![AGENT_FILE.to_string()]).await }
+  });
+  let accepting = file_info_request(&mut from_socket).await;
+  to_socket.send(file_info(accepting, true, 5)).await.unwrap();
+  assert_eq!(sending.await.unwrap().queued, [AGENT_FILE]);
+  // the task asks again as it starts, and the agent leaves before it answers
+  file_info_request(&mut from_socket).await;
+  assert!(controller.kick("nas"));
+
+  let ended = tokio::time::timeout(Duration::from_secs(10), async {
+    loop {
+      let (_, body) = app
+        .call("GET", "/api/v0/transfers/uploads/alice", None)
+        .await;
+      let user: api_types::transfers::UserResponse = serde_json::from_value(body).unwrap();
+      let ended = user
+        .directories
+        .into_iter()
+        .flat_map(|d| d.files)
+        .find(|f| f.ended_at.is_some());
+      if let Some(ended) = ended {
+        return ended;
+      }
+      tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+  })
+  .await
+  .expect("the upload ends");
+  let exception = ended.exception.unwrap();
+  assert!(exception.contains("logged in to upload"), "{exception}");
+}

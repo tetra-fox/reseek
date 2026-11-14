@@ -1,6 +1,6 @@
 //! Asking an agent about a file before a peer's request for it is queued: whether it still
 //! exists and how long it is. An agent that is not ready, leaves, or does not answer in the
-//! configured time gets no answer, and the request is refused as not shared.
+//! configured time gets no answer, and the peer is told to ask again.
 
 use api_types::relay::RelayMessage;
 use reseek_shares::lock;

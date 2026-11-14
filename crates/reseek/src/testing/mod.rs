@@ -324,6 +324,27 @@ pub async fn sent_jobs(app: &TestApp) -> usize {
     .count()
 }
 
+/// Loads into `shares` as the host of the agent `agent` the index of a daemon sharing the file
+/// `a.flac` in the share `alias`, as the agent's upload would.
+pub async fn load_agent_host(
+  shares: &std::sync::Arc<crate::shares::Shares>,
+  agent: &str,
+  alias: &str,
+) {
+  let dir = tempfile::tempdir().unwrap();
+  let share = dir.path().join(alias);
+  std::fs::create_dir_all(&share).unwrap();
+  std::fs::write(share.join("a.flac"), "agent").unwrap();
+  let config = format!("[shares]\ndirectories = [\"{}\"]\n", share.display());
+  let holder = app(&config, &[]).await;
+  let dump = dir.path().join("dump.db");
+  holder.state.shares.dump(&dump).await.unwrap();
+  shares
+    .load_host(agent, holder.state.shares.local_shares(), &dump)
+    .await
+    .unwrap();
+}
+
 /// An address outside every trusted network, for [`TestApp::send_from`].
 pub const OUTSIDE: &str = "192.0.2.1:1";
 

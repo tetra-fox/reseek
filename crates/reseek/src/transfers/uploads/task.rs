@@ -24,7 +24,7 @@ use tracing::{Instrument, debug, info, info_span, trace, warn};
 use uuid::Uuid;
 
 use super::Uploads;
-use super::intake::Located;
+use super::intake::{Located, Locating};
 use crate::relay::Controller;
 use crate::shares::LOCAL_HOST;
 use crate::transfers::state::{self, State};
@@ -117,10 +117,16 @@ impl Uploads {
     // knows by the name; whether they still see the file is decided again
     let sees = self.users.sees(&record.username);
     let located = match self.locate(&sees, &record.filename).await {
-      Ok(Some(found)) => found,
-      Ok(None) => {
+      Ok(Locating::Found(found)) => found,
+      Ok(Locating::NotShared) => {
         let gone = ClientError::NotFound(FILE_GONE.to_string());
         return self.fail(&mut record, &gone, None).await;
+      }
+      // the agent is asked for the file again when the upload's turn comes, and the peer is
+      // told the upload failed when it cannot send it then
+      Ok(Locating::Later) => {
+        debug!("the agent holding the file cannot answer now; the upload waits for its turn");
+        located
       }
       Err(e) => {
         warn!(error = %e, "share index not read; the file found when the request was accepted is sent");
