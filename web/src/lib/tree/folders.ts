@@ -300,6 +300,16 @@ type Tick = { on: number; of: number };
 /** Whether a folder line is ticked: it offers files and every one of them is ticked */
 export const tickedWhole = ({ on, of }: Tick) => of > 0 && on === of;
 
+/** Whether the line of the folder `path` in `byPath` is ticked, as `tickOf` counts it */
+export const lineTicked = <T>(
+  byPath: Map<string, FolderNode<T>>,
+  tickOf: (node: FolderNode<T>) => Tick,
+  path: string
+) => {
+  const node = byPath.get(path);
+  return !!node && tickedWhole(tickOf(node));
+};
+
 /**
  * How many of the selected items are under each folder, by the folder's key: each selected id, a
  * path or a `scopedKey`, counts once for every folder its path is in. Costs the selection's size

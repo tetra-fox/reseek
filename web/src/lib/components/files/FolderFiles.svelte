@@ -23,6 +23,7 @@
     type FolderNode,
     folderTree,
     itemsUnder,
+    lineTicked,
     separatorOf,
     tickedCounts,
     tickedWhole,
@@ -95,12 +96,6 @@
     on: ticked.get(node.path) ?? 0,
     of: node.count
   });
-
-  /** Whether the line of the folder `path` is ticked */
-  const lineTicked = (path: string) => {
-    const node = byPath.get(path);
-    return !!node && tickedWhole(tickOf(node));
-  };
 
   /**
    * Downloads files as one job that keeps their folders below the deepest one holding them, or
@@ -192,7 +187,7 @@
   {#if write && chosen.length}
     <SelectionBar
       files={chosen}
-      ondownload={() => download(chosen, lineTicked)}
+      ondownload={() => download(chosen, (path) => lineTicked(byPath, tickOf, path))}
       onclear={() => selected.clear()} />
   {/if}
   {#snippet footer()}

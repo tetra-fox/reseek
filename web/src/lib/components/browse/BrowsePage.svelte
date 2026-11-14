@@ -42,6 +42,7 @@
     ancestors,
     type FolderNode,
     itemsUnder,
+    lineTicked,
     parentOf,
     type RemoteFile,
     tickedCounts,
@@ -229,12 +230,6 @@
   const topOf = (at: string) =>
     ancestors(at, browser.tree, browser.separator)[0] ?? getFileName(at);
 
-  /** Whether the line of the folder `path` is ticked */
-  const lineTicked = (path: string) => {
-    const node = browser.tree.byPath.get(path);
-    return !!node && tickedWhole(tickOf(node));
-  };
-
   /**
    * Downloads files as one job: each top folder's as groups that keep their folders below the
    * deepest one holding them, or that folder itself when `whole` says its line is ticked
@@ -403,7 +398,9 @@
     {#if chosen.length}
       <SelectionBar
         files={chosen}
-        ondownload={write ? () => download(chosen, lineTicked) : undefined}
+        ondownload={write
+          ? () => download(chosen, (path) => lineTicked(browser.tree.byPath, tickOf, path))
+          : undefined}
         onclear={() => browser.selected.clear()} />
     {/if}
   {/if}
