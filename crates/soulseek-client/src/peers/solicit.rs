@@ -629,6 +629,23 @@ mod tests {
   }
 
   #[tokio::test]
+  async fn a_ticket_does_not_follow_the_count_search_tokens_come_from() {
+    let client = Client::new(crate::options::ClientOptions {
+      enable_listener: false,
+      starting_token: Some(100),
+      ..crate::options::ClientOptions::default()
+    })
+    .unwrap();
+    let searched = client.next_token();
+    let timeout = Duration::from_secs(10);
+    let first = client.issue_ticket("bob", PeerConnectionType::Peer, timeout);
+    let second = client.issue_ticket("bob", PeerConnectionType::Peer, timeout);
+    // random tickets land on these by chance about once in 2^31 each
+    assert_ne!(first.token(), searched + 1);
+    assert_ne!(second.token(), first.token().wrapping_add(1));
+  }
+
+  #[tokio::test]
   async fn a_ticket_is_never_a_running_searchs_token_or_one_search_answers_are_filed_under() {
     let client = Client::new(crate::options::ClientOptions {
       enable_listener: false,

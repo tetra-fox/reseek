@@ -128,6 +128,31 @@ async fn a_kept_answer_reaches_a_searcher_who_connects_late() {
 }
 
 #[tokio::test]
+async fn a_request_the_searcher_answered_in_time_is_not_answered_again() {
+  let logs = Logs::capture();
+  let mut session = responder(PATIENCE).await;
+  let request = carol_searches(&mut session, 5).await;
+  let mut carol = carol_pierces(&session, request).await;
+  assert_eq!(
+    carol.read_peer().await,
+    PeerMessage::SearchResponse(answer(5))
+  );
+  // someone else who saw the token connects with it too
+  let mut again = carol_pierces(&session, request).await;
+  again.closed().await;
+  logs
+    .wait_for(&[&format!(
+      "Unknown PierceFirewall attempt with token {request}"
+    )])
+    .await;
+  let carols = carol.stream.local_addr().unwrap();
+  assert_eq!(
+    session.client.message_connection_address("carol"),
+    Some(carols)
+  );
+}
+
+#[tokio::test]
 async fn a_kept_answer_is_given_up_when_the_searcher_cannot_connect() {
   let logs = Logs::capture();
   let mut session = responder(Duration::from_millis(300)).await;

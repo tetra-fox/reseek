@@ -74,6 +74,27 @@ async fn a_late_answer_replaces_the_dialed_connection_and_carries_the_offer() {
 }
 
 #[tokio::test]
+async fn a_request_answered_late_is_not_answered_again() {
+  let logs = Logs::capture();
+  let mut scripted = Scripted::start().await;
+  let _running = scripted.download("@@share\\late.mp3", |_| {});
+  let mut dialed = scripted.connected().await;
+  queued(&mut dialed, "@@share\\late.mp3").await;
+  let token = relayed(&mut scripted, PeerConnectionType::Peer).await;
+  let answered = answer(&scripted, token).await;
+  current(&scripted, &answered).await;
+  // someone else who saw the token connects with it too
+  let mut again = answer(&scripted, token).await;
+  again.closed().await;
+  logs
+    .wait_for(&[&format!(
+      "Unknown PierceFirewall attempt with token {token}"
+    )])
+    .await;
+  current(&scripted, &answered).await;
+}
+
+#[tokio::test]
 async fn an_answer_after_the_request_was_awaited_for_is_refused() {
   let logs = Logs::capture();
   let mut options: ClientOptions = listening_options();

@@ -16,7 +16,8 @@ use soulseek_client::{
 use soulseek_proto::init::PeerInit;
 use soulseek_proto::peer::*;
 use soulseek_proto::{
-  InitMessage, Limits, PeerCode, PeerConnectionType, PeerMessage, RemoteFilename, TransferDirection,
+  InitMessage, Limits, PeerCode, PeerConnectionType, PeerMessage, RemoteFilename, ServerRequest,
+  TransferDirection,
 };
 use tokio::io::AsyncReadExt;
 use tokio_util::sync::CancellationToken;
@@ -555,11 +556,15 @@ async fn a_connection_from_the_address_the_server_now_gives_replaces_the_open_on
 
 #[tokio::test]
 async fn a_user_on_a_new_address_with_nothing_open_is_served_without_asking() {
-  let session = session().await;
+  let mut session = session().await;
   let mut bob = introduced_from(&session, ELSEWHERE, "bob").await;
   answered(&mut bob).await;
   let from = bob.stream.local_addr().unwrap();
   assert_eq!(session.client.message_connection_address("bob"), Some(from));
+  // the server hears nothing about bob before a request sent after he was served
+  let marker = ServerRequest::CheckPrivileges;
+  session.client.write_server_message(&marker).await.unwrap();
+  assert_eq!(session.server.request().await, marker);
 }
 
 #[tokio::test]
