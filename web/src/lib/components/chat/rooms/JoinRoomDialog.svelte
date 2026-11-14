@@ -196,17 +196,18 @@
       aria-label="Rooms"
       aria-activedescendant={list.activeId}
       tabindex="0"
-      aria-rowcount={rooms.length}
+      aria-rowcount={rooms.length + 1}
       {@attach lines.attach}
       {@attach list.attach}>
       <div class="sticky top-0 z-10" bind:offsetHeight={headerHeight}>
-        <GridHeader {grid} class="h-7 border-b bg-surface-muted text-fg-muted" />
+        <GridHeader {grid} rowindex={1} class="h-7 border-b bg-surface-muted text-fg-muted" />
       </div>
       <div class="relative" style:height={`${lines.total}px`}>
         {#each lines.drawn as { line: room, index, start, size } (room.name)}
           <div
             role="row"
             {...list.line(room, index)}
+            aria-rowindex={index + 2}
             style={grid.row}
             style:transform={`translateY(${start - headerHeight}px)`}
             style:height={`${size}px`}

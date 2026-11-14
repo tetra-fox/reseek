@@ -256,12 +256,12 @@
     role="grid"
     aria-label={BUDDY.plural}
     aria-activedescendant={list.activeId}
-    aria-rowcount={shown.length}
+    aria-rowcount={shown.length + 1}
     tabindex="0"
     {@attach lines.attach}
     {@attach list.attach}>
     <div class="sticky top-0 z-10" bind:offsetHeight={headerHeight}>
-      <GridHeader {grid} class="h-9 border-b bg-surface-muted text-fg-muted" />
+      <GridHeader {grid} rowindex={1} class="h-9 border-b bg-surface-muted text-fg-muted" />
     </div>
     <div
       role="rowgroup"
@@ -273,6 +273,7 @@
         <div
           role="row"
           {...list.line(u, index)}
+          aria-rowindex={index + 2}
           data-index={index}
           {@attach lines.measure}
           class="absolute inset-x-0 top-0 grid items-center list-row py-1.5"

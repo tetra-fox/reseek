@@ -51,6 +51,11 @@ describe("the join dialog", () => {
     const names = () =>
       [...document.querySelectorAll("[data-line]")].map((l) => l.getAttribute("data-line"));
     expect(names()).toEqual(["indie", "ambient", "jazz"]);
+    // the grid draws a window of its rooms, so each row says where it is among them, the header
+    // first
+    expect(document.querySelector('[role="grid"]')!.getAttribute("aria-rowcount")).toBe("4");
+    const rows = [...document.querySelectorAll('[role="grid"] [role="row"]')];
+    expect(rows.map((r) => r.getAttribute("aria-rowindex"))).toEqual(["1", "2", "3", "4"]);
 
     type("#create-name", "club");
     document.querySelector<HTMLElement>("[role=switch]")!.click();
