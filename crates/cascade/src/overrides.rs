@@ -286,13 +286,13 @@ fn merged_entry<'a>(
     let side = |side: &'a Value| tree::get(side, &inner.key).unwrap_or(&Value::Null);
     let (base, ours, theirs) = (side(base), side(ours), side(theirs));
     let at = format!("{at}.{}", inner.key);
-    let value = if inner.kind == Kind::Map {
-      merged_map(inner, &at, base, ours, theirs, lost)
-    } else {
-      settled(base, ours, theirs).unwrap_or_else(|| {
+    let value = match settled(base, ours, theirs) {
+      Some(value) => value,
+      None if inner.kind == Kind::Map => merged_map(inner, &at, base, ours, theirs, lost),
+      None => {
         lost.push((at, MOVED.to_string()));
         theirs.clone()
-      })
+      }
     };
     if value.is_null() {
       tree::remove(&mut entry, &inner.key);
@@ -577,6 +577,58 @@ mod tests {
       rebased(seen, &set, &json!({ "music": ["c"] }), &mut lost),
       Err(MOVED.to_string()),
       "an override with nothing left over the files is dropped"
+    );
+  }
+
+  #[derive(Default, Serialize, crate::Cascade)]
+  struct Nested {
+    /// Groups by name.
+    #[cascade(user_keyed)]
+    groups: BTreeMap<String, Group>,
+  }
+
+  #[derive(Default, Serialize, crate::Cascade)]
+  struct Group {
+    /// Its color.
+    color: String,
+    /// Its tags by name.
+    #[cascade(user_keyed)]
+    tags: BTreeMap<String, String>,
+  }
+
+  #[test]
+  fn a_map_inside_an_entry_is_merged_entry_by_entry() {
+    let schema = Schema::of::<Nested>();
+    let groups = schema.field("groups").unwrap();
+    let mut lost = Vec::new();
+    let set = item(
+      json!({ "v": { "color": "red", "tags": { "a": "9", "b": "2" } } }),
+      json!({ "v": { "color": "red", "tags": { "a": "1" } } }),
+      None,
+    );
+    let files = json!({ "v": { "color": "green", "tags": { "a": "8", "c": "3" } } });
+    let kept = rebased(groups, &set, &files, &mut lost).unwrap();
+    assert_eq!(
+      kept.value,
+      json!({ "v": { "color": "green", "tags": { "a": "8", "b": "2", "c": "3" } } })
+    );
+    assert_eq!(lost, [("groups.v.tags.a".to_string(), MOVED.to_string())]);
+
+    let mut lost = Vec::new();
+    let set = item(
+      json!({ "v": { "color": "blue" } }),
+      json!({ "v": { "color": "red" } }),
+      None,
+    );
+    assert_eq!(
+      rebased(
+        groups,
+        &set,
+        &json!({ "v": { "color": "green" } }),
+        &mut lost
+      ),
+      Err(MOVED.to_string()),
+      "no side has the map inside, so none is made and nothing is left"
     );
   }
 
