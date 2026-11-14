@@ -86,7 +86,7 @@ const tailStart = (text: string, columns: number): number => {
     let from = Math.max(0, text.length - size);
     // never inside a code point; and a flag is a pair of regional indicators, paired from the
     // start of their run, so the start goes before the run
-    if (/[\udc00-\udfff]/.test(text[from] ?? "")) from--;
+    if (from > 0 && /[\ud800-\udbff][\udc00-\udfff]/.test(text.slice(from - 1, from + 1))) from--;
     while (from >= 2 && /\ud83c[\udde6-\uddff]/.test(text.slice(from - 2, from))) from -= 2;
     const letters = [...LETTERS.segment(text.slice(from))];
     let width = 0;

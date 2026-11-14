@@ -87,21 +87,49 @@ describe("cutting in the middle", () => {
       }
       return text;
     };
-    // letters of one to eleven code units, a lone regional indicator among them, mixed
-    const kinds = ["a", "坂", "e\u0301", "e\u0301\u0302\u0303", "👩🏽‍💻", "🇯🇵", "🇯", "\\"];
+    // a path keeps its last part when that is at most 48 columns, else its last 12
+    const reference = (text: string, path: boolean) => {
+      const cut = Math.max(text.lastIndexOf("\\"), text.lastIndexOf("/"));
+      if (path && cut > 0 && text.length - whole(text, 48).length <= cut) return text.slice(cut);
+      return whole(text, 12);
+    };
+    // letters of one to eleven code units mixed with pieces that join the letter before them: a
+    // lone regional indicator, a bare accent and joiner, a virama, an emoji with its selector
+    const kinds = [
+      "a",
+      "坂",
+      "e\u0301",
+      "e\u0301\u0302\u0303",
+      "👩🏽‍💻",
+      "🇯🇵",
+      "🇯",
+      "\u0301",
+      "\u200d",
+      "❤️",
+      "क्",
+      "ष",
+      "\\",
+      "/"
+    ];
     let seed = 7;
     const next = (n: number) => ((seed = (seed * 1_103_515_245 + 12_345) % 2 ** 31) >> 8) % n;
-    for (let run = 0; run < 2000; run++) {
+    for (let run = 0; run < 4000; run++) {
       const text = Array.from({ length: 5 + next(120) }, () => kinds[next(kinds.length)]).join("");
-      expect(splitTail(text)[1], JSON.stringify(text)).toBe(whole(text, 12));
+      const path = run % 2 === 1;
+      expect(splitTail(text, path)[1], JSON.stringify(text)).toBe(reference(text, path));
     }
     expect(splitTail(`${"x".repeat(70_000)}Tiê\u0301n 👩🏽‍💻.flac`)[1]).toBe("Tiê\u0301n 👩🏽‍💻.flac");
-    // the end read first starts at the joiner inside an emoji, or inside the first indicator of a
-    // flag, where the letters it holds are not the whole text's
+    // the end read first starts at the joiner inside an emoji, inside a flag's first indicator,
+    // or at its second, where the letters it holds are not the whole text's
     const marks = (n: number) => `e${"\u0301".repeat(n)}`;
     const joined = `abc👩🏽‍💻${marks(4).repeat(5)}${marks(3).repeat(5)}`;
-    const flags = `${"🇯🇵".repeat(20)}a`;
-    for (const text of [joined, flags]) expect(splitTail(text)[1]).toBe(whole(text, 12));
+    const flags = [`${"🇯🇵".repeat(20)}a`, `${"🇯🇵".repeat(20)}ab`];
+    for (const text of [joined, ...flags]) expect(splitTail(text)[1]).toBe(whole(text, 12));
+  });
+
+  it("ends on a text that starts with half of a code point", () => {
+    expect(splitTail("\udc00abc")).toEqual(["", "\udc00abc"]);
+    expect(splitTail("\udc00dir\\file.flac", true)).toEqual(["\udc00dir", "\\file.flac"]);
   });
 
   it("never cuts inside a letter drawn from several code points", () => {
