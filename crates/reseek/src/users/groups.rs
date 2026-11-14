@@ -310,6 +310,32 @@ pub fn unknown_sender_groups(options: &Options) -> BTreeSet<String> {
     .collect()
 }
 
+/// Who our user info tells peers may send us files unasked, as the peer protocol counts it: 0 no
+/// one, 1 everyone, 2 our buddies, 3 some users we permit, for groups of
+/// `transfers.download.received.from` other than buddies. A group no one can be in counts as
+/// none.
+pub fn upload_permitted(options: &Options) -> u32 {
+  let unknown = unknown_sender_groups(options);
+  let groups: Vec<&str> = options
+    .transfers
+    .download
+    .received
+    .from
+    .iter()
+    .filter(|group| !unknown.contains(*group))
+    .map(String::as_str)
+    .collect();
+  if groups.is_empty() {
+    0
+  } else if groups.contains(&DEFAULT_GROUP) {
+    1
+  } else if groups.iter().all(|group| *group == BUDDIES_GROUP) {
+    2
+  } else {
+    3
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;

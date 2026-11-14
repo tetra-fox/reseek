@@ -32,7 +32,7 @@ use crate::telemetry::Telemetry;
 use crate::transfers::downloads::Downloads;
 use crate::transfers::uploads::Uploads;
 pub use crate::transfers::uploads::{Forecast, NOT_SHARED, OVERWHELMED};
-use crate::users::Directory as Users;
+use crate::users::{Directory as Users, upload_permitted};
 
 /// Requests with a `.` or `..` part, which a peer could send at any rate.
 static TRAVERSING: LogLimiter = LogLimiter::new();
@@ -253,25 +253,27 @@ pub fn forecast(edges: &Edges, username: &str) -> Forecast {
 /// A peer asks for our user info: a blocked user is shown no free slot and the longest queue.
 pub async fn user_info(edges: &Edges, username: &str, endpoint: SocketAddr) -> UserInfo {
   if blocked(edges, username, Some(endpoint), BlockScope::Uploads) {
-    let local = crate::profile::local_info(&edges.config.current().values).await;
+    let options = edges.config.current();
+    let local = crate::profile::local_info(&options.values).await;
     return UserInfo {
       description: local.description,
       picture: local.picture,
       upload_slots: 0,
       queue_length: i32::MAX as u32,
       has_free_upload_slot: false,
-      upload_permitted: None,
+      upload_permitted: Some(upload_permitted(&options.values)),
     };
   }
   edges.activity.record(Some(username), ActivityKind::Profile);
   profile(edges, username).await
 }
 
-/// Our user info: our description and picture, with the slots of the group `username` would be
-/// queued in and the place they would take. Their group is asked of the server when nothing is
-/// known of them, so a leecher is known as one.
+/// Our user info: our description and picture, who may send us files, and the slots of the
+/// group `username` would be queued in and the place they would take. Their group is asked of
+/// the server when nothing is known of them, so a leecher is known as one.
 async fn profile(edges: &Edges, username: &str) -> UserInfo {
-  let local = crate::profile::local_info(&edges.config.current().values).await;
+  let options = edges.config.current();
+  let local = crate::profile::local_info(&options.values).await;
   if let Some(network) = edges.network.upgrade() {
     let placement = edges
       .users
@@ -286,7 +288,7 @@ async fn profile(edges: &Edges, username: &str) -> UserInfo {
     upload_slots: forecast.total_slots,
     queue_length: forecast.position,
     has_free_upload_slot: forecast.free_slots > 0,
-    upload_permitted: None,
+    upload_permitted: Some(upload_permitted(&options.values)),
   }
 }
 
@@ -488,5 +490,31 @@ pub(crate) mod tests {
       (3, 0, true),
       "the group's own slots, all free, with no one waiting"
     );
+  }
+
+  #[tokio::test]
+  async fn user_info_says_who_may_send_us_files() {
+    let friends = "[transfers.groups.user_defined.friends.upload]\n";
+    for (groups, permitted) in [
+      ("[]", 0),
+      ("[\"frends\"]", 0),
+      ("[\"default\"]", 1),
+      ("[\"buddies\", \"default\"]", 1),
+      ("[\"buddies\"]", 2),
+      ("[\"buddies\", \"frends\"]", 2),
+      ("[\"friends\"]", 3),
+      ("[\"buddies\", \"privileged\"]", 3),
+    ] {
+      let config = format!("{CONFIG}{friends}[transfers.download.received]\nfrom = {groups}\n");
+      let edges = edges(&app(&config, &[]).await);
+      let asked = user_info(&edges, "alice", from("198.51.100.7")).await;
+      assert_eq!(asked.upload_permitted, Some(permitted), "from = {groups}");
+      let blocked = user_info(&edges, "alice", from("192.0.2.9")).await;
+      assert_eq!(
+        blocked.upload_permitted,
+        Some(permitted),
+        "blocked, from = {groups}"
+      );
+    }
   }
 }

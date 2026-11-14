@@ -30,7 +30,7 @@ mod touch;
 mod transfers;
 
 pub use blocking::reason_fits;
-pub use groups::Placement;
+pub use groups::{Placement, upload_permitted};
 pub use interests::{HATED, LIKED};
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
