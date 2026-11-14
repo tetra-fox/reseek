@@ -335,7 +335,7 @@ mod tests {
     assert_eq!(messaging.reply_for("alice"), reply, "a new away period");
   }
 
-  #[tokio::test]
+  #[tokio::test(start_paused = true)]
   async fn nobody_at_the_ui_sets_away_until_someone_opens_it() {
     let (app, mut script) = watched().await;
     shown(&mut script, "Away").await;
@@ -343,7 +343,7 @@ mod tests {
     shown(&mut script, "Online").await;
   }
 
-  #[tokio::test]
+  #[tokio::test(start_paused = true)]
   async fn streams_of_scripts_opening_and_closing_do_not_hold_off_away() {
     let (app, mut script) = watched().await;
     // another script opens a stream and closes it, again and again, well within the wait
