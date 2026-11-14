@@ -24,7 +24,7 @@ use uuid::Uuid;
 use super::{Downloads, Group};
 use crate::jobs::{Ended, NewJob, NewPart};
 use crate::transfers::categories::{CANCELLED, ERRORED, SUCCESSFUL, UNFINISHED};
-use crate::transfers::listing::common_folder;
+use crate::transfers::listing::common_remote_folder;
 use crate::transfers::state::state_at;
 use crate::transfers::{ASKED_ORDER, Record, readable, text_at};
 
@@ -136,7 +136,7 @@ fn summary(job: Uuid, rows: &[(String, String, TransferStates)]) -> Option<Downl
     }
   }
   let folder = if usernames.len() == 1 {
-    common_folder(rows.iter().map(|(_, filename, _)| filename.as_str())).to_string()
+    common_remote_folder(rows.iter().map(|(_, filename, _)| filename.as_str())).to_string()
   } else {
     String::new()
   };
@@ -171,7 +171,7 @@ pub(super) fn job_name(groups: &[Group]) -> String {
   if let [only] = files.as_slice() {
     return format!("{} from {from}", last_segment(only));
   }
-  let folder = common_folder(files.iter().copied());
+  let folder = common_remote_folder(files.iter().copied());
   // a folder of one segment is the top of a share, which names nothing
   if users.len() == 1 && folder.contains(['\\', '/']) {
     return format!("{} from {from}", last_segment(folder));
@@ -327,7 +327,7 @@ fn parts_folder(parts: &[Part]) -> &str {
     .windows(2)
     .all(|pair| pair[0].username == pair[1].username);
   if one_user && parts.len() > 1 {
-    common_folder(parts.iter().map(|p| p.filename.as_str()))
+    common_remote_folder(parts.iter().map(|p| p.filename.as_str()))
   } else {
     ""
   }

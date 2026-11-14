@@ -17,33 +17,52 @@ use super::state::in_states;
 use super::{ASKED_ORDER, COLUMNS, Record, direction_text, readable, store, transfer};
 use crate::db::{Database, DbError, timestamp};
 
-/// The remote directory of a remote filename: everything before its last separator, which is
-/// `/` when the filename holds one and `\` otherwise; empty for a filename with neither.
+/// The separator of a remote filename: `/` when it holds one, `\` otherwise.
+fn remote_separator(filename: &str) -> char {
+  if filename.contains('/') { '/' } else { '\\' }
+}
+
+/// The remote directory of a remote filename: everything before its last separator; empty for
+/// a filename without one.
 pub fn remote_directory(filename: &str) -> &str {
-  let separator = if filename.contains('/') { '/' } else { '\\' };
-  filename
+  parent(filename, remote_separator(filename))
+}
+
+/// Everything in `path` before its last `separator`, empty when it has none.
+fn parent(path: &str, separator: char) -> &str {
+  path
     .rsplit_once(separator)
     .map_or("", |(directory, _)| directory)
 }
 
-/// The deepest folder holding every one of `paths`, remote filenames or `/`-separated local
-/// paths, where `\` and `/` both end a folder; empty when they share none.
-pub fn common_folder<'a>(mut paths: impl Iterator<Item = &'a str>) -> &'a str {
+/// The deepest folder holding every one of `paths`, whose folders end at `separator`; empty
+/// when they share none.
+pub fn common_folder<'a>(paths: impl IntoIterator<Item = &'a str>, separator: char) -> &'a str {
+  let mut paths = paths.into_iter();
   let Some(first) = paths.next() else {
     return "";
   };
   let holds = |folder: &str, path: &str| {
     path
       .strip_prefix(folder)
-      .is_some_and(|rest| rest.starts_with(['\\', '/']))
+      .is_some_and(|rest| rest.starts_with(separator))
   };
-  let mut common = remote_directory(first);
+  let mut common = parent(first, separator);
   for path in paths {
     while !common.is_empty() && !holds(common, path) {
-      common = remote_directory(common);
+      common = parent(common, separator);
     }
   }
   common
+}
+
+/// [`common_folder`] of remote filenames, with the separator the first of them uses.
+pub fn common_remote_folder<'a>(filenames: impl IntoIterator<Item = &'a str>) -> &'a str {
+  let mut filenames = filenames.into_iter().peekable();
+  let separator = filenames
+    .peek()
+    .map_or('\\', |first| remote_separator(first));
+  common_folder(filenames, separator)
 }
 
 /// The transfers of `direction`, of `username` alone when given, grouped by user in the order
@@ -308,7 +327,7 @@ mod tests {
 
   #[test]
   fn the_common_folder_is_the_deepest_holding_every_file() {
-    let folder = |names: &[&'static str]| common_folder(names.iter().copied());
+    let folder = |names: &[&'static str]| common_remote_folder(names.iter().copied());
     assert_eq!(
       folder(&[
         "@@a\\M\\Album\\Disc 1\\1.flac",
@@ -325,6 +344,23 @@ mod tests {
     assert_eq!(folder(&["A/Album/1.flac", "A/Albums/1.flac"]), "A");
     assert_eq!(folder(&["1.flac", "A/2.flac"]), "");
     assert_eq!(folder(&["one.flac", "@@a\\two.flac"]), "");
+    assert_eq!(
+      folder(&["Music/AC/1.flac", "Music/AC\\DC/1.flac"]),
+      "Music",
+      "a `\\` in a name that `/` separates is part of the name"
+    );
+  }
+
+  #[test]
+  fn local_paths_share_a_folder_only_at_a_slash() {
+    let folder = |paths: &[&'static str]| common_folder(paths.iter().copied(), '/');
+    assert_eq!(folder(&["Album/1.flac", "Album/CD2/1.flac"]), "Album");
+    assert_eq!(
+      folder(&["B\\C.flac", "B\\D.flac"]),
+      "",
+      "two files at the top whose names hold a `\\`"
+    );
+    assert_eq!(folder(&["A/B\\C/1.flac", "A/B\\C/2.flac"]), "A/B\\C");
   }
 
   #[tokio::test]

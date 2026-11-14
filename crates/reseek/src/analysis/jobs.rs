@@ -167,7 +167,7 @@ fn job_name(targets: &[Target]) -> String {
   match targets {
     [one] => format!("Analyze {}", file_name(&one.relative)),
     _ => {
-      let folder = common_folder(targets.iter().map(|t| t.relative.as_str()));
+      let folder = common_folder(targets.iter().map(|t| t.relative.as_str()), '/');
       match folder.rsplit('/').next().filter(|name| !name.is_empty()) {
         Some(name) => format!("Analyze {name}"),
         None => format!("Analyze {} files", targets.len()),
