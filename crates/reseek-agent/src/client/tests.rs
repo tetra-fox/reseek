@@ -3,7 +3,7 @@
 //! only while a load or scan fills the index, or runs after an upload on the socket; a
 //! re-upload that fails is tried again with no change to ask for it, a first upload refused as
 //! too large copies nothing and is a refusal, and an upload stops when its socket closes. A
-//! run of upload failures is warned about once per run, and a refusal or another agent taking
+//! run of upload failures is warned about once for each way it fails, and a refusal or another agent taking
 //! the socket once however many uploads succeed between. A file sent or a download fetched
 //! whose call fails says what failed without the call's URL.
 

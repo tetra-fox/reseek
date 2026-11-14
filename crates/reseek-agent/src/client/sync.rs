@@ -146,7 +146,8 @@ impl AgentClient {
       link.refused(format!("shares refused: {reason}"));
       return link.close(frames::close::NORMAL);
     }
-    // a run of failures is warned about once, across the sockets a failed first upload closes
+    // each way a run of failures fails is warned about once, across the sockets a failed first
+    // upload closes
     warn_once(
       &self.sync_warned,
       &e.to_string(),

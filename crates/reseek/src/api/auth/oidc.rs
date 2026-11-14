@@ -374,7 +374,8 @@ async fn test(
   }))
 }
 
-/// The 503 for a provider whose discovery document cannot be read, logged with why.
+/// The 503 for a provider whose discovery document, or the signing keys a login needs, cannot
+/// be read, logged with why.
 fn unavailable(name: &str, error: &str) -> ApiError {
   if let Some(suppressed) = PROVIDER_DOWN.allow() {
     warn!(
