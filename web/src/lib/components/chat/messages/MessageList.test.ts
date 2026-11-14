@@ -18,7 +18,7 @@ const stored = (localId: number) => ({
   id: localId,
   timestamp: new Date(Date.UTC(2026, 9, 27, 0, 0, localId)).toISOString(),
   username: "alice",
-  direction: "In",
+  direction: "In" as const,
   message: `line ${localId}`,
   isAcknowledged: true,
   wasReplayed: false,
