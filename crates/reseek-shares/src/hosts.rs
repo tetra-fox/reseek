@@ -24,8 +24,8 @@ use super::{LOCAL_HOST, SharedCounts, Shares, View, repository, storage, visibil
 use crate::db::{Database, DbError, Location, remove_database};
 use crate::lock;
 
-/// How long the browse cache waits after an agent's host changed before it is rebuilt, so an
-/// agent that comes and goes rebuilds it once.
+/// How long the browse caches wait after an agent's host changed before they are rebuilt, so
+/// an agent that comes and goes rebuilds them once.
 const HOST_SETTLE: Duration = Duration::from_secs(2);
 
 /// Numbers each agent index file this process writes, so none is written over another.
@@ -471,13 +471,16 @@ impl Shares {
   }
 
   /// After an agent's host came or went: the state, the server's counts and the check of the
-  /// visibility lists follow at once, the browse cache once the hosts have been still for a
-  /// moment, and a browse meanwhile waits for it.
+  /// visibility lists follow at once, the browse caches once the hosts have been still for a
+  /// moment. A browse meanwhile finds its view's cache behind the change and writes it itself.
   fn hosts_changed(self: &Arc<Self>) {
+    // numbered before the state tells of it, so a browse made once the state shows the change
+    // finds every browse cache read before it behind
+    let at = self.next_in_order();
+    self.hosts_changed_at.fetch_max(at, Ordering::AcqRel);
     self.publish();
     self.check_unmatched();
     self.counts.send_replace(self.server_counts());
-    self.host_changes.fetch_add(1, Ordering::AcqRel);
     if self.hosts_settling.swap(true, Ordering::AcqRel) {
       return;
     }
@@ -489,15 +492,7 @@ impl Shares {
       }
       // a change from here on is a rebuild of its own
       shares.hosts_settling.store(false, Ordering::Release);
-      let through = shares.host_changes.load(Ordering::Acquire);
       shares.refresh_browse_caches().await;
-      shares.browse_follows.send_if_modified(|follows| {
-        let later = through > *follows;
-        if later {
-          *follows = through;
-        }
-        later
-      });
     });
   }
 }

@@ -1238,6 +1238,32 @@ async fn a_volatile_index_serves_an_agent_and_keeps_it_for_no_later_start() {
   serves_an_agent("", true).await;
 }
 
+/// An agent's engine sharing `music` with `Other/02.flac` beside the album, with its index
+/// dumped to `dump.db` among its files and the shares it lists.
+struct Agent {
+  files: tempfile::TempDir,
+  engine: Engine,
+  dump: PathBuf,
+  listed: Vec<api_types::shares::Share>,
+}
+
+async fn agent_dump() -> Agent {
+  let (files, engine) = shared_engine().await;
+  std::fs::create_dir_all(files.path().join("music/Other")).unwrap();
+  std::fs::write(files.path().join("music/Other/02.flac"), "agent").unwrap();
+  engine.shares.scan(false, ScanOrigin::Asked).unwrap();
+  eventually(async || idle(&engine.shares) && engine.state().files == 2).await;
+  let dump = files.path().join("dump.db");
+  engine.shares.dump(&dump).await.unwrap();
+  let listed = engine.shares.local_shares();
+  Agent {
+    files,
+    engine,
+    dump,
+    listed,
+  }
+}
+
 /// A controller whose configuration ends in `extra`, keeping nothing across a stop when
 /// `volatile`, loads, serves and drops an agent's index.
 async fn serves_an_agent(extra: &str, volatile: bool) {
@@ -1245,14 +1271,12 @@ async fn serves_an_agent(extra: &str, volatile: bool) {
   let controller = engine_as(&(config(files.path()) + extra), volatile).await;
   let kept = usize::from(!volatile);
   // the agent's index is another engine's dump, with a share of its own
-  let (agent_files, agent) = shared_engine().await;
-  std::fs::create_dir_all(agent_files.path().join("music/Other")).unwrap();
-  std::fs::write(agent_files.path().join("music/Other/02.flac"), "agent").unwrap();
-  agent.shares.scan(false, ScanOrigin::Asked).unwrap();
-  eventually(async || idle(&agent.shares) && agent.state().files == 2).await;
-  let dump = agent_files.path().join("dump.db");
-  agent.shares.dump(&dump).await.unwrap();
-  let listed = agent.shares.local_shares();
+  let Agent {
+    files: _agent_files,
+    engine: agent,
+    dump,
+    listed,
+  } = agent_dump().await;
 
   let shares = &controller.shares;
   let counted = shares
@@ -1387,4 +1411,73 @@ async fn serves_an_agent(extra: &str, volatile: bool) {
   assert_eq!(restarted.forget_away("nas"), !volatile);
   assert!(shares.forget_away("nas"));
   assert!(!shares.forget_away("nas"));
+}
+
+/// The directory names the browse cache of `view` lists.
+fn cached_directories(shares: &Shares, view: &View) -> Vec<String> {
+  let bytes = std::fs::read(shares.browse_cache(view)).unwrap();
+  let soulseek_proto::PeerMessage::BrowseResponse(listing) =
+    soulseek_proto::PeerMessage::decode(&bytes).unwrap()
+  else {
+    panic!("not a browse response");
+  };
+  listing
+    .directories
+    .iter()
+    .map(|d| d.name.as_str().to_string())
+    .collect()
+}
+
+#[tokio::test]
+async fn a_browse_cache_read_before_an_agent_changed_never_replaces_one_read_after() {
+  let (_files, controller) = shared_engine().await;
+  let agent = agent_dump().await;
+  let shares = &controller.shares;
+  let everything = View::everything();
+  let file = shares.browse_cache(&everything);
+  let other = "Music\\Other".to_string();
+  assert!(shares.current_browse_cache(&everything).is_some());
+
+  // a refresh reads the shares, the agent connects, the rewrite after the settle lands first
+  let before = shares.write_browse_cache(&everything, &file).await.unwrap();
+  shares
+    .load_host("nas", agent.listed.clone(), &agent.dump)
+    .await
+    .unwrap();
+  assert_eq!(
+    shares.current_browse_cache(&everything),
+    None,
+    "the cache is behind the agent"
+  );
+  let after = shares.write_browse_cache(&everything, &file).await.unwrap();
+  assert!(shares.place_browse_cache(&everything, after).await.unwrap());
+  let placed = shares
+    .place_browse_cache(&everything, before)
+    .await
+    .unwrap();
+  assert!(cached_directories(shares, &everything).contains(&other));
+  assert!(!placed, "the earlier read is discarded");
+  assert_eq!(shares.current_browse_cache(&everything), Some(file.clone()));
+
+  // a refresh reads the shares, the agent drops, the earlier read lands first: it stays behind
+  // until the rewrite after the settle
+  let before = shares.write_browse_cache(&everything, &file).await.unwrap();
+  assert!(shares.remove_host("nas"));
+  assert!(
+    shares
+      .place_browse_cache(&everything, before)
+      .await
+      .unwrap()
+  );
+  assert!(cached_directories(shares, &everything).contains(&other));
+  assert_eq!(shares.current_browse_cache(&everything), None);
+  eventually(async || shares.current_browse_cache(&everything).is_some()).await;
+  assert!(!cached_directories(shares, &everything).contains(&other));
+
+  let unfinished: Vec<String> = std::fs::read_dir(controller.cache())
+    .unwrap()
+    .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+    .filter(|name| name.starts_with("browse.cache.tmp-"))
+    .collect();
+  assert!(unfinished.is_empty(), "{unfinished:?}");
 }

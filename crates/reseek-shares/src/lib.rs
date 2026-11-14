@@ -44,7 +44,7 @@ mod walk;
 mod watcher;
 
 use std::collections::{BTreeSet, HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
 use std::time::{Duration, Instant};
@@ -57,7 +57,7 @@ use soulseek_proto::SearchQuery;
 use soulseek_proto::peer::{Directory, File};
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
-use tracing::{Instrument, debug, info, info_span, trace, warn};
+use tracing::{Instrument, debug, error, info, info_span, trace, warn};
 
 use crate::db::{Database, DbError};
 pub use folders::FolderError;
@@ -277,10 +277,13 @@ pub struct Shares {
   away: Mutex<HashMap<String, hosts::Away>>,
   /// a browse cache rebuild after a host change is waiting
   hosts_settling: AtomicBool,
-  /// how many times an agent's host came or went
-  host_changes: AtomicU64,
-  /// how many of `host_changes` the browse caches were last rewritten after
-  browse_follows: watch::Sender<u64>,
+  /// numbers, in the order they happen, each read of the shares for a browse cache, each
+  /// refresh of the browse caches asked for and each time an agent's host came or went
+  browse_order: AtomicU64,
+  /// the number of the last time an agent's host came or went
+  hosts_changed_at: AtomicU64,
+  /// held while a browse cache is checked against the one in place and renamed over it
+  browse_placing: tokio::sync::Mutex<()>,
   /// what each local share holds as last counted
   local_counts: Mutex<Counted>,
   /// the views other than everything whose browse cache was written, rewritten whenever the
@@ -292,12 +295,22 @@ pub struct Shares {
   changed: watch::Sender<u64>,
 }
 
-/// The views that hide something whose browse cache is kept, and the generation their files
-/// are written in.
+/// The views that hide something whose browse cache is kept, the generation their files are
+/// written in, and the read of the shares each file in place was made from.
 #[derive(Default)]
 struct BrowseViews {
   kept: BTreeSet<View>,
   generation: u64,
+  /// by file, the number of the read it was made from, so a listing read earlier never
+  /// replaces one read later
+  listed: HashMap<PathBuf, u64>,
+}
+
+impl BrowseViews {
+  /// Whether the browse cache `file` in place was made from a read numbered after `after`.
+  fn read_after(&self, file: &Path, after: u64) -> bool {
+    self.listed.get(file).is_some_and(|read| *read > after)
+  }
 }
 
 impl Shares {
@@ -362,8 +375,9 @@ impl Shares {
       hosts: Mutex::new(Vec::new()),
       away: Mutex::new(away),
       hosts_settling: AtomicBool::new(false),
-      host_changes: AtomicU64::new(0),
-      browse_follows: watch::Sender::new(0),
+      browse_order: AtomicU64::new(0),
+      hosts_changed_at: AtomicU64::new(0),
+      browse_placing: tokio::sync::Mutex::new(()),
       local_counts: Mutex::new(Counted::default()),
       browse_views: Mutex::new(BrowseViews::default()),
       unmatched: Mutex::new(HashSet::new()),
@@ -479,16 +493,14 @@ impl Shares {
       .map_err(|e| FolderError::Failed(e.to_string()))?
   }
 
-  /// Returns once the browse caches list the agents' hosts as they are now: at once, unless an
-  /// agent came or went and the caches are still to be rewritten for it, or the engine stops.
-  pub async fn browse_settled(&self) {
-    let wanted = self.host_changes.load(Ordering::Acquire);
-    let mut follows = self.browse_follows.subscribe();
-    tokio::select! {
-      () = self.shutdown.cancelled() => {}
-      // the sender lives as long as the engine, so the wait ends only with what it waits for
-      followed = follows.wait_for(|follows| *follows >= wanted) => drop(followed),
-    }
+  /// The browse cache file of `view` when one is in place that was read after an agent's host
+  /// last came or went; `None` when the view's file is still to be written, for this view or
+  /// since that change.
+  pub fn current_browse_cache(&self, view: &View) -> Option<PathBuf> {
+    let changed = self.hosts_changed_at.load(Ordering::Acquire);
+    let views = lock(&self.browse_views);
+    let file = browse::path(&self.cache, view, views.generation);
+    views.read_after(&file, changed).then_some(file)
   }
 
   /// The browse cache file of `view`, the encoded browse response a peer with that view is
@@ -498,7 +510,8 @@ impl Shares {
     browse::path(&self.cache, view, lock(&self.browse_views).generation)
   }
 
-  /// Writes the browse cache of `view` again from the index; returns the file written.
+  /// Writes the browse cache of `view` again from the index, unless one read later is put in
+  /// place first; returns the file.
   pub async fn rebuild_browse_cache(&self, view: &View) -> Result<PathBuf, browse::CacheError> {
     // the view is kept in the generation its file is written in, so the file is rewritten
     // with the shares for as long as it can be read
@@ -509,16 +522,73 @@ impl Shares {
       }
       browse::path(&self.cache, view, views.generation)
     };
-    browse::rebuild(&self.databases(), &file, view).await?;
+    self.rewrite_browse_cache(view, &file).await?;
     Ok(file)
   }
 
+  /// Writes the browse cache of `view` at `file` from the shares as they are now, unless one
+  /// read later is put in place first.
+  async fn rewrite_browse_cache(&self, view: &View, file: &Path) -> Result<(), browse::CacheError> {
+    let started = Instant::now();
+    info!("Warming browse response cache...");
+    let written = self.write_browse_cache(view, file).await?;
+    if self.place_browse_cache(view, written).await? {
+      info!(
+        ms = started.elapsed().as_millis() as u64,
+        "Browse response cached successfully"
+      );
+    }
+    Ok(())
+  }
+
+  /// The browse cache of `view` for `file`, written beside it from a read of the shares
+  /// numbered as it starts.
+  async fn write_browse_cache(
+    &self,
+    view: &View,
+    file: &Path,
+  ) -> Result<browse::Unplaced, browse::CacheError> {
+    // numbered before the hosts are taken, so every host change numbered before it is in it
+    let read = self.next_in_order();
+    browse::write(&self.databases(), file, view, read).await
+  }
+
+  /// Puts `written` in place of its file unless the file holds a listing read after it, which
+  /// is left as it is; returns whether it was put in place.
+  async fn place_browse_cache(
+    &self,
+    view: &View,
+    written: browse::Unplaced,
+  ) -> Result<bool, std::io::Error> {
+    // checked and renamed under one lock, so no later listing is put in place between the two
+    let _placing = self.browse_placing.lock().await;
+    if lock(&self.browse_views).read_after(&written.file, written.read) {
+      debug!("browse cache read before the one in place discarded");
+      written.discard().await;
+      return Ok(false);
+    }
+    written.place().await?;
+    let mut views = lock(&self.browse_views);
+    // a file of a generation forgotten meanwhile is never read again
+    if browse::path(&self.cache, view, views.generation) == written.file {
+      views.listed.insert(written.file, written.read);
+    }
+    Ok(true)
+  }
+
+  /// The next number in the order of browse cache reads and host changes.
+  fn next_in_order(&self) -> u64 {
+    self.browse_order.fetch_add(1, Ordering::AcqRel) + 1
+  }
+
   /// Rewrites the browse cache of every view a peer browsed with, and of the view that hides
-  /// nothing, after the shares changed; a failure is logged.
+  /// nothing, after the shares changed, leaving a file read since it was asked for; a failure
+  /// is logged.
   async fn refresh_browse_caches(&self) {
     if !self.browse_caches {
       return;
     }
+    let asked = self.next_in_order();
     let files: Vec<(View, PathBuf)> = {
       let views = lock(&self.browse_views);
       std::iter::once(View::everything())
@@ -529,9 +599,13 @@ impl Shares {
         })
         .collect()
     };
-    let dbs = self.databases();
     for (view, file) in files {
-      browse::refresh(&dbs, &file, &view).await;
+      if lock(&self.browse_views).read_after(&file, asked) {
+        continue;
+      }
+      if let Err(e) = self.rewrite_browse_cache(&view, &file).await {
+        error!(error = %e, "Error caching browse response");
+      }
     }
   }
 
@@ -539,9 +613,11 @@ impl Shares {
   /// shares' visibility or a user's groups: one a peer still has is written again at its next
   /// browse, and the files of the others are removed.
   pub fn forget_browse_views(&self) {
+    let everything = browse::path(&self.cache, &View::everything(), 0);
     let generation = {
       let mut views = lock(&self.browse_views);
       views.kept.clear();
+      views.listed.retain(|file, _| *file == everything);
       views.generation += 1;
       views.generation
     };

@@ -7,11 +7,10 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::Instant;
 
 use soulseek_proto::PeerMessage;
 use soulseek_proto::peer::{BrowseResponse, Directory};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, warn};
 
 use super::hosts::Index;
 use super::repository;
@@ -84,39 +83,72 @@ pub async fn listing(dbs: &[Arc<Index>], alias: Option<String>) -> Result<Vec<Di
   Ok(merge(listings))
 }
 
-/// Writes the listing of `dbs`, the local index and the relay agents', as `view` sees it, to
-/// the browse cache at `file`, through a file of its own beside it that replaces it whole, so
-/// a peer never reads half of one.
-pub async fn rebuild(dbs: &[Arc<Index>], file: &Path, view: &View) -> Result<(), CacheError> {
-  let started = Instant::now();
-  info!("Warming browse response cache...");
+/// A browse cache written beside the file it is for, still to be renamed over it.
+pub struct Unplaced {
+  /// the browse cache file it is for
+  pub file: PathBuf,
+  temporary: PathBuf,
+  /// the number of the read of the shares it was made from
+  pub read: u64,
+}
+
+impl Unplaced {
+  /// Renames it over its file, which a peer then reads whole.
+  pub async fn place(&self) -> std::io::Result<()> {
+    let placed = tokio::fs::rename(&self.temporary, &self.file).await;
+    if placed.is_err() {
+      self.remove().await;
+    }
+    placed
+  }
+
+  /// Deletes it, leaving its file as it is.
+  pub async fn discard(self) {
+    self.remove().await;
+  }
+
+  async fn remove(&self) {
+    if let Err(e) = tokio::fs::remove_file(&self.temporary).await
+      && e.kind() != std::io::ErrorKind::NotFound
+    {
+      warn!(path = %self.temporary.display(), error = %e, "unfinished browse cache not removed");
+    }
+  }
+}
+
+/// Writes the listing of `dbs`, the local index and the relay agents', as `view` sees it, to a
+/// file of its own beside the browse cache `file`, numbered `read`, the read of the shares it
+/// is made from.
+pub async fn write(
+  dbs: &[Arc<Index>],
+  file: &Path,
+  view: &View,
+  read: u64,
+) -> Result<Unplaced, CacheError> {
   let mut directories = listing(dbs, None).await?;
   directories.retain(|directory| !view.hides(directory.name.as_str()));
-  let file = file.to_path_buf();
-  tokio::task::spawn_blocking(move || -> Result<(), std::io::Error> {
+  // a name of its own, so writes that overlap never write into each other's file
+  let temporary = file.with_file_name(format!("{TEMPORARY}{:016x}", rand::random::<u64>()));
+  let unplaced = Unplaced {
+    file: file.to_path_buf(),
+    temporary: temporary.clone(),
+    read,
+  };
+  let written = tokio::task::spawn_blocking(move || {
     let message = PeerMessage::BrowseResponse(BrowseResponse {
       directories,
       locked_directories: Vec::new(),
     });
-    // a name of its own, so rebuilds that overlap never write into each other's file
-    let temporary = file.with_file_name(format!("{TEMPORARY}{:016x}", rand::random::<u64>()));
-    let written = std::fs::write(&temporary, message.encode())
-      .and_then(|()| std::fs::rename(&temporary, &file));
-    if written.is_err()
-      && let Err(e) = std::fs::remove_file(&temporary)
-      && e.kind() != std::io::ErrorKind::NotFound
-    {
-      warn!(path = %temporary.display(), error = %e, "unfinished browse cache not removed");
-    }
-    written
+    std::fs::write(&temporary, message.encode())
   })
   .await
-  .map_err(|e| CacheError::Task(e.to_string()))??;
-  info!(
-    ms = started.elapsed().as_millis() as u64,
-    "Browse response cached successfully"
-  );
-  Ok(())
+  .map_err(|e| CacheError::Task(e.to_string()))
+  .and_then(|written| written.map_err(CacheError::from));
+  if let Err(e) = written {
+    unplaced.discard().await;
+    return Err(e);
+  }
+  Ok(unplaced)
 }
 
 /// Deletes the browse caches a last run left in `cache`, which may list shares configured
@@ -164,13 +196,6 @@ async fn remove(cache: &Path, stale: impl Fn(&str) -> bool) {
   }
 }
 
-/// [`rebuild`], logging a failure.
-pub async fn refresh(dbs: &[Arc<Index>], file: &Path, view: &View) {
-  if let Err(e) = rebuild(dbs, file, view).await {
-    error!(error = %e, "Error caching browse response");
-  }
-}
-
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -188,7 +213,10 @@ mod tests {
     .unwrap();
     let dir = tempfile::tempdir().unwrap();
     let file = path(dir.path(), &View::everything(), 0);
-    rebuild(&[Index::local(db)], &file, &View::everything())
+    super::write(&[Index::local(db)], &file, &View::everything(), 1)
+      .await
+      .unwrap()
+      .place()
       .await
       .unwrap();
     let bytes = std::fs::read(&file).unwrap();

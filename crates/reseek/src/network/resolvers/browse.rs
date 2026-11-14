@@ -48,24 +48,25 @@ pub async fn browse(edges: &Edges, username: &str, endpoint: SocketAddr) -> Brow
   reply
 }
 
-/// Our share listing as `view` sees it, from its browse cache, once the cache lists the relay
-/// agents as they are. A missing cache is written first; a cache that can be neither read nor
-/// written gives an empty listing.
+/// Our share listing as `view` sees it, from its browse cache. A cache that is missing, or was
+/// read before a relay agent last came or went, is written first; a cache that can be neither
+/// read nor written gives an empty listing.
 async fn listing(edges: &Edges, view: &View) -> BrowseReply {
-  edges.shares.browse_settled().await;
-  let file = edges.shares.browse_cache(view);
-  match cached(&file).await {
-    Ok(frame) => return BrowseReply::Encoded(frame),
-    Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-    Err(e) => return unread(&file, &e),
+  if let Ok(reply) = current(edges, view).await {
+    return reply;
   }
   let _rebuilding = edges.rebuilding.lock().await;
   // a browse that waited for the lock finds the cache the one before it wrote
-  if let Ok(frame) = cached(&file).await {
-    return BrowseReply::Encoded(frame);
-  }
-  if let Some(suppressed) = UNCACHED.allow() {
-    warn!(suppressed, "Browse response not cached. Rebuilding...");
+  match current(edges, view).await {
+    Ok(reply) => return reply,
+    Err(Unwritten::Missing) => {
+      if let Some(suppressed) = UNCACHED.allow() {
+        warn!(suppressed, "Browse response not cached. Rebuilding...");
+      }
+    }
+    Err(Unwritten::Behind) => {
+      debug!("browse cache of the view not written yet or since an agent came or went; writing it")
+    }
   }
   let file = match edges.shares.rebuild_browse_cache(view).await {
     Ok(file) => file,
@@ -79,6 +80,28 @@ async fn listing(edges: &Edges, view: &View) -> BrowseReply {
   match cached(&file).await {
     Ok(frame) => BrowseReply::Encoded(frame),
     Err(e) => unread(&file, &e),
+  }
+}
+
+/// Why a browse cache is to be written before it is sent.
+enum Unwritten {
+  /// the shares say it is current, but its file is gone
+  Missing,
+  /// it is not written for this view, or not since an agent came or went
+  Behind,
+}
+
+/// The browse cache of `view` as the reply to a browse when it is current; a cache that cannot
+/// be read gives an empty listing.
+async fn current(edges: &Edges, view: &View) -> Result<BrowseReply, Unwritten> {
+  let file = edges
+    .shares
+    .current_browse_cache(view)
+    .ok_or(Unwritten::Behind)?;
+  match cached(&file).await {
+    Ok(frame) => Ok(BrowseReply::Encoded(frame)),
+    Err(e) if e.kind() == std::io::ErrorKind::NotFound => Err(Unwritten::Missing),
+    Err(e) => Ok(unread(&file, &e)),
   }
 }
 
@@ -205,7 +228,9 @@ mod tests {
     );
 
     std::fs::remove_file(&cache).unwrap();
+    let (logs, _capturing) = crate::testing::captured_logs();
     let sent = bytes(browse(&edges, "alice", peer).await).await;
+    assert!(warned_missing(&logs), "{:?}", logs.snapshot());
     assert_eq!(sent, std::fs::read(&cache).unwrap(), "written again");
     let PeerMessage::BrowseResponse(listing) = PeerMessage::decode(&sent).unwrap() else {
       panic!("not a browse response");
@@ -241,17 +266,50 @@ mod tests {
       .collect()
   }
 
+  /// Whether `logs` hold a warning that a browse cache was missing.
+  fn warned_missing(logs: &crate::logging::LogBuffer) -> bool {
+    logs.snapshot().iter().any(|record| {
+      record.level == api_types::logs::LogLevel::Warning
+        && record.message.contains("Browse response not cached")
+    })
+  }
+
   #[tokio::test]
-  async fn a_browse_right_after_an_agent_loads_lists_its_files() {
+  async fn a_browse_right_after_an_agent_loads_lists_its_files_writing_only_its_own_view() {
     let dir = tempfile::tempdir().unwrap();
-    let app = shared(dir.path()).await;
+    for share in ["Music", "Private"] {
+      std::fs::create_dir_all(dir.path().join(share).join("Album")).unwrap();
+      std::fs::write(dir.path().join(share).join("Album/01.mp3"), "one").unwrap();
+    }
+    let config = format!(
+      "[shares]\ndirectories = [\"{}\", \"{}\"]\n[shares.visible_to]\nPrivate = [\"friends\"]\n",
+      dir.path().join("Music").display(),
+      dir.path().join("Private").display()
+    );
+    let app = app(&config, &[]).await;
     let edges = edges(&app);
     let peer = from("198.51.100.7");
+    let (logs, _capturing) = crate::testing::captured_logs();
     let before = directories(&bytes(browse(&edges, "alice", peer).await).await);
-    assert!(!before.contains(&"Agent".to_string()), "{before:?}");
+    assert!(
+      !before.iter().any(|d| d.starts_with("Private")),
+      "{before:?}"
+    );
+    assert!(
+      !warned_missing(&logs),
+      "a view's first browse writes its cache as a matter of course"
+    );
+
     crate::testing::load_agent_host(&app.state.shares, "nas", "Agent").await;
     let after = directories(&bytes(browse(&edges, "alice", peer).await).await);
     assert!(after.contains(&"Agent".to_string()), "{after:?}");
+    let everything = app.state.shares.browse_cache(&View::everything());
+    let unbrowsed = directories(&std::fs::read(&everything).unwrap());
+    assert!(
+      !unbrowsed.contains(&"Agent".to_string()),
+      "the view nobody browsed is left to the rewrite after the agents settle: {unbrowsed:?}"
+    );
+    assert!(!warned_missing(&logs));
   }
 
   #[tokio::test]
