@@ -21,7 +21,7 @@
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { formatDay, plural } from "#lib/format.js";
-  import { freezesWhileUsed, interaction } from "#lib/lists/interaction.svelte.js";
+  import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { LineMenu } from "#lib/lists/linemenu.svelte.js";
   import { markOf, Saver, type ScrollMark } from "#lib/lists/scroll.svelte.js";
   import { ListWindow } from "#lib/lists/virtual.svelte.js";
@@ -131,13 +131,13 @@
         // while the scrollbar is held at the top, older pages go above it rather than keep the view
         anchor: gripped ? undefined : (line) => line.kind === "message",
         // a page read on the way down stays below the view, which is reading older messages
-        followOnAppend: !interaction.frozen && !pane.hasNewer && !loadingNewer,
+        followOnAppend: !pane.messages.freeze.frozen && !pane.hasNewer && !loadingNewer,
         anchorTo: "end",
         scrollEndThreshold: NEAR,
         rangeExtractor: (range) => {
           const drawn = new Set(defaultRangeExtractor(range));
           if (keep !== -1) drawn.add(keep);
-          if (interaction.frozen) {
+          if (pane.messages.freeze.frozen) {
             for (const key of held) {
               const index = lines.findIndex((l) => l.key === key);
               if (index !== -1) drawn.add(index);
@@ -150,7 +150,7 @@
   );
   $effect(() => {
     const keys = shown.drawn.map((d) => d.key);
-    if (!interaction.frozen) held = keys;
+    if (!pane.messages.freeze.frozen) held = keys;
   });
 
   /** The active message's element, while it is drawn */
@@ -246,7 +246,7 @@
    */
   const followsEnd = (node: HTMLElement) => {
     const observer = new ResizeObserver(() => {
-      if (placed && atBottom && !loadingNewer && !interaction.frozen) toBottom();
+      if (placed && atBottom && !loadingNewer && !pane.messages.freeze.frozen) toBottom();
     });
     observer.observe(node);
     if (node.firstElementChild) observer.observe(node.firstElementChild);
@@ -330,7 +330,7 @@
       seenNewest = newest;
       // a page read on the way down is history, not news
       if (loadingNewer) return;
-      if (atBottom && !interaction.frozen) {
+      if (atBottom && !pane.messages.freeze.frozen) {
         pane.trim();
         await tick();
         readIfSeen();
@@ -398,7 +398,7 @@
     {@attach lineMenu.attach}
     {@attach shown.attach}
     {@attach followsEnd}
-    {@attach freezesWhileUsed}>
+    {@attach freezesWhileUsed(pane.messages.freeze)}>
     <div class="relative" style:height={`${shown.total}px`}>
       {#each shown.drawn as { line, index, start } (line.key)}
         <div

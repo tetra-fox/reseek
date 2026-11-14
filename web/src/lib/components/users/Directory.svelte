@@ -157,7 +157,8 @@
 
   keepCurrent(
     () => void load(),
-    () => "users"
+    () => "users",
+    rows.freeze
   );
   $effect(() => {
     void query;
@@ -406,7 +407,7 @@
       all={list.allTick}
       rowindex={1}
       class="h-9 border-b bg-surface-muted text-fg-muted" />
-    <div role="rowgroup" {@attach freezesWhileUsed}>
+    <div role="rowgroup" {@attach freezesWhileUsed(rows.freeze)}>
       {#each shown as u, i (u.username)}
         {@const listed = u.groups.filter((g) => g.name !== BUDDIES)}
         {@const queue = queueOf(u)}

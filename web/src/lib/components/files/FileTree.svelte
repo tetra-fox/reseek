@@ -7,7 +7,7 @@
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import { Arrivals } from "#lib/lists/arrivals.svelte.js";
   import { LINE_REM } from "#lib/lists/density.js";
-  import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
+  import { type Freeze, freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { LineMenu } from "#lib/lists/linemenu.svelte.js";
   import { type AllTick, ListControl } from "#lib/lists/list.svelte.js";
   import { ListWindow } from "#lib/lists/virtual.svelte.js";
@@ -108,6 +108,8 @@
     framed?: boolean;
     /** focus came to an item, for the inspector; a tree without it has no inspector */
     inspect?: (item: T) => void;
+    /** what a press or a text selection in the tree holds, for a screen whose rows come and go */
+    freeze?: Freeze;
     class?: ClassValue;
   };
 
@@ -139,6 +141,7 @@
     lineClass,
     framed = true,
     inspect,
+    freeze,
     class: className
   }: Props = $props();
 
@@ -437,7 +440,7 @@
     style:height={`${view.total}px`}
     style:min-width={least}
     role="rowgroup"
-    {@attach freezesWhileUsed}>
+    {@attach freeze && freezesWhileUsed(freeze)}>
     {#each view.drawn as { line, index, start } (line.key)}
       {#if line.kind === "folder"}
         <div

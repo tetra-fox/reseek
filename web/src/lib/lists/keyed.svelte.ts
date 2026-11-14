@@ -1,6 +1,6 @@
 import { SvelteMap, SvelteSet } from "svelte/reactivity";
 
-import { interaction } from "./interaction.svelte";
+import { Freeze, interaction } from "./interaction.svelte";
 
 /** Whether two values from the API are the same, looking inside arrays and objects */
 export const same = (a: unknown, b: unknown): boolean => {
@@ -33,13 +33,15 @@ export const patch = <T extends object>(target: T, source: T) => {
  * it to `reconcile` with the answer, or to `abandon`: the answer may have been read before frames
  * that arrive while it is on its way, so the rows those frames changed keep their change, and an
  * answer overtaken by a later reload is not taken. A read of one row works the same way with
- * `readingRow` and `takeRow` or `assignRow`. While the user interacts with a list
- * (`interaction.frozen`), removals wait, marked in `removed`, and happen when it ends
+ * `readingRow` and `takeRow` or `assignRow`. While its `freeze` holds, as while the user selects
+ * in the list, removals wait, marked in `removed`, and happen when it ends
  */
 export class Keyed<T extends object> {
   #rows = new SvelteMap<string, T>();
   #key: (row: T) => string;
-  /** rows that are gone but stay until the interaction ends */
+  /** what holds the list still: its own, unless lists shown as one share it */
+  readonly freeze: Freeze;
+  /** rows that are gone but stay until the freeze ends */
   removed = new SvelteSet<string>();
   /** the rows in the order they were first added */
   rows = $derived([...this.#rows.values()]);
@@ -56,8 +58,9 @@ export class Keyed<T extends object> {
   /** the last turn begun before the list was emptied, whose reads are older than it */
   #cleared = 0;
 
-  constructor(key: (row: T) => string) {
+  constructor(key: (row: T) => string, freeze = new Freeze(interaction)) {
     this.#key = key;
+    this.freeze = freeze;
   }
 
   get size() {
@@ -95,16 +98,16 @@ export class Keyed<T extends object> {
     Object.assign(row, fields);
   }
 
-  /** Removes a row, or marks it removed until the interaction ends */
+  /** Removes a row, or marks it removed until the freeze ends */
   remove(key: string) {
     this.#touch(key);
     if (!this.#rows.has(key)) return;
-    if (!interaction.frozen) {
+    if (!this.freeze.frozen) {
       this.#rows.delete(key);
       return;
     }
     this.removed.add(key);
-    interaction.whenThawed(() => {
+    this.freeze.whenThawed(() => {
       if (!this.removed.has(key)) return;
       this.removed.delete(key);
       this.#rows.delete(key);

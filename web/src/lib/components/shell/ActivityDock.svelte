@@ -53,7 +53,7 @@
     viewport.phone
       ? fly(node, { y: 24, duration: motionFast() })
       : slide(node, { duration: motionFast() });
-  keepCurrent(() => void activity.load());
+  keepCurrent(() => void activity.load(), undefined, activity.entries.freeze);
 
   const hidden = $derived(new Set(activityPrefs.hidden));
   const shown = $derived(activity.shown.filter((e) => !hidden.has(kindOf(e.kind.type))));
@@ -179,7 +179,7 @@
     aria-activedescendant={list.activeId}
     tabindex="0"
     {@attach list.attach}
-    {@attach freezesWhileUsed}>
+    {@attach freezesWhileUsed(activity.entries.freeze)}>
     {#each shown as e, i (e.id)}
       {@const k = e.kind}
       {@const Icon =

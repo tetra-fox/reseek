@@ -27,7 +27,7 @@
   import { adminView } from "#lib/config/view.svelte.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { ago, dateTime, formatCount, listText, plural } from "#lib/format.js";
-  import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
+  import { Freeze, freezesWhileUsed, interaction } from "#lib/lists/interaction.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
   import { Grid, keptIn } from "#lib/lists/table.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
@@ -44,9 +44,11 @@
 
   // the blocks in force: ours, and the configuration's, which only the configuration lifts
   const blocked = new Loader(() => call(() => api.GET("/api/v0/users/blocked")));
+  const freeze = new Freeze(interaction);
   keepCurrent(
     () => void blocked.load(),
-    () => "users"
+    () => "users",
+    freeze
   );
   void blocked.load();
   $effect(() =>
@@ -204,7 +206,7 @@
     tabindex="0"
     {@attach list.attach}>
     <GridHeader {grid} all={list.allTick} class="h-9 border-b bg-surface-muted text-fg-muted" />
-    <div role="rowgroup" {@attach freezesWhileUsed}>
+    <div role="rowgroup" {@attach freezesWhileUsed(freeze)}>
       {#each entries as b, i (b.username)}
         <div
           role="row"

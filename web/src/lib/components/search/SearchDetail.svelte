@@ -28,6 +28,7 @@
   import { formatCount, listText, plural } from "#lib/format.js";
   import { useInspector } from "#lib/inspector/inspector.svelte.js";
   import { type ActiveFilter, clearThen, typedFilter } from "#lib/lists/filtered.js";
+  import { Freeze, interaction } from "#lib/lists/interaction.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
   import { href } from "#lib/nav.js";
@@ -68,12 +69,15 @@
   const results = new Results(id);
   $effect(() => () => results.close());
 
+  /** what holds the results still, in the list or the tree */
+  const freeze = new Freeze(interaction);
   keepCurrent(
     () => {
       if (!searches.starting.has(id)) void searches.fetch(id);
       void readBlocked();
     },
-    () => `search:${id}`
+    () => `search:${id}`,
+    freeze
   );
   // the counts come with the list's frames, and blocks made meanwhile with the users' frames
   $effect(() => live.retain("search"));
@@ -458,7 +462,8 @@
           inspect={(file) => (picked = file)}
           ondismiss={dismiss}
           {allFiles}
-          {selected} />
+          {selected}
+          {freeze} />
       {/if}
     {:else if view.length}
       <ResultsTree
@@ -471,7 +476,8 @@
         ondismiss={dismiss}
         inspect={(file) => (picked = file)}
         {allFiles}
-        {selected} />
+        {selected}
+        {freeze} />
     {/if}
     {#if !view.length}
       <EmptyState icon={SearchXIcon} title="All results are hidden">

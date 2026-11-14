@@ -84,7 +84,8 @@
   );
   keepCurrent(
     () => void listed.load(),
-    () => "events"
+    () => "events",
+    rows.freeze
   );
   $effect(() => {
     void page;
@@ -217,7 +218,7 @@
     aria-activedescendant={list.activeId}
     tabindex="0"
     {@attach list.attach}
-    {@attach freezesWhileUsed}>
+    {@attach freezesWhileUsed(rows.freeze)}>
     <GridHeader {grid} class="h-8 border-b bg-surface-muted text-fg-muted" />
     {#each events as e, i (e.id)}
       {@const summary = eventSummary(e)}

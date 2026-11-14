@@ -31,7 +31,8 @@
 
   keepCurrent(
     () => void searches.load(),
-    () => "search"
+    () => "search",
+    searches.list.freeze
   );
   // a stream reopened for this topic resumes where it was and sends no list, so the page asks
   void searches.load();
@@ -92,7 +93,7 @@
               <th class="w-20"><span class="sr-only">Actions</span></th>
             </tr>
           </thead>
-          <tbody {@attach freezesWhileUsed}>
+          <tbody {@attach freezesWhileUsed(searches.list.freeze)}>
             {#each rows.slice(0, shown) as search (search.id)}
               {@const done = isDone(search.state)}
               {@const scope = scopeLabel(search.scope)}

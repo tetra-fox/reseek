@@ -191,6 +191,7 @@
     framed={false}
     class="tabular-nums"
     {inspect}
+    freeze={store.list.freeze}
     onopen={(t) => ondetails(t)}
     onkey={actOnKey}
     lineClass={(line) =>

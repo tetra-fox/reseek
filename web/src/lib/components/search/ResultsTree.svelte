@@ -34,6 +34,7 @@
   } from "#lib/files/downloads.js";
   import { formatAttributes, getFileName, plural } from "#lib/format.js";
   import { inspector } from "#lib/inspector/inspector.svelte.js";
+  import type { Freeze } from "#lib/lists/interaction.svelte.js";
   import { offerFields, type Picked, userFacts } from "#lib/search/facts.js";
   import { type Result, type ResultFile, resultFiles } from "#lib/search/results.js";
   import type { Expansion } from "#lib/tree/expansion.svelte.js";
@@ -72,6 +73,8 @@
     allFiles: AllFiles;
     /** the ticked files, by their result's key and path, which the list layout shares */
     selected: SvelteSet<string>;
+    /** what holds the results still */
+    freeze: Freeze;
   };
 
   let {
@@ -83,7 +86,8 @@
     ondismiss,
     inspect,
     allFiles,
-    selected
+    selected,
+    freeze
   }: Props = $props();
 
   const write = $derived(canWrite && connected);
@@ -284,6 +288,7 @@
   bind:this={tree}
   {lines}
   {expansion}
+  {freeze}
   label="Search results"
   place={`search.${searchId}.tree`}
   columns={fileTemplate(columns)}

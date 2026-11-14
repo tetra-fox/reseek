@@ -66,7 +66,7 @@
     }
     return outcome;
   });
-  keepCurrent(() => void shares.load());
+  keepCurrent(() => void shares.load(), undefined, rows.freeze);
   void shares.load();
 
   const scan = $derived(app.state?.shares);
@@ -258,7 +258,7 @@
         aria-activedescendant={sharedList.activeId}
         tabindex="0"
         {@attach sharedList.attach}
-        {@attach freezesWhileUsed}>
+        {@attach freezesWhileUsed(rows.freeze)}>
         <GridHeader {grid} class="h-8 border-b bg-surface-muted text-fg-muted" />
         {#each shared as r, i (key(r))}
           <div

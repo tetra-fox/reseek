@@ -28,7 +28,7 @@
   } from "#lib/files/downloads.js";
   import { badgeCount, formatBytes, formatSpeed, getFileName, plural } from "#lib/format.js";
   import { inspector } from "#lib/inspector/inspector.svelte.js";
-  import { heldOrder } from "#lib/lists/interaction.svelte.js";
+  import { type Freeze, heldOrder } from "#lib/lists/interaction.svelte.js";
   import { Grid } from "#lib/lists/table.svelte.js";
   import { offerFields, type Picked } from "#lib/search/facts.js";
   import {
@@ -57,9 +57,12 @@
     allFiles: AllFiles;
     /** the ticked files, by their row's key, which the tree layout shares */
     selected: SvelteSet<string>;
+    /** what holds the results still */
+    freeze: Freeze;
   };
 
-  let { rows, searchId, canDownload, inspect, ondismiss, allFiles, selected }: Props = $props();
+  let { rows, searchId, canDownload, inspect, ondismiss, allFiles, selected, freeze }: Props =
+    $props();
 
   followDownloads();
   /** a list has no folders to open, the tree it is drawn by wants one */
@@ -90,7 +93,8 @@
   ]);
 
   // while the user holds the list still, rows keep their places and new ones go below
-  const hold = heldOrder<ResultRow>((r) => r.key);
+  // svelte-ignore state_referenced_locally
+  const hold = heldOrder<ResultRow>((r) => r.key, freeze);
   const sorted = $derived(hold(grid.rows));
   const lines = $derived(
     sorted.map((r): TreeLine<ResultRow> => ({
@@ -198,6 +202,7 @@
   bind:this={tree}
   {lines}
   {expansion}
+  {freeze}
   label="Search results"
   place={`search.${searchId}.list`}
   columns={grid.template}

@@ -63,7 +63,8 @@
       void pane.load();
       void members?.load();
     },
-    () => (target.kind === "room" ? "rooms" : "conversations")
+    () => (target.kind === "room" ? "rooms" : "conversations"),
+    pane.messages.freeze
   );
   void pane.load();
   void members?.load();

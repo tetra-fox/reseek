@@ -76,7 +76,8 @@
 
   keepCurrent(
     () => void listed.load(),
-    () => "transfers"
+    () => "transfers",
+    rows.freeze
   );
   $effect(() => {
     void which;
@@ -171,7 +172,7 @@
     tabindex="0"
     {@attach list.attach}>
     <GridHeader {grid} class="h-9 border-b bg-surface-muted text-fg-muted" />
-    <div role="rowgroup" {@attach freezesWhileUsed}>
+    <div role="rowgroup" {@attach freezesWhileUsed(rows.freeze)}>
       {#each shown as t, i (t.id)}
         <div
           role="row"

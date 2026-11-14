@@ -86,7 +86,7 @@
 
   // the list holds still while the pointer is on it, a text is selected in it or a row's menu
   // is open, so a row never moves away from a click
-  const hold = heldOrder<Line>((l) => l.key);
+  const hold = heldOrder<Line>((l) => l.key, chat.freeze);
   const lines = $derived.by(() => {
     // an empty section shows no heading
     const section = (key: string, title: string, targets: Target[]): Line[] => {
@@ -267,7 +267,7 @@
     tabindex="0"
     {@attach list.attach}
     {@attach lineMenu.attach}
-    {@attach freezesWhileUsed}
+    {@attach freezesWhileUsed(chat.freeze)}
     {@attach keepsScroll("chat.list")}>
     {#each lines as line, i (line.key)}
       {#if line.kind === "header"}

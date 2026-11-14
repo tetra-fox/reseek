@@ -1,4 +1,4 @@
-import { interaction } from "#lib/lists/interaction.svelte.js";
+import { type Freeze, interaction } from "#lib/lists/interaction.svelte.js";
 
 import { live, type Topic } from "./live.svelte";
 
@@ -12,19 +12,23 @@ export const RECONCILE_MS = 60_000;
  * every minute while the tab is visible, as soon as the tab is visible again, when frames may
  * have been missed, when a stream that resumed starts following the topic, and on the polling
  * timer while the stream is down. A stream that resumed after a lost one brings what it missed. A
- * reload due while the user holds a list still waits until they let go. Call it while the
- * component is being set up
+ * reload due while `freeze` holds, the screen's list's own or every list's, waits until it ends.
+ * Call it while the component is being set up
  */
-export const keepCurrent = (reload: () => void, topic?: () => Topic | undefined) => {
+export const keepCurrent = (
+  reload: () => void,
+  topic?: () => Topic | undefined,
+  freeze: Freeze = interaction
+) => {
   let mounted = true;
   let waiting = false;
   let visible = $state(!document.hidden);
 
   const run = () => {
     if (waiting) return;
-    if (!interaction.frozen) return reload();
+    if (!freeze.frozen) return reload();
     waiting = true;
-    interaction.whenThawed(() => {
+    freeze.whenThawed(() => {
       waiting = false;
       if (mounted) reload();
     });

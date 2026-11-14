@@ -53,7 +53,8 @@
   const role = $derived(session.can("ReadWrite") ? members.roleOf(us) : null);
   const room = $derived(members.room);
   // the list holds still while it is pressed, selected in or a name's card or menu is open from it
-  const hold = heldOrder<Line>((l) => l.key);
+  // svelte-ignore state_referenced_locally
+  const hold = heldOrder<Line>((l) => l.key, members.users.freeze);
   $effect(() => (menuFor ? interaction.hold() : undefined));
   const lines = $derived.by(() => {
     const filter = typed.trim().toLowerCase();
@@ -215,7 +216,7 @@
     aria-activedescendant={list.activeId}
     tabindex="0"
     {@attach list.attach}
-    {@attach freezesWhileUsed}
+    {@attach freezesWhileUsed(members.users.freeze)}
     {@attach keepsScroll(`chat.members.${members.name}`)}>
     {#each lines as line, i (line.key)}
       {#if line.kind === "header"}

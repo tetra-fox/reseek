@@ -79,7 +79,8 @@
 
   keepCurrent(
     () => void store.load(),
-    () => "transfers"
+    () => "transfers",
+    store.list.freeze
   );
   // a link naming a state filter shows that one alone
   $effect(() => {
@@ -209,7 +210,7 @@
   );
 
   // while the user holds the table still, rows keep their places and new ones go below
-  const hold = heldOrder<Item>((item) => item.key);
+  const hold = heldOrder<Item>((item) => item.key, store.list.freeze);
   // svelte-ignore state_referenced_locally
   const grid = transferGrid(direction, view, () => filtered);
   const items = $derived(hold(layout(grid.rows, groupingOf(view), folds.isOpen)));

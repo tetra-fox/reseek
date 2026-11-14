@@ -4,7 +4,6 @@
   import { type Burst, burstText } from "#lib/chat/rooms/presence.js";
   import type { RoomMembers } from "#lib/chat/rooms/room.svelte.js";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
-  import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
 
   import PresenceRow from "./PresenceRow.svelte";
@@ -29,8 +28,7 @@
     aria-multiselectable="true"
     aria-activedescendant={list.activeId}
     tabindex="0"
-    {@attach list.attach}
-    {@attach freezesWhileUsed}>
+    {@attach list.attach}>
     {#each shown as burst, i (burst.key)}
       <div role="row" {...list.line(burst, i)} aria-label={burstText(burst)} class="log-row">
         <PresenceRow {burst} />

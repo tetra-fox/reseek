@@ -17,7 +17,7 @@
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import { formatCount } from "#lib/format.js";
   import { type ActiveFilter, typedFilter } from "#lib/lists/filtered.js";
-  import { freezesWhileUsed, interaction } from "#lib/lists/interaction.svelte.js";
+  import { Freeze, freezesWhileUsed, interaction } from "#lib/lists/interaction.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
@@ -37,8 +37,9 @@
 
   /** lines Clear took away, still matched so a reload does not bring them back */
   let cleared: Line[] = [];
+  const freeze = new Freeze(interaction);
   /** how many lines the list keeps: all of them while the user holds it */
-  const cap = () => (interaction.frozen ? undefined : MAX);
+  const cap = () => (freeze.frozen ? undefined : MAX);
 
   // the snapshot a reopened stream sends replaces the list, keeping the rows of the records
   // already shown
@@ -71,7 +72,8 @@
     () => {
       if (!paused) void reload();
     },
-    () => "logs"
+    () => "logs",
+    freeze
   );
   void reload();
   $effect(() => live.on("logs.buffer", take));
@@ -238,7 +240,7 @@
   aria-activedescendant={list.activeId}
   tabindex="0"
   {@attach list.attach}
-  {@attach freezesWhileUsed}>
+  {@attach freezesWhileUsed(freeze)}>
   {#each shown as l, i (l.seq)}
     {@const level = LEVELS.find((x) => x.level === l.record.level)}
     {@const whole = opened.has(l.seq)}

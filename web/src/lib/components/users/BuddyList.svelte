@@ -80,7 +80,8 @@
 
   keepCurrent(
     () => void load(),
-    () => "users"
+    () => "users",
+    rows.freeze
   );
   void load();
   $effect(() =>
@@ -267,7 +268,7 @@
       role="rowgroup"
       class="relative"
       style:height={`${lines.total}px`}
-      {@attach freezesWhileUsed}>
+      {@attach freezesWhileUsed(rows.freeze)}>
       {#each lines.drawn as { line: u, index, start } (u.username)}
         {@const buddy = u.buddy ?? { notifyPresence: false }}
         <div
