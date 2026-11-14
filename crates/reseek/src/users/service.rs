@@ -168,14 +168,18 @@ impl Directory {
     }
   }
 
-  /// `username`'s whole profile from what is stored.
+  /// `username`'s whole profile from what is stored. Its figures are read in the user's summary
+  /// turn, so figures read before a change are not kept after it.
   pub(crate) async fn profile(&self, username: &str) -> Result<UserProfile, ApiError> {
     let (row, block) = self.stored(username).await.map_err(internal)?;
-    let figures = self
-      .figures
-      .get(&self.transfers, &self.messaging, username)
-      .await
-      .map_err(internal)?;
+    let figures = {
+      let _turn = self.summary_turns.take(username).await;
+      self
+        .figures
+        .get(&self.transfers, &self.messaging, username)
+        .await
+        .map_err(internal)?
+    };
     let options = self.config.current().values.clone();
     let alternative = self.state.current().alternative_speed_limits;
     let placement = self.placement_of(&options, username, row.as_ref());

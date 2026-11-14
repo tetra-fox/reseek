@@ -513,6 +513,17 @@ impl Directory {
     self.forget(username);
   }
 
+  /// Stops the next figure read before it keeps what it read; see [`FigureCache::pause_next`].
+  #[cfg(test)]
+  pub(crate) fn pause_figures(
+    &self,
+  ) -> (
+    tokio::sync::oneshot::Receiver<()>,
+    tokio::sync::oneshot::Sender<()>,
+  ) {
+    self.figures.pause_next()
+  }
+
   /// Forgets what is cached about `username`.
   fn forget(&self, username: &str) {
     self.figures.forget(username);

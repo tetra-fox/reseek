@@ -592,6 +592,45 @@ mod tests {
     assert_eq!(after.figures.messages.inbound, 2);
   }
 
+  /// A message from alice stored while `reading`, a read of hers that takes her figures, has
+  /// read them and not kept them yet; her summary after counts the message.
+  async fn a_message_stored_during_a_figure_read_is_counted_after_it<F>(
+    app: &crate::testing::TestApp,
+    reading: F,
+  ) where
+    F: std::future::Future,
+  {
+    let message = soulseek_client::PrivateMessage {
+      id: 1,
+      timestamp: SystemTime::now(),
+      username: "alice".into(),
+      message: "hello".into(),
+      replayed: false,
+    };
+    let (got_there, go_on) = app.state.users.pause_figures();
+    let storing = async {
+      got_there.await.unwrap();
+      let stored = app.state.messaging.received(message);
+      // the clock moves on only once the store is done or waits for the read
+      let waited = async {
+        tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+        go_on.send(()).unwrap();
+      };
+      tokio::join!(stored, waited);
+    };
+    tokio::join!(reading, storing);
+    let summary = app.state.users.summary("alice").await.unwrap();
+    assert_eq!(summary.unread_messages, 1);
+  }
+
+  // the clock stands still while anything runs, so the user touch writer never writes
+  #[tokio::test(start_paused = true)]
+  async fn figures_a_profile_read_before_a_message_was_stored_are_not_kept_after_it() {
+    let app = app("", &[]).await;
+    let profile = async { app.state.users.profile("alice").await.unwrap() };
+    a_message_stored_during_a_figure_read_is_counted_after_it(&app, profile).await;
+  }
+
   #[tokio::test]
   async fn a_message_the_server_did_not_take_opens_no_conversation() {
     let config = "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n";

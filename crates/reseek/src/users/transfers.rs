@@ -66,7 +66,17 @@ pub async fn figures(transfers: &Database, username: &str) -> Result<UserFigures
 #[derive(Default)]
 pub struct FigureCache {
   entries: Mutex<HashMap<String, (Instant, UserFigures)>>,
+  /// set by a test to stop the next read between computing figures and keeping them: the read
+  /// says it got there on the sender and waits for the receiver
+  #[cfg(test)]
+  paused: Mutex<Option<Paused>>,
 }
+
+#[cfg(test)]
+type Paused = (
+  tokio::sync::oneshot::Sender<()>,
+  tokio::sync::oneshot::Receiver<()>,
+);
 
 impl FigureCache {
   /// `username`'s figures from `transfers` and `messaging`, computed again when the kept ones
@@ -89,6 +99,14 @@ impl FigureCache {
     (fresh.messages, fresh.last_message_at) = messaging
       .read(move |conn| crate::messaging::message_figures(conn, &name))
       .await?;
+    #[cfg(test)]
+    {
+      let paused = lock(&self.paused).take();
+      if let Some((reached, resume)) = paused {
+        reached.send(()).expect("the test waits for the read");
+        resume.await.expect("the test lets the read go on");
+      }
+    }
     let mut entries = lock(&self.entries);
     entries.retain(|_, (at, _)| at.elapsed() < FIGURES_FOR);
     entries.insert(username.to_string(), (Instant::now(), fresh.clone()));
@@ -98,6 +116,21 @@ impl FigureCache {
   /// Forgets `username`'s figures.
   pub fn forget(&self, username: &str) {
     lock(&self.entries).remove(username);
+  }
+
+  /// Stops the next read once it has computed its figures, before it keeps them, until the
+  /// returned sender is used; the returned receiver says it got there.
+  #[cfg(test)]
+  pub fn pause_next(
+    &self,
+  ) -> (
+    tokio::sync::oneshot::Receiver<()>,
+    tokio::sync::oneshot::Sender<()>,
+  ) {
+    let (reached, got_there) = tokio::sync::oneshot::channel();
+    let (go_on, resume) = tokio::sync::oneshot::channel();
+    *lock(&self.paused) = Some((reached, resume));
+    (got_there, go_on)
   }
 }
 
