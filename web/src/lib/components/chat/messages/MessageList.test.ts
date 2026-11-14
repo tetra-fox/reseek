@@ -169,6 +169,8 @@ describe("the message list", () => {
     expect(interaction.frozen).toBe(true);
     // the line menu marks the message as every list's lines are marked
     expect([...document.querySelectorAll("[data-menu-open]")]).toEqual([message]);
+    // of the three messages, only the one right-clicked opens its menu
+    expect(document.querySelectorAll('[role="menu"]')).toHaveLength(1);
     press(document.querySelector('[role="menuitem"]')!, "Escape");
     await flush();
     expect(document.querySelector('[role="menu"]')).toBeNull();
