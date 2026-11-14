@@ -9,6 +9,7 @@ use std::sync::OnceLock;
 
 use cascade::{Layers, Schema, Watch, Watcher};
 use directories::ProjectDirs;
+use reseek_shares::log_format::{Clock, Line};
 use reseek_shares::{Setup, Shares};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
@@ -189,9 +190,14 @@ fn run(invocation: Invocation) -> ExitCode {
   } else {
     tracing::Level::INFO
   };
+  let color = std::io::stdout().is_terminal();
   tracing_subscriber::fmt()
     .with_max_level(level)
-    .with_ansi(std::io::stdout().is_terminal())
+    .with_ansi(color)
+    .event_format(Line {
+      clock: Clock::Time,
+      color,
+    })
     .init();
   for warning in &loaded.warnings {
     warn!(warning, "configuration");

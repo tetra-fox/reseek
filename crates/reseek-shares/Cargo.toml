@@ -8,7 +8,7 @@ license = "AGPL-3.0-only"
 
 [features]
 # in-memory databases for the tests of the crates that use this one
-testing = ["dep:tracing-subscriber"]
+testing = []
 
 [dependencies]
 api-types.workspace = true
@@ -32,7 +32,7 @@ thiserror.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread"] }
 tokio-util.workspace = true
 tracing.workspace = true
-tracing-subscriber = { workspace = true, optional = true }
+tracing-subscriber.workspace = true
 url.workspace = true
 uuid.workspace = true
 walkdir.workspace = true
@@ -40,7 +40,6 @@ walkdir.workspace = true
 [dev-dependencies]
 tempfile.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
-tracing-subscriber.workspace = true
 
 [lints]
 workspace = true

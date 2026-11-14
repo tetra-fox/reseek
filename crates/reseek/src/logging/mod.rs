@@ -4,7 +4,6 @@
 
 mod buffer;
 mod file;
-mod format;
 mod loki;
 
 use std::path::PathBuf;
@@ -23,11 +22,8 @@ pub use file::DailyFile;
 
 use crate::config::Options;
 use crate::config::enums::{DiagnosticLevel, LogLevel};
-use format::{Clock, Line};
-
-/// The name of the span every event of the process is in, which carries the instance name,
-/// the invocation id and the process id. The text sinks leave it out of each line.
-pub const PROCESS_SPAN: &str = "process";
+pub use reseek_shares::log_format::PROCESS_SPAN;
+use reseek_shares::log_format::{Clock, Line};
 
 /// The message a caught panic carries, which is a text unless it was raised with some other
 /// value.

@@ -111,7 +111,12 @@ async fn an_agents_file_is_downloaded_through_its_controller() {
   );
   assert_eq!(state.relay.agents[0].ip_address, "127.0.0.1");
   assert_eq!(state.relay.agents[0].version, env!("CARGO_PKG_VERSION"));
-  agent.printed_line(READY).await;
+  let ready = agent.printed_line(READY).await;
+  // the daemon's line: `[time LVL] [module] spans: message`
+  assert!(
+    ready.starts_with('[') && ready.contains(" INF] [reseek_agent::client::sync] "),
+    "{ready}"
+  );
   exactly(&api, "RelayAgentConnected", 1).await;
   exactly(&api, "RelayAgentSharesUpdated", 1).await;
   exactly(&api, "RelayAgentDisconnected", 0).await;

@@ -23,7 +23,7 @@ use tracing_subscriber::layer::{Context, Layer};
 use tracing_subscriber::registry::LookupSpan;
 
 use super::PROCESS_SPAN;
-use super::format::{Clock, Line};
+use reseek_shares::log_format::{Clock, Line};
 
 /// How many lines may wait to be pushed before new ones are dropped.
 pub const CAPACITY: usize = 8192;
