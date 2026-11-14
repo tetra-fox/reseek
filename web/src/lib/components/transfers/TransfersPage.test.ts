@@ -146,6 +146,22 @@ describe("the transfers table", () => {
     expect(row(a.id)).toBe(first);
   });
 
+  it("mounts a row's tooltips once a mouse comes to one of its cells", async () => {
+    const a = transfer({ filename: "x\\a.flac" });
+    const b = transfer({ filename: "x\\b.flac" });
+    listing = [a, b];
+    await start();
+    const tipped = (id: string) => !!row(id)!.querySelector("[data-tooltip-trigger]");
+    expect([tipped(a.id), tipped(b.id)]).toEqual([false, false]);
+    // the last cell, as a pointer coming in from the right reaches it first
+    const cells = row(a.id)!.querySelectorAll("[role=gridcell]");
+    cells[cells.length - 1].dispatchEvent(
+      new PointerEvent("pointerenter", { pointerType: "mouse" })
+    );
+    await flushFaked();
+    expect([tipped(a.id), tipped(b.id)]).toEqual([true, false]);
+  });
+
   it("comes back on the row it was left at, where rows arrived above it meanwhile", async () => {
     // jsdom keeps no scroll offset and lays out no content: each box keeps the offset it is
     // given, over content taller than any offset here

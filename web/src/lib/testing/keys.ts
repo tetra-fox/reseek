@@ -9,10 +9,10 @@ export const press = (target: Element, key: string, mods: KeyboardEventInit = {}
 };
 
 /**
- * Moves focus to `target` as Tab does: the key goes down where focus is, then `target` takes it,
- * which jsdom then counts as focus from the keys (`:focus-visible`)
+ * Gives `target` focus as the keys would, whatever the tab order: a Tab goes down where focus is,
+ * then `target` takes it, which jsdom then counts as focus from the keys (`:focus-visible`)
  */
-export const tabTo = (target: HTMLElement) => {
+export const focusByKeys = (target: HTMLElement) => {
   const from = document.activeElement ?? document.body;
   from.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
   target.focus();

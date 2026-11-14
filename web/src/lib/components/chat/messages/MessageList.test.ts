@@ -7,7 +7,7 @@ import { dismiss, toasts } from "#lib/feedback/toast.svelte.js";
 import { Freeze, freezesWhileUsed, interaction } from "#lib/lists/interaction.svelte.js";
 import { ListWindow } from "#lib/lists/virtual.svelte.js";
 import { flush } from "#lib/testing/flush.js";
-import { press, tabTo } from "#lib/testing/keys.js";
+import { press, focusByKeys } from "#lib/testing/keys.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 
 import MessageList from "./MessageList.svelte";
@@ -79,7 +79,7 @@ describe("the message list", () => {
     expect([tipped(1), tipped(2), tipped(3)]).toEqual([false, false, false]);
     row(3).dispatchEvent(new PointerEvent("pointerenter", { pointerType: "mouse" }));
     const pressed = copy();
-    tabTo(pressed);
+    focusByKeys(pressed);
     await flush();
     expect([tipped(1), tipped(2), tipped(3)]).toEqual([false, false, true]);
     // the button the keys came to is drawn again as a trigger, and keeps the focus

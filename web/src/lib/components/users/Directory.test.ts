@@ -7,7 +7,7 @@ import { live } from "#lib/live/live.svelte.js";
 import { session } from "#lib/session.svelte.js";
 import { userSummary } from "#lib/testing/fixtures.js";
 import { flushFaked } from "#lib/testing/flush.js";
-import { tabTo } from "#lib/testing/keys.js";
+import { focusByKeys } from "#lib/testing/keys.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 import { box } from "#lib/testing/state.svelte.js";
 import { type DirectoryAddress, directoryAt } from "#lib/users/directory.js";
@@ -79,7 +79,7 @@ describe("the users directory", () => {
     expect(bar().textContent).not.toContain("Block");
   });
 
-  it("leaves a tapped row's tooltips dormant, so the button the tap focused takes its click", async () => {
+  it("mounts a row's tooltips for a mouse, not a tap, so the button a tap focused takes its click", async () => {
     session.principal = { name: "me", role: "ReadWrite" } as never;
     app.state = { user: { username: "me" } } as never;
     await start([userSummary("bob")]);
@@ -92,6 +92,9 @@ describe("the users directory", () => {
     await flushFaked();
     expect(buddy()).toBe(tapped);
     expect(tapped.hasAttribute("data-tooltip-trigger")).toBe(false);
+    line("bob").dispatchEvent(new PointerEvent("pointerenter", { pointerType: "mouse" }));
+    await flushFaked();
+    expect(buddy().hasAttribute("data-tooltip-trigger")).toBe(true);
   });
 
   it("offers no live Unblock for a block the configuration made", async () => {
@@ -103,7 +106,7 @@ describe("the users directory", () => {
       line("bob").querySelector<HTMLButtonElement>('button[aria-label="Unblock"]')!;
     // it keeps its focus, so the keys reach the reason in its tooltip, and does nothing. The keys
     // mount the tooltip of a row no pointer has come to, and the focus stays on the button
-    tabTo(unblock());
+    focusByKeys(unblock());
     await flushFaked();
     expect(document.activeElement).toBe(unblock());
     expect(unblock().getAttribute("aria-disabled")).toBe("true");
