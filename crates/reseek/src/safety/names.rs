@@ -16,6 +16,13 @@ static UNC: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[/\\]{2}[^/\\]+[/\\
 static SOULSEEK_QT: LazyLock<Regex> =
   LazyLock::new(|| Regex::new(r"^@@[A-Za-z0-9]{5,}[/\\]?").unwrap());
 
+/// The name of the SoulseekQt root that `path` is, with or without a separator after it: `abcde`
+/// for `@@abcde`. `None` for a path that is anything more or less.
+pub fn soulseek_qt_root_name(path: &str) -> Option<&str> {
+  let root = SOULSEEK_QT.find(path)?;
+  (root.end() == path.len()).then(|| path[2..].trim_end_matches(['/', '\\']))
+}
+
 /// `path` localized to `os` without a leading drive root, UNC root (with its server) or
 /// SoulseekQt root. A single leading `/` is not a root and stays.
 fn strip_path_root(path: &str, os: Os) -> String {
@@ -147,6 +154,16 @@ mod tests {
     assert_eq!(unix("@@abcd/Music"), "@@abcd/Music", "four is not a root");
     assert_eq!(unix("/home/user"), "/home/user");
     assert_eq!(strip_path_root("\\Music", Os::Windows), "\\Music");
+  }
+
+  #[test]
+  fn a_soulseek_qt_root_is_named_by_what_follows_its_at_signs() {
+    assert_eq!(soulseek_qt_root_name("@@abcde"), Some("abcde"));
+    assert_eq!(soulseek_qt_root_name("@@abcde\\"), Some("abcde"));
+    assert_eq!(soulseek_qt_root_name("@@abcde/"), Some("abcde"));
+    for path in ["@@abcde\\Music", "@@abcd", "C:", "/", "abcde"] {
+      assert_eq!(soulseek_qt_root_name(path), None, "{path}");
+    }
   }
 
   #[test]

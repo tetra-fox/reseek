@@ -14,6 +14,7 @@ use reseek_shares::traverses;
 pub use local::{SEGMENT_BYTES, creatable, creatable_path, too_long, with_suffix};
 pub use names::{
   directory_name_safely, file_name_safely, sanitize_filename, sanitize_path_segment,
+  soulseek_qt_root_name,
 };
 
 /// Which operating system's path rules a check uses.

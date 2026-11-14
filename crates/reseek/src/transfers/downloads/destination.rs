@@ -18,7 +18,8 @@ use uuid::Uuid;
 
 use crate::safety::{
   Os, combine_safely, creatable, creatable_path, directory_name_safely, file_name_safely,
-  is_absolute, sanitize_filename, sanitize_path_segment, too_long, with_suffix,
+  is_absolute, sanitize_filename, sanitize_path_segment, soulseek_qt_root_name, too_long,
+  with_suffix,
 };
 
 /// How many bytes of the hash of a download's peer and remote filename its incomplete file's
@@ -98,11 +99,17 @@ pub fn from_folder<'a>(folder: &str, filename: &'a str) -> Option<&'a str> {
 }
 
 /// The folders of the remote filename `filename` from the remote folder `folder` down, made
-/// safe; fails when the file is not under the folder, which the API refuses.
+/// safe; fails when the file is not under the folder, which the API refuses. A whole SoulseekQt
+/// share, `@@abcde`, is named `abcde`, the name its files' paths lose with their root.
 fn folder_tree(folder: &str, filename: &str, os: Os) -> Result<String, String> {
   let below = from_folder(folder, filename)
     .ok_or_else(|| format!("the remote filename {filename} is not under the folder {folder}"))?;
-  Ok(directory_name_safely(below, true, os).unwrap_or_default())
+  let tree = directory_name_safely(below, true, os).unwrap_or_default();
+  Ok(match soulseek_qt_root_name(folder) {
+    Some(share) if tree.is_empty() => segment(share, os),
+    Some(share) => format!("{}{}{tree}", segment(share, os), os.separator()),
+    None => tree,
+  })
 }
 
 /// Whether `pattern` names a directory of the file: its own, or its whole path.
@@ -405,6 +412,37 @@ mod tests {
     assert_eq!(
       unix("${SEARCH_ID}/${SEARCH_TEXT}", &searched),
       "unknown_search_id/unknown_search_text"
+    );
+  }
+
+  #[test]
+  fn a_whole_share_keeps_its_name() {
+    let in_share = |folder, filename| Source {
+      folder: Some(folder),
+      ..source("alice", filename)
+    };
+    let nested = in_share("@@abcde", "@@abcde\\Music\\01.flac");
+    let top = in_share("@@abcde\\", "@@abcde\\cover.jpg");
+    assert_eq!(unix("${SOURCE_DIRECTORY}", &nested), "abcde/Music");
+    assert_eq!(unix("${SOURCE_DIRECTORY}", &top), "abcde");
+    assert_eq!(unix("${SOURCE_USERNAME}", &nested), "alice/abcde/Music");
+    assert_eq!(unix("{}", &top), "abcde");
+    assert_eq!(
+      unix("${SOURCE_PATH}", &nested),
+      "Music",
+      "the full path is without its root, as for any file"
+    );
+    assert_eq!(
+      subdirectory(None, &nested, Os::Windows).unwrap(),
+      "abcde\\Music"
+    );
+    // a folder in the share is named from itself down, as any folder is
+    let below = in_share("@@abcde\\Music", "@@abcde\\Music\\01.flac");
+    assert_eq!(unix("${SOURCE_DIRECTORY}", &below), "Music");
+    // other roots have no name of their own
+    assert_eq!(
+      unix("${SOURCE_DIRECTORY}", &in_share("C:", "C:\\Music\\01.flac")),
+      "Music"
     );
   }
 
