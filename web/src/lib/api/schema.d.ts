@@ -2008,7 +2008,10 @@ export interface paths {
         /** Who the caller is, with the browser session it came with. */
         get: operations["get_session"];
         put?: never;
-        /** Signs in with a local account's username and password and sets the session cookie. */
+        /**
+         * Signs in with a local account's username and password and sets the session cookie. A session
+         *     the browser signed in with before is ended, as its cookie is replaced.
+         */
         post: operations["session_login"];
         delete?: never;
         options?: never;
@@ -2066,8 +2069,9 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Ends the caller's browser session and clears its cookie. For a session from an OpenID
-         *     Connect provider that has a logout page, that page is returned for the browser to go to.
+         * Ends the caller's browser session and clears its cookie, also a session whose user has no role
+         *     right now. For a session from an OpenID Connect provider that has a logout page, that page is
+         *     returned for the browser to go to.
          */
         post: operations["logout"];
         delete?: never;
@@ -4130,7 +4134,7 @@ export interface components {
          * @description Why the server closes a stream.
          * @enum {string}
          */
-        ByeReason: "unauthorized" | "withheld" | "lagged" | "shutdown";
+        ByeReason: "unauthorized" | "withheld" | "roleChanged" | "lagged" | "shutdown";
         /** @description A user the in-memory user cache holds, as `GET /users/cache` lists it. */
         CachedUser: {
             /** @description the last statistics fetched or pushed, null before any */

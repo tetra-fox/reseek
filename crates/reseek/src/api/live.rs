@@ -1,6 +1,6 @@
 //! The event stream route: `GET /live` as server-sent events, for the topics asked for.
 
-use api_types::auth::PrincipalSummary;
+use api_types::auth::{PrincipalSummary, Role};
 use api_types::live::{ByeReason, Hello, Lagged, LiveFrame, LiveQuery};
 use axum::Extension;
 use axum::extract::{Query, State};
@@ -110,12 +110,20 @@ async fn stream(
       "event stream opened"
     )
   });
-  let needed = topics
-    .iter()
-    .map(|topic| topic.role())
-    .max()
-    .unwrap_or(api_types::auth::Role::ReadOnly);
-  let revalidate = recheck(&app, presented, caller.principal.subject.clone(), needed);
+  // the topics were checked against the role it opens with, and the page against it too
+  let opened = caller.principal.role;
+  let revalidate = recheck(
+    &app,
+    presented,
+    caller.principal.subject.clone(),
+    move |role| {
+      if role == opened {
+        Ok(())
+      } else {
+        Err(ByeReason::RoleChanged)
+      }
+    },
+  );
   let body = span.in_scope(|| live::body(registered, first, revalidate));
   Ok(
     (
@@ -149,34 +157,30 @@ fn holder(principal: &api_types::auth::Principal, presented: &Presented) -> Stri
 }
 
 /// Checks again that what a long-lived request presented, the event stream's or an agent's
-/// socket, still names the principal `subject` with at least the role `needed`. A session whose
-/// user has no role, or too low a one, right now is withheld rather than unauthorized: it goes
-/// on, and is let in again once the configuration gives the role back.
+/// socket, still names the principal `subject` with a role `accept` takes. A session whose user
+/// has no role right now is withheld rather than unauthorized: it goes on, and is let in again
+/// once the configuration gives a role back.
 pub(super) fn recheck(
   app: &AppState,
   presented: Presented,
   subject: String,
-  needed: api_types::auth::Role,
+  accept: impl Fn(Role) -> Result<(), ByeReason> + Send + Sync + 'static,
 ) -> Revalidate {
   let app = app.clone();
   let presented = Arc::new(presented);
+  let accept = Arc::new(accept);
   Arc::new(move || {
     let app = app.clone();
     let presented = presented.clone();
     let subject = subject.clone();
+    let accept = accept.clone();
     Box::pin(async move {
       match identify(&app, &presented, Check::Again).await {
+        Ok(identified) if identified.withheld => Err(ByeReason::Withheld),
         Ok(identified) => match identified.principal {
-          Some(principal) if principal.subject == subject => {
-            if principal.role >= needed {
-              Ok(())
-            } else {
-              Err(ByeReason::Withheld)
-            }
-          }
+          Some(principal) if principal.subject == subject => accept(principal.role),
           _ => Err(ByeReason::Unauthorized),
         },
-        Err(e) if e.is_withheld() => Err(ByeReason::Withheld),
         // logged under the span of the stream or the agent's socket that checks it
         Err(e) => {
           debug!(
@@ -478,12 +482,7 @@ mod tests {
     let presented =
       crate::auth::Presented::read(&peer, &uri, &axum::http::HeaderMap::new(), &current.values);
     let subject = format!("token:{}", created["token"]["id"].as_str().unwrap());
-    let check = super::recheck(
-      &app.state,
-      presented,
-      subject,
-      crate::live::Topic::Users.role(),
-    );
+    let check = super::recheck(&app.state, presented, subject, |_| Ok(()));
     assert_eq!(check().await, Ok(()));
     let id = created["token"]["id"].as_str().unwrap();
     app
@@ -573,11 +572,14 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn a_role_lowered_in_the_configuration_ends_its_streams_at_once() {
-    let account = |role: &str| {
-      format!("[web.authentication.local.users.alice]\npassword = \"pw\"\nrole = \"{role}\"\n")
+  async fn a_role_changed_or_gone_in_the_configuration_ends_its_streams_at_once() {
+    let account = |role: Option<&str>| match role {
+      Some(role) => {
+        format!("[web.authentication.local.users.alice]\npassword = \"pw\"\nrole = \"{role}\"\n")
+      }
+      None => String::new(),
     };
-    let app = app(&account("administrator"), &[]).await;
+    let app = app(&account(Some("administrator")), &[]).await;
     let login = app
       .send_from(
         OUTSIDE,
@@ -589,30 +591,35 @@ mod tests {
       )
       .await;
     let cookie = crate::testing::set_cookie(&login.headers, "reseek_session").unwrap();
-    let mut stream = app
-      .stream_from(
-        OUTSIDE,
-        with(
-          request("GET", "/api/v0/live?topics=logs", None),
-          "cookie",
-          &cookie,
-        ),
-      )
-      .await;
-    assert_eq!(stream.status, 200);
-    stream.next().await.unwrap();
-
+    let open = async || {
+      let mut stream = app
+        .stream_from(
+          OUTSIDE,
+          with(
+            request("GET", "/api/v0/live?topics=users", None),
+            "cookie",
+            &cookie,
+          ),
+        )
+        .await;
+      assert_eq!(stream.status, 200);
+      stream.next().await.unwrap();
+      stream
+    };
     // well inside the 30 s between the checks a stream makes by itself
-    let started = tokio::time::Instant::now();
-    std::fs::write(app.dir.path().join("config.toml"), account("readonly")).unwrap();
-    app.state.config.reload().await.unwrap();
-    let bye = stream.until("bye").await.pop().unwrap();
-    assert_eq!(
-      bye.data,
-      json!({ "reason": "withheld" }),
-      "the session goes on"
-    );
-    assert!(started.elapsed() < std::time::Duration::from_secs(5));
+    let ends_with = async |role: Option<&str>, reason: &str| {
+      let mut stream = open().await;
+      let started = tokio::time::Instant::now();
+      std::fs::write(app.dir.path().join("config.toml"), account(role)).unwrap();
+      app.state.config.reload().await.unwrap();
+      let bye = stream.until("bye").await.pop().unwrap();
+      assert_eq!(bye.data, json!({ "reason": reason }), "{role:?}");
+      assert!(started.elapsed() < std::time::Duration::from_secs(5));
+    };
+    // the topics still fit the lower role, and the stream ends all the same
+    ends_with(Some("readonly"), "roleChanged").await;
+    ends_with(Some("readwrite"), "roleChanged").await;
+    ends_with(None, "withheld").await;
   }
 
   // a session's uses are wall-clock times in the database, which paused time does not move, so
@@ -683,7 +690,7 @@ mod tests {
       &app.state,
       presented,
       "local:reseek".to_string(),
-      crate::live::Topic::Application.role(),
+      |_| Ok(()),
     );
     assert_eq!(check().await, Ok(()));
     // a use would be recorded by a task of its own. Paused time moves on only once every task

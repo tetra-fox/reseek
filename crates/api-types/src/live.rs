@@ -213,13 +213,16 @@ pub struct Lagged {}
 
 /// Why the server closes a stream.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "camelCase")]
 pub enum ByeReason {
   /// the credential stopped being valid; reconnecting does not help, logging in does
   Unauthorized,
-  /// the session goes on but its user has no role, or too low a one for the stream's topics,
-  /// right now; `GET /session` says when it has one again
+  /// the session goes on but its user has no role right now; `GET /session` says when it has
+  /// one again
   Withheld,
+  /// the principal's role changed; `GET /session` gives the new one, and a stream opened again
+  /// follows it
+  RoleChanged,
   /// the stream fell too far behind; reconnect with `Last-Event-ID`
   Lagged,
   /// the daemon is shutting down

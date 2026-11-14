@@ -165,11 +165,6 @@ impl ApiError {
     )
   }
 
-  /// Whether this is the answer to a session whose user has no role right now.
-  pub fn is_withheld(&self) -> bool {
-    self.error == WITHHELD
-  }
-
   /// A 503 for something other than the Soulseek connection that is not there now.
   pub fn service_unavailable(error: impl Into<String>) -> Self {
     Self::new(StatusCode::SERVICE_UNAVAILABLE, error, None)

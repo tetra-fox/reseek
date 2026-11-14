@@ -4,9 +4,11 @@
 //! order: an API token, a configuration API key, the session cookie, a trusted reverse proxy's
 //! forwarded identity, a trusted network. A token or key that is presented but not valid fails
 //! the request at once rather than falling through to a weaker way in; a session cookie that is
-//! not valid is cleared and the next ways are tried. A request that changes something on the
-//! strength of the session cookie alone must come from a page of this site, and no request let
-//! in by a trusted network or a proxy's forwarded identity may come from a page of another site.
+//! not valid is cleared and the next ways are tried. A session whose user the configuration
+//! gives no role right now is kept, and answered 403 to anything but signing in or out. A
+//! request that changes something on the strength of the session cookie alone must come from a
+//! page of this site, and no request let in by a trusted network or a proxy's forwarded identity
+//! may come from a page of another site.
 //! The principal, or its absence, is put on the request as an [`Authentication`]; a handler
 //! takes an [`Authorized`] to require a role.
 
@@ -52,6 +54,10 @@ use sessions::StoredSession;
 
 /// The prefix of an API token.
 pub const TOKEN_PREFIX: &str = "slsk_";
+
+/// What a session whose user has no role right now may still post to: signing in, which
+/// replaces it, and signing out.
+const WITHHELD_ROUTES: [&str; 2] = ["/api/v0/session", "/api/v0/session/logout"];
 
 /// What the daemon keeps to tell who a request is: the authentication database, the key its
 /// cookies are made with, the failure limits and the local accounts.
@@ -106,6 +112,11 @@ pub async fn authenticate(
     Ok(identified) => identified,
     Err(e) => return e.into_response(),
   };
+  let signs_in_or_out =
+    request.method() == axum::http::Method::POST && WITHHELD_ROUTES.contains(&request.uri().path());
+  if identified.withheld && !signs_in_or_out {
+    return ApiError::withheld().into_response();
+  }
   let headers = request.headers();
   let client = &presented.client;
   // a browser on a trusted network, or behind a proxy that signs it in from its own cookies, is

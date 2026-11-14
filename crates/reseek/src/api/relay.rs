@@ -308,12 +308,11 @@ async fn socket(
   enabled(options)?;
   stored_credential(&caller.principal, options)?;
   // the uploads an agent makes need this role, so a key without it is refused here, at once
-  let recheck = super::live::recheck(
-    &app,
-    presented,
-    caller.principal.subject.clone(),
-    Role::ReadWrite,
-  );
+  let recheck = super::live::recheck(&app, presented, caller.principal.subject.clone(), |role| {
+    (role >= Role::ReadWrite)
+      .then_some(())
+      .ok_or(api_types::live::ByeReason::Unauthorized)
+  });
   app.services.relay.socket(request, recheck).await
 }
 

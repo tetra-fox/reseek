@@ -24,8 +24,8 @@ use crate::auth::oidc::external_base;
 use crate::auth::oidc::logout::end_session_url;
 use crate::auth::sessions::{self, NewSession, Origin, StoredSession};
 use crate::auth::{
-  Administrator, AnyRole, Authorized, Client, Presented, RequestSession, end_sessions, networks,
-  session_cookie, start_session,
+  Administrator, AnyRole, Authentication, Authorized, Client, Presented, RequestSession,
+  end_sessions, networks, session_cookie, start_session,
 };
 use crate::config::Options;
 
@@ -65,7 +65,8 @@ async fn get_session(
   })
 }
 
-/// Signs in with a local account's username and password and sets the session cookie.
+/// Signs in with a local account's username and password and sets the session cookie. A session
+/// the browser signed in with before is ended, as its cookie is replaced.
 #[utoipa::path(
   operation_id = "session_login",
   post, path = "/session", tag = "session", request_body = LoginRequest,
@@ -79,6 +80,7 @@ async fn get_session(
 async fn login(
   State(app): State<AppState>,
   Extension(presented): Extension<Presented>,
+  replaced: Option<Extension<RequestSession>>,
   Json(login): Json<LoginRequest>,
 ) -> Result<Response, ApiError> {
   if login.username.trim().is_empty() || login.password.trim().is_empty() {
@@ -161,6 +163,10 @@ async fn login(
     },
   )
   .await?;
+  if let Some(Extension(RequestSession(replaced))) = replaced {
+    let by = Some(session.subject.clone());
+    end_sessions(&app, vec![replaced.id], by, SessionRevokeReason::Logout).await?;
+  }
   let scope = Scope::new(&app.url_base, client.https);
   Ok(
     (
@@ -237,8 +243,9 @@ async fn providers(
   })
 }
 
-/// Ends the caller's browser session and clears its cookie. For a session from an OpenID
-/// Connect provider that has a logout page, that page is returned for the browser to go to.
+/// Ends the caller's browser session and clears its cookie, also a session whose user has no role
+/// right now. For a session from an OpenID Connect provider that has a logout page, that page is
+/// returned for the browser to go to.
 #[utoipa::path(
   post, path = "/session/logout", tag = "session",
   responses(
@@ -248,19 +255,26 @@ async fn providers(
 )]
 async fn logout(
   State(app): State<AppState>,
-  caller: Authorized<AnyRole>,
+  Extension(Authentication(principal)): Extension<Authentication>,
   Extension(presented): Extension<Presented>,
   session: Option<Extension<RequestSession>>,
 ) -> Result<Response, ApiError> {
+  let session = session.map(|Extension(RequestSession(session))| session);
+  // a session whose user has no role right now comes without a principal
+  let by = match (&principal, &session) {
+    (Some(principal), _) => principal.subject.clone(),
+    (None, Some(session)) => session.subject.clone(),
+    (None, None) => return Err(ApiError::unauthorized("Authentication required")),
+  };
   let scope = Scope::new(&app.url_base, presented.client.https);
   let mut redirect = None;
-  if let Some(Extension(RequestSession(session))) = session {
+  if let Some(session) = session {
     // revoked before the provider is asked for its logout page, which can take seconds, so a
     // caller that leaves meanwhile is still logged out
     end_sessions(
       &app,
       vec![session.id.clone()],
-      Some(caller.principal.subject.clone()),
+      Some(by),
       SessionRevokeReason::Logout,
     )
     .await?;
@@ -701,6 +715,65 @@ mod tests {
     reload(config(Some("readonly"))).await;
     let me = send("/api/v0/session", credentials[2]).await.json();
     assert_eq!(me["role"], "ReadOnly", "the token follows its owner again");
+  }
+
+  #[tokio::test]
+  async fn a_session_whose_user_has_no_role_now_may_sign_out_or_in_and_nothing_else() {
+    use crate::auth::sessions;
+
+    let viewer = "[web.authentication.local.users.viewer]\npassword = \"look\"\n";
+    let app = app(viewer, &[]).await;
+    let reload = async |text: &str| {
+      std::fs::write(app.dir.path().join("config.toml"), text).unwrap();
+      app.state.config.reload().await.unwrap();
+    };
+    let as_cookie = |r, cookie: &str| with(with(r, "cookie", cookie), "origin", "http://localhost");
+    let withheld = async || {
+      reload(viewer).await;
+      let login = json!({ "username": "viewer", "password": "look" });
+      let signed = app
+        .send_from(OUTSIDE, request("POST", "/api/v0/session", Some(login)))
+        .await;
+      let cookie = set_cookie(&signed.headers, "reseek_session").unwrap();
+      reload("").await;
+      cookie
+    };
+    let ended = async |cookie: &str| {
+      let id = cookie.split_once('=').unwrap().1.split_once('.').unwrap().0;
+      let session = sessions::find(&app.state.auth.db, id).await.unwrap();
+      session.unwrap().revoked_at.is_some()
+    };
+
+    let cookie = withheld().await;
+    let refused = app
+      .send_from(
+        OUTSIDE,
+        as_cookie(request("GET", "/api/v0/sessions", None), &cookie),
+      )
+      .await;
+    assert_eq!(refused.status, 403);
+    let out = app
+      .send_from(
+        OUTSIDE,
+        as_cookie(request("POST", "/api/v0/session/logout", None), &cookie),
+      )
+      .await;
+    assert_eq!(out.status, 200, "{:?}", out.body);
+    assert_eq!(
+      set_cookie(&out.headers, "reseek_session").as_deref(),
+      Some("reseek_session=")
+    );
+    assert!(ended(&cookie).await);
+
+    let cookie = withheld().await;
+    let other = as_cookie(
+      request("POST", "/api/v0/session", Some(credentials("reseek"))),
+      &cookie,
+    );
+    let signed = app.send_from(OUTSIDE, other).await;
+    assert_eq!(signed.status, 204, "{:?}", signed.body);
+    assert!(set_cookie(&signed.headers, "reseek_session").is_some());
+    assert!(ended(&cookie).await, "the new session replaces it");
   }
 
   #[tokio::test]

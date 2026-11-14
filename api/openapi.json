@@ -9297,7 +9297,7 @@
         "tags": [
           "session"
         ],
-        "summary": "Signs in with a local account's username and password and sets the session cookie.",
+        "summary": "Signs in with a local account's username and password and sets the session cookie. A session\nthe browser signed in with before is ended, as its cookie is replaced.",
         "operationId": "session_login",
         "requestBody": {
           "content": {
@@ -9461,7 +9461,7 @@
         "tags": [
           "session"
         ],
-        "summary": "Ends the caller's browser session and clears its cookie. For a session from an OpenID\nConnect provider that has a logout page, that page is returned for the browser to go to.",
+        "summary": "Ends the caller's browser session and clears its cookie, also a session whose user has no role\nright now. For a session from an OpenID Connect provider that has a logout page, that page is\nreturned for the browser to go to.",
         "operationId": "logout",
         "responses": {
           "200": {
@@ -17707,6 +17707,7 @@
         "enum": [
           "unauthorized",
           "withheld",
+          "roleChanged",
           "lagged",
           "shutdown"
         ]

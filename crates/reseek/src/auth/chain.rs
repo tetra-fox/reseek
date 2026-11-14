@@ -114,6 +114,9 @@ pub struct Identified {
   pub session: Option<StoredSession>,
   /// the principal came from the session cookie alone
   pub by_cookie: bool,
+  /// the session's user has no role right now, so the request has no principal and only
+  /// signing in or out is let through
+  pub withheld: bool,
   /// `Set-Cookie` values for the answer
   pub cookies: Vec<HeaderValue>,
 }
@@ -210,7 +213,12 @@ pub async fn identify(
         identified.by_cookie = true;
         return Ok(identified);
       }
-      CookieSession::Withheld => return Err(ApiError::withheld()),
+      CookieSession::Withheld(session) => {
+        identified.session = Some(*session);
+        identified.by_cookie = true;
+        identified.withheld = true;
+        return Ok(identified);
+      }
       CookieSession::Invalid => identified.cookies.push(scope.clear(cookies::SESSION)),
     }
   }
@@ -287,7 +295,7 @@ pub async fn page_session(
   let mut cookies = Vec::new();
   if let Some(value) = &presented.cookie {
     match cookie_session(app, value, presented, options, true).await? {
-      CookieSession::Valid(..) | CookieSession::Withheld => return Ok(cookies),
+      CookieSession::Valid(..) | CookieSession::Withheld(_) => return Ok(cookies),
       CookieSession::Invalid => cookies.push(scope.clear(cookies::SESSION)),
     }
   }
@@ -321,10 +329,10 @@ pub async fn page_session(
 
 /// What a session cookie names.
 enum CookieSession {
-  /// an active session, with the role its user has now; boxed, as the other cases carry nothing
+  /// an active session, with the role its user has now; boxed, as the last case carries nothing
   Valid(Box<StoredSession>, Role),
   /// an active session whose user the configuration gives no role right now
-  Withheld,
+  Withheld(Box<StoredSession>),
   /// no session to use: a forged cookie, or a session unknown or ended
   Invalid,
 }
@@ -345,7 +353,7 @@ async fn cookie_session(
   let found = |session, role: Option<Role>| match role {
     Some(role) => CookieSession::Valid(Box::new(session), role),
     // ended only by a configuration that stands, through `end_sessions_without_role`
-    None => CookieSession::Withheld,
+    None => CookieSession::Withheld(Box::new(session)),
   };
   if session.sign_in.origin != Origin::Proxy {
     return Ok(found(session, role));
@@ -895,6 +903,28 @@ mod tests {
     assert_eq!(me().await.json()["role"], "ReadOnly");
     reload(config("default = \"deny\"\n")).await;
     assert_eq!(me().await.status, 403, "withheld until the removal stands");
+  }
+
+  #[tokio::test]
+  async fn a_page_load_keeps_the_cookie_of_a_session_whose_user_has_no_role_now() {
+    use crate::testing::{set_cookie, with};
+    let viewer = "[web.authentication.local.users.viewer]\npassword = \"look\"\n";
+    let app = app(viewer, &[]).await.with_page();
+    let login = json_login("viewer", "look");
+    let signed = app.send_from(OUTSIDE, login).await;
+    let cookie = set_cookie(&signed.headers, "reseek_session").unwrap();
+    std::fs::write(app.dir.path().join("config.toml"), "").unwrap();
+    app.state.config.reload().await.unwrap();
+    let page = app
+      .send_from(OUTSIDE, with(request("GET", "/", None), "cookie", &cookie))
+      .await;
+    assert_eq!(page.status, 200);
+    assert!(set_cookie(&page.headers, "reseek_session").is_none());
+  }
+
+  fn json_login(username: &str, password: &str) -> axum::http::Request<axum::body::Body> {
+    let body = serde_json::json!({ "username": username, "password": password });
+    request("POST", "/api/v0/session", Some(body))
   }
 
   #[tokio::test]
