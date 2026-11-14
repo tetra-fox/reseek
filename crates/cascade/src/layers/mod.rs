@@ -143,7 +143,8 @@ impl<T: Root> Layers<T> {
     dir: impl AsRef<Path>,
     patterns: impl IntoIterator<Item = S>,
   ) -> Self {
-    // absolute, so it compares equal to the paths file notifications carry
+    // absolute, so it compares equal to the paths file notifications carry; when the working
+    // directory cannot be read a relative one stays relative, opened as any relative path is
     let dir = std::path::absolute(dir.as_ref()).unwrap_or_else(|_| dir.as_ref().to_path_buf());
     self
       .entries

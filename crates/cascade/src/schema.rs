@@ -38,6 +38,9 @@ pub struct Field {
   pub apply: Apply,
   /// shown as `*****`, never logged
   pub secret: bool,
+  /// a filesystem path: a relative one set in a file counts from that file's directory, one
+  /// set by an environment variable or a flag from the working directory
+  pub path: bool,
   /// the field's help text
   pub doc: String,
   /// the names the value is one of, `None` when it is not one of a fixed set
@@ -63,6 +66,7 @@ impl Field {
       negated: node.negated,
       apply: node.apply.unwrap_or_default(),
       secret: node.secret,
+      path: node.path,
       doc: node.doc,
       choices: node
         .choices

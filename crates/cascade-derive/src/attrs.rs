@@ -41,6 +41,8 @@ pub(crate) struct FieldAttrs {
   /// the `Apply` variant
   pub(crate) apply: Option<&'static str>,
   pub(crate) secret: bool,
+  /// a filesystem path, counted from where the layer that sets it is
+  pub(crate) path: bool,
   pub(crate) doc: String,
   /// the `Kind` variant
   pub(crate) kind: Option<&'static str>,
@@ -133,6 +135,7 @@ pub(crate) fn field(field: &Field, errors: &mut Errors) -> FieldAttrs {
     negated: false,
     apply: None,
     secret: false,
+    path: false,
     doc: doc_comment(&field.attrs),
     kind: None,
     user_keyed: false,
@@ -162,6 +165,12 @@ pub(crate) fn field(field: &Field, errors: &mut Errors) -> FieldAttrs {
     errors.push(syn::Error::new_spanned(
       ident,
       "a user_keyed map can only be set in files, drop `env` and `cli`",
+    ));
+  }
+  if attrs.path && attrs.user_keyed {
+    errors.push(syn::Error::new_spanned(
+      ident,
+      "a user_keyed map is not a path, mark the paths inside its entries",
     ));
   }
   if attrs.negated && attrs.long.is_none() {
@@ -219,13 +228,16 @@ fn cascade_meta(
   } else if path.is_ident("secret") {
     once(meta, attrs.secret)?;
     attrs.secret = true;
+  } else if path.is_ident("path") {
+    once(meta, attrs.path)?;
+    attrs.path = true;
   } else if path.is_ident("user_keyed") {
     once(meta, attrs.user_keyed)?;
     attrs.user_keyed = true;
   } else {
     return Err(meta.error(
       "unknown cascade attribute, expected one of env, env_alias, cli, negated, apply, kind, doc, \
-       secret, user_keyed",
+       secret, path, user_keyed",
     ));
   }
   Ok(())
@@ -406,7 +418,7 @@ mod tests {
       ///
       /// Second paragraph.
       #[cascade(env = "APP_USER", env_alias = "NEW_USER", cli = "-u|--user")]
-      #[cascade(apply = "reconnect", secret, kind = "string")]
+      #[cascade(apply = "reconnect", secret, kind = "string", path)]
       #[serde(default, rename = "login")]
       user: String
     })))
@@ -417,7 +429,7 @@ mod tests {
     assert_eq!(attrs.short, Some('u'));
     assert_eq!(attrs.long.as_deref(), Some("--user"));
     assert_eq!(attrs.apply, Some("Reconnect"));
-    assert!(attrs.secret);
+    assert!(attrs.secret && attrs.path);
     assert_eq!(attrs.kind, Some("String"));
     assert_eq!(attrs.doc, "The user to log in as.\nSecond paragraph.");
     assert!(!attrs.user_keyed && !attrs.skip && !attrs.negated);
@@ -491,6 +503,10 @@ mod tests {
       (
         named(parse_quote!({ #[cascade(user_keyed, env = "A")] a: Map })),
         "a user_keyed map can only be set in files",
+      ),
+      (
+        named(parse_quote!({ #[cascade(user_keyed, path)] a: Map })),
+        "a user_keyed map is not a path",
       ),
       (
         named(parse_quote!({ #[serde(flatten)] a: Inner })),

@@ -14,6 +14,13 @@ pub(crate) fn get<'a>(tree: &'a Value, key: &str) -> Option<&'a Value> {
     .try_fold(tree, |node, part| node.as_object()?.get(part))
 }
 
+/// [`get`], to change the value.
+pub(crate) fn get_mut<'a>(tree: &'a mut Value, key: &str) -> Option<&'a mut Value> {
+  key
+    .split('.')
+    .try_fold(tree, |node, part| node.as_object_mut()?.get_mut(part))
+}
+
 /// Sets the value at a dotted key, turning anything on the way that is not a table (a section
 /// that is `None`) into one.
 pub(crate) fn set(tree: &mut Value, key: &str, value: Value) {

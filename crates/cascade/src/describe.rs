@@ -114,6 +114,7 @@ pub struct Node {
   pub(crate) negated: bool,
   pub(crate) apply: Option<Apply>,
   pub(crate) secret: bool,
+  pub(crate) path: bool,
   pub(crate) doc: String,
   pub(crate) entries: Vec<Node>,
   /// what an entry of a user-keyed map holds until something sets its fields
@@ -124,11 +125,17 @@ pub struct Node {
 impl Node {
   /// # Panics
   ///
-  /// When the flag of a field that is not a boolean is `negated`.
+  /// When the flag of a field that is not a boolean is `negated`, or a field that is not a
+  /// string is a `path`.
   fn leaf(attrs: &private::Attrs, kind: Kind, entries: Vec<Node>) -> Self {
     assert!(
       !attrs.negated || kind == Kind::Bool,
       "`{}` is not a boolean: only a boolean's flag can turn it off",
+      attrs.name
+    );
+    assert!(
+      !attrs.path || kind == Kind::String,
+      "`{}` is not a string: only a string can be a path",
       attrs.name
     );
     Self {
@@ -142,6 +149,7 @@ impl Node {
       negated: attrs.negated,
       apply: attrs.apply,
       secret: attrs.secret,
+      path: attrs.path,
       doc: attrs.doc.to_string(),
       entries,
       entry_defaults: serde_json::Value::Null,
@@ -176,6 +184,8 @@ pub mod private {
     pub negated: bool,
     pub apply: Option<Apply>,
     pub secret: bool,
+    /// the value is a filesystem path
+    pub path: bool,
     pub doc: &'static str,
   }
 
@@ -199,8 +209,9 @@ pub mod private {
   ///
   /// # Panics
   ///
-  /// When a section is given an env var or a flag; those go on its leaves. When the flag of a
-  /// leaf that is not a boolean is `negated`.
+  /// When a section is given an env var, a flag or `path`; those go on its leaves. When the
+  /// flag of a leaf that is not a boolean is `negated`, or a leaf that is not a string is a
+  /// `path`.
   pub fn push<F: Cascade>(nodes: &mut Vec<Node>, attrs: Attrs) {
     match F::shape().0 {
       Inner::Leaf {
@@ -217,6 +228,11 @@ pub mod private {
           "`{}` is a section: env vars and flags go on its fields",
           attrs.name
         );
+        assert!(
+          !attrs.path,
+          "`{}` is a section: `path` goes on its fields",
+          attrs.name
+        );
         nodes.extend(children.into_iter().map(|child| child.under(&attrs)));
       }
     }
@@ -226,7 +242,8 @@ pub mod private {
   ///
   /// # Panics
   ///
-  /// When the flag of a leaf that is not a boolean is `negated`.
+  /// When the flag of a leaf that is not a boolean is `negated`, or a leaf that is not a string
+  /// is a `path`.
   pub fn push_kind(nodes: &mut Vec<Node>, kind: Kind, attrs: Attrs) {
     nodes.push(Node::leaf(&attrs, kind, Vec::new()));
   }

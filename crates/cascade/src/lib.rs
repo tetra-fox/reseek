@@ -62,6 +62,9 @@
 //! - `apply = "live" | "reconnect" | "restart"`: when a change takes effect, `live` when not
 //!   given. On a section it is the default for every field inside.
 //! - `secret`: shown as `*****`, never logged. On a section, every field inside.
+//! - `path`: a filesystem path, a string. A relative one set in a file counts from that file's
+//!   directory, one set by an environment variable or a flag from the working directory; one
+//!   set at run time is kept as given.
 //! - `doc = "..."`: the field's help, the doc comment when not given.
 //! - `kind = "bool" | "integer" | "float" | "string" | "duration" | "size"`: the field's kind
 //!   when its type does not say, such as a size type or an enum written as a string.

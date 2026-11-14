@@ -93,6 +93,7 @@ fn push(ty: &syn::Type, attrs: &FieldAttrs) -> TokenStream {
     None => quote!(::std::option::Option::None),
   };
   let secret = attrs.secret;
+  let path = attrs.path;
   let negated = attrs.negated;
   let doc = &attrs.doc;
   let fields = quote! {
@@ -105,6 +106,7 @@ fn push(ty: &syn::Type, attrs: &FieldAttrs) -> TokenStream {
       negated: #negated,
       apply: #apply,
       secret: #secret,
+      path: #path,
       doc: #doc,
     }
   };
