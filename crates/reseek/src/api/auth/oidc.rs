@@ -22,7 +22,7 @@ use crate::app::AppState;
 use crate::auth::cookies::{self, Scope};
 use crate::auth::oidc::flow::{self, LOGIN_TIME, NotSignedIn, is_local_path};
 use crate::auth::oidc::logout::{NotTaken, check_token, end_session_url};
-use crate::auth::oidc::{Provider, external_base};
+use crate::auth::oidc::{Provider, external_base, subject_of};
 use crate::auth::sessions::{self, NewSession, Origin};
 use crate::auth::{
   Administrator, Authorized, Presented, end_sessions, session_cookie, start_session,
@@ -213,10 +213,10 @@ async fn callback(
     &app,
     &presented,
     NewSession {
-      subject: format!("oidc:{name}:{}", claims.subject),
+      subject: subject_of(&name, &claims.subject),
       name: admitted.name,
       email: admitted.email,
-      groups: serde_json::to_string(&admitted.groups).ok(),
+      groups: Some(admitted.groups),
       role: admitted.role,
       origin: Origin::Oidc(name.clone()),
       ttl: sessions::lifetime(provider.options.session_ttl),
@@ -312,7 +312,7 @@ async fn backchannel(
     }
   };
   let origin = Origin::Oidc(name.clone());
-  let subject = logged_out.sub.map(|sub| format!("oidc:{name}:{sub}"));
+  let subject = logged_out.sub.map(|sub| subject_of(&name, &sub));
   let _logging_out = app.auth.oidc.logging_out().await;
   let ids = sessions::of_provider_login(&app.auth.db, &origin, logged_out.sid, subject)
     .await
@@ -847,6 +847,56 @@ mod tests {
       }
       assert_eq!(expired().await.status, 429, "{broken}");
     }
+  }
+
+  #[tokio::test]
+  async fn a_provider_users_role_follows_the_configuration_on_each_request() {
+    let (issuer, app) = setup("deny").await;
+    let reload = async |extra: &str, readwrite: &str| {
+      let text = format!(
+        "[web.authentication.oidc.home]\nissuer = \"{}\"\nclient_id = \"{CLIENT_ID}\"\n\
+         client_secret = \"{CLIENT_SECRET}\"\n{extra}[web.authentication.oidc.home.role_mapping]\n\
+         administrator = [\"admins\"]\nreadwrite = [{readwrite}]\ndefault = \"deny\"\n",
+        issuer.url
+      );
+      std::fs::write(app.dir.path().join("config.toml"), text).unwrap();
+      app.state.config.reload().await.unwrap();
+    };
+    let started = start(&app, "/").await;
+    let nonce = started.params["nonce"].clone();
+    grant(
+      &issuer,
+      &started,
+      "c1",
+      json!({
+        "sub": "u1", "nonce": nonce, "groups": ["users"], "email": "a@example.net",
+        "email_verified": true,
+      }),
+    );
+    let cookie = set_cookie(&back(&app, &started, "c1").await.headers, "reseek_session").unwrap();
+    assert_eq!(me(&app, &cookie).await.json()["role"], "ReadWrite");
+
+    reload("", "").await;
+    assert_eq!(
+      me(&app, &cookie).await.status,
+      401,
+      "no group grants a role now"
+    );
+    reload("", "\"users\"").await;
+    assert_eq!(me(&app, &cookie).await.json()["role"], "ReadWrite");
+    reload("allowed_subjects = [\"u2\"]\n", "\"users\"").await;
+    assert_eq!(
+      me(&app, &cookie).await.status,
+      401,
+      "not an allowed subject"
+    );
+    reload("allowed_emails = [\"a@example.net\"]\n", "\"users\"").await;
+    assert_eq!(me(&app, &cookie).await.json()["role"], "ReadWrite");
+    reload("allowed_emails = [\"b@example.net\"]\n", "\"users\"").await;
+    assert_eq!(me(&app, &cookie).await.status, 401, "not an allowed email");
+    std::fs::write(app.dir.path().join("config.toml"), "").unwrap();
+    app.state.config.reload().await.unwrap();
+    assert_eq!(me(&app, &cookie).await.status, 401, "the provider is gone");
   }
 
   #[tokio::test]

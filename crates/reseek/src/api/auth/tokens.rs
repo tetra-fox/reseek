@@ -210,7 +210,7 @@ async fn revoke(
     return Err(ApiError::not_found("No such token"));
   }
   info!(id = %id, by = caller.principal.subject, "API token revoked");
-  app.live.credentials_ended();
+  app.live.credentials_changed();
   raise(&app, &token, &caller.principal.subject, false);
   Ok(StatusCode::NO_CONTENT)
 }

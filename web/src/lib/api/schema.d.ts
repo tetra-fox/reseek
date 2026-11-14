@@ -7687,7 +7687,7 @@ export interface components {
             lastSeenAt: string;
             /** @description the name to show for who signed in */
             name: string;
-            /** @description the role, fixed at login */
+            /** @description the role the configuration in effect gives its user */
             role: components["schemas"]["Role"];
             /**
              * @description the stable id of who signed in, such as `local:admin`
@@ -7708,7 +7708,7 @@ export interface components {
             ip?: string | null;
             /** @description the name to show for who signed in */
             name: string;
-            /** @description the session's role, fixed for its lifetime */
+            /** @description the role they signed in with; each request reads it again from the configuration */
             role: components["schemas"]["Role"];
             /**
              * @description the stable id of who signed in

@@ -30,11 +30,19 @@ pub struct Account {
   pub role: Role,
 }
 
+/// What the subject of a local account starts with, before its username.
+const SUBJECT_PREFIX: &str = "local:";
+
 impl Account {
   /// The subject its sessions act as.
   pub fn subject(&self) -> String {
-    format!("local:{}", self.username)
+    format!("{SUBJECT_PREFIX}{}", self.username)
   }
+}
+
+/// The username of a local account's `subject`.
+pub fn username_of(subject: &str) -> Option<&str> {
+  subject.strip_prefix(SUBJECT_PREFIX)
 }
 
 /// How long a password check waits for one of those running to finish.

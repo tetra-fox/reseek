@@ -7,7 +7,7 @@ use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, 
 use crate::db::{self, Schema};
 
 /// The tables of `auth.db`.
-pub static SCHEMA: Schema = db::schema!("auth", ["0001_initial"], private);
+pub static SCHEMA: Schema = db::schema!("auth", ["0001_initial", "0002_session_role"], private);
 
 /// A role as the database stores it: 0, 1 and 3, as the roles have always been numbered.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

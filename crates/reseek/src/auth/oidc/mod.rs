@@ -402,6 +402,19 @@ impl<'c> AsyncHttpClient<'c> for ProviderHttp {
   }
 }
 
+/// The subject the user `sub` of the provider `provider` signs in as.
+pub fn subject_of(provider: &str, sub: &str) -> String {
+  format!("oidc:{provider}:{sub}")
+}
+
+/// The provider's id for its user in `subject`, when [`subject_of`] made it for `provider`.
+pub fn provider_subject<'a>(provider: &str, subject: &'a str) -> Option<&'a str> {
+  subject
+    .strip_prefix("oidc:")?
+    .strip_prefix(provider)?
+    .strip_prefix(':')
+}
+
 /// The public base URL of the daemon: `web.external_url` when set, else the scheme and host
 /// the client used with the URL base; `None` when the request names no host.
 pub fn external_base(url_base: &str, options: &Options, client: &Client) -> Option<String> {

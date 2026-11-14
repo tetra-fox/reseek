@@ -25344,7 +25344,7 @@
           },
           "role": {
             "$ref": "#/components/schemas/Role",
-            "description": "the role, fixed at login"
+            "description": "the role the configuration in effect gives its user"
           },
           "subject": {
             "type": "string",
@@ -25388,7 +25388,7 @@
           },
           "role": {
             "$ref": "#/components/schemas/Role",
-            "description": "the session's role, fixed for its lifetime"
+            "description": "the role they signed in with; each request reads it again from the configuration"
           },
           "subject": {
             "type": "string",

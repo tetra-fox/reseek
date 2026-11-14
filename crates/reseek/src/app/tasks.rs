@@ -46,6 +46,8 @@ async fn follow_configuration(app: AppState) {
     }
     let loaded = loads.borrow_and_update().clone();
     app.state.configured(&loaded);
+    // a principal's role is read from the configuration, so every stream checks its own again
+    app.live.credentials_changed();
     app
       .live
       .publish(LiveFrame::ApplicationOptions(view::document(&loaded)));
@@ -135,7 +137,7 @@ pub(crate) async fn end_lapsed_sessions(app: &AppState) {
   match ended {
     Ok(ended) => {
       if !ended.is_empty() {
-        app.live.credentials_ended();
+        app.live.credentials_changed();
       }
       for session in ended {
         debug!(subject = session.subject, "session ended by time");

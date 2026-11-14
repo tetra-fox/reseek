@@ -189,7 +189,7 @@ pub struct SessionCreated {
   pub name: String,
   /// how they signed in
   pub via: Via,
-  /// the session's role, fixed for its lifetime
+  /// the role they signed in with; each request reads it again from the configuration
   pub role: Role,
   /// the client address they signed in from, null when unknown
   pub ip: Option<String>,

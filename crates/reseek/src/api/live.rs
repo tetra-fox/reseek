@@ -558,6 +558,45 @@ mod tests {
     );
   }
 
+  #[tokio::test]
+  async fn a_role_lowered_in_the_configuration_ends_its_streams_at_once() {
+    let account = |role: &str| {
+      format!("[web.authentication.local.users.alice]\npassword = \"pw\"\nrole = \"{role}\"\n")
+    };
+    let app = app(&account("administrator"), &[]).await;
+    let login = app
+      .send_from(
+        OUTSIDE,
+        request(
+          "POST",
+          "/api/v0/session",
+          Some(json!({ "username": "alice", "password": "pw" })),
+        ),
+      )
+      .await;
+    let cookie = crate::testing::set_cookie(&login.headers, "reseek_session").unwrap();
+    let mut stream = app
+      .stream_from(
+        OUTSIDE,
+        with(
+          request("GET", "/api/v0/live?topics=logs", None),
+          "cookie",
+          &cookie,
+        ),
+      )
+      .await;
+    assert_eq!(stream.status, 200);
+    stream.next().await.unwrap();
+
+    // well inside the 30 s between the checks a stream makes by itself
+    let started = tokio::time::Instant::now();
+    std::fs::write(app.dir.path().join("config.toml"), account("readonly")).unwrap();
+    app.state.config.reload().await.unwrap();
+    let bye = stream.until("bye").await.pop().unwrap();
+    assert_eq!(bye.data, json!({ "reason": "unauthorized" }));
+    assert!(started.elapsed() < std::time::Duration::from_secs(5));
+  }
+
   // a session's uses are wall-clock times in the database, which paused time does not move, so
   // the session is moved back instead
   #[tokio::test(start_paused = true)]

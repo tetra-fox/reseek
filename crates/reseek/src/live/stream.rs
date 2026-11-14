@@ -171,9 +171,9 @@ async fn write(
   output: mpsc::Sender<Bytes>,
 ) {
   let queue = registered.queue.clone();
-  let mut ended = registered.hub.ended.subscribe();
-  // a session or token that ended while the stream opened is caught by checking once at the start
-  ended.mark_changed();
+  let mut credentials = registered.hub.credentials.subscribe();
+  // a credential that changed while the stream opened is caught by checking once at the start
+  credentials.mark_changed();
   let mut last_id = registered.at;
   for bytes in std::iter::once(Bytes::from_static(b"retry: 1000\n\n")).chain(first) {
     if output.send(bytes).await.is_err() {
@@ -234,7 +234,7 @@ async fn write(
         false
       }
       () = sleep_until(recheck) => true,
-      Ok(()) = ended.changed() => true,
+      Ok(()) = credentials.changed() => true,
     };
     if check {
       if !revalidate().await {

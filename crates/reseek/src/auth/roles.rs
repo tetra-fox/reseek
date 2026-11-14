@@ -4,7 +4,7 @@ use api_types::auth::Role;
 use serde_json::Value;
 
 use crate::config::enums::DefaultRole;
-use crate::config::{OidcRoleMapping, RoleMapping};
+use crate::config::{Oidc, OidcRoleMapping, RoleMapping};
 
 /// The groups that grant each role, and the role of everyone else.
 pub struct Mapping<'a> {
@@ -62,6 +62,28 @@ impl Mapping<'_> {
       DefaultRole::Administrator => Some(Role::Administrator),
     }
   }
+}
+
+/// The role an identity provider's `options` give its user `subject` with the verified `email`
+/// and `groups`; why not when they let the user in with none.
+pub fn provider_role(
+  options: &Oidc,
+  subject: &str,
+  email: Option<&str>,
+  groups: &[String],
+) -> Result<Role, String> {
+  if !options.allowed_subjects.is_empty() && !options.allowed_subjects.iter().any(|s| s == subject)
+  {
+    return Err("the subject is not in allowed_subjects".to_string());
+  }
+  if !options.allowed_emails.is_empty()
+    && !email.is_some_and(|email| options.allowed_emails.iter().any(|e| e == email))
+  {
+    return Err("no verified email in allowed_emails".to_string());
+  }
+  Mapping::from(&options.role_mapping)
+    .role(groups)
+    .ok_or_else(|| "in no group that grants a role".to_string())
 }
 
 /// The strings at the dotted `path` in `claims`: a list of strings, or one string.

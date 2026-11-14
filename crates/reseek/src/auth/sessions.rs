@@ -1,6 +1,8 @@
 //! Browser sessions: kept in `auth.db` so they can be listed and revoked. The cookie holds the
 //! session's id and an HMAC of it, so a forged id is refused before the database is read. A
-//! session ends when it expires, when it goes unused for too long, or when it is revoked.
+//! session ends when it expires, when it goes unused for too long, or when it is revoked. Its
+//! role is not kept: each request reads it from the configuration in effect, with the groups
+//! and email of the user's last sign-in, so a user removed or lowered there loses it at once.
 
 use api_types::auth::session::Session;
 use api_types::auth::{Principal, Role, Via};
@@ -9,8 +11,10 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use chrono::{DateTime, Duration, Utc};
 use rusqlite::{OptionalExtension, Row, params};
 
+use super::roles::{Mapping, provider_role};
 use super::secret::Secret;
-use super::store::StoredRole;
+use super::{local, oidc};
+use crate::config::Authentication;
 use crate::crypto;
 use crate::db::{Database, DbError, read_timestamp, shifted, timestamp};
 
@@ -88,8 +92,10 @@ pub struct StoredSession {
   pub subject: String,
   /// the name to show for them
   pub name: String,
-  /// its role, fixed at login
-  pub role: Role,
+  /// the groups of their last sign-in through an identity provider or a proxy
+  pub groups: Vec<String>,
+  /// the email address of their last sign-in, verified when it came from an identity provider
+  pub email: Option<String>,
   /// how it was established
   pub origin: Origin,
   /// the identity provider's session id
@@ -115,7 +121,6 @@ impl std::fmt::Debug for StoredSession {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     f.debug_struct("StoredSession")
       .field("subject", &self.subject)
-      .field("role", &self.role)
       .field("origin", &self.origin)
       .field("expires_at", &self.expires_at)
       .field("revoked_at", &self.revoked_at)
@@ -135,24 +140,45 @@ impl StoredSession {
     now - self.last_seen_at >= SEEN_WRITES.min(idle / 10)
   }
 
-  /// The principal its requests act as.
-  pub fn principal(&self) -> Principal {
+  /// The role `authentication` gives its user now; `None` when it lets them in no more, as for
+  /// a local account removed, a provider removed, or groups or allow-lists that refuse them.
+  pub fn role(&self, authentication: &Authentication) -> Option<Role> {
+    match &self.origin {
+      Origin::Local => {
+        let username = local::username_of(&self.subject)?;
+        if username == authentication.username {
+          return Some(Role::Administrator);
+        }
+        let user = authentication.local.users.get(username)?;
+        Some(user.role.into())
+      }
+      Origin::Oidc(name) => {
+        let options = authentication.oidc.get(name)?;
+        let subject = oidc::provider_subject(name, &self.subject)?;
+        provider_role(options, subject, self.email.as_deref(), &self.groups).ok()
+      }
+      Origin::Proxy => Mapping::from(&authentication.proxy.role_mapping).role(&self.groups),
+    }
+  }
+
+  /// The principal its requests act as with `role`.
+  pub fn principal(&self, role: Role) -> Principal {
     Principal {
       subject: self.subject.clone(),
       name: self.name.clone(),
-      role: self.role,
+      role,
       via: self.origin.via(),
     }
   }
 
-  /// The session as the sessions list shows it.
-  pub fn to_api(&self, current: bool) -> Session {
+  /// The session with `role` as the sessions list shows it.
+  pub fn to_api(&self, current: bool, role: Role) -> Session {
     Session {
       id: self.id.clone(),
       subject: self.subject.clone(),
       name: self.name.clone(),
       via: self.origin.via(),
-      role: self.role,
+      role,
       created_at: self.created_at,
       last_seen_at: self.last_seen_at,
       ip: self.ip.clone(),
@@ -184,11 +210,11 @@ pub struct NewSession {
   pub subject: String,
   /// the name to show
   pub name: String,
-  /// their email address, when known
+  /// their email address, when known; from an identity provider only a verified one
   pub email: Option<String>,
-  /// their groups as JSON, for an identity provider or proxy login
-  pub groups: Option<String>,
-  /// the role, fixed for the session's life
+  /// their groups, for an identity provider or proxy login
+  pub groups: Option<Vec<String>>,
+  /// the role they signed in with, which the event telling of the session carries
   pub role: Role,
   /// how they signed in
   pub origin: Origin,
@@ -204,9 +230,9 @@ pub struct NewSession {
   pub user_agent: Option<String>,
 }
 
-const COLUMNS: &str = "s.id, s.subject, coalesce(i.name, s.subject), s.role, s.via, s.idp_sid, \
-                       s.id_token, s.created_at, s.expires_at, s.last_seen_at, s.ip, \
-                       s.user_agent, s.revoked_at";
+const COLUMNS: &str = "s.id, s.subject, coalesce(i.name, s.subject), i.claims_json, i.email, \
+                       s.via, s.idp_sid, s.id_token, s.created_at, s.expires_at, s.last_seen_at, \
+                       s.ip, s.user_agent, s.revoked_at";
 
 const FROM: &str = "sessions s LEFT JOIN identities i ON i.subject = s.subject";
 
@@ -214,21 +240,28 @@ fn read_row(row: &Row<'_>) -> rusqlite::Result<StoredSession> {
   let time = |index: usize| -> rusqlite::Result<DateTime<Utc>> {
     read_timestamp(&row.get::<_, String>(index)?)
   };
+  let groups = match row.get::<_, Option<String>>(3)? {
+    Some(json) => serde_json::from_str(&json).map_err(|e| {
+      rusqlite::Error::FromSqlConversionFailure(3, rusqlite::types::Type::Text, e.into())
+    })?,
+    None => Vec::new(),
+  };
   Ok(StoredSession {
     id: row.get(0)?,
     subject: row.get(1)?,
     name: row.get(2)?,
-    role: row.get::<_, StoredRole>(3)?.0,
-    origin: Origin::parse(&row.get::<_, String>(4)?)?,
-    idp_sid: row.get(5)?,
-    id_token: row.get(6)?,
-    created_at: time(7)?,
-    expires_at: time(8)?,
-    last_seen_at: time(9)?,
-    ip: row.get(10)?,
-    user_agent: row.get(11)?,
+    groups,
+    email: row.get(4)?,
+    origin: Origin::parse(&row.get::<_, String>(5)?)?,
+    idp_sid: row.get(6)?,
+    id_token: row.get(7)?,
+    created_at: time(8)?,
+    expires_at: time(9)?,
+    last_seen_at: time(10)?,
+    ip: row.get(11)?,
+    user_agent: row.get(12)?,
     revoked_at: row
-      .get::<_, Option<String>>(12)?
+      .get::<_, Option<String>>(13)?
       .as_deref()
       .map(read_timestamp)
       .transpose()?,
@@ -238,11 +271,16 @@ fn read_row(row: &Row<'_>) -> rusqlite::Result<StoredSession> {
 /// Records the sign-in of `new.subject` and makes a session for it.
 pub async fn create(db: &Database, new: NewSession) -> Result<StoredSession, DbError> {
   let now = Utc::now();
+  let claims = new
+    .groups
+    .as_ref()
+    .map(|groups| serde_json::to_string(groups).expect("a list of strings always encodes"));
   let session = StoredSession {
     id: URL_SAFE_NO_PAD.encode(crypto::random_bytes(ID_BYTES)),
     subject: new.subject,
     name: new.name,
-    role: new.role,
+    groups: new.groups.unwrap_or_default(),
+    email: new.email,
     origin: new.origin,
     idp_sid: new.idp_sid,
     id_token: new.id_token,
@@ -254,31 +292,28 @@ pub async fn create(db: &Database, new: NewSession) -> Result<StoredSession, DbE
     revoked_at: None,
   };
   let row = session.clone();
-  let (email, groups) = (new.email, new.groups);
   db.write(move |conn| {
     let tx = conn.transaction()?;
     tx.execute(
       "INSERT INTO identities (subject, provider, name, email, claims_json, first_login_at, \
        last_login_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6) ON CONFLICT (subject) DO UPDATE SET \
-       provider = excluded.provider, name = excluded.name, email = coalesce(excluded.email, \
-       email), claims_json = coalesce(excluded.claims_json, claims_json), last_login_at = \
-       excluded.last_login_at",
+       provider = excluded.provider, name = excluded.name, email = excluded.email, claims_json = \
+       coalesce(excluded.claims_json, claims_json), last_login_at = excluded.last_login_at",
       params![
         row.subject,
         row.origin.stored(),
         row.name,
-        email,
-        groups,
+        row.email,
+        claims,
         timestamp(now)
       ],
     )?;
     tx.execute(
-      "INSERT INTO sessions (id, subject, role, via, idp_sid, id_token, created_at, expires_at, \
-       last_seen_at, ip, user_agent) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?7, ?9, ?10)",
+      "INSERT INTO sessions (id, subject, via, idp_sid, id_token, created_at, expires_at, \
+       last_seen_at, ip, user_agent) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?6, ?8, ?9)",
       params![
         row.id,
         row.subject,
-        StoredRole(row.role),
         row.origin.stored(),
         row.idp_sid,
         row.id_token,
@@ -450,7 +485,8 @@ mod tests {
         id: "id".into(),
         subject: "alice".into(),
         name: "alice".into(),
-        role: Role::ReadWrite,
+        groups: Vec::new(),
+        email: None,
         origin: Origin::Local,
         idp_sid: None,
         id_token: None,

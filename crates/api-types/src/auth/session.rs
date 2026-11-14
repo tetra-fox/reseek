@@ -118,7 +118,7 @@ pub struct Session {
   /// how the session was established: a local login, an OpenID Connect login or a reverse
   /// proxy
   pub via: Via,
-  /// the role, fixed at login
+  /// the role the configuration in effect gives its user
   pub role: Role,
   /// when the login happened
   pub created_at: DateTime<Utc>,

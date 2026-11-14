@@ -19,7 +19,7 @@ use serde_json::Value;
 use tracing::debug;
 
 use super::{ExtraClaims, Keys, LEEWAY, Metadata, OidcClient, OidcIdToken, Provider};
-use crate::auth::roles::{Mapping, claim_strings};
+use crate::auth::roles::{claim_strings, provider_role};
 use crate::auth::secret::Secret;
 use crate::crypto;
 use crate::http::outbound::error_chain;
@@ -247,7 +247,8 @@ pub struct Admitted {
   pub role: Role,
   /// the name to show
   pub name: String,
-  /// their email address
+  /// their email address when the provider verified it, which the allowed emails are checked
+  /// against again on each request
   pub email: Option<String>,
   /// their groups
   pub groups: Vec<String>,
@@ -265,18 +266,8 @@ pub fn admit(provider: &Provider, claims: &Claims) -> Result<Admitted, String> {
       .and_then(Value::as_bool)
       .unwrap_or(false)
   });
-  if !options.allowed_subjects.is_empty() && !options.allowed_subjects.contains(&claims.subject) {
-    return Err("the subject is not in allowed_subjects".to_string());
-  }
-  if !options.allowed_emails.is_empty()
-    && !verified_email.is_some_and(|email| options.allowed_emails.iter().any(|e| e == email))
-  {
-    return Err("no verified email in allowed_emails".to_string());
-  }
   let groups = claim_strings(&claims.claims, &options.role_mapping.claim);
-  let role = Mapping::from(&options.role_mapping)
-    .role(&groups)
-    .ok_or_else(|| "in no group that grants a role".to_string())?;
+  let role = provider_role(options, &claims.subject, verified_email, &groups)?;
   let name = claim(&options.username_claim)
     .or_else(|| claim("email"))
     .unwrap_or(&claims.subject)
@@ -284,7 +275,7 @@ pub fn admit(provider: &Provider, claims: &Claims) -> Result<Admitted, String> {
   Ok(Admitted {
     role,
     name,
-    email: claim("email").map(str::to_string),
+    email: verified_email.map(str::to_string),
     groups,
   })
 }

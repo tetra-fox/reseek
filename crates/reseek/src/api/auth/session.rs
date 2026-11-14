@@ -291,10 +291,16 @@ async fn list(
   let active = sessions::active(&app.auth.db, whose, crate::auth::idle(&app))
     .await
     .map_err(ApiError::internal)?;
+  let options = app.config.current();
+  let authentication = &options.values.web.authentication;
+  // a session whose user the configuration gives no role is not let in, so it is not listed
   Ok(Json(
     active
       .iter()
-      .map(|session| session.to_api(current.as_deref() == Some(session.id.as_str())))
+      .filter_map(|session| {
+        let role = session.role(authentication)?;
+        Some(session.to_api(current.as_deref() == Some(session.id.as_str()), role))
+      })
       .collect(),
   ))
 }
@@ -592,6 +598,78 @@ mod tests {
       )
       .await;
     assert_eq!(missing.status, 400);
+  }
+
+  #[tokio::test]
+  async fn a_lowered_or_removed_user_loses_the_role_on_the_next_request() {
+    let config = |role: Option<&str>| match role {
+      Some(role) => format!(
+        "[web.authentication.local.users.viewer]\npassword = \"look\"\nrole = \"{role}\"\n\
+         [web.authentication.api_keys.robot]\nkey = \"robot-key-0123456789\"\nrole = \"{role}\"\n"
+      ),
+      None => String::new(),
+    };
+    let app = app(&config(Some("administrator")), &[]).await;
+    let reload = async |text: String| {
+      std::fs::write(app.dir.path().join("config.toml"), text).unwrap();
+      app.state.config.reload().await.unwrap();
+    };
+    let admin = signed_in(&app).await;
+    let signed = app
+      .send_from(
+        OUTSIDE,
+        request(
+          "POST",
+          "/api/v0/session",
+          Some(json!({ "username": "viewer", "password": "look" })),
+        ),
+      )
+      .await;
+    let cookie = set_cookie(&signed.headers, "reseek_session").unwrap();
+    let credentials = [
+      ("cookie", cookie.as_str()),
+      ("x-api-key", "robot-key-0123456789"),
+    ];
+    let send = |uri: &str, (name, value): (&'static str, &str)| {
+      app.send_from(OUTSIDE, with(request("GET", uri, None), name, value))
+    };
+    for credential in credentials {
+      let answer = send("/api/v0/options/view", credential).await;
+      assert_eq!(answer.status, 200, "{credential:?}");
+    }
+
+    reload(config(Some("readonly"))).await;
+    for credential in credentials {
+      let answer = send("/api/v0/options/view", credential).await;
+      assert_eq!(answer.status, 403, "{credential:?} is no administrator now");
+    }
+    let me = send("/api/v0/session", credentials[0]).await.json();
+    assert_eq!(me["role"], "ReadOnly");
+    let listed = send("/api/v0/sessions", ("cookie", admin.as_str()))
+      .await
+      .json();
+    let roles: Vec<&str> = listed
+      .as_array()
+      .unwrap()
+      .iter()
+      .map(|session| session["role"].as_str().unwrap())
+      .collect();
+    assert_eq!(roles, ["ReadOnly", "Administrator"]);
+
+    reload(config(None)).await;
+    for credential in credentials {
+      let answer = send("/api/v0/session", credential).await;
+      assert_eq!(answer.status, 401, "{credential:?} is gone");
+    }
+    let cleared = send("/api/v0/session", credentials[0]).await;
+    assert_eq!(
+      set_cookie(&cleared.headers, "reseek_session").as_deref(),
+      Some("reseek_session=")
+    );
+    let listed = send("/api/v0/sessions", ("cookie", admin.as_str()))
+      .await
+      .json();
+    assert_eq!(listed.as_array().unwrap().len(), 1, "{listed}");
   }
 
   #[tokio::test]
@@ -902,7 +980,10 @@ mod tests {
       }
     });
     let app = app(
-      &format!("[web.authentication.oidc.home]\nissuer = \"{issuer}\"\nclient_id = \"reseek\"\n"),
+      &format!(
+        "[web.authentication.oidc.home]\nissuer = \"{issuer}\"\nclient_id = \"reseek\"\n\
+         [web.authentication.oidc.home.role_mapping]\nreadwrite = [\"users\"]\n"
+      ),
       &[],
     )
     .await;
@@ -913,7 +994,7 @@ mod tests {
         subject: "oidc:home:u1".to_string(),
         name: "alice".to_string(),
         email: None,
-        groups: None,
+        groups: Some(vec!["users".to_string()]),
         role: api_types::auth::Role::ReadWrite,
         origin: Origin::Oidc("home".to_string()),
         ttl: chrono::Duration::hours(1),

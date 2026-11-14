@@ -51,8 +51,9 @@ struct Hub {
   cancel: CancellationToken,
   /// who has a stream open, changed under the state's lock as streams open and close
   audience: watch::Sender<Audience>,
-  /// marked whenever a session or token ends, so every stream checks its credential at once
-  ended: watch::Sender<()>,
+  /// marked whenever a session or token ends or the configuration changes, so every stream
+  /// checks its credential at once
+  credentials: watch::Sender<()>,
   /// woken whenever a stream closes and gives back its place under the cap
   freed: Notify,
 }
@@ -173,7 +174,7 @@ impl Live {
         epoch: format!("{:016x}", rand::random::<u64>()),
         cancel,
         audience: watch::Sender::new(Audience::default()),
-        ended: watch::Sender::new(()),
+        credentials: watch::Sender::new(()),
         freed: Notify::new(),
       }),
     }
@@ -245,9 +246,10 @@ impl Live {
   }
 
   /// Has every open stream check its credential now rather than at its next turn, for when a
-  /// session or token ended: the streams it opened close at once.
-  pub fn credentials_ended(&self) {
-    self.hub.ended.send_modify(|()| {});
+  /// session or token ended or the configuration changed what one may do: the streams that lost
+  /// their way in close at once.
+  pub fn credentials_changed(&self) {
+    self.hub.credentials.send_modify(|()| {});
   }
 
   /// Who has a stream open; a receiver is woken only when a count changed.
