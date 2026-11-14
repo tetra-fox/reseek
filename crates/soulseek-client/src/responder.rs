@@ -136,11 +136,16 @@ impl SearchResponder {
     }
   }
 
-  /// the searcher answers ride on the connection request `response_token` for: answers kept
-  /// under it, or waiting on its attempt
+  /// The searcher answers ride on the connection request `response_token` for: answers kept
+  /// under it, or waiting on its attempt. A request the searcher's late connection took is
+  /// answered, and is no one's after that.
   pub(crate) fn searcher_for(&self, response_token: u32) -> Option<String> {
-    let kept = self
-      .undelivered()
+    // held while the arrivals are read, as when a late connection is recorded
+    let undelivered = self.undelivered();
+    if crate::lock(&self.arrived).peek(&response_token).is_some() {
+      return None;
+    }
+    let kept = undelivered
       .find(|(rode_on, _)| *rode_on == response_token)
       .map(|kept| kept.username.clone());
     kept.or_else(|| crate::lock(&self.riding).get(&response_token).cloned())
@@ -787,6 +792,40 @@ mod tests {
         .await
     );
     assert_eq!(answers_read(&mut carol, 1).await, [1]);
+    drop(waiting);
+  }
+
+  #[tokio::test]
+  async fn a_request_the_searchers_late_connection_answered_is_not_known_again() {
+    let client = Client::new(ClientOptions {
+      enable_listener: false,
+      ..ClientOptions::default()
+    })
+    .unwrap();
+    let nowhere = std::net::TcpListener::bind("127.0.0.1:0")
+      .unwrap()
+      .local_addr()
+      .unwrap();
+    let mut waiting = client.responder().wait_for("carol");
+    let reached = client
+      .reach(
+        "carol",
+        Some(nowhere),
+        &CancellationToken::new(),
+        |request| {
+          waiting.rides_on(request);
+        },
+      )
+      .await;
+    let request = reached.err().unwrap().request.unwrap();
+    assert_eq!(
+      client.responder().searcher_for(request).as_deref(),
+      Some("carol")
+    );
+    // carol's late connection takes the request, while an answer still waits on her
+    client.try_respond_cached(request).await;
+    // someone else connecting with the same token is not taken for carol
+    assert_eq!(client.responder().searcher_for(request), None);
     drop(waiting);
   }
 
