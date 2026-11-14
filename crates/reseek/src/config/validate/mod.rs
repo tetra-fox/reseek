@@ -26,8 +26,6 @@ pub struct Context {
   pub default_downloads: PathBuf,
   /// the default incomplete directory, exempt like `default_downloads`
   pub default_incomplete: PathBuf,
-  /// the directory of the running program, which `web.content_path` is relative to
-  pub program_dir: PathBuf,
   /// whether the daemon started with case-sensitive patterns: the flag takes a restart, so every
   /// pattern is compiled with it until then, and checked the same way
   pub started_case_sensitive: bool,
@@ -49,7 +47,7 @@ pub fn validate(options: &Options, context: &Context) -> Result<(), Vec<Invalid>
     case_sensitive,
   ));
   transfers::check(&options.transfers, case_sensitive, &mut report);
-  web::check(&options.web, context, &mut report);
+  web::check(&options.web, &mut report);
   soulseek::check(&options.soulseek, &mut report);
   scripts::check(&options.integrations, &mut report);
   analysis::check(&options.analysis, &mut report);
@@ -91,7 +89,6 @@ mod tests {
     Context {
       default_downloads: dir.join("downloads"),
       default_incomplete: dir.join("incomplete"),
-      program_dir: dir.to_path_buf(),
       started_case_sensitive: false,
     }
   }

@@ -1,10 +1,9 @@
-//! Path options: whether the file or directory a path names is there and usable. Whether a path
-//! is absolute or steps outside where it starts is [`crate::safety`]'s.
+//! Path options: whether the file or directory a path names is there and usable. A path reaches
+//! these checks absolute and without `.` and `..`: the configuration resolves one set in a
+//! file, a variable or a flag, and refuses a relative one set at run time.
 
 use std::fs;
 use std::path::{Path, PathBuf};
-
-use crate::safety::{Os, is_absolute, non_traversing};
 
 /// A path that is set is not the empty string, which would name the working directory.
 pub(crate) fn not_empty(name: &str, path: &Path) -> Result<(), String> {
@@ -14,41 +13,28 @@ pub(crate) fn not_empty(name: &str, path: &Path) -> Result<(), String> {
   Ok(())
 }
 
-/// An absolute path for the running system that does not step outside itself.
-pub(crate) fn absolute(name: &str, path: &Path) -> Result<(), String> {
-  not_empty(name, path)?;
-  let text = path.to_string_lossy();
-  if !is_absolute(&text, Os::CURRENT) {
-    return Err(format!(
-      "The field {name} must be an absolute path on the current operating system."
-    ));
-  }
-  non_traversing(name, &text)
-}
-
 /// A file that exists and can be opened for reading.
 pub(crate) fn readable_file(name: &str, path: &Path) -> Result<(), String> {
   not_empty(name, path)?;
-  let full = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
-  if !full.is_file() {
+  if !path.is_file() {
     return Err(format!(
       "The field {name} specifies a file '{}' that does not exist.",
-      full.display()
+      path.display()
     ));
   }
-  fs::File::open(&full).map(drop).map_err(|_| {
+  fs::File::open(path).map(drop).map_err(|_| {
     format!(
       "The field {name} specifies a file '{}' that cannot be opened for reading.",
-      full.display()
+      path.display()
     )
   })
 }
 
-/// A download directory: absolute, not stepping outside itself, and an existing writable
-/// directory, unless it is `default`, which is made at startup. A path is compared to the
-/// default after resolving links, so another spelling of the default is the default too.
+/// A download directory: an existing writable directory, unless it is `default`, which is made
+/// at startup. A path is compared to the default after resolving links, so another spelling of
+/// the default is the default too.
 pub(crate) fn download_directory(name: &str, path: &Path, default: &Path) -> Result<(), String> {
-  absolute(name, path)?;
+  not_empty(name, path)?;
   if resolved(path) == resolved(default) {
     return Ok(());
   }
@@ -56,16 +42,10 @@ pub(crate) fn download_directory(name: &str, path: &Path, default: &Path) -> Res
   writable(name, path)
 }
 
-/// The directory `path` names, under the program's directory, exists.
-pub(crate) fn directory_under(name: &str, path: &Path, base: &Path) -> Result<(), String> {
+/// A directory that exists.
+pub(crate) fn directory(name: &str, path: &Path) -> Result<(), String> {
   not_empty(name, path)?;
-  let text = path.to_string_lossy();
-  if path.has_root() || is_absolute(&text, Os::CURRENT) {
-    return Err(format!(
-      "The field {name} must be a relative directory path, not '{text}'."
-    ));
-  }
-  existing_directory(name, &base.join(path))
+  existing_directory(name, path)
 }
 
 fn existing_directory(name: &str, path: &Path) -> Result<(), String> {
@@ -122,7 +102,6 @@ mod tests {
       download_directory("d", Path::new(""), &default).unwrap_err(),
       "The field d must be absent or a path."
     );
-    assert!(download_directory("d", Path::new("relative"), &default).is_err());
   }
 
   #[cfg(unix)]

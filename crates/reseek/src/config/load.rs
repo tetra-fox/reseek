@@ -71,7 +71,6 @@ pub fn layers(
   overrides: Option<Overrides>,
 ) -> Layers<Options> {
   let defaults = defaults.clone();
-  let program_dir = program_dir();
   // the first options validated are the ones the daemon starts with
   let started = Arc::new(OnceLock::new());
   let mut layers = Layers::<Options>::new()
@@ -93,7 +92,6 @@ pub fn layers(
         &Context {
           default_downloads,
           default_incomplete,
-          program_dir: program_dir.clone(),
           started_case_sensitive,
         },
       )
@@ -102,14 +100,6 @@ pub fn layers(
     layers = layers.overrides(overrides);
   }
   layers
-}
-
-/// The directory of the running program, which `web.content_path` is relative to.
-pub fn program_dir() -> PathBuf {
-  std::env::current_exe()
-    .ok()
-    .and_then(|exe| exe.parent().map(Path::to_path_buf))
-    .unwrap_or_default()
 }
 
 /// The set variables that start with `RESEEK_` but no option reads and nothing else reads
@@ -174,9 +164,10 @@ mod tests {
   fn a_relative_directory_in_a_file_counts_from_the_file() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::create_dir(dir.path().join("dl")).unwrap();
+    std::fs::create_dir(dir.path().join("ui")).unwrap();
     std::fs::write(
       dir.path().join("config.toml"),
-      "[directories]\ndownloads = \"dl\"\n",
+      "[directories]\ndownloads = \"dl\"\n[web]\ncontent_path = \"ui\"\n",
     )
     .unwrap();
     let sources = Sources {
@@ -189,6 +180,7 @@ mod tests {
     let options = &watcher.current().values;
     let paths = defaults.resolve(options).unwrap();
     assert_eq!(paths.downloads, dir.path().join("dl"));
+    assert_eq!(options.web.content_path, Some(dir.path().join("ui")));
     assert_eq!(
       paths.config,
       std::env::current_dir().unwrap().join("conf"),

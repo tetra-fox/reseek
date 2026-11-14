@@ -9,14 +9,14 @@ use std::path::Path;
 use rustls::pki_types::pem::PemObject;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 
+use super::Report;
 use super::fields::{cidr, cidr_list, http_url, ip_addresses, length, range, required, url_path};
-use super::paths::{absolute, directory_under, readable_file};
-use super::{Context, Report};
+use super::paths::{directory, not_empty, readable_file};
 use crate::auth::local;
 use crate::config::api_key::PrimaryApiKey;
 use crate::config::{Authentication, Certificate, Web};
 
-pub(super) fn check(web: &Web, context: &Context, report: &mut Report) {
+pub(super) fn check(web: &Web, report: &mut Report) {
   let key = "web.https.port";
   report.check(key, range(key, web.https.port, 1, 65535));
   for (key, addresses) in [
@@ -28,16 +28,11 @@ pub(super) fn check(web: &Web, context: &Context, report: &mut Report) {
     }
   }
   if let Some(socket) = &web.socket {
-    report.check("web.socket", absolute("web.socket", socket));
+    report.check("web.socket", not_empty("web.socket", socket));
   }
   report.check("web.url_base", url_path("web.url_base", &web.url_base));
   if let Some(content) = &web.content_path {
-    let key = "web.content_path";
-    report.check(
-      key,
-      length(key, Some(content.to_string_lossy().as_ref()), 1, 255),
-    );
-    report.check(key, directory_under(key, content, &context.program_dir));
+    report.check("web.content_path", directory("web.content_path", content));
   }
   super::transfers::check_speed(
     "web.files.serve_speed_limit",
@@ -245,15 +240,8 @@ mod tests {
   use crate::config::{ApiKey, Oidc};
 
   fn problems(web: &Web) -> Vec<(String, String)> {
-    let dir = tempfile::tempdir().unwrap();
-    let context = Context {
-      default_downloads: dir.path().join("downloads"),
-      default_incomplete: dir.path().join("incomplete"),
-      program_dir: dir.path().to_path_buf(),
-      started_case_sensitive: false,
-    };
     let mut report = Report::default();
-    check(web, &context, &mut report);
+    check(web, &mut report);
     report.0.into_iter().map(|i| (i.key, i.message)).collect()
   }
 

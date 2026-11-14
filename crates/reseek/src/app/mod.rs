@@ -712,7 +712,7 @@ async fn host(
       return EXIT_FATAL;
     }
   };
-  let ui = Ui::new(options, &load::program_dir(), assets);
+  let ui = Ui::new(options, assets);
   let listeners = match http::bind(&options.web).await {
     Ok(listeners) => listeners,
     Err(e) => {

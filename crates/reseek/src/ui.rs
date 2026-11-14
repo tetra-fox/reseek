@@ -41,17 +41,15 @@ pub enum Ui {
 }
 
 impl Ui {
-  /// The UI `options` ask for, `assets` the bundle built into the program. `program_dir` is
-  /// where `web.content_path` is relative to.
-  pub fn new(options: &Options, program_dir: &Path, assets: Assets) -> Self {
+  /// The UI `options` ask for, `assets` the bundle built into the program.
+  pub fn new(options: &Options, assets: Assets) -> Self {
     if options.headless || !options.web.ui {
       info!("Running in headless mode; web UI is DISABLED");
       return Self::Off;
     }
     if let Some(dir) = &options.web.content_path {
-      let dir = program_dir.join(dir);
       info!(path = %dir.display(), "Serving static content from directory");
-      return Self::Directory(dir);
+      return Self::Directory(dir.clone());
     }
     if assets("index.html").is_none() {
       warn!("the web UI was not built into this program; it serves a page saying so");

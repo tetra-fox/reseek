@@ -8,7 +8,7 @@ use super::fields::{
   duration_at_least, duration_off_or_at_least, http_url, is_regex, length, off_or_at_least, range,
   url_path,
 };
-use super::paths::{absolute, download_directory, readable_file};
+use super::paths::{download_directory, not_empty, readable_file};
 use super::{Context, Report};
 use crate::config::enums::LogLevel;
 use crate::config::{Blacklist, Logging, Options, Retention, TransferRetention};
@@ -27,7 +27,7 @@ pub(super) fn check(options: &Options, context: &Context, report: &mut Report) {
   ];
   for (key, path) in paths {
     if let Some(path) = path {
-      report.check(key, absolute(key, path));
+      report.check(key, not_empty(key, path));
     }
   }
   let directories = [
@@ -260,7 +260,6 @@ mod tests {
     let context = Context {
       default_downloads: dir.path().join("downloads"),
       default_incomplete: dir.path().join("incomplete"),
-      program_dir: dir.path().to_path_buf(),
       started_case_sensitive: false,
     };
     let mut report = Report::default();
