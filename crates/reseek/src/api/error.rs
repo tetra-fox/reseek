@@ -12,6 +12,9 @@ const UNAVAILABLE: &str = "soulseek_unavailable";
 /// The error code of a request whose session's user the configuration gives no role right now.
 const WITHHELD: &str = "access_withheld";
 
+/// The error code of an event stream asked for a topic the principal's role may not follow.
+const TOPIC_FORBIDDEN: &str = "topic_forbidden";
+
 /// What went wrong in a handler: the status that answers it, the message and its detail.
 #[derive(Debug)]
 pub struct ApiError {
@@ -162,6 +165,16 @@ impl ApiError {
       StatusCode::FORBIDDEN,
       WITHHELD,
       Some("The configuration gives your account no role right now".to_string()),
+    )
+  }
+
+  /// A 403 for an event stream asked for `topic`, which the principal's role may not follow. The
+  /// detail is the topic, so a client can ask again without it.
+  pub fn topic_forbidden(topic: &str) -> Self {
+    Self::new(
+      StatusCode::FORBIDDEN,
+      TOPIC_FORBIDDEN,
+      Some(topic.to_string()),
     )
   }
 

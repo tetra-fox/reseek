@@ -45,10 +45,7 @@ async fn stream(
     .iter()
     .find(|topic| caller.principal.role < topic.role())
   {
-    return Err(ApiError::forbidden(format!(
-      "The {topic} topic requires the {:?} role",
-      topic.role()
-    )));
+    return Err(ApiError::topic_forbidden(&topic.to_string()));
   }
   let asked = headers
     .get("last-event-id")
