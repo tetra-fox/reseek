@@ -472,15 +472,13 @@ impl Shares {
 
   /// After an agent's host came or went: the state, the server's counts and the check of the
   /// visibility lists follow at once, the browse cache once the hosts have been still for a
-  /// moment.
+  /// moment, and a browse meanwhile waits for it.
   fn hosts_changed(self: &Arc<Self>) {
     self.publish();
     self.check_unmatched();
     self.counts.send_replace(self.server_counts());
-    if self
-      .hosts_settling
-      .swap(true, std::sync::atomic::Ordering::AcqRel)
-    {
+    self.host_changes.fetch_add(1, Ordering::AcqRel);
+    if self.hosts_settling.swap(true, Ordering::AcqRel) {
       return;
     }
     let shares = self.clone();
@@ -489,10 +487,17 @@ impl Shares {
         () = shares.shutdown.cancelled() => return,
         () = tokio::time::sleep(HOST_SETTLE) => {}
       }
-      shares
-        .hosts_settling
-        .store(false, std::sync::atomic::Ordering::Release);
+      // a change from here on is a rebuild of its own
+      shares.hosts_settling.store(false, Ordering::Release);
+      let through = shares.host_changes.load(Ordering::Acquire);
       shares.refresh_browse_caches().await;
+      shares.browse_follows.send_if_modified(|follows| {
+        let later = through > *follows;
+        if later {
+          *follows = through;
+        }
+        later
+      });
     });
   }
 }

@@ -379,8 +379,6 @@ pkgs.testers.runNixOSTest {
         def shared(listing: Any) -> set[str]:
             return {d["name"] + "\\" + f["filename"] for d in listing["directories"] for f in d["files"]}
 
-        # the controller answers browses from a listing it rebuilds once its agents have been still
-        # for a moment
         expected = {remote(path) for path in agent_files}
         until(
             peer,

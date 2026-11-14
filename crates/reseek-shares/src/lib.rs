@@ -43,7 +43,7 @@ mod watcher;
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
 use std::time::{Duration, Instant};
 
@@ -275,6 +275,10 @@ pub struct Shares {
   away: Mutex<HashMap<String, hosts::Away>>,
   /// a browse cache rebuild after a host change is waiting
   hosts_settling: AtomicBool,
+  /// how many times an agent's host came or went
+  host_changes: AtomicU64,
+  /// how many of `host_changes` the browse caches were last rewritten after
+  browse_follows: watch::Sender<u64>,
   /// what each local share holds as last counted
   local_counts: Mutex<Counted>,
   /// the views other than everything whose browse cache was written, rewritten whenever the
@@ -356,6 +360,8 @@ impl Shares {
       hosts: Mutex::new(Vec::new()),
       away: Mutex::new(away),
       hosts_settling: AtomicBool::new(false),
+      host_changes: AtomicU64::new(0),
+      browse_follows: watch::Sender::new(0),
       local_counts: Mutex::new(Counted::default()),
       browse_views: Mutex::new(BrowseViews::default()),
       unmatched: Mutex::new(HashSet::new()),
@@ -469,6 +475,18 @@ impl Shares {
     tokio::task::spawn_blocking(move || folders::list(&settings, path.as_deref()))
       .await
       .map_err(|e| FolderError::Failed(e.to_string()))?
+  }
+
+  /// Returns once the browse caches list the agents' hosts as they are now: at once, unless an
+  /// agent came or went and the caches are still to be rewritten for it, or the engine stops.
+  pub async fn browse_settled(&self) {
+    let wanted = self.host_changes.load(Ordering::Acquire);
+    let mut follows = self.browse_follows.subscribe();
+    tokio::select! {
+      () = self.shutdown.cancelled() => {}
+      // the sender lives as long as the engine, so the wait ends only with what it waits for
+      followed = follows.wait_for(|follows| *follows >= wanted) => drop(followed),
+    }
   }
 
   /// The browse cache file of `view`, the encoded browse response a peer with that view is

@@ -48,9 +48,11 @@ pub async fn browse(edges: &Edges, username: &str, endpoint: SocketAddr) -> Brow
   reply
 }
 
-/// Our share listing as `view` sees it, from its browse cache. A missing cache is written
-/// first; a cache that can be neither read nor written gives an empty listing.
+/// Our share listing as `view` sees it, from its browse cache, once the cache lists the relay
+/// agents as they are. A missing cache is written first; a cache that can be neither read nor
+/// written gives an empty listing.
 async fn listing(edges: &Edges, view: &View) -> BrowseReply {
+  edges.shares.browse_settled().await;
   let file = edges.shares.browse_cache(view);
   match cached(&file).await {
     Ok(frame) => return BrowseReply::Encoded(frame),
@@ -225,6 +227,31 @@ mod tests {
       "a blocked user's empty share is not counted"
     );
     assert!(exposed(&app).contains("\nreseek_browse_response_latency_count 2\n"));
+  }
+
+  /// The directory names of a browse response.
+  fn directories(sent: &[u8]) -> Vec<String> {
+    let PeerMessage::BrowseResponse(listing) = PeerMessage::decode(sent).unwrap() else {
+      panic!("not a browse response");
+    };
+    listing
+      .directories
+      .iter()
+      .map(|d| d.name.as_str().to_string())
+      .collect()
+  }
+
+  #[tokio::test]
+  async fn a_browse_right_after_an_agent_loads_lists_its_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let app = shared(dir.path()).await;
+    let edges = edges(&app);
+    let peer = from("198.51.100.7");
+    let before = directories(&bytes(browse(&edges, "alice", peer).await).await);
+    assert!(!before.contains(&"Agent".to_string()), "{before:?}");
+    crate::testing::load_agent_host(&app.state.shares, "nas", "Agent").await;
+    let after = directories(&bytes(browse(&edges, "alice", peer).await).await);
+    assert!(after.contains(&"Agent".to_string()), "{after:?}");
   }
 
   #[tokio::test]
