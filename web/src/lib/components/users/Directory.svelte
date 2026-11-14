@@ -20,6 +20,7 @@
   import UserPlusIcon from "@lucide/svelte/icons/user-plus";
   import UsersIcon from "@lucide/svelte/icons/users";
   import { untrack } from "svelte";
+  import { SvelteSet } from "svelte/reactivity";
 
   import { api, type Schemas } from "#lib/api/client.js";
   import LoadError from "#lib/components/LoadError.svelte";
@@ -43,6 +44,7 @@
   import { ListControl } from "#lib/lists/list.svelte.js";
   import { pageCount, type Place } from "#lib/lists/pages.js";
   import { Grid, type GridColumn } from "#lib/lists/table.svelte.js";
+  import { wakeOnPointer } from "#lib/lists/wake.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
   import { Loader } from "#lib/loader.svelte.js";
@@ -108,6 +110,8 @@
   const SHOWN_GROUPS = 3;
 
   const rows = new Keyed<UserSummary>((u) => u.username);
+  /** the users whose rows a mouse or a pen has come to, which then mount their tooltips */
+  const awake = new SvelteSet<string>();
   /** the usernames in the order the daemon sorted them */
   let order = $state<string[]>([]);
   let total = $state(0);
@@ -411,10 +415,12 @@
       {#each shown as u, i (u.username)}
         {@const listed = u.groups.filter((g) => g.name !== BUDDIES)}
         {@const queue = queueOf(u)}
+        {@const dormant = !awake.has(u.username)}
         <div
           role="row"
           {...list.line(u, i)}
           aria-rowindex={(place.page - 1) * place.size + i + 2}
+          onpointerenter={wakeOnPointer(() => awake.add(u.username))}
           class={[
             "grid items-center list-row py-1.5",
             u.block && "bg-danger-soft/40",
@@ -437,11 +443,11 @@
             {#if u.block}<Badge tone="danger">blocked</Badge>{/if}
           </span>
           <span role="gridcell" class="flex min-w-0 items-center gap-1.5 px-2 text-xs">
-            <Presence presence={u.presence} worded />{u.presence ?? "Unknown"}
+            <Presence presence={u.presence} worded {dormant} />{u.presence ?? "Unknown"}
           </span>
           {#if viewport.xxl}
             <span role="gridcell" class="min-w-0 px-2"
-              >{#if queue}<GroupBadge group={queue} queue />{/if}</span>
+              >{#if queue}<GroupBadge group={queue} queue {dormant} />{/if}</span>
           {/if}
           <span role="gridcell" class="flex min-w-0 flex-wrap gap-1 px-2">
             {#each listed.slice(0, SHOWN_GROUPS) as g (g.name)}
@@ -449,14 +455,16 @@
                 type="button"
                 class="max-w-full rounded-badge hover:bg-hover"
                 aria-label={`Show only group ${g.name}`}
-                onclick={() => refilter({ group: g.name })}><GroupBadge group={g} /></button>
+                onclick={() => refilter({ group: g.name })}
+                ><GroupBadge group={g} {dormant} /></button>
             {/each}
             {#if listed.length > SHOWN_GROUPS}
               <Tooltip
                 text={listed
                   .slice(SHOWN_GROUPS)
                   .map((g) => g.name)
-                  .join("\n")}>
+                  .join("\n")}
+                {dormant}>
                 {#snippet child({ props })}
                   <a
                     {...props}
@@ -467,7 +475,7 @@
               </Tooltip>
             {/if}
           </span>
-          <Tooltip text={u.lastSeenAt ? dateTime(u.lastSeenAt) : undefined} dense>
+          <Tooltip text={u.lastSeenAt ? dateTime(u.lastSeenAt) : undefined} dense {dormant}>
             {#snippet child({ props })}
               <span {...props} role="gridcell" class="truncate px-2 text-xs">
                 {u.lastSeenAt ? ago(u.lastSeenAt, clock.now) : "never"}
@@ -483,7 +491,7 @@
           </span>
           <span role="gridcell" class="flex justify-end px-1">
             {#each reach(u.username, { only: ["message", "shares"] }) as action (action.id)}
-              <Tooltip text={action.label}>
+              <Tooltip text={action.label} {dormant}>
                 {#snippet child({ props })}
                   <Button
                     {...props}
@@ -495,7 +503,7 @@
               </Tooltip>
             {/each}
             {#if canManage(u.username)}
-              <Tooltip text={u.buddy ? BUDDY.remove : BUDDY.add}>
+              <Tooltip text={u.buddy ? BUDDY.remove : BUDDY.add} {dormant}>
                 {#snippet child({ props })}
                   <Button
                     {...props}
@@ -509,7 +517,7 @@
                 {/snippet}
               </Tooltip>
               {@const byConfig = configBlocked(u.block)}
-              <Tooltip text={byConfig ? CONFIG_BLOCKED : u.block ? "Unblock" : "Block"}>
+              <Tooltip text={byConfig ? CONFIG_BLOCKED : u.block ? "Unblock" : "Block"} {dormant}>
                 {#snippet child({ props })}
                   <Button
                     {...props}

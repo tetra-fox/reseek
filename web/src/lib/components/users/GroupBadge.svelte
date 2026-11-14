@@ -18,16 +18,18 @@
     class?: string;
     /** after the name, such as a button that takes the user out of it */
     children?: Snippet;
+    /** its tooltip waits for its row to wake, as `Tooltip`'s `dormant` */
+    dormant?: boolean;
   };
 
-  let { group, queue = false, href, class: className, children }: Props = $props();
+  let { group, queue = false, href, class: className, children, dormant = false }: Props = $props();
 
   const tip = $derived(
     !group.defined ? NOT_CONFIGURED : queue ? `Queue: ${group.name}` : undefined
   );
 </script>
 
-<Tooltip text={tip} dense>
+<Tooltip text={tip} dense {dormant}>
   {#snippet child({ props })}
     <Badge
       {...props}

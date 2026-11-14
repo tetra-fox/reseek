@@ -8,13 +8,15 @@
     text?: string;
     /** the presence is in words beside the dot, which then needs no tooltip */
     worded?: boolean;
+    /** its tooltip waits for its row to wake, as `Tooltip`'s `dormant` */
+    dormant?: boolean;
   };
 
   // a user's presence as a dot: green online, yellow away, gray offline or unknown
-  let { presence, text, worded = false }: Props = $props();
+  let { presence, text, worded = false, dormant = false }: Props = $props();
 </script>
 
-<Tooltip text={worded ? undefined : (text ?? presence ?? "Unknown")} dense spoken>
+<Tooltip text={worded ? undefined : (text ?? presence ?? "Unknown")} dense spoken {dormant}>
   {#snippet child({ props })}
     <span
       {...props}

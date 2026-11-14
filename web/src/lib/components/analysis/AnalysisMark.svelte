@@ -8,7 +8,13 @@
 
   // a file's analysis in a list: the user's judgment with a person beside it, or else a muted
   // "Analyzed" whose tooltip gives the analyzer's reading, never in a warning color of its own
-  let { mark }: { mark: Mark | undefined } = $props();
+  type Props = {
+    mark: Mark | undefined;
+    /** its tooltip waits for its row to wake, as `Tooltip`'s `dormant` */
+    dormant?: boolean;
+  };
+
+  let { mark, dormant = false }: Props = $props();
 
   // the tooltip reads these lazily, and can do so after `mark` is gone but before the block below
   // is torn down, so they are worked out here and not from `mark` inside it
@@ -17,7 +23,7 @@
 </script>
 
 {#if mark}
-  <Tooltip text={hint} dense spoken>
+  <Tooltip text={hint} dense spoken {dormant}>
     {#snippet child({ props })}
       {#if judgment}
         <Badge {...props} tone={judgment === "fake" ? "danger" : "success"}

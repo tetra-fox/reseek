@@ -37,6 +37,7 @@
     NONE,
     plural
   } from "#lib/format.js";
+  import { wakeOnPointer } from "#lib/lists/wake.js";
   import { session } from "#lib/session.svelte.js";
   import {
     act,
@@ -99,6 +100,9 @@
     onblock
   }: Props = $props();
 
+  /** the row's tooltips wait for a mouse or a pen to come to one of its cells */
+  let dormant = $state(true);
+  const pointed = wakeOnPointer(() => (dormant = false));
   const icons = { audio: FileAudioIcon, video: FileVideoIcon, other: FileIcon };
   const Icon = $derived(icons[kindOf(t.filename)]);
   const chip = $derived(stateChip(t));
@@ -154,7 +158,7 @@
     <span class="grid min-w-0 flex-1 grid-cols-[minmax(0,max-content)_auto] items-center gap-1.5">
       <span class="flex min-w-0 items-center gap-1.5">
         <Icon class="size-4 shrink-0 text-fg-muted" />
-        <Tooltip text={t.filename} dense>
+        <Tooltip text={t.filename} dense {dormant}>
           {#snippet child({ props })}
             {#if ondetails}
               <button
@@ -171,7 +175,8 @@
         </Tooltip>
       </span>
       {#if direction === "download"}
-        <span class="flex @max-[10em]:hidden"><AnalysisMark mark={marks.download(t.id)} /></span>
+        <span class="flex @max-[10em]:hidden"
+          ><AnalysisMark mark={marks.download(t.id)} {dormant} /></span>
       {/if}
     </span>
   </span>
@@ -188,7 +193,7 @@
     {#if write && can.reorder}
       <!-- a download waiting here is dragged onto another to start before it; the keyboard has
            the row menu's Start next and Start last -->
-      <Tooltip text="Drag onto another waiting download to start before it" dense>
+      <Tooltip text="Drag onto another waiting download to start before it" dense {dormant}>
         {#snippet child({ props })}
           <span
             {...props}
@@ -209,7 +214,11 @@
         {/snippet}
       </Tooltip>
     {/if}
-    <Tooltip text={chip.title ?? (retryIn ? `next attempt ${retryIn}` : undefined)} dense spoken>
+    <Tooltip
+      text={chip.title ?? (retryIn ? `next attempt ${retryIn}` : undefined)}
+      dense
+      spoken
+      {dormant}>
       {#snippet child({ props })}
         <span {...props} class="min-w-0">
           <Badge tone={chip.tone} class="max-w-full truncate">{chip.text}</Badge>
@@ -223,8 +232,11 @@
 <!-- behind the cells, the transfer's bytes as a fill, its finish as a pulse, a failure as a tint -->
 <DownloadFill transfer={t} track={direction === "download"} />
 {#each columns as column (column)}
+  <!-- the pointer only wakes the row's tooltips here; the cell takes no input of its own -->
+  <!-- svelte-ignore a11y_interactive_supports_focus -->
   <div
     role="gridcell"
+    onpointerenter={pointed}
     class={[
       "flex min-w-0 items-center gap-1.5 px-2",
       ["size", "speed", "eta", "elapsed", "attempts", "transferred"].includes(column) &&
@@ -243,7 +255,7 @@
         <div class="flex min-w-0 flex-1 flex-col gap-0.5">
           <div class="flex min-w-0 items-center gap-1.5">{@render name()}</div>
           <div class="flex min-w-0 items-center gap-1.5 text-xs text-fg-muted">
-            <Tooltip text={plural(t.size, "byte", "bytes")} dense>
+            <Tooltip text={plural(t.size, "byte", "bytes")} dense {dormant}>
               {#snippet child({ props })}
                 <span {...props} class="shrink-0 whitespace-nowrap tabular-nums"
                   >{formatBytes(t.size)}</span>
@@ -259,7 +271,7 @@
       {@const queue = direction === "upload" && user ? queueOf(user) : null}
       {@const dot = groupColor(queue?.color)}
       {#if queue && dot}
-        <Tooltip text={`Queue: ${queue.name}`} dense spoken>
+        <Tooltip text={`Queue: ${queue.name}`} dense spoken {dormant}>
           {#snippet child({ props })}
             <span {...props} class="size-2 shrink-0 rounded-full" style:background-color={dot}
             ></span>
@@ -269,7 +281,7 @@
       <Username name={t.username} folder={getFileName(getDirectoryName(t.filename))} />
       {#if user?.block}<Badge tone="danger">blocked</Badge>{/if}
     {:else if column === "size"}
-      <Tooltip text={plural(t.size, "byte", "bytes")} dense>
+      <Tooltip text={plural(t.size, "byte", "bytes")} dense {dormant}>
         {#snippet child({ props })}<span {...props}>{formatBytes(t.size)}</span>{/snippet}
       </Tooltip>
     {:else if column === "progress"}
@@ -291,7 +303,9 @@
         {#if place !== null}<span class="tabular-nums">#{formatCount(place)}</span>{/if}
         {#if can.queuePosition}
           {@const failed = storeOf(t).queueErrors.get(t.id)}
-          <Tooltip text={failed === undefined ? "Check queue position" : queueFailure(failed)}>
+          <Tooltip
+            text={failed === undefined ? "Check queue position" : queueFailure(failed)}
+            {dormant}>
             {#snippet child({ props })}
               <Button
                 {...props}
@@ -305,7 +319,7 @@
           </Tooltip>
         {/if}
       {:else if isQueued(t.state)}
-        <Tooltip text={wait ? whyText(wait) : undefined}>
+        <Tooltip text={wait ? whyText(wait) : undefined} {dormant}>
           {#snippet child({ props })}
             <span {...props} class="truncate" role="note" onpointerenter={() => void waits.load(t)}>
               {wait ? placeText(wait) : "Queued"}
@@ -317,7 +331,7 @@
       {@const at =
         column === "requested" ? t.requestedAt : column === "started" ? t.startedAt : t.endedAt}
       {#if at}
-        <Tooltip text={ago(at)} dense>
+        <Tooltip text={ago(at)} dense {dormant}>
           {#snippet child({ props })}<span {...props} class="truncate">{dateTime(at)}</span
             >{/snippet}
         </Tooltip>
@@ -331,7 +345,7 @@
     {:else if column === "job"}
       {#if t.jobId}
         {@const job = t.jobId}
-        <Tooltip text={job} dense>
+        <Tooltip text={job} dense {dormant}>
           {#snippet child({ props })}
             <span {...props} class="font-mono text-xs">{job.slice(0, 8)}</span>
           {/snippet}
@@ -344,7 +358,7 @@
         <!-- a phone shows only the menu, which holds every one of these too -->
         <span class="contents max-md:hidden">
           {#if write && can.retry}
-            <Tooltip text="Retry">
+            <Tooltip text="Retry" {dormant}>
               {#snippet child({ props })}
                 <Button
                   {...props}
@@ -358,7 +372,7 @@
             </Tooltip>
           {/if}
           {#if write && can.cancel}
-            <Tooltip text="Cancel">
+            <Tooltip text="Cancel" {dormant}>
               {#snippet child({ props })}
                 <Button
                   {...props}
@@ -372,7 +386,7 @@
             </Tooltip>
           {/if}
           {#if write}
-            <Tooltip text="Remove">
+            <Tooltip text="Remove" {dormant}>
               {#snippet child({ props })}
                 <Button
                   {...props}
@@ -386,7 +400,7 @@
             </Tooltip>
           {/if}
           {#if can.open}
-            <Tooltip text="Open">
+            <Tooltip text="Open" {dormant}>
               {#snippet child({ props })}
                 <Button
                   {...props}
@@ -400,7 +414,7 @@
             </Tooltip>
           {/if}
           {#if can.openFolder}
-            <Tooltip text="Open folder">
+            <Tooltip text="Open folder" {dormant}>
               {#snippet child({ props })}
                 <Button
                   {...props}
