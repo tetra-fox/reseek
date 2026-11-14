@@ -39,7 +39,7 @@ export const resultRows = (results: Result[]): ResultRow[] =>
   );
 
 /**
- * The longest queue the list writes in full: a user's queue runs to thousands, and a longer one
+ * The longest queue the results write in full: a user's queue runs to thousands, and a longer one
  * is written "99,999+"
  */
 export const QUEUE_MOST = 99_999;
