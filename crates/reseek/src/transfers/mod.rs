@@ -284,6 +284,12 @@ mod tests {
           "UPDATE Transfers SET PlaceInQueue = 4 WHERE State = ?1",
           [state::column(TransferStates::QueuedRemotely)],
         )?;
+        // a lost row left paused, waiting to be retried and with a place in a queue
+        conn.execute(
+          "UPDATE Transfers SET Paused = 1, NextAttemptAt = '2026-11-01T11:00:00.000000Z', \
+           PlaceInQueue = 3 WHERE Id = ?1",
+          [lost[0].0.to_string()],
+        )?;
         // the queued row was last heard of when the peer queued it
         store::entered(conn, lost[1].0, TransferStates::QueuedRemotely, at(7))
       })
@@ -311,17 +317,19 @@ mod tests {
     let migrated = open(&location).await.unwrap();
     let errored = Completed(Errored);
     for (id, ended) in lost {
-      let (record, history, resumable) = migrated
+      // whether it is resumable or paused, its retry time and its place in a queue
+      type Waits = (bool, bool, Option<String>, Option<u32>);
+      let (record, history, waits) = migrated
         .read(move |conn| {
-          let resumable: bool = conn.query_row(
-            "SELECT Resumable FROM Transfers WHERE Id = ?1",
+          let waits: Waits = conn.query_row(
+            "SELECT Resumable, Paused, NextAttemptAt, PlaceInQueue FROM Transfers WHERE Id = ?1",
             [id.to_string()],
-            |row| row.get(0),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
           )?;
           Ok((
             store::get(conn, id)?.unwrap(),
             store::history(conn, id)?,
-            resumable,
+            waits,
           ))
         })
         .await
@@ -331,9 +339,14 @@ mod tests {
           record.state.kind(),
           record.ended_at,
           record.exception.as_deref(),
-          resumable
+          waits
         ),
-        (errored, Some(ended), Some("State lost"), false),
+        (
+          errored,
+          Some(ended),
+          Some("State lost"),
+          (false, false, None, None)
+        ),
         "{}",
         record.username
       );
