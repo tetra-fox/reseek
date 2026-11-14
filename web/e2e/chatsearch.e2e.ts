@@ -114,6 +114,14 @@ test("typing lists rooms, users and messages in categories, walked by the arrows
   ]);
   // what matched is marked, in names and in messages
   await expect(list.locator("mark").first()).toHaveText("floyd");
+  // a hit's name looks as it does everywhere else, though an option a click picks holds no link
+  const named = options(page).nth(4).getByText("alice", { exact: true });
+  const color = await page
+    .locator('[data-line="user:alice"]')
+    .getByText("alice", { exact: true })
+    .evaluate((e) => getComputedStyle(e).color);
+  await expect(named).toHaveCSS("color", color);
+  await expect(options(page).getByRole("link")).toHaveCount(0);
 
   // the arrows reach every entry, and Escape closes the list with the text kept
   await page.keyboard.press("ArrowDown");

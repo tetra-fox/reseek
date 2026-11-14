@@ -3,6 +3,7 @@
 
   import { richText, slskText } from "#lib/chat/messages/rich.js";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
+  import Username from "#lib/components/users/Username.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { enqueue } from "#lib/files/downloads.js";
   import { slskBrowse, type SlskLink } from "#lib/files/slsk.js";
@@ -15,6 +16,8 @@
 
   const parts = $derived(richText(text, watch));
   const write = $derived(session.can("ReadWrite"));
+
+  const opens = (link: SlskLink) => (link.folder ? "Browse folder" : "Show file");
 
   const download = async (link: SlskLink) => {
     // the size is not in the link; the daemon learns it from the peer
@@ -31,8 +34,9 @@
       target="_blank"
       rel="noopener noreferrer"
       class="text-accent underline-offset-2 hover:underline">{part.text}</a
-    >{:else if part.kind === "slsk"}<Tooltip
-      text={`${part.link.folder ? "Browse folder" : "Show file"} in ${part.link.username}'s shares`}
+    >{:else if part.kind === "slsk"}{#snippet where()}{opens(part.link)} in <Username
+        name={part.link.username}
+        plain />'s shares{/snippet}<Tooltip text={where}
       >{#snippet child({ props })}<a
           {...props}
           href={slskBrowse(part.link)}

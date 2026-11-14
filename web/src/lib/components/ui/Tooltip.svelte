@@ -3,12 +3,15 @@
   import type { Snippet } from "svelte";
   import { createAttachmentKey } from "svelte/attachments";
 
-  import { type Side, tether } from "#lib/components/ui/TooltipHost.svelte";
+  import { type Side, tether, words } from "#lib/components/ui/TooltipHost.svelte";
   import type { Binding } from "#lib/ui/keys.js";
 
   type Props = {
-    /** no tooltip when it's missing */
-    text: string | undefined;
+    /**
+     * no tooltip when it's missing. A snippet draws words that hold what plain text can't, such
+     * as a username in its own look
+     */
+    text: string | Snippet | undefined;
     /** which side of the element it opens on */
     side?: Side;
     /** the keys that do what the element does, named after the text */
@@ -86,4 +89,6 @@
         props: { ...own, ...(dense || clipped ? {} : { tabindex }), ...(clipped ? measuring : {}) }
       })}
     {/snippet}
-  </Tooltip.Trigger>{/if}{#if spoken && text !== undefined}<span class="sr-only">{text}</span>{/if}
+  </Tooltip.Trigger>{/if}{#if spoken && text !== undefined}<span class="sr-only"
+    >{@render words(text)}</span
+  >{/if}

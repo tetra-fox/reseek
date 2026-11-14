@@ -1,5 +1,6 @@
 <script lang="ts" module>
   import { Tooltip } from "bits-ui";
+  import type { Snippet } from "svelte";
 
   import { type Binding, keysSpoken, keysText } from "#lib/ui/keys.js";
   import { safeArea } from "#lib/ui/safearea.svelte.js";
@@ -8,8 +9,19 @@
 
   // the app has one tooltip, mounted once in the root layout. every Tooltip trigger tethers to it
   // and passes its text, its side and the keys it names as the payload
-  export const tether = Tooltip.createTether<{ text: string; side: Side; keys?: Binding }>();
+  export const tether = Tooltip.createTether<{
+    text: string | Snippet;
+    side: Side;
+    keys?: Binding;
+  }>();
+
+  export { words };
 </script>
+
+<!-- a tooltip's words, as text or drawn by a snippet -->
+{#snippet words(
+  text: string | Snippet
+)}{#if typeof text === "function"}{@render text()}{:else}{text}{/if}{/snippet}
 
 <!-- bits-ui's default 700ms is slow for the collapsed sidebar, where the tooltip is the only label.
      Only a tooltip that waited out the delay grows in: one opened just after another closed
@@ -25,8 +37,8 @@
           collisionPadding={safeArea.padding(8)}
           class="z-50 max-w-[min(24rem,calc(100vw-1rem))] origin-(--bits-tooltip-content-transform-origin) rounded-control border bg-overlay px-2 py-1 text-xs wrap-anywhere whitespace-pre-line text-fg shadow-raised data-[state=closed]:animate-popover-out data-[state=delayed-open]:animate-popover-in">
           <!-- the keys are drawn as signs and read as words -->
-          {payload?.text}{#if payload?.keys}{" "}<span aria-hidden="true"
-              >({keysText(payload.keys)})</span
+          {#if payload}{@render words(payload.text)}{/if}{#if payload?.keys}{" "}<span
+              aria-hidden="true">({keysText(payload.keys)})</span
             ><span class="sr-only">{keysSpoken(payload.keys)}</span>{/if}
         </Tooltip.Content>
       </Tooltip.Portal>

@@ -84,6 +84,19 @@ test("a room reads like a chat: names, actions, links, the wall and the activity
   await page.keyboard.press("Escape");
 });
 
+test("a slsk:// link's tooltip names its user as every username looks", async ({ page }) => {
+  await fakeChat(page);
+  await visit(page, "/chat/rooms/indie");
+  const log = page.getByRole("log");
+  const color = await log
+    .getByRole("link", { name: "bob", exact: true })
+    .evaluate((a) => getComputedStyle(a).color);
+  await log.getByRole("link", { name: /^slsk:\/\/bob/ }).hover();
+  const tip = page.locator("[data-tooltip-content]");
+  await expect(tip).toHaveText("Browse folder in bob's shares");
+  await expect(tip.getByText("bob", { exact: true })).toHaveCSS("color", color);
+});
+
 test("the server's notices are one read-only entry, reached by the keys", async ({ page }) => {
   await fakeChat(page);
   await visit(page, "/chat");
