@@ -33,7 +33,7 @@ export type LineMenuSpec<L> = {
  * by the menu key or Shift+F10, under the focused line, or by a line's own button, under it. A
  * link, selected text and a line with nothing in its menu keep the browser's own menu. While a
  * menu is open the lines hold still. Put `attach` on the list's container, pass its keys to
- * `key`, and render the menu while `line` is set
+ * `key`, spread `mark` on each line's element, and render the menu while `line` is set
  */
 export class LineMenu<L> {
   #spec: LineMenuSpec<L>;
@@ -60,6 +60,14 @@ export class LineMenu<L> {
   /** where the open menu hangs */
   get anchor(): MenuAnchor {
     return this.#at?.anchor ?? null;
+  }
+
+  /**
+   * What a line's element carries while its menu is open, which keeps the line tinted and its
+   * controls shown once the pointer has gone from the line to the menu
+   */
+  mark(line: L) {
+    return { "data-menu-open": this.#at?.key === this.#spec.key(line) || undefined };
   }
 
   /** Opens a line's menu at the point `at`, under the element `at`, or under the line */

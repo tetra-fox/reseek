@@ -424,6 +424,7 @@
         style:padding-left={inset(pin.line.depth, "folder")}
         data-line={pin.line.key}
         data-focused={list.isFocused(pin.line) || undefined}
+        {...lineMenu.mark(pin.line)}
         aria-selected={folderId && selected ? selected.has(folderId(pin.line.node)) : undefined}
         data-pinned="true"
         {@attach untabbable(list.focus)}>
@@ -442,6 +443,7 @@
         <div
           role="row"
           {...list.line(line, index)}
+          {...lineMenu.mark(line)}
           aria-rowindex={index + 1 + above}
           class={[
             "group absolute inset-x-0 top-0 flex items-center list-row",
@@ -463,6 +465,7 @@
         <div
           role="row"
           {...list.line(line, index)}
+          {...lineMenu.mark(line)}
           aria-rowindex={index + 1 + above}
           class={[
             "group absolute inset-x-0 top-0 isolate grid items-center list-row",

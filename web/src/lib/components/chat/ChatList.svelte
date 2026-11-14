@@ -319,6 +319,7 @@
         <div
           role="row"
           {...list.line(line, i)}
+          {...lineMenu.mark(line)}
           transition:disclose
           aria-current={current === line.key ? "page" : undefined}
           aria-keyshortcuts={movable ? keysAria(CHAT.movePin) : undefined}
@@ -425,7 +426,6 @@
             aria-label={`Menu for ${chatName(t)}`}
             aria-haspopup="menu"
             aria-expanded={lineMenu.line?.key === line.key}
-            data-state={lineMenu.line?.key === line.key ? "open" : "closed"}
             onclick={(e) => {
               opener = e.currentTarget;
               lineMenu.open(line, opener);

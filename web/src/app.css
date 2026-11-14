@@ -12,9 +12,10 @@
 @custom-variant unusable (&:is(:disabled, [aria-disabled="true"]));
 
 /* inside a row someone is using: the pointer is on it, the keys are on it or on a control in it, or
-   one of its menus is open. A row's control keeps no state from a mouse click, which leaves focus
-   on it. Rows take the pointer from data-super-hover-active, not :hover, which holds still while a
-   list scrolls; lib/ui/hover.ts lists every element a rule here keys on it */
+   one of its menus is open, from a trigger in it or, on a list line, from the line itself. A row's
+   control keeps no state from a mouse click, which leaves focus on it. Rows take the pointer from
+   data-super-hover-active, not :hover, which holds still while a list scrolls; lib/ui/hover.ts
+   lists every element a rule here keys on it */
 @custom-variant row-active {
   @media (hover: hover) {
     &:is(:where(.group, [data-line])[data-super-hover-active] *) {
@@ -25,6 +26,9 @@
     @slot;
   }
   &:is(:where(.group, [data-line]):has([data-state="open"]) *) {
+    @slot;
+  }
+  &:is([data-line][data-menu-open] *) {
     @slot;
   }
   &:is([data-line][data-focused] *) {
@@ -525,15 +529,15 @@
   @apply flex h-control shrink-0 items-center gap-1.5 rounded-control px-3 text-sm whitespace-nowrap text-fg-muted transition-colors duration-(--motion-fast) hover:bg-hover hover:text-fg focus-visible:-outline-offset-2 aria-[current]:nav-current;
 }
 
-/* a list line's tint: hovered, its menu open, the page it leads to, and selected, which hover
-   deepens and never hides. The selected tint is see-through, mixed on --line-under */
+/* a list line's tint: hovered, a menu of it open, the page it leads to, and selected, which hover
+   and an open menu deepen and never hide. The selected tint is see-through, mixed on --line-under */
 @utility line-tint {
   @media (hover: hover) {
     &[data-super-hover-active] {
       background-color: var(--color-hover);
     }
   }
-  &:has([data-state="open"]) {
+  &:is([data-menu-open], :has([data-state="open"])) {
     background-color: var(--color-hover);
   }
   &[aria-current] {
@@ -550,6 +554,9 @@
     &[aria-selected="true"][data-super-hover-active] {
       background-color: var(--color-accent-soft);
     }
+  }
+  &[aria-selected="true"]:is([data-menu-open], :has([data-state="open"])) {
+    background-color: var(--color-accent-soft);
   }
 }
 
