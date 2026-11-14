@@ -96,7 +96,7 @@
 
   /** a user-defined group or a new one, whose name and color are ours */
   const own = start.own;
-  /** a built-in group's own upload settings, whose options a file may hold */
+  /** the group's name when it is built in and has upload settings, which a file may hold */
   const builtin = own ? null : uploadGroup(start.name);
   /** everyone's settings, whose not set is the global transfer settings */
   const everyone = start.name === DEFAULT;
