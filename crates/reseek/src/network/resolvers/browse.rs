@@ -85,20 +85,31 @@ async fn listing(edges: &Edges, view: &View) -> BrowseReply {
   }
 }
 
-/// The views whose browse cache a browse is writing, each with its own lock.
+/// The views whose browse cache a browse is writing or waits to write, each with its own lock.
 #[derive(Default)]
-pub(super) struct Rewrites(Mutex<HashMap<View, Arc<tokio::sync::Mutex<()>>>>);
+pub(super) struct Rewrites(Mutex<HashMap<View, Rewrite>>);
+
+/// A view's lock and how many browses hold or wait for it, counted under the map's lock.
+#[derive(Default)]
+struct Rewrite {
+  lock: Arc<tokio::sync::Mutex<()>>,
+  browses: usize,
+}
 
 impl Rewrites {
   /// Waits until no other browse writes the cache of `view`, then holds it until the returned
   /// value is dropped.
   async fn hold(&self, view: &View) -> Rewriting<'_> {
-    let held = lock(&self.0).entry(view.clone()).or_default().clone();
-    // made before the wait, so a browse dropped while it waits still lets go of the view
+    let held = {
+      let mut views = lock(&self.0);
+      let rewrite = views.entry(view.clone()).or_default();
+      rewrite.browses += 1;
+      rewrite.lock.clone()
+    };
+    // made before the wait, so a browse dropped while it waits still counts itself out
     let mut rewriting = Rewriting {
       rewrites: self,
       view: view.clone(),
-      lock: held.clone(),
       guard: None,
     };
     rewriting.guard = Some(held.lock_owned().await);
@@ -106,12 +117,10 @@ impl Rewrites {
   }
 }
 
-/// A view's cache held for a browse writing it; the view is forgotten once nobody holds or
-/// waits for it.
+/// A browse holding or waiting for a view's lock; the view is forgotten once no browse does.
 struct Rewriting<'a> {
   rewrites: &'a Rewrites,
   view: View,
-  lock: Arc<tokio::sync::Mutex<()>>,
   guard: Option<tokio::sync::OwnedMutexGuard<()>>,
 }
 
@@ -119,9 +128,11 @@ impl Drop for Rewriting<'_> {
   fn drop(&mut self) {
     drop(self.guard.take());
     let mut views = lock(&self.rewrites.0);
-    // clones are taken under this lock, so a count of two, the map's and this one, means no
-    // other browse holds or waits for the view
-    if Arc::strong_count(&self.lock) == 2 {
+    let rewrite = views
+      .get_mut(&self.view)
+      .expect("a view stays in the map while a browse counted in it lives");
+    rewrite.browses -= 1;
+    if rewrite.browses == 0 {
       views.remove(&self.view);
     }
   }
@@ -356,6 +367,12 @@ mod tests {
     assert!(!warned_missing(&logs));
   }
 
+  /// Whether `future`, polled once, is still waiting.
+  fn pending<F: Future>(future: std::pin::Pin<&mut F>) -> bool {
+    let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
+    future.poll(&mut cx).is_pending()
+  }
+
   #[tokio::test]
   async fn a_browse_never_waits_for_another_views_cache_being_written() {
     let dir = tempfile::tempdir().unwrap();
@@ -386,17 +403,34 @@ mod tests {
     .expect("alice's browse waited for another view");
     let listed = directories(&bytes(browsed).await);
     assert!(listed.contains(&"Agent".to_string()), "{listed:?}");
-    let gave_up = tokio::time::timeout(
-      std::time::Duration::from_millis(10),
-      edges.rebuilding.hold(&hiding),
-    )
-    .await;
-    assert!(gave_up.is_err(), "the same view waits");
+    // a browse of the held view waits, and lets go of it whether it gives up before or after
+    // the browse holding the view is done
+    let mut first = Box::pin(edges.rebuilding.hold(&hiding));
+    assert!(pending(first.as_mut()), "the same view waits");
+    drop(first);
+    let mut last = Box::pin(edges.rebuilding.hold(&hiding));
+    assert!(pending(last.as_mut()));
     drop(writing);
+    drop(last);
     assert!(
       lock(&edges.rebuilding.0).is_empty(),
       "a view nobody holds or waits for is forgotten"
     );
+  }
+
+  #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+  async fn a_view_is_forgotten_when_two_browses_of_it_end_together() {
+    let rewrites = Arc::new(Rewrites::default());
+    for round in 0..20_000 {
+      let both = [(); 2].map(|()| {
+        let rewrites = rewrites.clone();
+        tokio::spawn(async move { drop(rewrites.hold(&View::everything()).await) })
+      });
+      for browse in both {
+        browse.await.unwrap();
+      }
+      assert!(lock(&rewrites.0).is_empty(), "left behind in round {round}");
+    }
   }
 
   #[tokio::test]
