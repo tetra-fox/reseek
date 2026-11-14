@@ -1192,8 +1192,9 @@ export interface paths {
         head?: never;
         /**
          * Sets and removes runtime overrides. They last across restarts until they expire, are
-         *     removed, or the files change the value under them; with `expiresIn` `restart` they are kept
-         *     in memory only and end when the daemon stops. A change sent with a `revision` the options
+         *     removed, or the files change the value under them; for a map of named entries only the keys
+         *     of entries the files change too give way. With `expiresIn` `restart` they are kept in memory
+         *     only and end when the daemon stops. A change sent with a `revision` the options
          *     have changed since is refused with 409, the current revision as its detail.
          */
         patch: operations["patch_options"];
@@ -6495,7 +6496,8 @@ export interface components {
         };
         /**
          * @description Sets and removes runtime overrides, which apply on top of every other layer until they
-         *     expire or the files change the value under them.
+         *     expire or the files change the value under them; for a map of named entries, until the files
+         *     change the same key of an entry.
          */
         OptionsPatch: {
             /**

@@ -5355,7 +5355,7 @@
         "tags": [
           "options"
         ],
-        "summary": "Sets and removes runtime overrides. They last across restarts until they expire, are\nremoved, or the files change the value under them; with `expiresIn` `restart` they are kept\nin memory only and end when the daemon stops. A change sent with a `revision` the options\nhave changed since is refused with 409, the current revision as its detail.",
+        "summary": "Sets and removes runtime overrides. They last across restarts until they expire, are\nremoved, or the files change the value under them; for a map of named entries only the keys\nof entries the files change too give way. With `expiresIn` `restart` they are kept in memory\nonly and end when the daemon stops. A change sent with a `revision` the options\nhave changed since is refused with 409, the current revision as its detail.",
         "operationId": "patch_options",
         "requestBody": {
           "content": {
@@ -23155,7 +23155,7 @@
       },
       "OptionsPatch": {
         "type": "object",
-        "description": "Sets and removes runtime overrides, which apply on top of every other layer until they\nexpire or the files change the value under them.",
+        "description": "Sets and removes runtime overrides, which apply on top of every other layer until they\nexpire or the files change the value under them; for a map of named entries, until the files\nchange the same key of an entry.",
         "properties": {
           "expiresIn": {
             "type": [
