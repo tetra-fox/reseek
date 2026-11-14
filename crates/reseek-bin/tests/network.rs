@@ -99,7 +99,11 @@ async fn the_watchdog_reconnects_once_the_server_is_back() {
   // trying already, so it starts over at once rather than at the end of its back-off
   assert_eq!(client.connect().await.unwrap().as_u16(), 205);
   server.start_again();
-  let state = until(&client, "logged in again", logged_in).await;
+  // the login shows before the watchdog's loop, which logged in, has ended
+  let state = until(&client, "logged in again, the watchdog done", |s| {
+    logged_in(s) && !s.connection_watchdog.is_attempting_connection
+  })
+  .await;
   assert!(!state.connection_watchdog.is_enabled);
   assert_eq!(state.connection_watchdog.next_attempt_at, None);
 }
