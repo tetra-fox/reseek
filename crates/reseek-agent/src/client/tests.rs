@@ -5,8 +5,8 @@
 //! too large copies nothing and is a refusal, and an upload stops when its socket closes. A
 //! run of upload failures is warned about once for each way it fails, and a refusal or another
 //! agent taking the socket once however many uploads succeed between. A login gives the agent's
-//! device id. A file sent or a download
-//! fetched whose call fails says what failed without the call's URL.
+//! device id. A file sent or a download fetched whose call fails says what failed without the
+//! call's URL.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};

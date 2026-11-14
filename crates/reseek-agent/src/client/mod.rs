@@ -3,8 +3,8 @@
 //! dials again, backing off up to 30 seconds and starting over once it was ready. A refusal of
 //! its configuration, its API key or its shares, another device connected under its instance
 //! name, or another agent logging in under that name, backs off to the cap at once and is warned
-//! about once per reason; so is a controller it cannot reach, until a socket is ready again. A change to the controller's settings closes the
-//! socket and dials again with the new ones.
+//! about once per reason; so is a controller it cannot reach, until a socket is ready again. A
+//! change to the controller's settings closes the socket and dials again with the new ones.
 
 pub(crate) mod dial;
 mod downloads;

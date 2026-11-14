@@ -3,7 +3,7 @@
 //! stops it.
 
 use std::ffi::OsString;
-use std::io::IsTerminal;
+use std::io::{IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::OnceLock;
@@ -251,16 +251,35 @@ fn device_id(file: &Path) -> Result<Uuid, String> {
     }),
     Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
       let device = Uuid::new_v4();
-      // written beside it and renamed, so a stop partway leaves no file or a whole one
+      // written beside it, synced, renamed and the directory synced, so a stop or a power cut
+      // partway leaves no file or a whole one
       let written = file.with_extension("tmp");
-      std::fs::write(&written, format!("{device}\n"))
-        .and_then(|()| std::fs::rename(&written, file))
-        .map_err(|e| format!("{}: {e}", file.display()))?;
+      let write = || -> std::io::Result<()> {
+        let mut out = std::fs::File::create(&written)?;
+        writeln!(out, "{device}")?;
+        out.sync_all()?;
+        std::fs::rename(&written, file)?;
+        sync_directory(file)
+      };
+      write().map_err(|e| format!("{}: {e}", file.display()))?;
       info!(%device, path = %file.display(), "Made a device id for this agent");
       Ok(device)
     }
     Err(e) => Err(format!("{}: {e}", file.display())),
   }
+}
+
+/// Syncs the directory holding `file`, so a rename into it is on disk.
+#[cfg(unix)]
+fn sync_directory(file: &Path) -> std::io::Result<()> {
+  let dir = file.parent().expect("the file is named in a directory");
+  std::fs::File::open(dir)?.sync_all()
+}
+
+/// On Windows the directory is not synced; the rename is left to the file system.
+#[cfg(not(unix))]
+fn sync_directory(_: &Path) -> std::io::Result<()> {
+  Ok(())
 }
 
 /// Opens the share index and keeps the connection to the controller, as the device `device`,
