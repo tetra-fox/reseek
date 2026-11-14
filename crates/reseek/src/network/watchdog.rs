@@ -17,7 +17,7 @@ use api_types::state::ConnectionWatchdogState;
 use cascade::Watcher;
 use chrono::Utc;
 use reseek_shares::{backoff, lock};
-use soulseek_client::{Client, ClientError};
+use soulseek_client::{Client, ClientError, Outage};
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, error, info, info_span, warn};
@@ -65,9 +65,8 @@ struct Inner {
   turns: Mutex<Turns>,
   /// whether a loop runs and when its next attempt starts
   status: Mutex<Status>,
-  /// the failure last warned of since the last login, so the same failure again is told at
-  /// debug
-  warned: Mutex<Option<String>>,
+  /// the ways attempts failed since the last login, each warned about once
+  outage: Mutex<Outage>,
 }
 
 /// Whether the watchdog is on, and what may turn it on
@@ -159,7 +158,7 @@ impl Watchdog {
         running: Arc::new(tokio::sync::Mutex::new(())),
         turns: Mutex::new(Turns::default()),
         status: Mutex::new(Status::default()),
-        warned: Mutex::new(None),
+        outage: Mutex::new(Outage::new()),
       }),
     };
     tokio::spawn(
@@ -275,11 +274,11 @@ impl Watchdog {
     was
   }
 
-  /// Forgets the failed attempts, the unanswered logins and the failure warned of, once a login
+  /// Forgets the failed attempts, the unanswered logins and the failures warned of, once a login
   /// succeeded: a failure from then on is a new outage.
   pub fn logged_in(&self) {
     lock(&self.inner.turns).clear();
-    *lock(&self.inner.warned) = None;
+    lock(&self.inner.outage).end();
     self.publish();
   }
 
@@ -367,7 +366,7 @@ impl Watchdog {
         return;
       }
       let span = info_span!("server_connect", attempt = failed + 1);
-      match self.attempt(&attempt).instrument(span).await {
+      match self.attempt(&attempt, failed > 0).instrument(span).await {
         Attempt::Connected | Attempt::Canceled => return,
         Attempt::Stop => {
           self.stop(&attempt);
@@ -383,10 +382,15 @@ impl Watchdog {
     }
   }
 
-  /// One attempt with the current options, once the shares are initialized.
-  async fn attempt(&self, cancel: &CancellationToken) -> Attempt {
+  /// One attempt with the current options, once the shares are initialized. A `retry` follows
+  /// the wait that was logged, so it is told at debug.
+  async fn attempt(&self, cancel: &CancellationToken, retry: bool) -> Attempt {
     let inner = &self.inner;
-    info!("Attempting to connect to the Soulseek server");
+    if retry {
+      debug!("Attempting to connect to the Soulseek server");
+    } else {
+      info!("Attempting to connect to the Soulseek server");
+    }
     tokio::select! {
       () = cancel.cancelled() => {
         debug!("Reconnection attempt canceled");
@@ -436,13 +440,10 @@ impl Watchdog {
   /// Logs an attempt that failed: a warning the first time it fails this way since the last
   /// login, debug after, so a server that stays down is one warning and each new reason one more.
   fn failed(&self, error: &ClientError) {
-    let failure = error.to_string();
-    let mut warned = lock(&self.inner.warned);
-    if warned.as_ref() == Some(&failure) {
-      debug!(%error, "Failed to reconnect");
-    } else {
+    if lock(&self.inner.outage).new_reason(&error.to_string()) {
       warn!(%error, "Failed to reconnect");
-      *warned = Some(failure);
+    } else {
+      debug!(%error, "Failed to reconnect");
     }
   }
 
@@ -523,27 +524,23 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn a_failure_warns_once_until_a_login_and_a_new_one_warns_again() {
-    use crate::logging::{BufferLayer, LogBuffer};
+  async fn each_failure_warns_once_until_a_login_and_then_again() {
     use api_types::logs::LogLevel;
-    use tracing_subscriber::layer::SubscriberExt;
 
     let app = crate::testing::app(crate::testing::TRUSTED, &[]).await;
     let watchdog = app.state.network.watchdog();
-    let buffer = Arc::new(LogBuffer::default());
-    let subscriber = tracing_subscriber::registry().with(BufferLayer(buffer.clone()));
     let refused = ClientError::connection(soulseek_client::ConnectionErrorKind::Other, "refused");
     let unreachable =
       ClientError::connection(soulseek_client::ConnectionErrorKind::Other, "unreachable");
-    tracing::subscriber::with_default(subscriber, || {
-      watchdog.failed(&refused);
-      watchdog.failed(&refused);
-      watchdog.failed(&unreachable);
-      watchdog.failed(&unreachable);
-      watchdog.logged_in();
-      watchdog.failed(&unreachable);
-    });
-    let told: Vec<(LogLevel, String)> = buffer
+    let (logs, capturing) = crate::testing::captured_logs();
+    // two reasons taking turns, as a server that is down can give
+    for error in [&refused, &unreachable, &refused, &unreachable] {
+      watchdog.failed(error);
+    }
+    watchdog.logged_in();
+    watchdog.failed(&unreachable);
+    drop(capturing);
+    let told: Vec<(LogLevel, String)> = logs
       .snapshot()
       .into_iter()
       .filter(|record| record.message.starts_with("Failed to reconnect"))
@@ -554,11 +551,63 @@ mod tests {
       told,
       [
         (LogLevel::Warning, line("refused")),
-        (LogLevel::Debug, line("refused")),
         (LogLevel::Warning, line("unreachable")),
+        (LogLevel::Debug, line("refused")),
         (LogLevel::Debug, line("unreachable")),
         (LogLevel::Warning, line("unreachable")),
       ]
+    );
+  }
+
+  #[tokio::test]
+  async fn a_server_that_stays_down_is_one_info_line_per_wait() {
+    use api_types::logs::LogLevel;
+
+    let (logs, _capturing) = crate::testing::captured_logs();
+    let closed = std::net::TcpListener::bind("127.0.0.1:0")
+      .unwrap()
+      .local_addr()
+      .unwrap()
+      .port();
+    let _app = crate::testing::soulseek::app(&format!(
+      "[soulseek]\naddress = \"127.0.0.1\"\nport = {closed}\nusername = \"me\"\n\
+       password = \"secret\"\n"
+    ))
+    .await;
+    let failures = || {
+      logs
+        .snapshot()
+        .iter()
+        .filter(|record| record.message.starts_with("Failed to reconnect"))
+        .count()
+    };
+    // the first attempt and two retries, after waits of up to a second and up to three
+    tokio::time::timeout(Duration::from_secs(15), async {
+      while failures() < 3 {
+        tokio::time::sleep(Duration::from_millis(50)).await;
+      }
+    })
+    .await
+    .expect("three attempts failed in time");
+    let records = logs.snapshot();
+    let failed: Vec<usize> = records
+      .iter()
+      .enumerate()
+      .filter(|(_, record)| record.message.starts_with("Failed to reconnect"))
+      .map(|(i, _)| i)
+      .collect();
+    let retries = &records[failed[0]..failed[2]];
+    let told: Vec<&str> = retries
+      .iter()
+      .filter(|record| record.level == LogLevel::Information)
+      .map(|record| record.message.as_str())
+      .collect();
+    assert_eq!(told.len(), 2, "{told:#?}");
+    assert!(
+      told
+        .iter()
+        .all(|line| line.starts_with("Waiting before attempting to reconnect")),
+      "{told:#?}"
     );
   }
 
