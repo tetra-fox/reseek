@@ -136,6 +136,38 @@ impl Client {
     };
     Ok(tokio::spawn(upload.run().instrument(span)))
   }
+
+  /// Tells `username` that an upload of `filename` they asked for will not come, with `reason`,
+  /// as a refusal of their request would have: their client drops the file. Best effort and
+  /// bounded, as when an upload ends.
+  pub async fn deny_upload(&self, username: &str, filename: RemoteFilename, reason: String) {
+    let denied = PeerMessage::UploadDenied(UploadDenied { filename, reason });
+    self.tell_upload_ended(username, denied).await;
+  }
+
+  /// Sends `username` the `message` that says an upload to them ended. Best effort and bounded;
+  /// skipped while the client disconnects or once it is disposed, but not because the server
+  /// session was lost.
+  async fn tell_upload_ended(&self, username: &str, message: PeerMessage) {
+    if self.state() == ClientState::Disconnecting || self.cancellation().is_cancelled() {
+      tracing::debug!(
+        "the client is disconnecting or disposed; the peer is not told the upload ended"
+      );
+      return;
+    }
+    let tell = async {
+      // the address is looked up only when there is no connection to the peer to reuse
+      let conn = self
+        .message_connection(username, None, &CancellationToken::new())
+        .await?;
+      write_peer(&conn, message).await
+    };
+    match tokio::time::timeout(COURTESY_BUDGET, tell).await {
+      Ok(Ok(())) => tracing::debug!("the peer was told the upload ended"),
+      Ok(Err(error)) => tracing::debug!(%error, "the peer could not be told the upload ended"),
+      Err(_) => tracing::debug!("telling the peer the upload ended took too long; given up"),
+    }
+  }
 }
 
 /// Measures a file to upload, opening it the way the upload will, so a file that cannot be read
@@ -454,17 +486,7 @@ impl Upload {
   /// Tells the peer an upload did not succeed: that we canceled it, so it drops the file, or
   /// that it failed, so it queues the file again. A peer that refused the offer or closed the
   /// transfer connection is told nothing.
-  /// Best effort and bounded; skipped while the client disconnects or once it is disposed, but
-  /// not because the server session was lost.
   async fn tell_peer(&mut self, error: &ClientError) {
-    if self.client.state() == ClientState::Disconnecting
-      || self.client.cancellation().is_cancelled()
-    {
-      tracing::debug!(
-        "the client is disconnecting or disposed; the peer is not told the upload ended"
-      );
-      return;
-    }
     // an offline peer cannot hear it, one that refused the file has said it does not want it,
     // and one that closed the transfer connection under the upload left on its own
     if matches!(
@@ -487,18 +509,6 @@ impl Upload {
         filename: self.filename.clone(),
       }),
     };
-    let tell = async {
-      // the address is looked up only when there is no connection to the peer to reuse
-      let conn = self
-        .client
-        .message_connection(&self.username, None, &CancellationToken::new())
-        .await?;
-      write_peer(&conn, message).await
-    };
-    match tokio::time::timeout(COURTESY_BUDGET, tell).await {
-      Ok(Ok(())) => tracing::debug!("the peer was told the upload ended"),
-      Ok(Err(error)) => tracing::debug!(%error, "the peer could not be told the upload ended"),
-      Err(_) => tracing::debug!("telling the peer the upload ended took too long; given up"),
-    }
+    self.client.tell_upload_ended(&self.username, message).await;
   }
 }

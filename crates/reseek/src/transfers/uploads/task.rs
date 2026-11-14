@@ -2,6 +2,7 @@
 //! with the queue's slot, the group's speed limit and every state written as it comes, the
 //! progress at most every [`PROGRESS_EVERY`]. How it ended is written, counted and, for a
 //! success, raised as `UploadFileComplete`; whatever the end, the upload leaves the queue. A
+//! file no longer shared to the user fails the upload, and the peer is told it is not shared. A
 //! stop of the daemon leaves the record as it is, for the stop to end.
 
 use std::sync::Arc;
@@ -24,7 +25,7 @@ use tracing::{Instrument, debug, info, info_span, trace, warn};
 use uuid::Uuid;
 
 use super::Uploads;
-use super::intake::{Located, Locating};
+use super::intake::{Located, Locating, NOT_SHARED};
 use crate::relay::Controller;
 use crate::shares::LOCAL_HOST;
 use crate::transfers::state::{self, State};
@@ -120,7 +121,12 @@ impl Uploads {
       Ok(Locating::Found(found)) => found,
       Ok(Locating::NotShared) => {
         let gone = ClientError::NotFound(FILE_GONE.to_string());
-        return self.fail(&mut record, &gone, None).await;
+        self.fail(&mut record, &gone, None).await;
+        // the answer a request for a file not shared gets, so the peer stops waiting for it
+        let filename = record.filename.as_str().into();
+        return client
+          .deny_upload(&record.username, filename, NOT_SHARED.to_string())
+          .await;
       }
       // the agent is asked for the file again when the upload's turn comes, and the peer is
       // told the upload failed when it cannot send it then
