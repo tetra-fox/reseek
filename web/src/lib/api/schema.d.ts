@@ -2433,7 +2433,9 @@ export interface paths {
         put?: never;
         /**
          * Creates a token with at most the caller's own role. Its secret is in the answer and is
-         *     never shown again. Needs a login session: a token cannot make tokens.
+         *     never shown again. Needs a login session: a token cannot make tokens. Refused to a caller
+         *     whose role cannot be read again later, such as a proxy user with no web UI session, since
+         *     the token acts with no more than its owner's role on each request.
          */
         post: operations["create"];
         delete?: never;

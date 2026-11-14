@@ -10915,7 +10915,7 @@
         "tags": [
           "tokens"
         ],
-        "summary": "Creates a token with at most the caller's own role. Its secret is in the answer and is\nnever shown again. Needs a login session: a token cannot make tokens.",
+        "summary": "Creates a token with at most the caller's own role. Its secret is in the answer and is\nnever shown again. Needs a login session: a token cannot make tokens. Refused to a caller\nwhose role cannot be read again later, such as a proxy user with no web UI session, since\nthe token acts with no more than its owner's role on each request.",
         "operationId": "create",
         "requestBody": {
           "content": {

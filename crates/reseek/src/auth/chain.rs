@@ -224,9 +224,9 @@ pub async fn identify(
   Ok(identified)
 }
 
-/// The role of a token's `owner` now: what `options` give them by their last sign-in, or give
-/// the trusted network they are; `None` for anyone else, which refuses the token.
-async fn owner_role(
+/// The role of the token owner `owner` now: what `options` give them by their last sign-in, or
+/// give the trusted network they are; `None` for anyone else, whose tokens are refused.
+pub async fn owner_role(
   app: &AppState,
   owner: &str,
   options: &crate::config::Options,

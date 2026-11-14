@@ -42,7 +42,7 @@ use crate::db::{Database, DbError, Location};
 use crate::http::Peer;
 pub use chain::{
   Check, Identified, Presented, end_sessions, end_sessions_without_role, identify, idle,
-  page_session, session_cookie, start_session,
+  owner_role, page_session, session_cookie, start_session,
 };
 pub use client::Client;
 use limits::Limits;
