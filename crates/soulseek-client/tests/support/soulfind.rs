@@ -18,7 +18,8 @@ use soulseek_proto::{ServerCode, ServerRequest};
 use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
 
-/// how long a fresh server may take to accept connections
+/// how long a fresh server may take to accept connections; it starts within milliseconds and
+/// says nothing once bound, so this only ends the wait on one that hangs
 const STARTUP: Duration = Duration::from_secs(10);
 /// ports tried before giving up, each after the previous one turned out to be taken
 const ATTEMPTS: u32 = 5;
@@ -91,8 +92,9 @@ impl Soulfind {
   fn start(binary: &Path) -> Self {
     for _ in 0..ATTEMPTS {
       let port = super::free_port();
-      let data = Path::new(env!("CARGO_TARGET_TMPDIR"))
-        .join(format!("soulfind-{}-{port}", std::process::id()));
+      // not under the target directory, whose disk a parallel build keeps busy: the database
+      // syncs at each step of its schema
+      let data = std::env::temp_dir().join(format!("soulfind-{}-{port}", std::process::id()));
       std::fs::create_dir_all(&data).unwrap();
       let mut server = Self {
         address: SocketAddr::from((Ipv4Addr::LOCALHOST, port)),
