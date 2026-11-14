@@ -123,8 +123,8 @@ impl Downloads {
   }
 }
 
-/// Downloads retried together: a group of one user, destination and search, and the records
-/// whose files it holds.
+/// Downloads retried together: a group of one user, destination, folder and search, and the
+/// records whose files it holds.
 struct Retried {
   group: Group,
   records: Vec<Record>,
@@ -390,7 +390,7 @@ mod tests {
   use crate::transfers::state::State;
 
   #[test]
-  fn a_retry_keeps_each_downloads_destination_and_search() {
+  fn a_retry_keeps_each_downloads_destination_folder_and_search() {
     let search = Uuid::new_v4();
     let ended = |username: &str, filename: &str, destination: Option<&str>| Record {
       state: State::Completed(TransferOutcome::Errored),
@@ -403,6 +403,13 @@ mod tests {
     let three = ended("alice", "a\\1\\2.flac", Some("Album/Disc 1"));
     let again = ended("alice", "a\\1\\1.flac", None);
     let bob = ended("bob", "a\\1\\1.flac", Some("Album/Disc 1"));
+    // the same but for the folder they were picked in
+    let in_folder = |filename: &str, folder: &str| Record {
+      folder: Some(folder.to_string()),
+      ..ended("alice", filename, None)
+    };
+    let picked = in_folder("b\\A\\1.flac", "b");
+    let opened = in_folder("b\\A\\2.flac", "b\\A");
     let running = Record::download("alice", "a\\3.flac", 1);
     let (groups, refused) = retry_groups(vec![
       one.clone(),
@@ -411,6 +418,8 @@ mod tests {
       three.clone(),
       again.clone(),
       bob.clone(),
+      picked.clone(),
+      opened.clone(),
     ]);
     let ids = |records: &[Record]| records.iter().map(|r| r.id).collect::<Vec<_>>();
     let shape: Vec<(Group, Vec<Uuid>)> = groups
@@ -427,8 +436,11 @@ mod tests {
         (group(&[&one, &three]), vec![one.id, three.id]),
         (group(&[&two]), vec![two.id]),
         (group(&[&bob]), vec![bob.id]),
+        (group(&[&picked]), vec![picked.id]),
+        (group(&[&opened]), vec![opened.id]),
       ]
     );
+    assert_eq!(shape[3].0.folder.as_deref(), Some("b"));
     assert_eq!(shape[0].0.destination.as_deref(), Some("Album/Disc 1"));
     assert_eq!(shape[0].0.search_id, Some(search));
     let refused: Vec<(Uuid, String)> = refused.into_iter().map(|f| (f.id, f.error)).collect();
