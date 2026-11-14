@@ -33,7 +33,8 @@
      * the element renders without a trigger while true: a row of a long list sets it until a
      * mouse or a pen first comes to the row (`wakeOnPointer`), since each trigger joins bits-ui's
      * registry. Keyboard focus wakes the one element, which is the tab stop its trigger would
-     * make it
+     * make it. Woken that way it is drawn anew, so an element shown only while focus is inside its
+     * row, as a hover toolbar, needs the row woken by the keys first
      */
     dormant?: boolean;
     /** the element the tooltip belongs to, which spreads `props` */
