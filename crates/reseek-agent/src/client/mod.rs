@@ -1,9 +1,9 @@
 //! The agent's connection to its controller, one for the life of the program: it dials, logs
 //! in, uploads its shares and serves the controller's requests; whenever the socket is lost, it
 //! dials again, backing off up to 30 seconds and starting over once it was ready. A refusal of
-//! its configuration, its API key or its shares, or another agent logging in under its instance
-//! name, backs off to the cap at once and is warned about once per reason; so is a controller it
-//! cannot reach, until a socket is ready again. A change to the controller's settings closes the
+//! its configuration, its API key or its shares, another device connected under its instance
+//! name, or another agent logging in under that name, backs off to the cap at once and is warned
+//! about once per reason; so is a controller it cannot reach, until a socket is ready again. A change to the controller's settings closes the
 //! socket and dials again with the new ones.
 
 pub(crate) mod dial;
@@ -20,19 +20,17 @@ use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 
 use cascade::Watcher;
-use reseek_relay_proto::frames::close;
+use reseek_relay_proto::frames::{REDIAL_AT_MOST, close};
 use reseek_shares::{Outage, Shares, backoff, lock};
 use tokio::sync::Notify;
 use tokio::sync::broadcast::error::RecvError;
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, info, info_span, warn};
+use uuid::Uuid;
 
 use crate::options::{Controller, Options};
 use dial::{DialError, Settings};
 use session::{Ended, Link};
-
-/// The longest wait between two attempts to reach the controller.
-const BACKOFF_CAP: Duration = Duration::from_secs(30);
 
 /// How long an agent waits at least after its controller closed for shutting down.
 const AFTER_SHUTDOWN: Duration = Duration::from_secs(1);
@@ -43,6 +41,8 @@ pub struct AgentClient {
   config: Watcher<Options>,
   /// the instance name the agent started with, which only a restart changes
   name: String,
+  /// the device id the agent keeps in its state folder, the same across its restarts
+  device: Uuid,
   shares: Arc<Shares>,
   /// the downloads directory, which the controller's finished downloads are copied to
   downloads: PathBuf,
@@ -67,15 +67,16 @@ pub struct AgentClient {
 }
 
 impl AgentClient {
-  /// The agent of the options in `config`, serving `shares` and copying finished downloads
-  /// into `downloads`, until `shutdown`; the share index is copied into `uploads` to be sent.
-  /// It follows the options and the shares at once and connects once [`AgentClient::run`]
-  /// runs.
+  /// The agent of the options in `config` on the device `device`, serving `shares` and copying
+  /// finished downloads into `downloads`, until `shutdown`; the share index is copied into
+  /// `uploads` to be sent. It follows the options and the shares at once and connects once
+  /// [`AgentClient::run`] runs.
   pub fn new(
     config: Watcher<Options>,
     shares: Arc<Shares>,
     downloads: PathBuf,
     uploads: PathBuf,
+    device: Uuid,
     shutdown: CancellationToken,
   ) -> Arc<Self> {
     let name = config.current().values.instance_name.clone();
@@ -83,6 +84,7 @@ impl AgentClient {
       this: this.clone(),
       config,
       name,
+      device,
       shares,
       downloads,
       uploads,
@@ -130,9 +132,9 @@ impl AgentClient {
       }
       if failures > 0 {
         let mut delay = if refused {
-          backoff::wait(u32::MAX, backoff::AT_ONCE, BACKOFF_CAP)
+          backoff::wait(u32::MAX, backoff::AT_ONCE, REDIAL_AT_MOST)
         } else {
-          backoff::wait(failures, backoff::AT_ONCE, BACKOFF_CAP)
+          backoff::wait(failures, backoff::AT_ONCE, REDIAL_AT_MOST)
         };
         if shut_down {
           delay = delay.max(AFTER_SHUTDOWN);
@@ -183,8 +185,8 @@ impl AgentClient {
       lock(&self.dial_warned).end();
       let ended = self.serve(socket, settings).await;
       shut_down = ended.code == Some(close::SHUTTING_DOWN);
-      // two agents with one instance name would otherwise take the socket from each other
-      // within a second, each time uploading their whole share index
+      // two agents with one instance name and one device id would otherwise take the socket
+      // from each other within a second, each time uploading their whole share index
       let superseded = ended.code == Some(close::SUPERSEDED);
       refused = superseded || ended.refusal.is_some();
       if ended.ready && !refused {

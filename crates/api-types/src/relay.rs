@@ -17,6 +17,9 @@ pub struct RelayState {
   pub enabled: bool,
   /// the agents connected to this controller, empty while relay mode is off
   pub agents: Vec<RelayAgentState>,
+  /// the devices refused because another one is connected under the instance name they gave,
+  /// while they keep trying
+  pub refused_devices: Vec<RelayRefusedDevice>,
 }
 
 /// An agent connected to this controller, listed once it has logged in.
@@ -35,6 +38,24 @@ pub struct RelayAgentState {
   pub shares_updated_at: Option<DateTime<Utc>>,
   /// the version the agent reported
   pub version: String,
+  /// the start of the device id it logged in with, null when it sent none
+  pub device: Option<String>,
+}
+
+/// A device refused because another device is connected under the instance name it gave.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RelayRefusedDevice {
+  /// the key of the configured agent under `relay.agents` whose instance name it gave
+  pub entry: String,
+  /// the instance name it gave
+  pub name: String,
+  /// the address it connected from
+  pub ip_address: String,
+  /// the start of its device id
+  pub device: String,
+  /// when it was last refused
+  pub refused_at: DateTime<Utc>,
 }
 
 /// The version of the relay socket protocol, sent in every envelope and in the handshake.
@@ -84,6 +105,11 @@ pub enum RelayMessage {
     /// null from an agent that does not send it, whose share upload is checked instead
     #[serde(default)]
     shares_schema: Option<u32>,
+    /// the random id the agent keeps in its state folder: a login with the id of the agent
+    /// connected under the name replaces its session, one with another id is refused; null
+    /// from an agent that does not send it, whose login replaces any session under its name
+    #[serde(default)]
+    device_id: Option<Uuid>,
     /// optional features the agent supports, empty today
     capabilities: Vec<String>,
   },
@@ -254,6 +280,9 @@ pub enum LoginFailure {
   IncompatibleVersion,
   /// the agent's share database schema differs from the controller's
   SchemaMismatch,
+  /// another device, with another device id, is connected under the instance name; sent only
+  /// to an agent that gave a device id
+  AnotherDevice,
 }
 
 /// Why an agent cannot serve a file request.

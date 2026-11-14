@@ -117,6 +117,7 @@ fn initial(loaded: &Loaded<Options>, paths: &Paths) -> State {
     relay: RelayState {
       enabled: loaded.values.relay.enabled,
       agents: Vec::new(),
+      refused_devices: Vec::new(),
     },
     health: HealthState {
       search: SearchHealth {

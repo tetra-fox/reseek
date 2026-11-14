@@ -134,7 +134,7 @@ RESEEK_CONTROLLER_API_KEY=key RESEEK_CONTROLLER_SECRET=secret ./reseek-agent-lin
   --instance-name pc --controller-address https://server:5031 -s /path/to/music
 ```
 
-It only dials out, so it needs no open port. On NixOS, `services.reseek-agent` runs it as its own user. Over https it trusts the certificate authorities it carries and the system's, so a server with a certificate from your own CA works once the agent's machine trusts that CA (NixOS `security.pki.certificateFiles`, `update-ca-certificates`, or `SSL_CERT_FILE`).
+It only dials out, so it needs no open port. It keeps a random device id in `device-id` in its data directory, and while it's connected the controller turns away another machine using its name; an agent folder copied to a new machine needs that file deleted. On NixOS, `services.reseek-agent` runs it as its own user. Over https it trusts the certificate authorities it carries and the system's, so a server with a certificate from your own CA works once the agent's machine trusts that CA (NixOS `security.pki.certificateFiles`, `update-ca-certificates`, or `SSL_CERT_FILE`).
 
 ### Desktop
 

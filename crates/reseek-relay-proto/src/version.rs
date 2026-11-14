@@ -3,9 +3,11 @@
 //! major number and, before 1.0, on the minor number too, which is what semantic versioning
 //! calls compatible. The patch number and any pre-release or build part may differ. The frame
 //! protocol number, checked on every frame, is the wire's own contract; the release line also
-//! keeps the HTTP calls and their behavior in step. The share index has a schema version of its
-//! own, which a migration moves within a release line, so the login carries it and the
-//! controller checks it on its own.
+//! keeps the HTTP calls and their behavior in step. A field a message gains within a release
+//! line is optional, so an earlier agent or controller on the line that does not send it is
+//! taken as before, and a reason or code that only the new field can lead to is sent only to a
+//! side that sent it. The share index has a schema version of its own, which a migration moves
+//! within a release line, so the login carries it and the controller checks it on its own.
 
 /// Whether an agent of version `agent` may relay through a controller of version `controller`:
 /// both read as `major.minor.patch`, and they are on the same release line. A version that does

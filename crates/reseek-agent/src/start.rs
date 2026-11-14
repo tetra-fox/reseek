@@ -1,5 +1,6 @@
 //! Running the agent: reading the command line and the configuration, logging to standard
-//! output, the directories it keeps its files in, and serving until a signal stops it.
+//! output, the directories it keeps its files in, its device id, and serving until a signal
+//! stops it.
 
 use std::ffi::OsString;
 use std::io::IsTerminal;
@@ -14,6 +15,7 @@ use reseek_shares::log_format::{Clock, Line};
 use reseek_shares::{Setup, Shares};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
+use uuid::Uuid;
 
 use crate::cli::{self, Command, Invocation};
 use crate::client::AgentClient;
@@ -55,6 +57,8 @@ struct Paths {
   downloads: PathBuf,
   /// the copies of the share index made to upload it
   uploads: PathBuf,
+  /// the file holding the device id
+  device: PathBuf,
 }
 
 /// The base directories before the options are read: under `app_dir` when given, else the
@@ -105,12 +109,16 @@ impl Defaults {
       .ok_or_else(|| no_home("paths.cache"))?;
     Ok(Paths {
       backups: data.join("backups"),
+      device: data.join(DEVICE_FILE),
       downloads: downloads(options, &data).0,
       uploads: cache.join("uploads"),
       cache,
     })
   }
 }
+
+/// The file in the data directory that holds the agent's device id.
+const DEVICE_FILE: &str = "device-id";
 
 /// The downloads directory `options` give, else the default, and the default: `downloads` in
 /// the data directory `data`.
@@ -198,6 +206,13 @@ fn run(invocation: Invocation) -> ExitCode {
     error!(error = e, "the agent's directories are not usable");
     return ExitCode::FAILURE;
   }
+  let device = match device_id(&paths.device) {
+    Ok(device) => device,
+    Err(e) => {
+      error!(error = e, "the agent's device id is not usable");
+      return ExitCode::FAILURE;
+    }
+  };
   let runtime = match tokio::runtime::Builder::new_multi_thread()
     .enable_all()
     .build()
@@ -208,7 +223,7 @@ fn run(invocation: Invocation) -> ExitCode {
       return ExitCode::FAILURE;
     }
   };
-  runtime.block_on(serve(watcher, paths))
+  runtime.block_on(serve(watcher, paths, device))
 }
 
 /// Creates the directories the agent writes to; a configured downloads directory must exist.
@@ -223,15 +238,41 @@ fn create(paths: &Paths, options: &Options) -> Result<(), String> {
   Ok(())
 }
 
-/// Opens the share index and keeps the connection to the controller until a signal stops the
-/// agent.
-async fn serve(config: Watcher<Options>, paths: Paths) -> ExitCode {
+/// The device id kept in `file`, made and written there on the first start. A login with it
+/// replaces the agent's earlier session on the controller, and one under the agent's name with
+/// another id is refused while this one is connected.
+fn device_id(file: &Path) -> Result<Uuid, String> {
+  match std::fs::read_to_string(file) {
+    Ok(text) => Uuid::try_parse(text.trim()).map_err(|e| {
+      format!(
+        "{}: not a device id ({e}); remove the file to make a new one",
+        file.display()
+      )
+    }),
+    Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+      let device = Uuid::new_v4();
+      // written beside it and renamed, so a stop partway leaves no file or a whole one
+      let written = file.with_extension("tmp");
+      std::fs::write(&written, format!("{device}\n"))
+        .and_then(|()| std::fs::rename(&written, file))
+        .map_err(|e| format!("{}: {e}", file.display()))?;
+      info!(%device, path = %file.display(), "Made a device id for this agent");
+      Ok(device)
+    }
+    Err(e) => Err(format!("{}: {e}", file.display())),
+  }
+}
+
+/// Opens the share index and keeps the connection to the controller, as the device `device`,
+/// until a signal stops the agent.
+async fn serve(config: Watcher<Options>, paths: Paths, device: Uuid) -> ExitCode {
   let shutdown = CancellationToken::new();
   stop_on_signals(shutdown.clone());
   let options = config.current().values.clone();
   info!(
     version = crate::VERSION,
     instance = options.instance_name,
+    %device,
     "reseek-agent starting"
   );
   let setup = Setup {
@@ -262,6 +303,7 @@ async fn serve(config: Watcher<Options>, paths: Paths) -> ExitCode {
     shares,
     paths.downloads,
     paths.uploads,
+    device,
     shutdown.clone(),
   );
   // the options change only from here, once the shares and the connection are built from the
@@ -318,6 +360,27 @@ fn stop_on_signals(shutdown: CancellationToken) {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn the_device_id_is_made_on_the_first_start_and_kept_after() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join(DEVICE_FILE);
+    let made = device_id(&file).unwrap();
+    assert_eq!(
+      std::fs::read_to_string(&file).unwrap().trim(),
+      made.to_string()
+    );
+    assert_eq!(
+      device_id(&file).unwrap(),
+      made,
+      "read again at the next start"
+    );
+    let left: Vec<_> = std::fs::read_dir(dir.path()).unwrap().collect();
+    assert_eq!(left.len(), 1, "nothing but the file");
+    std::fs::write(&file, "nas\n").unwrap();
+    let damaged = device_id(&file).unwrap_err();
+    assert!(damaged.contains("not a device id"), "{damaged}");
+  }
 
   #[test]
   fn a_relative_directory_in_a_file_counts_from_the_file() {

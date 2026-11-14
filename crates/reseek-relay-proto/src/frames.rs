@@ -29,6 +29,10 @@ pub const SHARE_TOKEN_LIFETIME: Duration = Duration::from_secs(300);
 /// How long a finished download's token is valid, for every attempt to fetch it.
 pub const DOWNLOAD_TOKEN_LIFETIME: Duration = Duration::from_secs(600);
 
+/// The longest an agent waits between two dials, past up to a second of jitter, which it waits
+/// after every refusal.
+pub const REDIAL_AT_MOST: Duration = Duration::from_secs(30);
+
 /// The largest frame either side reads.
 pub const MAX_FRAME: usize = 1 << 20;
 
@@ -38,7 +42,7 @@ pub mod close {
   pub const NORMAL: u16 = 1000;
   /// a frame was larger than either side reads
   pub const TOO_BIG: u16 = 1009;
-  /// another socket logged in as the same agent
+  /// the same agent, or one that gives no device id, logged in on another socket
   pub const SUPERSEDED: u16 = 4001;
   /// the controller's operator disconnected the agent, or its configuration changed
   pub const KICKED: u16 = 4002;

@@ -4,7 +4,8 @@
 //! re-upload that fails is tried again with no change to ask for it, a first upload refused as
 //! too large copies nothing and is a refusal, and an upload stops when its socket closes. A
 //! run of upload failures is warned about once for each way it fails, and a refusal or another
-//! agent taking the socket once however many uploads succeed between. A file sent or a download
+//! agent taking the socket once however many uploads succeed between. A login gives the agent's
+//! device id. A file sent or a download
 //! fetched whose call fails says what failed without the call's URL.
 
 use std::sync::Arc;
@@ -331,7 +332,14 @@ async fn agent_at(start: Start, address: &str, calls: Arc<AtomicUsize>, ready: b
       .unwrap(),
   );
   let uploads = path("uploads");
-  let agent = AgentClient::new(config, shares, path("received"), uploads, shutdown.clone());
+  let agent = AgentClient::new(
+    config,
+    shares,
+    path("received"),
+    uploads,
+    Uuid::new_v4(),
+    shutdown.clone(),
+  );
   let (link, frames) = Link::opened(settings, ready);
   *lock(&agent.link) = Some(link.clone());
   Agent {
@@ -582,6 +590,36 @@ async fn a_login_names_the_share_schema_and_a_refusal_for_it_is_the_agents() {
   assert_eq!(warnings.count("authentication challenge"), 0);
   let refused = r#"reason="login refused: SchemaMismatch" the relay controller refused this agent"#;
   assert_eq!(warnings.count(refused), 1);
+}
+
+/// The agent's login gives its device id, and a refusal for another device connected under its
+/// name says so in plain words, once however often it dials again
+#[tokio::test]
+async fn a_login_gives_the_device_id_and_a_refusal_for_another_device_says_so() {
+  let warnings = Logged::warnings();
+  let mut agent = agent(Vec::new(), false).await;
+  let challenge = RelayMessage::Challenge {
+    token: "abc".into(),
+    expires_in: 10_000,
+    protocol: RELAY_PROTOCOL,
+  };
+  agent
+    .agent
+    .handle(&agent.link, &frames::encode(None, challenge));
+  let RelayMessage::Login { device_id, .. } = agent.next().await else {
+    panic!("the agent does not log in");
+  };
+  assert_eq!(device_id, Some(agent.agent.device));
+  for _ in 0..3 {
+    agent.login_refused(LoginFailure::AnotherDevice);
+    agent.socket_ended(false, true);
+  }
+  let refused = format!(
+    r#"reason="another device is connected as {}" the relay controller refused this agent"#,
+    agent.agent.name
+  );
+  assert_eq!(warnings.count(&refused), 1);
+  assert_eq!(warnings.count("refused"), 1);
 }
 
 #[tokio::test]

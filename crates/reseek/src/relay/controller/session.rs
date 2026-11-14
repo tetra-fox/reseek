@@ -261,11 +261,19 @@ impl Session {
           credential,
           version,
           shares_schema,
+          device_id,
           ..
         },
       ) => {
         return self
-          .login(socket, agent, &credential, version, shares_schema)
+          .login(
+            socket,
+            agent,
+            &credential,
+            version,
+            shares_schema,
+            device_id,
+          )
           .await;
       }
       (
@@ -317,6 +325,7 @@ impl Session {
     credential: &str,
     version: String,
     shares_schema: Option<u32>,
+    device_id: Option<uuid::Uuid>,
   ) -> Option<Ended> {
     let Phase::Challenged(challenge) = &mut self.phase else {
       return None;
@@ -358,6 +367,7 @@ impl Session {
         shares_updated_at: None,
         // the refusal's log below still reads the login's own
         version: version.clone(),
+        device: device_id.map(super::short),
       };
       // checked again against the configuration as it is now, which may have changed while
       // the credential was being checked
@@ -368,6 +378,7 @@ impl Session {
         address: self.address,
         secret,
         key,
+        device: device_id,
         left: self.controller.shutdown.child_token(),
       })
     });
@@ -379,6 +390,7 @@ impl Session {
       Err(LoginFailure::BadCredential) => "bad_credential",
       Err(LoginFailure::IncompatibleVersion) => "incompatible_version",
       Err(LoginFailure::SchemaMismatch) => "schema_mismatch",
+      Err(LoginFailure::AnotherDevice) => "another_device",
     };
     self.controller.count("login", counted);
     if let Err(reason) = registered {
@@ -427,7 +439,7 @@ impl Session {
 
 /// Logs a refused login: an unknown agent, one outside its networks, a bad credential, a
 /// version outside ours and a share schema other than ours (`ours`) are warnings, never with
-/// the credential.
+/// the credential. Another device connected under the name is logged where it was refused.
 fn log_refusal(
   name: &str,
   login: &login::Login,
@@ -470,6 +482,8 @@ fn log_refusal(
       controller_shares_schema = ours.shares_schema,
       "Agent login refused: its share index's schema is not this controller's"
     ),
+    // logged as the registration refused it, warned about once while the device keeps trying
+    LoginFailure::AnotherDevice => {}
   }
 }
 

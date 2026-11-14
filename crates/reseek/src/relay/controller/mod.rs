@@ -1,8 +1,10 @@
 //! The controller: the agents logged in on their sockets, the tokens and waits of what it asked
 //! them for, and what follows an agent's coming and going. An agent is registered under its
-//! instance name once its login checks out and while its configuration still admits it; a
-//! second login under the same name closes the first socket. Leaving, an agent takes its shares
-//! with it, every wait on it fails at once, and what it was still sending stops.
+//! instance name once its login checks out and while its configuration still admits it. A
+//! second login under the same name from the same device, as when the agent restarted, closes
+//! the first socket; one from another device is refused while the first is connected, and
+//! listed in the state while it keeps trying. Leaving, an agent takes its shares with it, every
+//! wait on it fails at once, and what it was still sending stops.
 
 mod downloads;
 mod files;
@@ -20,7 +22,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use api_types::events::{Event, RelayAgentConnected, RelayAgentDisconnected};
-use api_types::relay::{LoginFailure, RelayAgentState, RelayErrorCode, RelayFileUploadResult};
+use api_types::relay::{
+  LoginFailure, RelayAgentState, RelayErrorCode, RelayFileUploadResult, RelayRefusedDevice,
+};
 use cascade::Watcher;
 use reseek_shares::{View, lock};
 use tokio::sync::broadcast::error::RecvError;
@@ -44,10 +48,14 @@ pub use files::RelayStream;
 use files::StreamWait;
 use info::FileInfoWait;
 use reseek_relay_proto::credential::{Key, Purpose};
-use reseek_relay_proto::frames::close;
+use reseek_relay_proto::frames::{REDIAL_AT_MOST, close};
 
 /// How many frames wait to be written to one agent's socket.
 const OUTBOUND: usize = 64;
+
+/// How long a refused device is listed after it was last refused: it dials again within
+/// [`REDIAL_AT_MOST`], so one that missed two dials stopped trying.
+const REFUSED_LISTED: std::time::Duration = REDIAL_AT_MOST.saturating_mul(3);
 
 /// What the controller writes to an agent's socket.
 #[derive(Debug)]
@@ -72,9 +80,19 @@ struct Registration {
   secret: String,
   /// the key derived from that secret, which its calls over HTTP are checked with
   key: Key,
+  /// the device id it logged in with, when it gave one
+  device: Option<Uuid>,
   /// canceled when the registration ends, which stops the share upload and the files it is
   /// still sending
   left: CancellationToken,
+}
+
+/// A device refused because another one is connected under the instance name it gave.
+struct Refused {
+  /// what the state shows of it
+  record: RelayRefusedDevice,
+  /// when it was last refused
+  at: Instant,
 }
 
 /// A token handed to an agent on its socket to upload its shares with.
@@ -118,6 +136,9 @@ struct Registry {
   /// the code of each agent's last share upload refusal and what it was held to, so a refusal
   /// repeated as it dials again is not warned about again; forgotten once it is handed a token
   refusals_warned: HashMap<String, (RelayErrorCode, Option<u64>)>,
+  /// the devices refused because another is connected under their instance name, by that name
+  /// and their device id; warned about when first refused
+  refused_devices: BTreeMap<(String, Uuid), Refused>,
 }
 
 /// The relay controller.
@@ -215,12 +236,17 @@ impl Controller {
 
   /// The configured agent whose instance name is `name`.
   fn configured(options: &Options, name: &str) -> Option<RelayAgent> {
+    Self::entry(options, name).map(|(_, agent)| agent.clone())
+  }
+
+  /// The key under `relay.agents` and the configuration of the agent whose instance name is
+  /// `name`.
+  fn entry<'a>(options: &'a Options, name: &str) -> Option<(&'a String, &'a RelayAgent)> {
     options
       .relay
       .agents
-      .values()
-      .find(|agent| agent.instance_name.as_deref() == Some(name))
-      .cloned()
+      .iter()
+      .find(|(_, agent)| agent.instance_name.as_deref() == Some(name))
   }
 
   /// Whether `address` is one the configured agent may connect from.
@@ -302,9 +328,11 @@ impl Controller {
     Ok(())
   }
 
-  /// Registers the agent of `registration` in place of any earlier socket of the same name,
-  /// which is closed, and raises `RelayAgentConnected`; refused when the configuration no
-  /// longer admits it, as when it changed while the login was checked.
+  /// Registers the agent of `registration` in place of any earlier socket of the same name and
+  /// device, which is closed, and raises `RelayAgentConnected`. Refused when the configuration
+  /// no longer admits it, as when it changed while the login was checked, and when another
+  /// device is connected under its name; an earlier socket or this login that gives no device
+  /// id is taken as the same device.
   fn register(&self, registration: Registration) -> Result<(), LoginFailure> {
     let name = registration.record.name.clone();
     let ip_address = registration.record.ip_address.clone();
@@ -314,15 +342,64 @@ impl Controller {
       // it looks for agents it no longer admits
       let options = self.config.current();
       Self::admits(&options.values, &name, &registration)?;
-      let earlier = registry
+      let connected = registry
         .agents
         .get(&name)
-        .map(|r| r.socket)
-        .and_then(|socket| take(&mut registry, &name, socket));
+        .map(|r| (r.socket, r.address, r.device));
+      if let Some((_, connected_address, Some(connected_device))) = connected
+        && let Some(device) = registration.device
+        && device != connected_device
+      {
+        let (entry, _) =
+          Self::entry(&options.values, &name).expect("the agent was admitted under these options");
+        let refused = Refused {
+          record: RelayRefusedDevice {
+            entry: entry.clone(),
+            name: name.clone(),
+            ip_address,
+            device: short(device),
+            refused_at: chrono::Utc::now(),
+          },
+          at: Instant::now(),
+        };
+        let first = registry
+          .refused_devices
+          .insert((name.clone(), device), refused)
+          .is_none();
+        drop(registry);
+        let address = registration.address;
+        if first {
+          warn!(
+            agent = name,
+            %address,
+            %device,
+            %connected_address,
+            %connected_device,
+            "Agent login refused: another device is connected as this agent"
+          );
+        } else {
+          debug!(
+            agent = name,
+            %address,
+            %device,
+            "agent login refused again: another device is connected as this agent"
+          );
+        }
+        self.publish();
+        return Err(LoginFailure::AnotherDevice);
+      }
+      if let Some(device) = registration.device {
+        registry.refused_devices.remove(&(name.clone(), device));
+      }
+      let earlier = connected.and_then(|(socket, ..)| take(&mut registry, &name, socket));
       registry.agents.insert(name.clone(), registration);
       earlier
     };
     if let Some(earlier) = earlier {
+      info!(
+        agent = name,
+        "Agent logged in again; its earlier connection is closed"
+      );
       self.closed_on_leaving(&name, earlier, close::SUPERSEDED, "superseded");
     }
     self.publish();
@@ -384,6 +461,10 @@ impl Controller {
       wait.fail(files::StreamFailure::Disconnected);
     }
     info!(agent = name, reason, pending, "Agent disconnected");
+    // a device refused for it gets in at its next dial
+    lock(&self.registry)
+      .refused_devices
+      .retain(|(refused, _), _| refused != name);
     self.shares.remove_host(name);
     self.publish();
     self
@@ -395,14 +476,43 @@ impl Controller {
       }));
   }
 
-  /// Puts the agents into `State.relay.agents`.
+  /// Puts the agents and the devices refused for them into `State.relay`.
   fn publish(&self) {
-    let agents = self.agents();
+    let (agents, refused): (Vec<_>, Vec<_>) = {
+      let registry = lock(&self.registry);
+      (
+        registry.agents.values().map(|r| r.record.clone()).collect(),
+        registry
+          .refused_devices
+          .values()
+          .map(|r| r.record.clone())
+          .collect(),
+      )
+    };
     self
       .relay_metrics()
       .agents_connected
       .set(agents.len() as f64);
-    self.state.update(|state| state.relay.agents = agents);
+    self.state.update(|state| {
+      state.relay.agents = agents;
+      state.relay.refused_devices = refused;
+    });
+  }
+
+  /// Forgets the devices last refused longer than [`REFUSED_LISTED`] ago.
+  fn forget_refused_devices(&self) {
+    let forgotten = {
+      let mut registry = lock(&self.registry);
+      let before = registry.refused_devices.len();
+      registry
+        .refused_devices
+        .retain(|_, r| r.at.elapsed() < REFUSED_LISTED);
+      before - registry.refused_devices.len()
+    };
+    if forgotten > 0 {
+      debug!(forgotten, "refused agent devices stopped trying");
+      self.publish();
+    }
   }
 
   fn relay_metrics(&self) -> &RelayMetrics {
@@ -437,15 +547,20 @@ impl Controller {
   }
 
   /// Disconnects the agents whose configuration was removed, whose instance name or secret
-  /// changed, or whose networks no longer hold the address they logged in from, until the
-  /// daemon stops.
+  /// changed, or whose networks no longer hold the address they logged in from, and forgets the
+  /// refused devices that stopped trying, until the daemon stops.
   async fn follow_configuration(self: Arc<Self>) {
     let mut changes = self.config.changes();
+    let mut refused = tokio::time::interval(REDIAL_AT_MOST);
     // the indexes an earlier run kept include those of agents configured no more
     self.drop_unconfigured();
     loop {
       let change = tokio::select! {
         () = self.shutdown.cancelled() => return,
+        _ = refused.tick() => {
+          self.forget_refused_devices();
+          continue;
+        }
         change = changes.recv() => change,
       };
       match change {
@@ -499,6 +614,13 @@ impl Controller {
   fn next_socket(&self) -> u64 {
     self.sockets.fetch_add(1, Ordering::Relaxed) + 1
   }
+}
+
+/// The start of the device id `device`, which the state shows.
+fn short(device: Uuid) -> String {
+  let mut text = device.simple().to_string();
+  text.truncate(8);
+  text
 }
 
 /// Takes the registration of the agent `name` out of `registry` when it is on `socket` and not

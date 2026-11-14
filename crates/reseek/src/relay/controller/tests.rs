@@ -1,7 +1,8 @@
 //! An agent's socket served without a network, on a clock the test moves: an agent whose
 //! shares are being scanned is waited for past the two minutes, but not past its deferral, an
 //! agent whose configuration or API key no longer admits it is disconnected, a login checked
-//! against a configuration that changed meanwhile is refused, a share upload cut off partway
+//! against a configuration that changed meanwhile is refused, a restarted agent replaces its
+//! session while another device under its name is refused, a share upload cut off partway
 //! leaves no file behind, and a file in flight stops when its agent is kicked.
 
 use std::collections::BTreeMap;
@@ -33,6 +34,9 @@ use reseek_relay_proto::credential::{Key, Purpose};
 use reseek_relay_proto::frames;
 
 const SECRET: &str = "nas-secret-0123456789";
+
+/// The device `nas` logs in from.
+const DEVICE: Uuid = Uuid::from_u128(0x1a2b3c4d_0000_4000_8000_000000000001);
 
 /// A socket whose frames the test sends and reads.
 struct Fake {
@@ -122,7 +126,7 @@ async fn log_in_while(
 ) -> Served {
   let schema = Some(Shares::schema_version());
   let (to_socket, mut from_socket, served) =
-    send_login(controller, address, secret, schema, admitted).await;
+    send_login(controller, address, secret, schema, Some(DEVICE), admitted).await;
   assert!(matches!(
     read(&written(&mut from_socket)[0]),
     RelayMessage::LoginOk { .. }
@@ -131,13 +135,14 @@ async fn log_in_while(
 }
 
 /// A socket of `controller`'s from `address`, served on a task of its own, that answered its
-/// challenge as `nas` with `secret` and the share schema `shares_schema`, opened with a
-/// credential that lets the agent in while `admitted` holds.
+/// challenge as `nas` with `secret`, the share schema `shares_schema` and the device id
+/// `device_id`, opened with a credential that lets the agent in while `admitted` holds.
 async fn send_login(
   controller: &Arc<Controller>,
   address: IpAddr,
   secret: &str,
   shares_schema: Option<u32>,
+  device_id: Option<Uuid>,
   admitted: Arc<AtomicBool>,
 ) -> Served {
   let (to_socket, frames) = mpsc::channel(64);
@@ -161,6 +166,7 @@ async fn send_login(
     credential,
     version: crate::version::info().current,
     shares_schema,
+    device_id,
     capabilities: Vec::new(),
   };
   to_socket.send(text(login)).await.unwrap();
@@ -475,11 +481,13 @@ async fn a_login_whose_agent_was_removed_while_it_was_checked_is_refused() {
       ready: false,
       shares_updated_at: None,
       version: crate::version::info().current,
+      device: None,
     },
     outbound,
     address: home,
     secret: SECRET.into(),
     key: Key::derive(SECRET, "nas"),
+    device: None,
     left: tokio_util::sync::CancellationToken::new(),
   };
   assert_eq!(
@@ -498,8 +506,15 @@ async fn a_login_on_another_share_schema_is_refused_for_it() {
   let home: IpAddr = [127, 0, 0, 1].into();
   let admitted = Arc::new(AtomicBool::new(true));
   let other = Some(Shares::schema_version() + 1);
-  let (_to_socket, mut from_socket, served) =
-    send_login(&controller, home, SECRET, other, admitted.clone()).await;
+  let (_to_socket, mut from_socket, served) = send_login(
+    &controller,
+    home,
+    SECRET,
+    other,
+    Some(DEVICE),
+    admitted.clone(),
+  )
+  .await;
   let answered = written(&mut from_socket);
   assert_eq!(
     read(&answered[0]),
@@ -515,11 +530,122 @@ async fn a_login_on_another_share_schema_is_refused_for_it() {
   assert!(controller.agents().is_empty());
 
   let (_to_socket, mut from_socket, _served) =
-    send_login(&controller, home, SECRET, None, admitted).await;
+    send_login(&controller, home, SECRET, None, Some(DEVICE), admitted).await;
   assert!(matches!(
     read(&written(&mut from_socket)[0]),
     RelayMessage::LoginOk { .. }
   ));
+}
+
+/// A login as `nas` from `device`, and how the controller answered it.
+async fn log_in_from(controller: &Arc<Controller>, device: Option<Uuid>) -> (Served, Vec<Message>) {
+  let home: IpAddr = [127, 0, 0, 1].into();
+  let admitted = Arc::new(AtomicBool::new(true));
+  let schema = Some(Shares::schema_version());
+  let (to_socket, mut from_socket, served) =
+    send_login(controller, home, SECRET, schema, device, admitted).await;
+  let answered = written(&mut from_socket);
+  ((to_socket, from_socket, served), answered)
+}
+
+/// The relay's warnings among the lines `logs` was sent since the last look.
+fn warnings(
+  logs: &mut tokio::sync::broadcast::Receiver<Arc<api_types::logs::LogRecord>>,
+) -> Vec<String> {
+  std::iter::from_fn(|| logs.try_recv().ok())
+    .filter(|r| r.level == api_types::logs::LogLevel::Warning && r.context.contains("relay"))
+    .map(|r| r.message.clone())
+    .collect()
+}
+
+/// An agent that logs in again from its device, as after a restart its controller has not
+/// noticed yet, replaces its earlier session without a warning; another device logging in under
+/// its name is refused for it, warned about once while it keeps trying and listed in the state
+/// until it stops or the first one leaves, and then gets in.
+#[tokio::test]
+async fn a_restarted_agent_replaces_its_session_and_another_device_is_refused() {
+  let (app, controller) = controller().await;
+  let (buffer, _capturing) = crate::testing::captured_logs();
+  let mut logs = buffer.subscribe();
+  let ((_first, mut first, _), answered) = log_in_from(&controller, Some(DEVICE)).await;
+  assert!(matches!(read(&answered[0]), RelayMessage::LoginOk { .. }));
+
+  let ((_restarted, mut restarted, _), answered) = log_in_from(&controller, Some(DEVICE)).await;
+  assert!(matches!(read(&answered[0]), RelayMessage::LoginOk { .. }));
+  assert_eq!(closed(&mut first), Some(Some(frames::close::SUPERSEDED)));
+  assert_eq!(warnings(&mut logs), Vec::<String>::new());
+  let agents = controller.agents();
+  assert_eq!(agents.len(), 1);
+  assert_eq!(agents[0].device.as_deref(), Some("1a2b3c4d"));
+
+  let other = Uuid::from_u128(0x5e6f7a8b_0000_4000_8000_000000000002);
+  for attempt in 0..2 {
+    let ((_, _, served), answered) = log_in_from(&controller, Some(other)).await;
+    assert_eq!(
+      read(&answered[0]),
+      RelayMessage::LoginFailed {
+        reason: LoginFailure::AnotherDevice
+      },
+      "attempt {attempt}"
+    );
+    assert!(
+      matches!(&answered[1], Message::Close(Some(f)) if f.code == frames::close::UNAUTHORIZED),
+      "{answered:?}"
+    );
+    served.await.unwrap();
+  }
+  let warned = warnings(&mut logs);
+  assert_eq!(warned.len(), 1, "{warned:?}");
+  assert!(
+    warned[0].contains("another device is connected as this agent")
+      && warned[0].contains(&other.to_string()),
+    "{warned:?}"
+  );
+  assert_eq!(closed(&mut restarted), None, "the connected agent stays");
+  let state = app.state.state.current();
+  let refused = &state.relay.refused_devices;
+  assert_eq!(refused.len(), 1);
+  assert_eq!(
+    (refused[0].entry.as_str(), refused[0].name.as_str()),
+    ("nas", "nas")
+  );
+  assert_eq!(refused[0].device, "5e6f7a8b");
+
+  // a device that stopped dialing is forgotten, and warned about again once it is back
+  for refused in lock(&controller.registry).refused_devices.values_mut() {
+    refused.at -= super::REFUSED_LISTED;
+  }
+  controller.forget_refused_devices();
+  assert!(app.state.state.current().relay.refused_devices.is_empty());
+  let (_, answered) = log_in_from(&controller, Some(other)).await;
+  assert_eq!(
+    read(&answered[0]),
+    RelayMessage::LoginFailed {
+      reason: LoginFailure::AnotherDevice
+    }
+  );
+  assert_eq!(warnings(&mut logs).len(), 1);
+  assert_eq!(app.state.state.current().relay.refused_devices.len(), 1);
+
+  assert!(controller.kick("nas"));
+  assert!(app.state.state.current().relay.refused_devices.is_empty());
+  let (_, answered) = log_in_from(&controller, Some(other)).await;
+  assert!(matches!(read(&answered[0]), RelayMessage::LoginOk { .. }));
+  assert_eq!(controller.agents()[0].device.as_deref(), Some("5e6f7a8b"));
+}
+
+/// A login that gives no device id, from an agent built before logins carried one, replaces
+/// the session under its name as any login did then, and one with an id replaces it in turn.
+#[tokio::test]
+async fn a_login_without_a_device_id_replaces_the_session_under_its_name() {
+  let (_app, controller) = controller().await;
+  let ((_first, mut first, _), _) = log_in_from(&controller, Some(DEVICE)).await;
+  let ((_older, mut older, _), answered) = log_in_from(&controller, None).await;
+  assert!(matches!(read(&answered[0]), RelayMessage::LoginOk { .. }));
+  assert_eq!(closed(&mut first), Some(Some(frames::close::SUPERSEDED)));
+  let (_, answered) = log_in_from(&controller, Some(DEVICE)).await;
+  assert!(matches!(read(&answered[0]), RelayMessage::LoginOk { .. }));
+  assert_eq!(closed(&mut older), Some(Some(frames::close::SUPERSEDED)));
 }
 
 #[tokio::test]

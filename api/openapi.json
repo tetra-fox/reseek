@@ -24188,6 +24188,13 @@
             "format": "date-time",
             "description": "when it connected"
           },
+          "device": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "the start of the device id it logged in with, null when it sent none"
+          },
           "ipAddress": {
             "type": "string",
             "description": "the address it connected from"
@@ -24234,12 +24241,47 @@
           }
         }
       },
+      "RelayRefusedDevice": {
+        "type": "object",
+        "description": "A device refused because another device is connected under the instance name it gave.",
+        "required": [
+          "entry",
+          "name",
+          "ipAddress",
+          "device",
+          "refusedAt"
+        ],
+        "properties": {
+          "device": {
+            "type": "string",
+            "description": "the start of its device id"
+          },
+          "entry": {
+            "type": "string",
+            "description": "the key of the configured agent under `relay.agents` whose instance name it gave"
+          },
+          "ipAddress": {
+            "type": "string",
+            "description": "the address it connected from"
+          },
+          "name": {
+            "type": "string",
+            "description": "the instance name it gave"
+          },
+          "refusedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "when it was last refused"
+          }
+        }
+      },
       "RelayState": {
         "type": "object",
         "description": "Relay mode and the agents connected to this controller, as part of the application state.",
         "required": [
           "enabled",
-          "agents"
+          "agents",
+          "refusedDevices"
         ],
         "properties": {
           "agents": {
@@ -24252,6 +24294,13 @@
           "enabled": {
             "type": "boolean",
             "description": "whether relay mode is on, which makes this daemon a controller its agents connect to"
+          },
+          "refusedDevices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RelayRefusedDevice"
+            },
+            "description": "the devices refused because another one is connected under the instance name they gave,\nwhile they keep trying"
           }
         }
       },

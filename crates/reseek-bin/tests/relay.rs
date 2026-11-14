@@ -516,6 +516,7 @@ async fn log_in(
       credential,
       version: version.to_string(),
       shares_schema: Some(reseek::shares::Shares::schema_version()),
+      device_id: None,
       capabilities: Vec::new(),
     },
   };

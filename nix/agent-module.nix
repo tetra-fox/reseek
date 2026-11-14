@@ -72,9 +72,9 @@ in
       type = types.path;
       default = "/var/lib/${unit}";
       description = ''
-        The agent's application directory: the share index lives in its `cache` directory and,
-        unless the settings say otherwise, the downloads copied from the controller in
-        `data/downloads`.
+        The agent's application directory: the share index lives in its `cache` directory, its
+        device id in `data/device-id` and, unless the settings say otherwise, the downloads
+        copied from the controller in `data/downloads`.
       '';
     };
 

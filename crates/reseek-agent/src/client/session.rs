@@ -296,6 +296,7 @@ impl AgentClient {
             credential,
             version: crate::VERSION.to_string(),
             shares_schema: Some(Shares::schema_version()),
+            device_id: Some(self.device),
             capabilities: Vec::new(),
           },
         );
@@ -313,10 +314,16 @@ impl AgentClient {
             | LoginFailure::BadCredential
             | LoginFailure::IncompatibleVersion
             | LoginFailure::SchemaMismatch
+            | LoginFailure::AnotherDevice
         );
         // a refusal of the configuration is warned about as the socket ends, an expired
         // challenge here; each once until a socket is ready
-        let refusal = format!("login refused: {reason:?}");
+        let refusal = match reason {
+          LoginFailure::AnotherDevice => {
+            format!("another device is connected as {}", self.name)
+          }
+          reason => format!("login refused: {reason:?}"),
+        };
         if configuration {
           debug!(?reason, "the relay controller refused the login");
           link.refused(refusal);

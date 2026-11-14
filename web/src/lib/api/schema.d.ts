@@ -7087,6 +7087,8 @@ export interface components {
              * @description when it connected
              */
             connectedAt: string;
+            /** @description the start of the device id it logged in with, null when it sent none */
+            device?: string | null;
             /** @description the address it connected from */
             ipAddress: string;
             /** @description the agent's instance name */
@@ -7114,12 +7116,33 @@ export interface components {
             /** @description how the upload ended */
             outcome: components["schemas"]["RelayUploadOutcome"];
         };
+        /** @description A device refused because another device is connected under the instance name it gave. */
+        RelayRefusedDevice: {
+            /** @description the start of its device id */
+            device: string;
+            /** @description the key of the configured agent under `relay.agents` whose instance name it gave */
+            entry: string;
+            /** @description the address it connected from */
+            ipAddress: string;
+            /** @description the instance name it gave */
+            name: string;
+            /**
+             * Format: date-time
+             * @description when it was last refused
+             */
+            refusedAt: string;
+        };
         /** @description Relay mode and the agents connected to this controller, as part of the application state. */
         RelayState: {
             /** @description the agents connected to this controller, empty while relay mode is off */
             agents: components["schemas"]["RelayAgentState"][];
             /** @description whether relay mode is on, which makes this daemon a controller its agents connect to */
             enabled: boolean;
+            /**
+             * @description the devices refused because another one is connected under the instance name they gave,
+             *     while they keep trying
+             */
+            refusedDevices: components["schemas"]["RelayRefusedDevice"][];
         };
         /**
          * @description How a relayed upload ended.
