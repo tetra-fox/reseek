@@ -3,8 +3,6 @@
 //! failure to do what was asked, keeping timeouts, cancellation and the operation's own
 //! outcomes as they are.
 
-use std::time::Duration;
-
 use soulseek_proto::{ServerCode, ServerRequest};
 use tokio_util::sync::CancellationToken;
 
@@ -31,23 +29,8 @@ impl Client {
     key: WaitKey,
     request: ServerRequest,
   ) -> Result<T, ClientError> {
-    self
-      .ask_within(verb, key, request, None, &CancellationToken::new())
-      .await
-  }
-
-  /// [`Client::ask`] with its own timeout, or the default one when `None`, ending at once when
-  /// `cancel` fires unless the reply had come by then
-  pub(super) async fn ask_within<T: Send + 'static>(
-    &self,
-    verb: &str,
-    key: WaitKey,
-    request: ServerRequest,
-    timeout: Option<Duration>,
-    cancel: &CancellationToken,
-  ) -> Result<T, ClientError> {
     self.require_logged_in(verb)?;
-    let reply = self.waiter().wait::<T>(key, timeout, cancel.clone());
+    let reply = self.waiter().wait::<T>(key, None, CancellationToken::new());
     self
       .write_server_message(&request)
       .await
