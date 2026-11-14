@@ -72,7 +72,8 @@ struct Stored {
 
 const HEADER: &str = "# Runtime overrides, written by the application. Each one ends when it \
                       expires or when the configuration\n# files change the value it was set \
-                      over. Remove one through the application rather than here.\n\n";
+                      over; a map of named entries keeps what the files leave as it was.\n# \
+                      Remove one through the application rather than here.\n\n";
 
 impl Overrides {
   /// The overrides kept at `path`, none when the file does not exist yet.
