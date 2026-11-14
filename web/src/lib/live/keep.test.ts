@@ -2,14 +2,17 @@ import { flushSync, mount, unmount } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { interaction } from "#lib/lists/interaction.svelte.js";
+import { frameText } from "#lib/testing/frames.js";
 import Keep from "#lib/testing/Keep.svelte";
 
 import { RECONCILE_MS } from "./keep.svelte";
 import { FALLBACK_MS, live } from "./live.svelte";
 
-const HELLO = 'event: hello\ndata: {"principal":{"name":"a","role":"ReadOnly"}}\n\n';
-const RESUMED =
-  'event: hello\ndata: {"principal":{"name":"a","role":"ReadOnly"},"resumed":true}\n\n';
+const principal = { name: "a", role: "ReadOnly" };
+/** a stream's greeting after the `seq`th frame of the run */
+const hello = (seq: number) => frameText(seq, "hello", { principal });
+const resumed = (seq: number) => frameText(seq, "hello", { principal, resumed: true });
+const LAGGED = frameText(2, "lagged", {});
 
 describe("keepCurrent", () => {
   let send: (text: string) => void;
@@ -38,7 +41,7 @@ describe("keepCurrent", () => {
     component = mount(Keep, { target: document.body, props: { reload, topic: "transfers" } });
     flushSync();
     live.start();
-    send(`id: 1\n${HELLO}`);
+    send(hello(1));
     await vi.advanceTimersByTimeAsync(0);
     flushSync();
     expect(live.status).toBe("connected");
@@ -99,7 +102,7 @@ describe("keepCurrent", () => {
 
   it("reloads on lagged", async () => {
     await connected();
-    send("id: 2\nevent: lagged\ndata: {}\n\n");
+    send(LAGGED);
     await vi.advanceTimersByTimeAsync(0);
     expect(reload).toHaveBeenCalledOnce();
   });
@@ -113,7 +116,7 @@ describe("keepCurrent", () => {
     // the retry after a second opens a new stream, which has not greeted yet
     await vi.advanceTimersByTimeAsync(FALLBACK_MS);
     expect(reload).toHaveBeenCalledOnce();
-    send(HELLO);
+    send(hello(2));
     await vi.advanceTimersByTimeAsync(0);
     flushSync();
     expect(live.status).toBe("connected");
@@ -124,13 +127,13 @@ describe("keepCurrent", () => {
     const release = live.retain("application");
     try {
       live.start();
-      send(`id: 1\n${HELLO}`);
+      send(hello(1));
       await vi.advanceTimersByTimeAsync(0);
       component = mount(Keep, { target: document.body, props: { reload, topic: "transfers" } });
       flushSync();
       await vi.advanceTimersByTimeAsync(300);
       expect(reload).not.toHaveBeenCalled();
-      send(`id: 1\n${RESUMED}`);
+      send(resumed(1));
       await vi.advanceTimersByTimeAsync(0);
       expect(reload).toHaveBeenCalledOnce();
     } finally {
@@ -142,7 +145,7 @@ describe("keepCurrent", () => {
     await connected();
     const release = live.retain("search");
     await vi.advanceTimersByTimeAsync(300);
-    send(RESUMED);
+    send(resumed(1));
     await vi.advanceTimersByTimeAsync(0);
     flushSync();
     expect(live.topics).toEqual(["search", "transfers"]);
@@ -153,7 +156,7 @@ describe("keepCurrent", () => {
   it("waits while a list is held and reloads once when it is let go", async () => {
     await connected();
     const release = interaction.hold();
-    send("id: 2\nevent: lagged\ndata: {}\n\n");
+    send(LAGGED);
     await pass(RECONCILE_MS);
     setHidden(true);
     setHidden(false);

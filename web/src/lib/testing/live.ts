@@ -1,6 +1,7 @@
 import type { Schemas } from "#lib/api/client.js";
 import { live } from "#lib/live/live.svelte.js";
 
+import { EPOCH } from "./frames";
 import { fakeNetwork } from "./network";
 
 /**
@@ -14,7 +15,7 @@ export const connected = (
   role: Schemas["Role"] = "ReadOnly"
 ) => {
   const net = fakeNetwork(answer);
-  const greet = (epoch = "first") =>
+  const greet = (epoch = EPOCH) =>
     net.frame("hello", {
       principal: { name: "me", role },
       resumed: false,

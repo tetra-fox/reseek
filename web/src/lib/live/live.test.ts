@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { EPOCH, frameText } from "#lib/testing/frames.js";
+
 import { Live, type Topic } from "./live.svelte";
 import { SILENCE_MS } from "./stream";
 
@@ -39,16 +41,14 @@ const fakeServer = (refuse: (n: number) => Response | undefined = () => undefine
   return { opened, fetcher: fetcher as unknown as typeof fetch };
 };
 
-const frame = (id: number, type: string, data: unknown) =>
-  `id: ${id}\nevent: ${type}\ndata: ${JSON.stringify(data)}\n\n`;
-const hello = (id: number, resumed = false) =>
-  frame(id, "hello", {
+const hello = (seq: number, resumed = false) =>
+  frameText(seq, "hello", {
     serverTime: "2026-10-26T12:00:00Z",
     version: {},
     principal: { name: "admin", role: "Administrator" },
     topics: [],
     resumed,
-    epoch: "first"
+    epoch: EPOCH
   });
 
 /** Lets the stream readers take what was written */
@@ -86,10 +86,10 @@ describe("Live", () => {
     expect(server.opened[0].headers["Last-Event-ID"]).toBeUndefined();
     server.opened[0].send(hello(10));
     server.opened[0].send(
-      frame(10, "application.state", {}) + frame(10, "application.options", {})
+      frameText(10, "application.state", {}) + frameText(10, "application.options", {})
     );
-    server.opened[0].send(frame(11, "users.removed", { username: "a" }));
-    server.opened[0].send(frame(12, "users.removed", { username: "b" }));
+    server.opened[0].send(frameText(11, "users.removed", { username: "a" }));
+    server.opened[0].send(frameText(12, "users.removed", { username: "b" }));
     await settle();
     expect(live.status).toBe("connected");
     expect(seen).toEqual(["state", "options", "removed a", "removed b"]);
@@ -100,7 +100,7 @@ describe("Live", () => {
     const live = make(server.fetcher);
     live.retain("application");
     live.start();
-    server.opened[0].send(hello(5) + frame(6, "users.removed", { username: "a" }));
+    server.opened[0].send(hello(5) + frameText(6, "users.removed", { username: "a" }));
     await settle();
     server.opened[0].end();
     await settle();
@@ -110,7 +110,7 @@ describe("Live", () => {
     expect(server.opened).toHaveLength(1);
     await vi.advanceTimersByTimeAsync(1);
     expect(server.opened).toHaveLength(2);
-    expect(server.opened[1].headers["Last-Event-ID"]).toBe("6");
+    expect(server.opened[1].headers["Last-Event-ID"]).toBe(`${EPOCH}-6`);
 
     // the second loss waits 1 s again, the third starts the growing wait, which doubles with
     // every loss after it, however long each attempt took, up to 30 s
@@ -139,7 +139,7 @@ describe("Live", () => {
     const server = fakeServer();
     const live = make(server.fetcher);
     live.start();
-    server.opened[0].send(hello(1) + frame(2, "bye", { reason: "unauthorized" }));
+    server.opened[0].send(hello(1) + frameText(2, "bye", { reason: "unauthorized" }));
     await settle();
     expect(unauthorized).toHaveBeenCalledOnce();
     expect(live.status).toBe("off");
@@ -158,7 +158,7 @@ describe("Live", () => {
     const server = fakeServer();
     const live = make(server.fetcher);
     live.start();
-    server.opened[0].send(hello(1) + frame(1, "bye", { reason: "shutdown" }));
+    server.opened[0].send(hello(1) + frameText(1, "bye", { reason: "shutdown" }));
     await settle();
     expect(live.status).toBe("polling");
     await vi.advanceTimersByTimeAsync(1000);
@@ -174,7 +174,7 @@ describe("Live", () => {
     const added: Topic[][] = [];
     live.onAdded((topics) => added.push(topics));
     live.start();
-    server.opened[0].send(hello(1) + frame(2, "users.removed", { username: "old" }));
+    server.opened[0].send(hello(1) + frameText(2, "users.removed", { username: "old" }));
     await settle();
     // a stream that did not resume sends the snapshots of all its topics
     expect(added).toEqual([]);
@@ -185,12 +185,12 @@ describe("Live", () => {
     await vi.advanceTimersByTimeAsync(1);
     expect(server.opened).toHaveLength(2);
     expect(server.opened[1].url).toBe("/live?topics=application,users");
-    expect(server.opened[1].headers["Last-Event-ID"]).toBe("2");
+    expect(server.opened[1].headers["Last-Event-ID"]).toBe(`${EPOCH}-2`);
     expect(server.opened[0].signal.aborted).toBe(false);
 
     // the old stream is silent from here; the new one replays from frame 2
-    server.opened[0].send(frame(3, "users.removed", { username: "twice" }));
-    server.opened[1].send(hello(2, true) + frame(3, "users.removed", { username: "twice" }));
+    server.opened[0].send(frameText(3, "users.removed", { username: "twice" }));
+    server.opened[1].send(hello(2, true) + frameText(3, "users.removed", { username: "twice" }));
     await settle();
     expect(server.opened[0].signal.aborted).toBe(true);
     expect(removed).toEqual(["old", "twice"]);
@@ -226,7 +226,7 @@ describe("Live", () => {
     // nothing else is opened, and every frame is handed over once
     await vi.advanceTimersByTimeAsync(5_000);
     expect(server.opened).toHaveLength(2);
-    server.opened[1].send(frame(2, "users.removed", { username: "once" }));
+    server.opened[1].send(frameText(2, "users.removed", { username: "once" }));
     await settle();
     expect(removed).toEqual(["once"]);
   });
@@ -258,8 +258,8 @@ describe("Live", () => {
     });
     live.on("users.removed", (data) => seen.push(data.username));
     live.start();
-    server.opened[0].send(hello(1) + frame(2, "users.removed", { username: "a" }));
-    server.opened[0].send(frame(3, "users.removed", { username: "b" }));
+    server.opened[0].send(hello(1) + frameText(2, "users.removed", { username: "a" }));
+    server.opened[0].send(frameText(3, "users.removed", { username: "b" }));
     await settle();
     expect(seen).toEqual(["a", "b"]);
     expect(live.status).toBe("connected");
@@ -276,7 +276,7 @@ describe("Live", () => {
     const removed: string[] = [];
     live.on("users.removed", (data) => removed.push(data.username));
     live.start();
-    server.opened[0].send(hello(1) + frame(2, "users.removed", { username: "a" }));
+    server.opened[0].send(hello(1) + frameText(2, "users.removed", { username: "a" }));
     await settle();
     live.retain("users");
     await vi.advanceTimersByTimeAsync(250);
@@ -288,8 +288,8 @@ describe("Live", () => {
     expect(live.retryAt).toBeNull();
     expect(server.opened).toHaveLength(2);
     expect(server.opened[1].url).toBe("/live?topics=application,users&reopen=true");
-    expect(server.opened[1].headers["Last-Event-ID"]).toBe("2");
-    server.opened[1].send(hello(2, true) + frame(3, "users.removed", { username: "again" }));
+    expect(server.opened[1].headers["Last-Event-ID"]).toBe(`${EPOCH}-2`);
+    server.opened[1].send(hello(2, true) + frameText(3, "users.removed", { username: "again" }));
     await settle();
     expect(removed).toEqual(["a", "again"]);
     expect(live.status).toBe("connected");
@@ -312,7 +312,7 @@ describe("Live", () => {
     expect(server.fetcher).toHaveBeenCalledTimes(3);
     expect(server.opened[0].signal.aborted).toBe(true);
     expect(server.opened[1].url).toBe("/live?topics=application,users&reopen=true");
-    expect(server.opened[1].headers["Last-Event-ID"]).toBe("1");
+    expect(server.opened[1].headers["Last-Event-ID"]).toBe(`${EPOCH}-1`);
     expect(live.status).toBe("connecting");
     server.opened[1].send(hello(1, true));
     await settle();
@@ -357,14 +357,14 @@ describe("Live", () => {
     server.opened[0].send(hello(1));
     await settle();
     expect(missed).toBe(0);
-    server.opened[0].send(frame(2, "lagged", {}));
+    server.opened[0].send(frameText(2, "lagged", {}));
     await settle();
     expect(missed).toBe(1);
 
     server.opened[0].end();
     await vi.advanceTimersByTimeAsync(1000);
     // the daemon could not resume: its greeting says so, and the lagged after it again
-    server.opened[1].send(hello(3) + frame(3, "lagged", {}));
+    server.opened[1].send(hello(3) + frameText(3, "lagged", {}));
     await settle();
     expect(missed).toBe(2);
     server.opened[1].end();

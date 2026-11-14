@@ -2,6 +2,8 @@ import { vi } from "vitest";
 
 import type { FrameData, FrameType } from "#lib/live/live.svelte.js";
 
+import { EPOCH, frameText } from "./frames";
+
 /** What a fake API answers: a JSON body, or a status with an optional body */
 export type Answer = unknown | { status: number; body?: unknown };
 
@@ -14,7 +16,9 @@ export const fakeNetwork = (
   answer: (url: URL, method: string, body: unknown) => Answer | Promise<Answer>
 ) => {
   let send: (text: string) => void = () => {};
-  let id = 0;
+  let seq = 0;
+  // the run of the daemon the frames' ids name, the one the last hello came from
+  let epoch = EPOCH;
   const requests: { method: string; url: URL; body: unknown; keepalive: boolean }[] = [];
   vi.stubGlobal(
     "fetch",
@@ -50,8 +54,10 @@ export const fakeNetwork = (
     requests,
     /** sends one frame on the open stream */
     frame<T extends FrameType>(type: T, data: FrameData<T>) {
-      id += 1;
-      send(`id: ${id}\nevent: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
+      // a test's hello may leave the run out, which keeps the one before
+      if (type === "hello") epoch = (data as FrameData<"hello">).epoch ?? epoch;
+      seq += 1;
+      send(frameText(seq, type, data, epoch));
     }
   };
 };

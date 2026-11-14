@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
-import { fakeChat, frame, helloFrame } from "./support/fakes";
+import { frameText } from "../src/lib/testing/frames";
+import { fakeChat, helloFrame } from "./support/fakes";
 import { open, refuseCopy, visit } from "./support/login";
 
 test("a room reads like a chat: names, actions, links, the wall and the activity", async ({
@@ -16,7 +17,7 @@ test("a room reads like a chat: names, actions, links, the wall and the activity
     const topics = (new URL(route.request().url()).searchParams.get("topics") ?? "").split(",");
     if (!topics.includes("rooms")) return route.continue();
     await opened;
-    const joined = frame(2, "rooms.user_joined", {
+    const joined = frameText(2, "rooms.user_joined", {
       roomName: "indie",
       user: { username: "guest", status: "Online", self: false }
     });
