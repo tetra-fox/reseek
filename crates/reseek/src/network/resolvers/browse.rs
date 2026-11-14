@@ -4,13 +4,15 @@
 //! our shares, which depends on whether they are our buddy and ask from the address the server
 //! reports for them.
 
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use api_types::activity::ActivityKind;
 use api_types::users::blocking::BlockScope;
-use reseek_shares::traverses;
+use reseek_shares::{lock, traverses};
 use soulseek_client::{BrowseReply, EncodedFrame, LogLimiter};
 use soulseek_proto::RemoteFilename;
 use soulseek_proto::peer::{BrowseResponse, Directory};
@@ -55,7 +57,7 @@ async fn listing(edges: &Edges, view: &View) -> BrowseReply {
   if let Ok(reply) = current(edges, view).await {
     return reply;
   }
-  let _rebuilding = edges.rebuilding.lock().await;
+  let _rewriting = edges.rebuilding.hold(view).await;
   // a browse that waited for the lock finds the cache the one before it wrote
   match current(edges, view).await {
     Ok(reply) => return reply,
@@ -80,6 +82,48 @@ async fn listing(edges: &Edges, view: &View) -> BrowseReply {
   match cached(&file).await {
     Ok(frame) => BrowseReply::Encoded(frame),
     Err(e) => unread(&file, &e),
+  }
+}
+
+/// The views whose browse cache a browse is writing, each with its own lock.
+#[derive(Default)]
+pub(super) struct Rewrites(Mutex<HashMap<View, Arc<tokio::sync::Mutex<()>>>>);
+
+impl Rewrites {
+  /// Waits until no other browse writes the cache of `view`, then holds it until the returned
+  /// value is dropped.
+  async fn hold(&self, view: &View) -> Rewriting<'_> {
+    let held = lock(&self.0).entry(view.clone()).or_default().clone();
+    // made before the wait, so a browse dropped while it waits still lets go of the view
+    let mut rewriting = Rewriting {
+      rewrites: self,
+      view: view.clone(),
+      lock: held.clone(),
+      guard: None,
+    };
+    rewriting.guard = Some(held.lock_owned().await);
+    rewriting
+  }
+}
+
+/// A view's cache held for a browse writing it; the view is forgotten once nobody holds or
+/// waits for it.
+struct Rewriting<'a> {
+  rewrites: &'a Rewrites,
+  view: View,
+  lock: Arc<tokio::sync::Mutex<()>>,
+  guard: Option<tokio::sync::OwnedMutexGuard<()>>,
+}
+
+impl Drop for Rewriting<'_> {
+  fn drop(&mut self) {
+    drop(self.guard.take());
+    let mut views = lock(&self.rewrites.0);
+    // clones are taken under this lock, so a count of two, the map's and this one, means no
+    // other browse holds or waits for the view
+    if Arc::strong_count(&self.lock) == 2 {
+      views.remove(&self.view);
+    }
   }
 }
 
@@ -310,6 +354,49 @@ mod tests {
       "the view nobody browsed is left to the rewrite after the agents settle: {unbrowsed:?}"
     );
     assert!(!warned_missing(&logs));
+  }
+
+  #[tokio::test]
+  async fn a_browse_never_waits_for_another_views_cache_being_written() {
+    let dir = tempfile::tempdir().unwrap();
+    let app = shared(dir.path()).await;
+    let edges = edges(&app);
+    let peer = from("198.51.100.7");
+    crate::testing::load_agent_host(&app.state.shares, "nas", "Agent").await;
+    let hiding = View::of(
+      &reseek_shares::options::Shares {
+        visible_to: [("Music".to_string(), vec!["family".to_string()])].into(),
+        ..Default::default()
+      },
+      &std::collections::BTreeSet::new(),
+    );
+    assert_ne!(hiding, View::everything());
+    assert_eq!(
+      app.state.shares.current_browse_cache(&View::everything()),
+      None,
+      "alice's cache is behind the agent"
+    );
+    // another view's browse is writing its cache
+    let writing = edges.rebuilding.hold(&hiding).await;
+    let browsed = tokio::time::timeout(
+      std::time::Duration::from_secs(10),
+      browse(&edges, "alice", peer),
+    )
+    .await
+    .expect("alice's browse waited for another view");
+    let listed = directories(&bytes(browsed).await);
+    assert!(listed.contains(&"Agent".to_string()), "{listed:?}");
+    let gave_up = tokio::time::timeout(
+      std::time::Duration::from_millis(10),
+      edges.rebuilding.hold(&hiding),
+    )
+    .await;
+    assert!(gave_up.is_err(), "the same view waits");
+    drop(writing);
+    assert!(
+      lock(&edges.rebuilding.0).is_empty(),
+      "a view nobody holds or waits for is forgotten"
+    );
   }
 
   #[tokio::test]

@@ -55,9 +55,9 @@ pub struct Edges {
   network: Weak<Network>,
   /// the workers, the waiting count and the request filters of other users' searches
   pub(super) searches: IncomingSearches,
-  /// held while a missing browse cache is written, so browses that find it missing at once
-  /// write it once
-  rebuilding: tokio::sync::Mutex<()>,
+  /// the browse caches being written on a browse, one lock per view, so browses of a view
+  /// that find its cache missing or behind write it once and other views' browses never wait
+  rebuilding: browse::Rewrites,
   /// the upload engine, attached once while the daemon is built
   uploads: OnceLock<Arc<Uploads>>,
   /// the download engine, attached with the upload engine
@@ -84,7 +84,7 @@ impl Edges {
       telemetry,
       network,
       searches,
-      rebuilding: tokio::sync::Mutex::new(()),
+      rebuilding: browse::Rewrites::default(),
       uploads: OnceLock::new(),
       downloads: OnceLock::new(),
     }
