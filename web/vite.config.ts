@@ -20,7 +20,7 @@ export default defineConfig({
   test: {
     include: ["src/**/*.test.ts"],
     environment: "jsdom",
-    // one jsdom per worker rather than one per file, which took most of the suite's time
+    // threads with a vm context per file: the suite takes about half the CPU it does on forks
     pool: "vmThreads",
     setupFiles: ["src/lib/testing/setup.ts"]
   },

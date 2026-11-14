@@ -2,9 +2,9 @@ import { ReadableStream, TextDecoderStream } from "node:stream/web";
 
 import { installMedia } from "./media";
 
-// vitest's jsdom context under vmThreads copies in fetch and Response but not the web streams:
-// the fakes answer with a ReadableStream and the live stream decodes through a TextDecoderStream.
-// TODO: drop once vitest's jsdom environment provides them
+// under vmThreads, vitest 5.1's jsdom environment (`setupVM`) copies fetch and Response into the
+// context but not the web streams: the fakes answer with a ReadableStream and the live stream
+// decodes through a TextDecoderStream. TODO: drop once `setupVM` copies them in too
 globalThis.ReadableStream ??= ReadableStream as typeof globalThis.ReadableStream;
 globalThis.TextDecoderStream ??= TextDecoderStream as typeof globalThis.TextDecoderStream;
 
