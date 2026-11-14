@@ -36,8 +36,8 @@ impl Client {
       .await
   }
 
-  /// [`Client::ask`] with a timeout other than the default one, ending at once when `cancel`
-  /// fires unless the reply had come by then
+  /// [`Client::ask`] with its own timeout, or the default one when `None`, ending at once when
+  /// `cancel` fires unless the reply had come by then
   pub(super) async fn ask_within<T: Send + 'static>(
     &self,
     verb: &str,

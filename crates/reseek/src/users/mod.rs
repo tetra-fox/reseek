@@ -4,9 +4,9 @@
 //!
 //! [`Directory`] is the engine: the API's users directory and blocking calls, and what the
 //! network engines ask of it: [`Directory::touch`], [`Directory::is_blocked`], each user's
-//! upload groups, [`Directory::placement`] and [`Directory::fetch_placement`], and watching users,
-//! [`Directory::watch`]. [`Users`] answers the API's user calls with it and with what the
-//! network says about users.
+//! groups, [`Directory::placement`], [`Directory::fetch_placement`] and
+//! [`Directory::placement_letting_in`], and watching users, [`Directory::watch`]. [`Users`]
+//! answers the API's user calls with it and with what the network says about users.
 
 mod blocking;
 mod blocklist;
