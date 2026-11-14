@@ -129,11 +129,11 @@ impl Overrides {
     Ok(())
   }
 
-  /// Makes `kept` the overrides in effect after others were dropped. A failed save is logged:
-  /// the next load drops the others again.
+  /// Makes `kept` the overrides in effect after others were dropped or set over the files as
+  /// they are now. A failed save is logged: the next load drops or sets them over again.
   pub(crate) fn keep_only(&mut self, kept: BTreeMap<Key, Override>) {
     if let Err(e) = self.save(&kept) {
-      warn!(error = %e, "the overrides file still lists dropped overrides");
+      warn!(error = %e, "the overrides file still holds overrides as they were before this load");
     }
     self.items = kept;
   }
