@@ -45,7 +45,10 @@ pub struct Issuer {
 
 struct Shared {
   url: String,
-  key: CoreRsaPrivateSigningKey,
+  /// the key it signs with and publishes, with its id
+  key: Mutex<(String, CoreRsaPrivateSigningKey)>,
+  /// its signing keys are answered with an error
+  keys_refused: Mutex<bool>,
   codes: Mutex<HashMap<String, Grant>>,
   userinfo: Mutex<Value>,
   /// userinfo answers as a signed JWT rather than JSON
@@ -69,16 +72,10 @@ impl Issuer {
   pub async fn start() -> Self {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let url = format!("http://{}", listener.local_addr().unwrap());
-    let pair = rcgen::KeyPair::generate_for(&rcgen::PKCS_RSA_SHA256).unwrap();
-    let pem = rsa::RsaPrivateKey::from_pkcs8_der(&pair.serialize_der())
-      .unwrap()
-      .to_pkcs1_pem(rsa::pkcs8::LineEnding::LF)
-      .unwrap();
-    let key =
-      CoreRsaPrivateSigningKey::from_pem(&pem, Some(JsonWebKeyId::new("k1".into()))).unwrap();
     let shared = Arc::new(Shared {
       url: url.clone(),
-      key,
+      key: Mutex::new(("k1".to_string(), signing_key("k1"))),
+      keys_refused: Mutex::new(false),
       codes: Mutex::new(HashMap::new()),
       userinfo: Mutex::new(json!({})),
       signed_userinfo: Mutex::new(false),
@@ -144,16 +141,37 @@ impl Issuer {
   pub fn sign(&self, claims: &Value) -> String {
     self.shared.sign(claims)
   }
+
+  /// Signs and publishes with a new key from now on, `id` by name.
+  pub fn rotate_key(&self, id: &str) {
+    *self.shared.key.lock().unwrap() = (id.to_string(), signing_key(id));
+  }
+
+  /// Answers requests for its signing keys with an error while `refused`.
+  pub fn refuse_keys(&self, refused: bool) {
+    *self.shared.keys_refused.lock().unwrap() = refused;
+  }
+}
+
+/// A new RSA signing key named `id`.
+fn signing_key(id: &str) -> CoreRsaPrivateSigningKey {
+  let pair = rcgen::KeyPair::generate_for(&rcgen::PKCS_RSA_SHA256).unwrap();
+  let pem = rsa::RsaPrivateKey::from_pkcs8_der(&pair.serialize_der())
+    .unwrap()
+    .to_pkcs1_pem(rsa::pkcs8::LineEnding::LF)
+    .unwrap();
+  CoreRsaPrivateSigningKey::from_pem(&pem, Some(JsonWebKeyId::new(id.into()))).unwrap()
 }
 
 impl Shared {
   fn sign(&self, claims: &Value) -> String {
+    let key = self.key.lock().unwrap();
+    let (id, key) = &*key;
     let header =
-      URL_SAFE_NO_PAD.encode(json!({ "alg": "RS256", "kid": "k1", "typ": "JWT" }).to_string());
+      URL_SAFE_NO_PAD.encode(json!({ "alg": "RS256", "kid": id, "typ": "JWT" }).to_string());
     let body = URL_SAFE_NO_PAD.encode(claims.to_string());
     let message = format!("{header}.{body}");
-    let signature = self
-      .key
+    let signature = key
       .sign(
         &CoreJwsSigningAlgorithm::RsaSsaPkcs1V15Sha256,
         message.as_bytes(),
@@ -179,8 +197,12 @@ async fn discovery(State(shared): State<Arc<Shared>>) -> Json<Value> {
   }))
 }
 
-async fn jwks(State(shared): State<Arc<Shared>>) -> Json<Value> {
-  Json(json!({ "keys": [shared.key.as_verification_key()] }))
+async fn jwks(State(shared): State<Arc<Shared>>) -> Response {
+  if *shared.keys_refused.lock().unwrap() {
+    return StatusCode::SERVICE_UNAVAILABLE.into_response();
+  }
+  let key = shared.key.lock().unwrap().1.as_verification_key();
+  Json(json!({ "keys": [key] })).into_response()
 }
 
 async fn token(

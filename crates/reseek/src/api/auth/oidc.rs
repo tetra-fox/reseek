@@ -20,7 +20,7 @@ use utoipa_axum::routes;
 use crate::api::error::ApiError;
 use crate::app::AppState;
 use crate::auth::cookies::{self, Scope};
-use crate::auth::oidc::flow::{self, LOGIN_TIME, is_local_path};
+use crate::auth::oidc::flow::{self, LOGIN_TIME, NotSignedIn, is_local_path};
 use crate::auth::oidc::logout::{NotTaken, check_token, end_session_url};
 use crate::auth::oidc::{Provider, external_base};
 use crate::auth::sessions::{self, NewSession, Origin};
@@ -97,7 +97,8 @@ async fn login(
     (status = 302, description = "signed in, or to the login page with the provider's error"),
     (status = 400, body = api_types::ErrorBody, description = "the login expired"),
     (status = 403, description = "the account is not let in", content_type = "text/html"),
-    (status = 404, body = api_types::ErrorBody), (status = 429, body = api_types::ErrorBody)
+    (status = 404, body = api_types::ErrorBody), (status = 429, body = api_types::ErrorBody),
+    (status = 503, body = api_types::ErrorBody)
   )
 )]
 async fn callback(
@@ -179,7 +180,12 @@ async fn callback(
   let signing_in = app.auth.oidc.signing_in().await;
   let claims = match flow::exchange(&provider, metadata.clone(), callback, code, &login).await {
     Ok(claims) => claims,
-    Err(reason) => {
+    // the provider's fault, not the client's failed login
+    Err(NotSignedIn::Unavailable(why)) => {
+      logins.forgive(attempt);
+      return Err(unavailable(&name, &why));
+    }
+    Err(NotSignedIn::Refused(reason)) => {
       failed(reason);
       return Ok(to_login_page(
         &app,
@@ -285,11 +291,13 @@ async fn backchannel(
   };
   let logged_out = match check_token(&provider, metadata, &form.logout_token).await {
     Ok(logged_out) => logged_out,
-    Err(NotTaken::Unchecked) => {
+    Err(NotTaken::Unchecked(why)) => {
       if let Some(suppressed) = LOGOUT_UNCHECKED.allow() {
         warn!(
           provider = name,
-          suppressed, "back-channel logout not checked; provider keys unreadable, answered 503"
+          error = why,
+          suppressed,
+          "back-channel logout not checked; provider keys unreadable, answered 503"
         );
       }
       return Err(ApiError::service_unavailable("The identity provider is unavailable").logged());
@@ -971,6 +979,67 @@ mod tests {
       let unread = app.send_from(OUTSIDE, token()).await;
       assert_eq!(unread.status, 503, "{attempt}: the keys could not be read");
     }
+  }
+
+  #[tokio::test]
+  async fn a_login_whose_signing_key_cannot_be_read_finds_the_provider_unavailable() {
+    let (issuer, app) = setup("readonly").await;
+    // discovers the provider and reads its key
+    start(&app, "/").await;
+    // later the provider moved to a key the daemon has not read, and cannot hand it out
+    tokio::time::pause();
+    tokio::time::advance(crate::auth::oidc::RETRY).await;
+    issuer.rotate_key("k2");
+    issuer.refuse_keys(true);
+    let (logs, _capturing) = crate::testing::captured_logs();
+    for (code, attempt) in [
+      ("c1", "read again"),
+      ("c2", "while reading again is held back"),
+    ] {
+      let started = start(&app, "/").await;
+      let nonce = started.params["nonce"].clone();
+      grant(
+        &issuer,
+        &started,
+        code,
+        json!({ "sub": "u1", "nonce": nonce }),
+      );
+      let answer = back(&app, &started, code).await;
+      assert_eq!(answer.status, 503, "{attempt}: {:?}", answer.body);
+      assert_eq!(
+        answer.json()["error"],
+        "The identity provider is unavailable"
+      );
+    }
+    let logged = logs.snapshot();
+    assert!(
+      logged.iter().any(|line| {
+        line
+          .message
+          .starts_with("OpenID Connect provider unavailable")
+          && line.message.contains("signing keys could not be read")
+      }),
+      "{logged:#?}"
+    );
+    assert!(
+      !logged
+        .iter()
+        .any(|line| line.message.contains("login failed")),
+      "{logged:#?}"
+    );
+    issuer.refuse_keys(false);
+    tokio::time::advance(crate::auth::oidc::RETRY).await;
+    let started = start(&app, "/").await;
+    let nonce = started.params["nonce"].clone();
+    grant(
+      &issuer,
+      &started,
+      "c3",
+      json!({ "sub": "u1", "nonce": nonce }),
+    );
+    let signed = back(&app, &started, "c3").await;
+    assert_eq!(signed.status, 302, "{:?}", signed.body);
+    assert!(set_cookie(&signed.headers, "reseek_session").is_some());
   }
 
   #[tokio::test]

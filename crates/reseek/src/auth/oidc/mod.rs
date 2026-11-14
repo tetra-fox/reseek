@@ -122,11 +122,12 @@ struct Discovery {
   keys: Option<KeysRead>,
 }
 
-/// A read of the provider's signing keys: when it began, and whether it got them.
-#[derive(Clone, Copy)]
+/// A read of the provider's signing keys: when it began, and why it did not get them when it
+/// did not.
+#[derive(Clone)]
 struct KeysRead {
   at: Instant,
-  got: bool,
+  failed: Option<String>,
 }
 
 /// What reading a provider's signing keys again gave.
@@ -135,8 +136,9 @@ pub enum Keys {
   Read(Box<Metadata>),
   /// read less than a minute ago, so the keys in use are the provider's
   Current,
-  /// not read, now or at the try less than a minute ago, so a token's key may be one of them
-  Unread,
+  /// not read, now or at the try less than a minute ago, so a token's key may be one of them;
+  /// with why
+  Unread(String),
 }
 
 /// Where reading the discovery document stands.
@@ -259,7 +261,7 @@ impl Provider {
         };
         discovery.keys = Some(KeysRead {
           at: Instant::now(),
-          got: true,
+          failed: None,
         });
         Ok(metadata)
       }
@@ -289,18 +291,21 @@ impl Provider {
   /// Reads the signing keys again, at most once a minute.
   pub async fn refresh_keys(&self) -> Keys {
     let mut discovery = self.discovery.lock().await;
-    if let Some(last) = discovery.keys.filter(|last| last.at.elapsed() < RETRY) {
-      return if last.got {
-        Keys::Current
-      } else {
-        Keys::Unread
+    if let Some(last) = discovery
+      .keys
+      .as_ref()
+      .filter(|last| last.at.elapsed() < RETRY)
+    {
+      return match &last.failed {
+        None => Keys::Current,
+        Some(failed) => Keys::Unread(format!("{failed}, less than a minute ago")),
       };
     }
     let at = Instant::now();
     let Document::Read { metadata, .. } = &mut discovery.document else {
-      return Keys::Unread;
+      return Keys::Unread("the discovery document is not read".to_string());
     };
-    let keys =
+    let failed =
       match JsonWebKeySet::<CoreJsonWebKey>::fetch_async(metadata.jwks_uri(), &self.http).await {
         Ok(keys) => {
           debug!(
@@ -309,17 +314,19 @@ impl Provider {
             "provider signing keys read again"
           );
           **metadata = Metadata::clone(metadata).set_jwks(keys);
-          Keys::Read(metadata.clone())
+          None
         }
-        Err(e) => {
-          warn!(provider = self.name, error = %e, "provider signing keys not read");
-          Keys::Unread
-        }
+        // whoever needed the keys logs why they are missing, with what it could not do
+        Err(e) => Some(format!(
+          "the provider's signing keys could not be read: {}",
+          error_chain(&e)
+        )),
       };
-    discovery.keys = Some(KeysRead {
-      at,
-      got: matches!(keys, Keys::Read(_)),
-    });
+    let keys = match &failed {
+      None => Keys::Read(metadata.clone()),
+      Some(failed) => Keys::Unread(failed.clone()),
+    };
+    discovery.keys = Some(KeysRead { at, failed });
     keys
   }
 

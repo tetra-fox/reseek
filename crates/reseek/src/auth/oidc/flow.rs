@@ -116,6 +116,22 @@ pub struct Claims {
   pub id_token: String,
 }
 
+/// Why a login's code did not say who signed in.
+#[derive(Debug)]
+pub enum NotSignedIn {
+  /// the provider refused the code, or what it sent did not check out
+  Refused(String),
+  /// the provider's signing keys could not be read to check the ID token
+  Unavailable(String),
+}
+
+/// A reason alone is a refusal.
+impl From<String> for NotSignedIn {
+  fn from(reason: String) -> Self {
+    Self::Refused(reason)
+  }
+}
+
 /// Exchanges `code` for tokens and checks the ID token: its issuer, audience, times, nonce and
 /// signature. The provider's keys are read again once when the token names a key not seen yet.
 pub async fn exchange(
@@ -124,7 +140,7 @@ pub async fn exchange(
   callback: RedirectUrl,
   code: String,
   login: &LoginState,
-) -> Result<Claims, String> {
+) -> Result<Claims, NotSignedIn> {
   let client = provider.client(metadata.clone(), callback.clone());
   let response = client
     .exchange_code(AuthorizationCode::new(code))
@@ -146,9 +162,10 @@ pub async fn exchange(
         let client = provider.client(*fresh, callback);
         verify(&client, &id_token, &nonce)
       }
-      Keys::Current | Keys::Unread => Err(ClaimsVerificationError::SignatureVerification(
+      Keys::Current => Err(ClaimsVerificationError::SignatureVerification(
         SignatureVerificationError::NoMatchingKey,
       )),
+      Keys::Unread(why) => return Err(NotSignedIn::Unavailable(why)),
     },
     other => other,
   };

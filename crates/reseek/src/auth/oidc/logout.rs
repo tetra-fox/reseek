@@ -31,9 +31,9 @@ pub enum NotTaken {
   #[error("{0}")]
   Invalid(String),
   /// no key in use made its signature, and the provider's keys could not be read again to look
-  /// for the one that did
-  #[error("the provider's signing keys could not be read to check the token")]
-  Unchecked,
+  /// for the one that did; why
+  #[error("{0}")]
+  Unchecked(String),
 }
 
 /// Checks a logout token like an ID token, without a nonce and with the back-channel logout
@@ -48,7 +48,7 @@ pub async fn check_token(
     Err(Unverified::NoKey) => match provider.refresh_keys().await {
       Keys::Read(fresh) => signed(&fresh, token),
       Keys::Current => Err(Unverified::NoKey),
-      Keys::Unread => return Err(NotTaken::Unchecked),
+      Keys::Unread(why) => return Err(NotTaken::Unchecked(why)),
     },
     other => other,
   }
