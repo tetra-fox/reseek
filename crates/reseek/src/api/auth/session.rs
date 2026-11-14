@@ -684,15 +684,15 @@ mod tests {
     assert_eq!(roles, ["ReadOnly", "Administrator"]);
 
     reload(config(None)).await;
-    for credential in credentials {
-      let answer = send("/api/v0/session", credential).await;
+    for credential in &credentials[1..] {
+      let answer = send("/api/v0/session", *credential).await;
       assert_eq!(answer.status, 401, "{credential:?} is gone");
     }
-    let cleared = send("/api/v0/session", credentials[0]).await;
-    assert_eq!(
-      set_cookie(&cleared.headers, "reseek_session").as_deref(),
-      Some("reseek_session=")
-    );
+    // the session goes on until the removal stands, its cookie kept
+    let withheld = send("/api/v0/session", credentials[0]).await;
+    assert_eq!(withheld.status, 403);
+    assert_eq!(withheld.json()["error"], "access_withheld");
+    assert!(set_cookie(&withheld.headers, "reseek_session").is_none());
     let listed = send("/api/v0/sessions", ("cookie", admin.as_str()))
       .await
       .json();

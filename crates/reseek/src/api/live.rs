@@ -1,7 +1,7 @@
 //! The event stream route: `GET /live` as server-sent events, for the topics asked for.
 
 use api_types::auth::PrincipalSummary;
-use api_types::live::{Hello, Lagged, LiveFrame, LiveQuery};
+use api_types::live::{ByeReason, Hello, Lagged, LiveFrame, LiveQuery};
 use axum::Extension;
 use axum::extract::{Query, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
@@ -149,7 +149,9 @@ fn holder(principal: &api_types::auth::Principal, presented: &Presented) -> Stri
 }
 
 /// Checks again that what a long-lived request presented, the event stream's or an agent's
-/// socket, still names the principal `subject` with at least the role `needed`.
+/// socket, still names the principal `subject` with at least the role `needed`. A session whose
+/// user has no role, or too low a one, right now is withheld rather than unauthorized: it goes
+/// on, and is let in again once the configuration gives the role back.
 pub(super) fn recheck(
   app: &AppState,
   presented: Presented,
@@ -164,16 +166,24 @@ pub(super) fn recheck(
     let subject = subject.clone();
     Box::pin(async move {
       match identify(&app, &presented, Check::Again).await {
-        Ok(identified) => identified
-          .principal
-          .is_some_and(|principal| principal.subject == subject && principal.role >= needed),
+        Ok(identified) => match identified.principal {
+          Some(principal) if principal.subject == subject => {
+            if principal.role >= needed {
+              Ok(())
+            } else {
+              Err(ByeReason::Withheld)
+            }
+          }
+          _ => Err(ByeReason::Unauthorized),
+        },
+        Err(e) if e.is_withheld() => Err(ByeReason::Withheld),
         // logged under the span of the stream or the agent's socket that checks it
         Err(e) => {
           debug!(
             error = e.status().as_u16(),
             "the credential checked again was refused"
           );
-          false
+          Err(ByeReason::Unauthorized)
         }
       }
     })
@@ -474,12 +484,16 @@ mod tests {
       subject,
       crate::live::Topic::Users.role(),
     );
-    assert!(check().await);
+    assert_eq!(check().await, Ok(()));
     let id = created["token"]["id"].as_str().unwrap();
     app
       .send(request("DELETE", &format!("/api/v0/tokens/{id}"), None))
       .await;
-    assert!(!check().await, "a revoked token ends the stream");
+    assert_eq!(
+      check().await,
+      Err(api_types::live::ByeReason::Unauthorized),
+      "a revoked token ends the stream"
+    );
   }
 
   #[tokio::test]
@@ -593,7 +607,11 @@ mod tests {
     std::fs::write(app.dir.path().join("config.toml"), account("readonly")).unwrap();
     app.state.config.reload().await.unwrap();
     let bye = stream.until("bye").await.pop().unwrap();
-    assert_eq!(bye.data, json!({ "reason": "unauthorized" }));
+    assert_eq!(
+      bye.data,
+      json!({ "reason": "withheld" }),
+      "the session goes on"
+    );
     assert!(started.elapsed() < std::time::Duration::from_secs(5));
   }
 
@@ -667,7 +685,7 @@ mod tests {
       "local:reseek".to_string(),
       crate::live::Topic::Application.role(),
     );
-    assert!(check().await);
+    assert_eq!(check().await, Ok(()));
     // a use would be recorded by a task of its own. Paused time moves on only once every task
     // waits, a database call among them, so such a write is in before this ends
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
@@ -677,7 +695,11 @@ mod tests {
       "neither the stream's opening nor its check is a use"
     );
     used_ago(idle + Duration::milliseconds(200)).await;
-    assert!(!check().await, "the session went idle under the stream");
+    assert_eq!(
+      check().await,
+      Err(api_types::live::ByeReason::Unauthorized),
+      "the session went idle under the stream"
+    );
   }
 
   // the clock's ticks run on paused time, which moves on whenever every task waits

@@ -882,7 +882,7 @@ mod tests {
     reload("", "").await;
     assert_eq!(
       me(&app, &cookie).await.status,
-      401,
+      403,
       "no group grants a role now"
     );
     reload("", users).await;
@@ -896,7 +896,7 @@ mod tests {
     reload("allowed_emails = [\"a@example.net\"]\n", users).await;
     assert_eq!(me(&app, &cookie).await.json()["role"], "ReadWrite");
     reload("allowed_emails = [\"b@example.net\"]\n", users).await;
-    assert_eq!(me(&app, &cookie).await.status, 401, "not an allowed email");
+    assert_eq!(me(&app, &cookie).await.status, 403, "not an allowed email");
 
     reload("", users).await;
     let cookie = sign_in("c3", true).await;
@@ -905,7 +905,7 @@ mod tests {
     reload("allowed_emails = [\"a@example.net\"]\n", users).await;
     assert_eq!(
       me(&app, &cookie).await.status,
-      401,
+      403,
       "the last sign-in's email is not verified"
     );
 
@@ -914,7 +914,7 @@ mod tests {
     reload("allowed_subjects = [\"u2\"]\n", users).await;
     assert_eq!(
       me(&app, &cookie).await.status,
-      401,
+      403,
       "not an allowed subject"
     );
 
@@ -922,7 +922,7 @@ mod tests {
     let cookie = sign_in("c6", true).await;
     std::fs::write(app.dir.path().join("config.toml"), "").unwrap();
     app.state.config.reload().await.unwrap();
-    assert_eq!(me(&app, &cookie).await.status, 401, "the provider is gone");
+    assert_eq!(me(&app, &cookie).await.status, 403, "the provider is gone");
   }
 
   #[tokio::test]

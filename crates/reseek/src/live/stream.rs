@@ -34,8 +34,9 @@ const STATE_GAP: Duration = Duration::from_millis(100);
 /// How many written pieces wait for the connection to take them.
 const OUTPUT: usize = 16;
 
-/// Asks whether the stream's credential is still good.
-pub type Revalidate = Arc<dyn Fn() -> Pin<Box<dyn Future<Output = bool> + Send>> + Send + Sync>;
+/// Asks whether the stream's credential is still good; why the stream closes when it is not.
+pub type Revalidate =
+  Arc<dyn Fn() -> Pin<Box<dyn Future<Output = Result<(), ByeReason>> + Send>> + Send + Sync>;
 
 /// The frames published for one stream and not yet written.
 pub struct Queue {
@@ -237,9 +238,9 @@ async fn write(
       Ok(()) = credentials.changed() => true,
     };
     if check {
-      if !revalidate().await {
-        debug!("event stream credential no longer valid");
-        break ByeReason::Unauthorized;
+      if let Err(reason) = revalidate().await {
+        debug!(?reason, "event stream credential no longer lets it in");
+        break reason;
       }
       recheck = Instant::now() + RECHECK;
     }

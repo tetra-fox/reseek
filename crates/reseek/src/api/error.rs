@@ -9,6 +9,9 @@ use axum::response::{IntoResponse, Response};
 /// The error code of a call the missing Soulseek connection refused.
 const UNAVAILABLE: &str = "soulseek_unavailable";
 
+/// The error code of a request whose session's user the configuration gives no role right now.
+const WITHHELD: &str = "access_withheld";
+
 /// What went wrong in a handler: the status that answers it, the message and its detail.
 #[derive(Debug)]
 pub struct ApiError {
@@ -150,6 +153,21 @@ impl ApiError {
   /// Whether this is the answer of a call the missing Soulseek connection refused.
   pub fn is_unavailable(&self) -> bool {
     self.error == UNAVAILABLE
+  }
+
+  /// A 403 for a session whose user the configuration gives no role right now. The session
+  /// goes on, and works again once the configuration gives one back.
+  pub fn withheld() -> Self {
+    Self::new(
+      StatusCode::FORBIDDEN,
+      WITHHELD,
+      Some("The configuration gives your account no role right now".to_string()),
+    )
+  }
+
+  /// Whether this is the answer to a session whose user has no role right now.
+  pub fn is_withheld(&self) -> bool {
+    self.error == WITHHELD
   }
 
   /// A 503 for something other than the Soulseek connection that is not there now.

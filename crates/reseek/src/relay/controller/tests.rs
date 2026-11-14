@@ -149,7 +149,11 @@ async fn send_login(
   let (sent, mut from_socket) = mpsc::channel(1024);
   let recheck: crate::live::Revalidate = Arc::new(move || {
     let admitted = admitted.load(Ordering::Relaxed);
-    Box::pin(async move { admitted })
+    Box::pin(async move {
+      admitted
+        .then_some(())
+        .ok_or(api_types::live::ByeReason::Unauthorized)
+    })
   });
   let served = tokio::spawn(controller.clone().serve_socket(
     Fake { frames, sent },

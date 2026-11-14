@@ -17706,6 +17706,7 @@
         "description": "Why the server closes a stream.",
         "enum": [
           "unauthorized",
+          "withheld",
           "lagged",
           "shutdown"
         ]

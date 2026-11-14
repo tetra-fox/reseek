@@ -1,9 +1,10 @@
 //! The chain that settles who a request is, in order: an API token, a configuration API key,
 //! the session cookie, a trusted reverse proxy's forwarded identity, a trusted network. A
 //! token or key that is presented but not valid fails at once, as does a token whose owner the
-//! configuration in effect gives no role; a session cookie that is not valid, or whose user the
-//! configuration gives no role, is cleared and the next ways are tried. A session the proxy step
-//! started ends when the proxy forwards someone else or a different role for them.
+//! configuration in effect gives no role. A session cookie that is not valid is cleared and the
+//! next ways are tried; one whose user the configuration gives no role right now is answered 403
+//! and kept, since that configuration may not stand. A session the proxy step started ends when
+//! the proxy forwards someone else or a different role for them.
 
 use std::net::IpAddr;
 
@@ -203,13 +204,14 @@ pub async fn identify(
   if let Some(value) = &presented.cookie {
     let used = check == Check::Request && !presented.opens_stream;
     match cookie_session(app, value, presented, options, used).await? {
-      Some((session, role)) => {
+      CookieSession::Valid(session, role) => {
         identified.principal = Some(session.principal(role));
-        identified.session = Some(session);
+        identified.session = Some(*session);
         identified.by_cookie = true;
         return Ok(identified);
       }
-      None => identified.cookies.push(scope.clear(cookies::SESSION)),
+      CookieSession::Withheld => return Err(ApiError::withheld()),
+      CookieSession::Invalid => identified.cookies.push(scope.clear(cookies::SESSION)),
     }
   }
   if let Some((principal, _)) = forwarded(presented, options) {
@@ -273,7 +275,8 @@ fn forwarded(
 /// With `proxy.session` on, a page load that a trusted proxy names a user for and that has no
 /// valid session cookie starts a session, so the page's later requests work without the
 /// proxy's headers; an invalid cookie is cleared, as is one whose proxy session the proxy now
-/// forwards someone else or a different role for. API requests never start one.
+/// forwards someone else or a different role for, and one whose user has no role right now is
+/// kept. API requests never start one.
 pub async fn page_session(
   app: &AppState,
   presented: &Presented,
@@ -284,8 +287,8 @@ pub async fn page_session(
   let mut cookies = Vec::new();
   if let Some(value) = &presented.cookie {
     match cookie_session(app, value, presented, options, true).await? {
-      Some(_) => return Ok(cookies),
-      None => cookies.push(scope.clear(cookies::SESSION)),
+      CookieSession::Valid(..) | CookieSession::Withheld => return Ok(cookies),
+      CookieSession::Invalid => cookies.push(scope.clear(cookies::SESSION)),
     }
   }
   if !options.web.authentication.proxy.session {
@@ -316,6 +319,16 @@ pub async fn page_session(
   Ok(cookies)
 }
 
+/// What a session cookie names.
+enum CookieSession {
+  /// an active session, with the role its user has now; boxed, as the other cases carry nothing
+  Valid(Box<StoredSession>, Role),
+  /// an active session whose user the configuration gives no role right now
+  Withheld,
+  /// no session to use: a forged cookie, or a session unknown or ended
+  Invalid,
+}
+
 /// The session a cookie value names with the role `options` give its user, unless the proxy
 /// step started it and the proxy now forwards someone else or a different role; that session is
 /// revoked. `used` records the request as a use of the session, which keeps it from going idle.
@@ -325,21 +338,26 @@ async fn cookie_session(
   presented: &Presented,
   options: &crate::config::Options,
   used: bool,
-) -> Result<Option<(StoredSession, Role)>, ApiError> {
+) -> Result<CookieSession, ApiError> {
   let Some((session, role)) = session_of(app, value, presented, options, used).await? else {
-    return Ok(None);
+    return Ok(CookieSession::Invalid);
+  };
+  let found = |session, role: Option<Role>| match role {
+    Some(role) => CookieSession::Valid(Box::new(session), role),
+    // ended only by a configuration that stands, through `end_sessions_without_role`
+    None => CookieSession::Withheld,
   };
   if session.sign_in.origin != Origin::Proxy {
-    return Ok(Some((session, role)));
+    return Ok(found(session, role));
   }
   let proxy = &options.web.authentication.proxy;
   let proxies = networks::ranges(&options.web.trusted_proxies);
   let Some(named) = proxy::forwarded(&presented.headers, presented.peer, proxy, &proxies) else {
     // a request with the cookie alone, which is what the session is for
-    return Ok(Some((session, role)));
+    return Ok(found(session, role));
   };
-  if named.subject() == session.subject && named.role(proxy) == Some(role) {
-    return Ok(Some((session, role)));
+  if named.subject() == session.subject && named.role(proxy) == role {
+    return Ok(found(session, role));
   }
   debug!(
     subject = session.subject,
@@ -347,20 +365,18 @@ async fn cookie_session(
     "the proxy forwards another user or role than its session's"
   );
   end_sessions(app, vec![session.id], None, SessionRevokeReason::Proxy).await?;
-  Ok(None)
+  Ok(CookieSession::Invalid)
 }
 
-/// The active session a cookie value names with the role `options` give its user, recording its
-/// use when `used` and the record is stale. A session whose user they give no role is refused
-/// but not ended here: the options may be a file read half written, so only a configuration
-/// that stands ends it, through [`end_sessions_without_role`].
+/// The active session a cookie value names with the role `options` give its user, `None` for
+/// none, recording its use when `used` and the record is stale.
 async fn session_of(
   app: &AppState,
   value: &str,
   presented: &Presented,
   options: &crate::config::Options,
   used: bool,
-) -> Result<Option<(StoredSession, Role)>, ApiError> {
+) -> Result<Option<(StoredSession, Option<Role>)>, ApiError> {
   let Some(id) = sessions::verified_id(&app.auth.secret, value) else {
     debug!(ip = %presented.client.ip, "session cookie with a wrong signature ignored");
     return Ok(None);
@@ -381,13 +397,13 @@ async fn session_of(
     );
     return Ok(None);
   }
-  let Some(role) = session.role(&options.web.authentication) else {
+  let role = session.role(&options.web.authentication);
+  if role.is_none() {
     debug!(
       subject = session.subject,
-      "session cookie of a user the configuration gives no role refused"
+      "session cookie of a user the configuration gives no role right now"
     );
-    return Ok(None);
-  };
+  }
   if used && session.seen_due(now, idle) {
     let db = app.auth.db.clone();
     let id = session.id.clone();
@@ -878,7 +894,7 @@ mod tests {
     reload(config("readonly = [\"users\"]\n")).await;
     assert_eq!(me().await.json()["role"], "ReadOnly");
     reload(config("default = \"deny\"\n")).await;
-    assert_eq!(me().await.status, 401);
+    assert_eq!(me().await.status, 403, "withheld until the removal stands");
   }
 
   #[tokio::test]

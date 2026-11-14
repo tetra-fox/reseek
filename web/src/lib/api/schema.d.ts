@@ -4130,7 +4130,7 @@ export interface components {
          * @description Why the server closes a stream.
          * @enum {string}
          */
-        ByeReason: "unauthorized" | "lagged" | "shutdown";
+        ByeReason: "unauthorized" | "withheld" | "lagged" | "shutdown";
         /** @description A user the in-memory user cache holds, as `GET /users/cache` lists it. */
         CachedUser: {
             /** @description the last statistics fetched or pushed, null before any */

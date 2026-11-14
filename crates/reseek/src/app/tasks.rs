@@ -205,7 +205,7 @@ mod tests {
 
   use super::SETTLE;
   use crate::auth::sessions;
-  use crate::testing::{OUTSIDE, TestApp, app, request, set_cookie, with};
+  use crate::testing::{Answer, OUTSIDE, TestApp, app, request, set_cookie, with};
 
   const VIEWER: &str = "[web.authentication.local.users.viewer]\npassword = \"look\"\n";
 
@@ -224,9 +224,13 @@ mod tests {
     tokio::task::yield_now().await;
   }
 
-  async fn status(app: &TestApp, cookie: &str) -> u16 {
+  async fn me(app: &TestApp, cookie: &str) -> Answer {
     let me = with(request("GET", "/api/v0/session", None), "cookie", cookie);
-    app.send_from(OUTSIDE, me).await.status.as_u16()
+    app.send_from(OUTSIDE, me).await
+  }
+
+  async fn status(app: &TestApp, cookie: &str) -> u16 {
+    me(app, cookie).await.status.as_u16()
   }
 
   async fn ended(app: &TestApp, cookie: &str) -> bool {
@@ -261,7 +265,13 @@ mod tests {
     let cookie = signed_in(&app).await;
     // a file read half written, then whole a moment later
     reload(&app, "").await;
-    assert_eq!(status(&app, &cookie).await, 401, "refused at once");
+    let withheld = me(&app, &cookie).await;
+    assert_eq!(withheld.status, 403, "refused at once");
+    assert_eq!(withheld.json()["error"], "access_withheld");
+    assert!(
+      set_cookie(&withheld.headers, "reseek_session").is_none(),
+      "the browser keeps its cookie"
+    );
     pass(Duration::from_secs(1)).await;
     reload(&app, VIEWER).await;
     pass(SETTLE).await;

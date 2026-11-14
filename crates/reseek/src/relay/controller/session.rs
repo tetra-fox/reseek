@@ -185,7 +185,7 @@ impl Session {
           }
         }
         _ = recheck.tick() => {
-          if !(self.recheck)().await {
+          if (self.recheck)().await.is_err() {
             warn!("the agent's API key no longer lets it in; disconnecting it");
             return closing(&mut socket, close::UNAUTHORIZED, "credential_refused").await;
           }

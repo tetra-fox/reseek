@@ -217,6 +217,9 @@ pub struct Lagged {}
 pub enum ByeReason {
   /// the credential stopped being valid; reconnecting does not help, logging in does
   Unauthorized,
+  /// the session goes on but its user has no role, or too low a one for the stream's topics,
+  /// right now; `GET /session` says when it has one again
+  Withheld,
   /// the stream fell too far behind; reconnect with `Last-Event-ID`
   Lagged,
   /// the daemon is shutting down
