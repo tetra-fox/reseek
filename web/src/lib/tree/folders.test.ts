@@ -170,10 +170,14 @@ describe("browse listings", () => {
     const wrapped = 4_294_967_295;
     const odd = { ...remote("odd.flac"), length: wrapped, bitRate: wrapped, sampleRate: wrapped };
     const fine = { ...remote("fine.flac"), length: 300, bitRate: 0, sampleRate: 44_100 };
-    const [root] = listingTree([{ name: "a", fileCount: 2, files: [odd, fine] }], "\\").roots;
-    expect(root.items.map((f) => [f.length, f.bitRate, f.sampleRate])).toEqual([
-      [300, 0, 44_100],
-      [null, null, null]
+    // a depth a peer can't mean beside a real sample rate, which the quality is written from
+    const deep = { ...remote("deep.flac"), sampleRate: 96_000, bitDepth: wrapped };
+    const files = [odd, fine, deep];
+    const [root] = listingTree([{ name: "a", fileCount: 3, files }], "\\").roots;
+    expect(root.items.map((f) => [f.length, f.bitRate, f.sampleRate, f.bitDepth])).toEqual([
+      [undefined, undefined, 96_000, null],
+      [300, 0, 44_100, undefined],
+      [null, null, null, undefined]
     ]);
   });
 
