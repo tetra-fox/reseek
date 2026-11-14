@@ -140,6 +140,8 @@ describe("a key binding", () => {
     expect(isPressed(COMPOSER.newLine, key({ key: "Enter", shiftKey: true, ...altGr }))).toBe(
       false
     );
+    // Shift is still held as given: AltGr+Shift+Enter neither sends nor breaks a line
+    expect(isPressed(COMPOSER.send, key({ key: "Enter", shiftKey: true, ...altGr }))).toBe(false);
     expect(isPressed(APP.palette, key({ key: "k", ...altGr }))).toBe(false);
   });
 
