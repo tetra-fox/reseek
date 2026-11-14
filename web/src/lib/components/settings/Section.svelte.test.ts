@@ -18,6 +18,7 @@ describe("a settings section", () => {
   afterEach(() => {
     for (const m of mounted) unmount(m);
     mounted = [];
+    app.state = null;
     document.body.innerHTML = "";
   });
 
@@ -137,7 +138,6 @@ describe("a settings section", () => {
         refusedDevices: [
           {
             entry: "nas",
-            name: "nas",
             ipAddress: "192.168.1.9",
             device: "5e6f7a8b",
             refusedAt: "2026-11-14T10:00:00Z"
@@ -158,7 +158,6 @@ describe("a settings section", () => {
     };
     expect(under("nas")).toBe("Another device is connected as this agent");
     expect(under("laptop")).toBe("");
-    app.state = null;
   });
 
   it("keeps a table's hidden secret unless something is typed in its place", async () => {
