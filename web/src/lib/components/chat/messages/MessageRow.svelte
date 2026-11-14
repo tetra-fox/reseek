@@ -25,41 +25,41 @@
 
   type Props = {
     /** its line's key, which its menu finds it by */
-    line: string;
-    message: Message;
+    "line": string;
+    "message": Message;
     /** the first of a group: shows the face, the author and the time */
-    head: boolean;
+    "head": boolean;
     /** the message a link pointed at */
-    highlight: boolean;
+    "highlight": boolean;
     /** the words marked in the text: our name and the watched words */
-    watch: string[];
+    "watch": string[];
     /** a room's message, which offers a private chat with its author */
-    room: boolean;
+    "room": boolean;
     /** a notice from the server: the time and the text, with nothing that belongs to a person */
-    notice?: boolean;
+    "notice"?: boolean;
     /** the keys are on it: it takes focus, and Tab goes from it to its actions */
-    active: boolean;
-    /**
-     * where its open menu hangs: at the pointer, or from the message itself for the keys; null
-     * while it is closed
-     */
-    menu: MenuAnchor | null;
+    "active": boolean;
+    /** what the list's line menu marks it with, which says whether its menu is open */
+    "data-menu-open"?: true;
+    /** where the list's open menu hangs: at the pointer, or from the message itself for the keys */
+    "menu": MenuAnchor | null;
     /** closes its menu */
-    onclosemenu: () => void;
+    "onclosemenu": () => void;
     /** quotes the message in the composer, when one can be sent */
-    onreply?: (message: Message) => void;
-    onretry: () => void;
+    "onreply"?: (message: Message) => void;
+    "onretry": () => void;
   };
 
   let {
     line,
-    message: m,
+    "message": m,
     head,
     highlight,
     watch,
     room,
     notice = false,
     active,
+    "data-menu-open": menuOpen,
     menu,
     onclosemenu,
     onreply,
@@ -151,10 +151,11 @@
     highlight && "bg-accent-soft/50 ring-1 ring-accent/50 ring-inset",
     active &&
       "outline-none focus-within:bg-hover/60 focus-within:ring-2 focus-within:ring-accent focus-within:ring-inset",
-    menu && "bg-hover/60 ring-2 ring-accent ring-inset"
+    "data-menu-open:bg-hover/60 data-menu-open:ring-2 data-menu-open:ring-accent data-menu-open:ring-inset"
   ]}
   tabindex={active ? -1 : undefined}
   data-line={line}
+  data-menu-open={menuOpen}
   data-message={m.localId}>
   <div class="flex justify-end">
     {#if head}
@@ -241,10 +242,7 @@
       bind:this={toolbar}
       role="group"
       aria-label="Message actions"
-      class={[
-        "absolute -top-3 right-3 z-10 items-center rounded-control border bg-overlay p-0.5 shadow-raised group-focus-within/message:flex group-hover/message:flex",
-        menu ? "flex" : "hidden"
-      ]}>
+      class="absolute -top-3 right-3 z-10 hidden items-center rounded-control border bg-overlay p-0.5 shadow-raised group-focus-within/message:flex group-hover/message:flex group-data-menu-open/message:flex">
       {#each actions as action (action.label)}
         <Tooltip text={action.label} dormant={!awake}>
           {#snippet child({ props })}
@@ -260,7 +258,7 @@
       {/each}
     </div>
   {/if}
-  {#if menu}
+  {#if menuOpen && menu}
     <Menu.Root open onOpenChange={(open) => !open && onclosemenu()}>
       <Menu.Content align={menu === row ? "end" : "start"} customAnchor={menu}>
         {#each actions as action (action.label)}

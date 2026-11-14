@@ -432,7 +432,8 @@
               room={pane.target.kind === "room"}
               notice={notices}
               active={line.message.localId === active}
-              menu={lineMenu.line?.key === line.key ? lineMenu.anchor : null}
+              {...lineMenu.mark(line)}
+              menu={lineMenu.anchor}
               onclosemenu={() => {
                 lineMenu.close();
                 // the keys go on from the message the menu was opened on

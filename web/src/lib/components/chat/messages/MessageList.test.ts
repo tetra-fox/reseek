@@ -167,9 +167,12 @@ describe("the message list", () => {
     expect(onMessage.defaultPrevented).toBe(true);
     expect(document.querySelector('[role="menuitem"]')?.textContent).toContain("Copy text");
     expect(interaction.frozen).toBe(true);
+    // the line menu marks the message as every list's lines are marked
+    expect([...document.querySelectorAll("[data-menu-open]")]).toEqual([message]);
     press(document.querySelector('[role="menuitem"]')!, "Escape");
     await flush();
     expect(document.querySelector('[role="menu"]')).toBeNull();
+    expect(document.querySelector("[data-menu-open]")).toBeNull();
     expect(interaction.frozen).toBe(false);
     // the pointer leaves the keys where they were: no message became the one they are on
     expect(document.querySelector("[data-message][tabindex]")).toBeNull();
