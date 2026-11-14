@@ -133,6 +133,13 @@ impl Uploads {
       governor: Arc::new(Governor::new(&options)),
       intake: Intake::default(),
     });
+    let engine = Arc::downgrade(&uploads);
+    // the engine is gone only at teardown, and its queue with it
+    uploads.users.keep_queued(Box::new(move || {
+      engine
+        .upgrade()
+        .map_or_else(Vec::new, |uploads| uploads.queue.users())
+    }));
     tokio::spawn(
       uploads
         .clone()

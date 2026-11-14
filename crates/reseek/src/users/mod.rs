@@ -513,6 +513,12 @@ impl Directory {
     self.forget(username);
   }
 
+  /// What the cache knows of every user, for a test to fill in.
+  #[cfg(test)]
+  pub(crate) fn reported(&self) -> group_cache::Reported {
+    self.groups.reported()
+  }
+
   /// Stops the next figure read before it keeps what it read; see [`FigureCache::pause_next`].
   #[cfg(test)]
   pub(crate) fn pause_figures(

@@ -2050,3 +2050,19 @@ async fn a_second_forget_that_finds_no_row_leaves_the_first_one_standing() {
     "the forgotten user is in the directory again"
   );
 }
+
+#[tokio::test]
+async fn a_queued_user_the_cache_does_not_know_is_asked_about_again() {
+  use soulseek_proto::ServerRequest;
+
+  let app = crate::testing::soulseek::app(CONFIG).await;
+  let mut server = crate::testing::soulseek::Server::silent().await;
+  server.login(&app).await;
+  // bob's upload waits in the queue, and the cache forgot him
+  assert_eq!(app.state.users.queue_group("bob"), "default");
+  server
+    .received(|request| {
+      matches!(request, ServerRequest::GetUserStats(asked) if asked.username == "bob").then_some(())
+    })
+    .await;
+}

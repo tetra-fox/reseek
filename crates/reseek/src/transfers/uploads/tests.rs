@@ -481,3 +481,37 @@ async fn canceling_an_upload_no_task_runs_ends_it() {
   );
   assert!(ended.ended_at.is_some());
 }
+
+#[tokio::test]
+async fn a_waiting_leecher_stays_in_leechers_however_many_names_the_cache_takes() {
+  use api_types::state::UserStatistics;
+  use api_types::users::StatisticsSnapshot;
+
+  let (_files, app) = shared_app("[transfers.groups.leechers.upload]\nslots = 1\n").await;
+  let users = &app.state.users;
+  let reported = users.reported();
+  let shares_nothing = StatisticsSnapshot {
+    statistics: UserStatistics {
+      average_speed: 0,
+      directory_count: 0,
+      file_count: 0,
+      upload_count: 0,
+    },
+    updated_at: chrono::Utc::now(),
+  };
+  reported.update("leecher", true, |facts| {
+    facts.statistics = Some(shares_nothing);
+  });
+  assert_eq!(users.queue_group("leecher"), "leechers");
+  app
+    .state
+    .uploads
+    .queue
+    .enqueue(Uuid::new_v4(), "leecher", SHARED);
+  // names a peer makes up, many times what the cache keeps
+  for n in 0..30_000 {
+    reported.update(&format!("fresh{n}"), true, |_| {});
+  }
+  assert!(reported.of("leecher").is_some(), "forgotten while queued");
+  assert_eq!(users.queue_group("leecher"), "leechers");
+}

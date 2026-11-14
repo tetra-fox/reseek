@@ -2,9 +2,10 @@
 //! once wherever they are asked: whether the server calls them privileged, their presence and
 //! their statistics with when they came, and the groups we put them in. A user enters on a
 //! fetch, a watch or the server's list of privileged users, and every user we put in a group is
-//! loaded at startup. Those in no group of ours, not privileged and not watched leave once more
-//! than [`KEPT`] of them are known, the ones read or changed longest ago first, so names a peer
-//! makes up do not pile up. What the server pushes on its own is taken only for users known
+//! loaded at startup. Those in no group of ours, not privileged, not watched and not in the
+//! upload queue leave once more than [`KEPT`] of them are known, the ones read or changed
+//! longest ago first, so names a peer makes up do not pile up; a user the queue holds whom the
+//! cache does not know is asked about again. What the server pushes on its own is taken only for users known
 //! already. Whatever it says that moves the groups a user with a row is shown in pushes
 //! their summary.
 //!
@@ -16,7 +17,9 @@
 
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use std::sync::{
+  Arc, Mutex, MutexGuard, OnceLock, PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard,
+};
 use std::time::{Duration, Instant};
 
 use api_types::state::UserStatistics;
@@ -38,8 +41,12 @@ use crate::turns::Turns;
 const STALE: Duration = Duration::from_secs(4 * 3600);
 
 /// How many users the cache keeps that it may forget. A user we put in a group, one the server
-/// calls privileged and one it watches for us are kept however many there are.
+/// calls privileged, one it watches for us and one the upload queue holds are kept however
+/// many there are.
 const KEPT: usize = 10_000;
+
+/// Lists the users the upload queue holds now, waiting or uploading.
+pub type Queued = Box<dyn Fn() -> Vec<String> + Send + Sync>;
 
 static REFETCH_FAILED: LogLimiter = LogLimiter::new();
 
@@ -84,6 +91,8 @@ pub struct Reported {
   watched: Arc<Mutex<HashSet<String>>>,
   /// counts every read and change, so each entry says how recently it was used
   clock: Arc<AtomicU64>,
+  /// the users the upload queue holds, once the upload engine is built
+  queued: Arc<OnceLock<Queued>>,
 }
 
 impl Reported {
@@ -134,9 +143,15 @@ impl Reported {
   }
 
   /// Forgets the users read or changed longest ago among those the cache may forget, down to
-  /// nine tenths of [`KEPT`], and trims again a tenth of [`KEPT`] later. Takes the watched users
-  /// before the entries, in the order [`Reported::for_new_row`] does.
+  /// nine tenths of [`KEPT`], and trims again a tenth of [`KEPT`] later. Reads the queue's users
+  /// before taking any lock of the cache's, as the queue looks up groups here with its own lock
+  /// held, then takes the watched users before the entries, in the order
+  /// [`Reported::for_new_row`] does.
   fn trim(&self) {
+    let queued: HashSet<String> = self
+      .queued
+      .get()
+      .map_or_else(HashSet::new, |users| users().into_iter().collect());
     let watched = lock(&self.watched);
     let mut entries = self.write();
     let mut forgettable: Vec<(u64, String)> = entries
@@ -146,6 +161,7 @@ impl Reported {
         !entry.facts.privileged
           && entry.facts.memberships.is_empty()
           && !watched.contains(*username)
+          && !queued.contains(*username)
       })
       .map(|(username, entry)| (entry.used.load(Ordering::Relaxed), username.clone()))
       .collect();
@@ -313,28 +329,47 @@ impl Directory {
   /// The groups `username` is in by what is known now, without waiting for anyone; statistics
   /// older than four hours are asked for again meanwhile.
   pub fn placement(self: &Arc<Self>, username: &str) -> Placement {
-    let facts = self.groups.facts(username).unwrap_or_default();
-    if facts.statistics.as_ref().is_some_and(|s| {
-      (Utc::now() - s.updated_at)
-        .to_std()
-        .is_ok_and(|age| age > STALE)
-    }) {
+    self.placed(username, false)
+  }
+
+  /// [`Directory::placement`], also asking again for the statistics of a user the cache does
+  /// not know when the upload queue holds them, `queued`.
+  fn placed(self: &Arc<Self>, username: &str, queued: bool) -> Placement {
+    let known = self.groups.facts(username);
+    let stale = known
+      .as_ref()
+      .and_then(|facts| facts.statistics.as_ref())
+      .is_some_and(|s| {
+        (Utc::now() - s.updated_at)
+          .to_std()
+          .is_ok_and(|age| age > STALE)
+      });
+    if stale || (queued && known.is_none()) {
       self.refetch_statistics(username);
     }
     let buddy = self.buddy(username).is_some();
+    let facts = known.unwrap_or_default();
     groups::place(&self.config.current().values, &facts, buddy)
   }
 
-  /// The group whose queue `username` waits in, by what is known now, without waiting for
-  /// anyone.
+  /// The group whose queue `username`, whom the upload queue holds, waits in, by what is known
+  /// now, without waiting for anyone.
   pub fn queue_group(self: &Arc<Self>, username: &str) -> String {
-    self.placement(username).queue
+    self.placed(username, true).queue
   }
 
-  /// The group whose speed limit `username`'s uploads count against, by what is known now,
-  /// without waiting for anyone.
+  /// The group whose speed limit the uploads of `username`, whom the upload queue holds, count
+  /// against, by what is known now, without waiting for anyone.
   pub fn speed_group(self: &Arc<Self>, username: &str) -> String {
-    self.placement(username).speed
+    self.placed(username, true).speed
+  }
+
+  /// Keeps the users `queued` lists, those the upload queue holds, in the cache however many
+  /// others it forgets.
+  pub fn keep_queued(&self, queued: Queued) {
+    if self.groups.facts.queued.set(queued).is_err() {
+      warn!("the upload queue was attached to the users cache already");
+    }
   }
 
   /// The groups `username` is in, after asking the server for their statistics and their
