@@ -101,6 +101,9 @@ describe("folded text", () => {
     expect(fold("x".repeat(1_000_000), 1000)).toBe("x".repeat(1000));
     expect(fold("a\nb\nc\nd", 1000, 2)).toBe("a\nb");
     expect(fold("a\nb", 1000, 2)).toBeNull();
+    // a line break or spaces after the last line kept are nothing more to show
+    expect(fold("a\nb\n", 1000, 2)).toBeNull();
+    expect(fold(`${"x".repeat(1000)}   `, 1000)).toBeNull();
     expect(fold("short", 1000)).toBeNull();
   });
 

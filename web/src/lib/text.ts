@@ -116,7 +116,8 @@ export const fold = (text: string, chars: number, lines = Infinity): string | nu
     if (lineEnd === -1 || lineEnd >= end) break;
   }
   if (lineEnd !== -1 && lineEnd < end) end = lineEnd;
-  if (end === text.length) return null;
+  // past `end` there is nothing to show more of when it is only spaces and line breaks
+  if (/^\s*$/.test(text.slice(end))) return null;
   // end is inside the text, so a letter holds it
   return text.slice(0, LETTERS.segment(text).containing(end)!.index);
 };
