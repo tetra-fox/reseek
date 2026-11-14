@@ -77,16 +77,27 @@ const LETTERS = new Intl.Segmenter();
 
 /**
  * Where the last `columns` of a text start, never inside a letter: an emoji or an accented letter
- * made of several code points is kept whole on one side
+ * made of several code points is kept whole on one side. Only the end of the text is read, from a
+ * start made earlier until the cut falls past its first letter, which may be the rest of a letter
+ * before it
  */
 const tailStart = (text: string, columns: number): number => {
-  const letters = [...LETTERS.segment(text)];
-  let width = 0;
-  for (let i = letters.length - 1; i >= 0; i--) {
-    width += WIDE.test(letters[i].segment) ? 2 : 1;
-    if (width > columns) return letters[i].index + letters[i].segment.length;
+  for (let size = columns * 4; ; size *= 2) {
+    let from = Math.max(0, text.length - size);
+    // never inside a code point; and a flag is a pair of regional indicators, paired from the
+    // start of their run, so the start goes before the run
+    if (/[\udc00-\udfff]/.test(text[from] ?? "")) from--;
+    while (from >= 2 && /\ud83c[\udde6-\uddff]/.test(text.slice(from - 2, from))) from -= 2;
+    const letters = [...LETTERS.segment(text.slice(from))];
+    let width = 0;
+    for (let i = letters.length - 1; i >= 0; i--) {
+      width += WIDE.test(letters[i].segment) ? 2 : 1;
+      if (width <= columns) continue;
+      if (i > 0 || from === 0) return from + letters[i].index + letters[i].segment.length;
+      break;
+    }
+    if (from === 0) return 0;
   }
-  return 0;
 };
 
 /**

@@ -75,6 +75,35 @@ describe("cutting in the middle", () => {
     expect(splitTail(deep, true)).toEqual([deep.slice(0, -6), "坂".repeat(6)]);
   });
 
+  it("finds the end of a long text as reading it whole would", () => {
+    // the end read from the whole text, letter by letter from the last
+    const wide = /[\p{scx=Han}\p{Emoji_Presentation}]/u;
+    const whole = (text: string, columns: number) => {
+      const letters = [...new Intl.Segmenter().segment(text)];
+      let width = 0;
+      for (let i = letters.length - 1; i >= 0; i--) {
+        width += wide.test(letters[i].segment) ? 2 : 1;
+        if (width > columns) return text.slice(letters[i].index + letters[i].segment.length);
+      }
+      return text;
+    };
+    // letters of one to eleven code units, a lone regional indicator among them, mixed
+    const kinds = ["a", "坂", "e\u0301", "e\u0301\u0302\u0303", "👩🏽‍💻", "🇯🇵", "🇯", "\\"];
+    let seed = 7;
+    const next = (n: number) => ((seed = (seed * 1_103_515_245 + 12_345) % 2 ** 31) >> 8) % n;
+    for (let run = 0; run < 2000; run++) {
+      const text = Array.from({ length: 5 + next(120) }, () => kinds[next(kinds.length)]).join("");
+      expect(splitTail(text)[1], JSON.stringify(text)).toBe(whole(text, 12));
+    }
+    expect(splitTail(`${"x".repeat(70_000)}Tiê\u0301n 👩🏽‍💻.flac`)[1]).toBe("Tiê\u0301n 👩🏽‍💻.flac");
+    // the end read first starts at the joiner inside an emoji, or inside the first indicator of a
+    // flag, where the letters it holds are not the whole text's
+    const marks = (n: number) => `e${"\u0301".repeat(n)}`;
+    const joined = `abc👩🏽‍💻${marks(4).repeat(5)}${marks(3).repeat(5)}`;
+    const flags = `${"🇯🇵".repeat(20)}a`;
+    for (const text of [joined, flags]) expect(splitTail(text)[1]).toBe(whole(text, 12));
+  });
+
   it("never cuts inside a letter drawn from several code points", () => {
     for (const name of ["🔥".repeat(9) + ".flac", "👩🏽‍💻".repeat(4) + "-x.mp3", "Tiến.flac"]) {
       const [head, tail] = splitTail("x".repeat(20) + name);
