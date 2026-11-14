@@ -1,4 +1,5 @@
 import { api, byRoom, type Schemas } from "#lib/api/client.js";
+import { Freeze } from "#lib/lists/interaction.svelte.js";
 import { Keyed } from "#lib/lists/keyed.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { call, type Outcome } from "#lib/request.js";
@@ -37,6 +38,8 @@ export class RoomMembers {
   bursts = $state<Burst[]>([]);
   /** the members' tickers, the latest change first */
   wall = $state.raw<WallLine[]>([]);
+  /** holds the wall still, for the reload that would reorder it */
+  readonly wallFreeze = new Freeze();
   /** the tickers the wall shows: all but those hidden with their members' messages */
   readonly shownWall = $derived(this.wall.filter((l) => !l.hidden));
   /** counts the pushes of the whole room, each newer than any read already on its way */

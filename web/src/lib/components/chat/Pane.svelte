@@ -58,14 +58,18 @@
   const members = target.kind === "room" ? new RoomMembers(target.name) : null;
   members?.follow();
 
+  // the messages and a room's members each reload once their own list lets go
   keepCurrent(
-    () => {
-      void pane.load();
-      void members?.load();
-    },
+    () => void pane.load(),
     () => (target.kind === "room" ? "rooms" : "conversations"),
     pane.messages.freeze
   );
+  if (members)
+    keepCurrent(
+      () => void members.load(),
+      () => "rooms",
+      members.wallFreeze
+    );
   void pane.load();
   void members?.load();
 

@@ -76,6 +76,7 @@ describe("a chat pane", () => {
     component = null;
     live.stop();
     chat.clear();
+    Reflect.deleteProperty(document, "hidden");
     session.principal = null;
     app.state = null;
     vi.unstubAllGlobals();
@@ -313,6 +314,58 @@ describe("a chat pane", () => {
     const log = document.querySelector("[role=log]")!;
     expect(ids()).toEqual(["1"]);
     expect(log.textContent).not.toMatch(/joined|left/);
+  });
+
+  it("holds a room's members back from a reload while text on its wall is selected", async () => {
+    chat.rooms.upsert(joinedRoom("indie", { userCount: 2 }));
+    const net = fakeNetwork((url) => {
+      if (url.pathname.endsWith("/rooms/joined/indie/messages")) {
+        return { messages: [roomMessage(1)], hasMore: false, gaps: [] };
+      }
+      if (url.pathname.endsWith("/rooms/joined/indie")) {
+        const tickers = [{ username: "bob", ticker: "listening to dub", hidden: false }];
+        return { name: "indie", isPrivate: false, users: [], tickers, messages: null };
+      }
+      return undefined;
+    });
+    chatLayout.users = true;
+    chatLayout.side = "wall";
+    let hidden = false;
+    Object.defineProperty(document, "hidden", { configurable: true, get: () => hidden });
+    /** what the pane has read: its room, and its room's messages */
+    const reads = () => {
+      const paths = net.requests.filter((r) => r.method === "GET").map((r) => r.url.pathname);
+      return {
+        room: paths.filter((p) => p.endsWith("/rooms/joined/indie")).length,
+        messages: paths.filter((p) => p.endsWith("/messages")).length
+      };
+    };
+    /** the tab hidden and shown again, which the pane reloads on */
+    const comeBack = async () => {
+      for (const value of [true, false]) {
+        hidden = value;
+        document.dispatchEvent(new Event("visibilitychange"));
+      }
+      await flush();
+    };
+    component = mount(Pane, {
+      target: document.body,
+      props: { target: { kind: "room", name: "indie" } }
+    });
+    await flush();
+    const before = reads();
+    const ticker = document.querySelector("[aria-label='Tickers'] p")!;
+    document.getSelection()!.selectAllChildren(ticker);
+    document.dispatchEvent(new Event("selectionchange"));
+
+    await comeBack();
+    // the messages read again; the members, whose reload reorders the wall, wait
+    expect(reads()).toEqual({ room: before.room, messages: before.messages + 1 });
+
+    document.getSelection()!.removeAllRanges();
+    document.dispatchEvent(new Event("selectionchange"));
+    await flush();
+    expect(reads().room).toBe(before.room + 1);
   });
 
   it("shows a room message the server never echoed as not sent, and takes a late echo", async () => {

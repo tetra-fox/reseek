@@ -10,6 +10,7 @@
   import Username from "#lib/components/users/Username.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { ago, formatCount } from "#lib/format.js";
+  import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
   import { userHref } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
@@ -71,7 +72,8 @@
     aria-label="Tickers"
     aria-activedescendant={list.activeId}
     tabindex="0"
-    {@attach list.attach}>
+    {@attach list.attach}
+    {@attach freezesWhileUsed(members.wallFreeze)}>
     {#each members.shownWall as line, i (line.username)}
       <div role="row" {...list.line(line, i)} class="list-row px-1 py-1.5 text-sm">
         <div role="gridcell">
