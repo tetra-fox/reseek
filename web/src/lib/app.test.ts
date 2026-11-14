@@ -3,7 +3,25 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { app } from "./app.svelte";
 import { FALLBACK_MS, live } from "./live/live.svelte";
 import { fakeNetwork } from "./testing/network";
+import { time } from "./testing/tabs";
 import { browserTabs, SETTLE_MS, Tabs } from "./ui/tabs";
+
+// the browser's tabs talk over a bus whose messages arrive at once, rather than over a
+// BroadcastChannel, whose messages cross on the event loop. In place before the app's module
+// makes this tab
+const tabsBus = await vi.hoisted(async () => {
+  const { bus } = await import("./testing/tabs");
+  const channel = bus();
+  vi.stubGlobal(
+    "BroadcastChannel",
+    class {
+      constructor() {
+        return channel();
+      }
+    }
+  );
+  return channel;
+});
 
 describe("the app's bootstrap", () => {
   afterEach(() => {
@@ -109,13 +127,12 @@ describe("the app's bootstrap", () => {
     await app.bootstrap();
     expect(app.phase).toBe("login");
     // a tab opened after this one, signed in: this one is older, yet it has left the election
-    const channel = new BroadcastChannel("reseek-tabs");
-    const signedIn = new Tabs(channel, performance.timeOrigin + 60_000);
+    const clock = time();
+    const signedIn = new Tabs(tabsBus(), performance.timeOrigin + 60_000, clock.now);
     signedIn.join();
-    await new Promise((done) => setTimeout(done, SETTLE_MS + 20));
+    clock.pass(SETTLE_MS);
     expect(signedIn.leads()).toBe(true);
     expect(browserTabs()?.leads()).toBe(false);
     signedIn.quit();
-    channel.close();
   });
 });
