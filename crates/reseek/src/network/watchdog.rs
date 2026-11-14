@@ -65,6 +65,9 @@ struct Inner {
   turns: Mutex<Turns>,
   /// whether a loop runs and when its next attempt starts
   status: Mutex<Status>,
+  /// the failure last warned of since the last login, so the same failure again is told at
+  /// debug
+  warned: Mutex<Option<String>>,
 }
 
 /// Whether the watchdog is on, and what may turn it on
@@ -156,6 +159,7 @@ impl Watchdog {
         running: Arc::new(tokio::sync::Mutex::new(())),
         turns: Mutex::new(Turns::default()),
         status: Mutex::new(Status::default()),
+        warned: Mutex::new(None),
       }),
     };
     tokio::spawn(
@@ -271,9 +275,11 @@ impl Watchdog {
     was
   }
 
-  /// Forgets the failed attempts and the unanswered logins, once a login succeeded.
+  /// Forgets the failed attempts, the unanswered logins and the failure warned of, once a login
+  /// succeeded: a failure from then on is a new outage.
   pub fn logged_in(&self) {
     lock(&self.inner.turns).clear();
+    *lock(&self.inner.warned) = None;
     self.publish();
   }
 
@@ -421,9 +427,22 @@ impl Watchdog {
         Attempt::Stop
       }
       Err(error) => {
-        warn!(%error, "Failed to reconnect");
+        self.failed(&error);
         Attempt::Failed
       }
+    }
+  }
+
+  /// Logs an attempt that failed: a warning the first time it fails this way since the last
+  /// login, debug after, so a server that stays down is one warning and each new reason one more.
+  fn failed(&self, error: &ClientError) {
+    let failure = error.to_string();
+    let mut warned = lock(&self.inner.warned);
+    if warned.as_ref() == Some(&failure) {
+      debug!(%error, "Failed to reconnect");
+    } else {
+      warn!(%error, "Failed to reconnect");
+      *warned = Some(failure);
     }
   }
 
@@ -501,6 +520,46 @@ mod tests {
     let (turn, _, _) = lock(&watchdog.inner.turns).begin(watchdog.inner.shutdown.child_token());
     watchdog.stop(&turn);
     assert!(!watchdog.is_enabled());
+  }
+
+  #[tokio::test]
+  async fn a_failure_warns_once_until_a_login_and_a_new_one_warns_again() {
+    use crate::logging::{BufferLayer, LogBuffer};
+    use api_types::logs::LogLevel;
+    use tracing_subscriber::layer::SubscriberExt;
+
+    let app = crate::testing::app(crate::testing::TRUSTED, &[]).await;
+    let watchdog = app.state.network.watchdog();
+    let buffer = Arc::new(LogBuffer::default());
+    let subscriber = tracing_subscriber::registry().with(BufferLayer(buffer.clone()));
+    let refused = ClientError::connection(soulseek_client::ConnectionErrorKind::Other, "refused");
+    let unreachable =
+      ClientError::connection(soulseek_client::ConnectionErrorKind::Other, "unreachable");
+    tracing::subscriber::with_default(subscriber, || {
+      watchdog.failed(&refused);
+      watchdog.failed(&refused);
+      watchdog.failed(&unreachable);
+      watchdog.failed(&unreachable);
+      watchdog.logged_in();
+      watchdog.failed(&unreachable);
+    });
+    let told: Vec<(LogLevel, String)> = buffer
+      .snapshot()
+      .into_iter()
+      .filter(|record| record.message.starts_with("Failed to reconnect"))
+      .map(|record| (record.level, record.message))
+      .collect();
+    let line = |error: &str| format!("Failed to reconnect error={error}");
+    assert_eq!(
+      told,
+      [
+        (LogLevel::Warning, line("refused")),
+        (LogLevel::Debug, line("refused")),
+        (LogLevel::Warning, line("unreachable")),
+        (LogLevel::Debug, line("unreachable")),
+        (LogLevel::Warning, line("unreachable")),
+      ]
+    );
   }
 
   #[test]
