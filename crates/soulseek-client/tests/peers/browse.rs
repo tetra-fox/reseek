@@ -146,7 +146,7 @@ async fn a_folder_comes_with_the_folders_below_it_and_info_says_who_may_upload()
   assert_eq!(
     info,
     UserInfo {
-      upload_permitted: Some(1),
+      upload_permitted: Some(0),
       ..self::info()
     }
   );

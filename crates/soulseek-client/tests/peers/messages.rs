@@ -58,6 +58,26 @@ async fn bob(session: &Session) -> PeerSide {
 }
 
 #[tokio::test]
+async fn user_info_says_no_one_may_send_files_only_when_offers_are_refused() {
+  for (takes_offers, permitted) in [(false, Some(0)), (true, None)] {
+    let mut options = listening_options();
+    if takes_offers {
+      options.resolvers.receive_offer = Some(Arc::new(|_, _, _, _| Box::pin(async { Ok(()) })));
+    }
+    let session = Session::with_options(options).await;
+    let mut bob = session.peer("bob").await;
+    bob.send(&PeerMessage::InfoRequest.encode()).await;
+    let PeerMessage::InfoResponse(info) = bob.read_peer().await else {
+      panic!("expected user info");
+    };
+    assert_eq!(
+      info.upload_permitted, permitted,
+      "takes offers: {takes_offers}"
+    );
+  }
+}
+
+#[tokio::test]
 async fn a_failed_browse_resolver_sends_an_empty_listing() {
   let mut options = listening_options();
   options.resolvers.browse_response_resolver = Some(Arc::new(|_, _| {

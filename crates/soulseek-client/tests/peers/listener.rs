@@ -61,7 +61,7 @@ async fn a_peer_introducing_itself_becomes_our_message_connection() {
   let PeerMessage::InfoResponse(info) = peer.read_peer().await else {
     panic!("expected user info");
   };
-  assert_eq!(info.upload_permitted, Some(1));
+  assert_eq!(info.upload_permitted, Some(0));
   let connections = user.client.message_connections();
   assert_eq!(connections.len(), 1);
   assert_eq!(connections[0].0, "bob");

@@ -88,7 +88,7 @@ async fn a_direct_connection_carries_messages_both_ways() {
   assert_eq!(conn.handle().kind(), ConnKind::OUTBOUND | ConnKind::DIRECT);
   assert_eq!(conn.handle().username(), Some(alice.username.as_str()));
   let info = info_over(&bob.client, &conn, &alice.username).await;
-  assert_eq!(info.upload_permitted, Some(1));
+  assert_eq!(info.upload_permitted, Some(0));
   // alice took the connection as bob's, and answers on it too
   let alices = alice.client.message_connections();
   assert_eq!(alices.len(), 1);

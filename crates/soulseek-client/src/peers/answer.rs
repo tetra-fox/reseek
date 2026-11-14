@@ -300,7 +300,8 @@ impl Client {
       has_free_upload_slot: false,
       upload_permitted: None,
     };
-    let mut info = match self.options().resolvers.user_info_resolver.clone() {
+    let options = self.options();
+    let mut info = match options.resolvers.user_info_resolver.clone() {
       None => empty(),
       Some(resolve) => resolve(username.to_owned(), endpoint)
         .await
@@ -309,8 +310,10 @@ impl Client {
           empty()
         }),
     };
-    // everyone may upload to us unless the application says otherwise
-    info.upload_permitted.get_or_insert(1);
+    // with no callback for files sent unasked every one is refused, so no one may send us any
+    if options.resolvers.receive_offer.is_none() {
+      info.upload_permitted.get_or_insert(0);
+    }
     answering
       .send(conn, &[PeerMessage::InfoResponse(info)])
       .await?;
