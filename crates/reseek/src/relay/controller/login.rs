@@ -1,8 +1,9 @@
 //! Checking an agent's login: the name it gives must be a configured agent's, it must connect
 //! from one of that agent's networks, the challenge of its socket must still be valid, its
-//! credential must be the one for that challenge, and its version must be on the controller's
-//! release line. The checks run in that order and the first that fails is the reason the login
-//! is refused, so only an agent that proved its secret learns that its version is refused.
+//! credential must be the one for that challenge, its version must be on the controller's
+//! release line, and its share index's schema, when it names one, must be the controller's. The
+//! checks run in that order and the first that fails is the reason the login is refused, so
+//! only an agent that proved its secret learns that its version or schema is refused.
 
 use std::net::IpAddr;
 use std::time::Duration;
@@ -31,18 +32,29 @@ pub(super) struct Login<'a> {
   pub credential: &'a str,
   /// the version it says it is
   pub version: &'a str,
+  /// the schema of its share index, when it says
+  pub shares_schema: Option<u32>,
+}
+
+/// What the controller holds an agent's login to.
+pub(super) struct Ours<'a> {
+  /// its version
+  pub version: &'a str,
+  /// the schema of its share index
+  pub shares_schema: u32,
 }
 
 /// Checks `login` against the configured `agent` with its name, if any, and the `challenge` of
-/// the socket, if it still has one, at `now`, for a controller of version `ours`; `key`
-/// derives the agent's key from its secret. Returns that key when the login checks out.
+/// the socket, if it still has one, at `now`, for the controller `ours`; `key` derives the
+/// agent's key from its secret. Returns that key when the login checks out. An agent that names
+/// no schema is let in, and its share upload is checked instead.
 pub(super) fn check(
   agent: Option<&RelayAgent>,
   login: &Login,
   challenge: Option<&Challenge>,
   lifetime: Duration,
   now: Instant,
-  ours: &str,
+  ours: &Ours,
   key: impl FnOnce(&str) -> Key,
 ) -> Result<Key, LoginFailure> {
   let (address, credential) = (login.address, login.credential);
@@ -59,8 +71,14 @@ pub(super) fn check(
   if !key.verifies(Purpose::Login, &challenge.token, credential) {
     return Err(LoginFailure::BadCredential);
   }
-  if !version::compatible(ours, login.version) {
+  if !version::compatible(ours.version, login.version) {
     return Err(LoginFailure::IncompatibleVersion);
+  }
+  if login
+    .shares_schema
+    .is_some_and(|theirs| theirs != ours.shares_schema)
+  {
+    return Err(LoginFailure::SchemaMismatch);
   }
   Ok(key)
 }
@@ -71,7 +89,10 @@ mod tests {
 
   const SECRET: &str = "0123456789abcdef";
   const LIFETIME: Duration = Duration::from_secs(10);
-  const OURS: &str = "0.4.2";
+  const OURS: Ours = Ours {
+    version: "0.4.2",
+    shares_schema: 7,
+  };
 
   fn agent(cidr: &str) -> RelayAgent {
     RelayAgent {
@@ -100,9 +121,10 @@ mod tests {
         let login = Login {
           address: home,
           credential,
-          version: OURS,
+          version: OURS.version,
+          shares_schema: Some(OURS.shares_schema),
         };
-        check(agent, &login, challenge, LIFETIME, now, OURS, key).map(drop)
+        check(agent, &login, challenge, LIFETIME, now, &OURS, key).map(drop)
       };
     assert_eq!(login(Some(&lan), Some(&challenge), issued, &right), Ok(()));
     assert_eq!(
@@ -138,11 +160,12 @@ mod tests {
       login(Some(&lan), Some(&challenge), issued, &wrong),
       Err(LoginFailure::BadCredential)
     );
-    let versioned = |version: &str, credential: &str| {
+    let versioned = |version: &str, shares_schema: Option<u32>, credential: &str| {
       let login = Login {
         address: home,
         credential,
         version,
+        shares_schema,
       };
       check(
         Some(&lan),
@@ -150,20 +173,35 @@ mod tests {
         Some(&challenge),
         LIFETIME,
         issued,
-        OURS,
+        &OURS,
         key,
       )
       .map(drop)
     };
-    assert_eq!(versioned("0.4.0", &right), Ok(()), "a patch apart");
+    let schema = Some(OURS.shares_schema);
+    assert_eq!(versioned("0.4.0", schema, &right), Ok(()), "a patch apart");
     assert_eq!(
-      versioned("0.5.0", &right),
+      versioned("0.5.0", schema, &right),
       Err(LoginFailure::IncompatibleVersion)
     );
     assert_eq!(
-      versioned("test", &wrong),
+      versioned("test", schema, &wrong),
       Err(LoginFailure::BadCredential),
       "the version is checked once the agent proved its secret"
+    );
+    assert_eq!(
+      versioned(OURS.version, Some(6), &right),
+      Err(LoginFailure::SchemaMismatch)
+    );
+    assert_eq!(
+      versioned("0.5.0", Some(6), &right),
+      Err(LoginFailure::IncompatibleVersion),
+      "the version is checked before the schema"
+    );
+    assert_eq!(
+      versioned(OURS.version, None, &right),
+      Ok(()),
+      "an agent that names no schema has its share upload checked"
     );
   }
 }

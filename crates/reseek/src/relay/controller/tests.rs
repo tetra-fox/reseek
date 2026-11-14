@@ -27,6 +27,7 @@ use uuid::Uuid;
 
 use super::{Controller, Registration};
 use crate::services::AgentCredential;
+use crate::shares::Shares;
 use crate::testing::app;
 use reseek_relay_proto::credential::{Key, Purpose};
 use reseek_relay_proto::frames;
@@ -119,6 +120,26 @@ async fn log_in_while(
   secret: &str,
   admitted: Arc<AtomicBool>,
 ) -> Served {
+  let schema = Some(Shares::schema_version());
+  let (to_socket, mut from_socket, served) =
+    send_login(controller, address, secret, schema, admitted).await;
+  assert!(matches!(
+    read(&written(&mut from_socket)[0]),
+    RelayMessage::LoginOk { .. }
+  ));
+  (to_socket, from_socket, served)
+}
+
+/// A socket of `controller`'s from `address`, served on a task of its own, that answered its
+/// challenge as `nas` with `secret` and the share schema `shares_schema`, opened with a
+/// credential that lets the agent in while `admitted` holds.
+async fn send_login(
+  controller: &Arc<Controller>,
+  address: IpAddr,
+  secret: &str,
+  shares_schema: Option<u32>,
+  admitted: Arc<AtomicBool>,
+) -> Served {
   let (to_socket, frames) = mpsc::channel(64);
   let (sent, mut from_socket) = mpsc::channel(1024);
   let recheck: crate::live::Revalidate = Arc::new(move || {
@@ -139,14 +160,11 @@ async fn log_in_while(
     agent: "nas".into(),
     credential,
     version: crate::version::info().current,
+    shares_schema,
     capabilities: Vec::new(),
   };
   to_socket.send(text(login)).await.unwrap();
   settle().await;
-  assert!(matches!(
-    read(&written(&mut from_socket)[0]),
-    RelayMessage::LoginOk { .. }
-  ));
   (to_socket, from_socket, served)
 }
 
@@ -265,7 +283,7 @@ async fn controller() -> (crate::testing::TestApp, Arc<Controller>) {
 
 /// A share upload token `controller` hands `nas` on the socket numbered `socket`.
 fn share_token(controller: &Controller, socket: u64) -> Uuid {
-  let begun = controller.begin_shares("nas", socket, crate::shares::Shares::schema_version(), 1024);
+  let begun = controller.begin_shares("nas", socket, Shares::schema_version(), 1024);
   match read(&Message::Text(begun.into())) {
     RelayMessage::SharesToken { token, .. } => token,
     refused => panic!("no share token: {refused:?}"),
@@ -346,7 +364,7 @@ async fn a_share_upload_cut_off_partway_leaves_no_file_behind() {
 #[tokio::test]
 async fn a_share_upload_refused_again_is_warned_about_once() {
   let (_app, controller) = controller().await;
-  let schema = crate::shares::Shares::schema_version();
+  let schema = Shares::schema_version();
   let too_large = 1 << 40;
   let ((), logged) = reseek_shares::testing::logged(|| {
     // the index grows between dials
@@ -469,6 +487,39 @@ async fn a_login_whose_agent_was_removed_while_it_was_checked_is_refused() {
     Err(LoginFailure::UnknownAgent)
   );
   assert!(controller.agents().is_empty());
+}
+
+/// A login on a share schema other than the controller's is refused for it; one that names no
+/// schema, from an agent built before logins carried it, is let in for its share upload to be
+/// checked.
+#[tokio::test]
+async fn a_login_on_another_share_schema_is_refused_for_it() {
+  let (_app, controller) = controller().await;
+  let home: IpAddr = [127, 0, 0, 1].into();
+  let admitted = Arc::new(AtomicBool::new(true));
+  let other = Some(Shares::schema_version() + 1);
+  let (_to_socket, mut from_socket, served) =
+    send_login(&controller, home, SECRET, other, admitted.clone()).await;
+  let answered = written(&mut from_socket);
+  assert_eq!(
+    read(&answered[0]),
+    RelayMessage::LoginFailed {
+      reason: LoginFailure::SchemaMismatch
+    }
+  );
+  assert!(
+    matches!(&answered[1], Message::Close(Some(f)) if f.code == frames::close::UNAUTHORIZED),
+    "{answered:?}"
+  );
+  served.await.unwrap();
+  assert!(controller.agents().is_empty());
+
+  let (_to_socket, mut from_socket, _served) =
+    send_login(&controller, home, SECRET, None, admitted).await;
+  assert!(matches!(
+    read(&written(&mut from_socket)[0]),
+    RelayMessage::LoginOk { .. }
+  ));
 }
 
 #[tokio::test]

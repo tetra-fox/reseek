@@ -510,6 +510,7 @@ async fn log_in(
       agent: agent.to_string(),
       credential,
       version: version.to_string(),
+      shares_schema: Some(reseek::shares::Shares::schema_version()),
       capabilities: Vec::new(),
     },
   };

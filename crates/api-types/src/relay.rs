@@ -80,6 +80,10 @@ pub enum RelayMessage {
     credential: String,
     /// the agent's version
     version: String,
+    /// the version of the agent's share database schema, which must equal the controller's;
+    /// null from an agent that does not send it, whose share upload is checked instead
+    #[serde(default)]
+    shares_schema: Option<u32>,
     /// optional features the agent supports, empty today
     capabilities: Vec<String>,
   },
@@ -248,6 +252,8 @@ pub enum LoginFailure {
   BadCredential,
   /// the agent's version is outside the controller's release line
   IncompatibleVersion,
+  /// the agent's share database schema differs from the controller's
+  SchemaMismatch,
 }
 
 /// Why an agent cannot serve a file request.

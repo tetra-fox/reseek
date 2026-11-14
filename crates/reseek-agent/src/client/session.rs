@@ -21,7 +21,7 @@ use reseek_relay_proto::credential::Purpose;
 use reseek_relay_proto::frames::{
   self, DEFER_EVERY, LOGIN_WITHIN, MAX_FRAME, PING_EVERY, SILENCE, close,
 };
-use reseek_shares::lock;
+use reseek_shares::{Shares, lock};
 
 use super::dial::{Settings, Socket};
 use super::{AgentClient, warn_once};
@@ -295,6 +295,7 @@ impl AgentClient {
             agent: link.settings.agent.clone(),
             credential,
             version: crate::VERSION.to_string(),
+            shares_schema: Some(Shares::schema_version()),
             capabilities: Vec::new(),
           },
         );
@@ -311,6 +312,7 @@ impl AgentClient {
             | LoginFailure::AddressNotAllowed
             | LoginFailure::BadCredential
             | LoginFailure::IncompatibleVersion
+            | LoginFailure::SchemaMismatch
         );
         // a refusal of the configuration is warned about as the socket ends, an expired
         // challenge here; each once until a socket is ready

@@ -12,7 +12,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use api_types::relay::{
-  DownloadOutcome, LoginFailure, RELAY_SUBPROTOCOL, RelayErrorCode, RelayMessage,
+  DownloadOutcome, LoginFailure, RELAY_PROTOCOL, RELAY_SUBPROTOCOL, RelayErrorCode, RelayMessage,
 };
 use cascade::{Layers, Watcher};
 use reseek_relay_proto::frames;
@@ -557,6 +557,31 @@ async fn a_login_refused_for_the_agents_configuration_is_warned_about_once_until
   agent.login_refused(LoginFailure::BadCredential);
   agent.socket_ended(false, true);
   assert_eq!(warnings.count("the relay controller refused this agent"), 2);
+}
+
+/// The agent's login names its share index's schema, and a controller on another schema
+/// refusing it is a refusal of the agent, not a failed challenge
+#[tokio::test]
+async fn a_login_names_the_share_schema_and_a_refusal_for_it_is_the_agents() {
+  let warnings = Logged::warnings();
+  let mut agent = agent(Vec::new(), false).await;
+  let challenge = RelayMessage::Challenge {
+    token: "abc".into(),
+    expires_in: 10_000,
+    protocol: RELAY_PROTOCOL,
+  };
+  agent
+    .agent
+    .handle(&agent.link, &frames::encode(None, challenge));
+  let RelayMessage::Login { shares_schema, .. } = agent.next().await else {
+    panic!("the agent does not log in");
+  };
+  assert_eq!(shares_schema, Some(Shares::schema_version()));
+  agent.login_refused(LoginFailure::SchemaMismatch);
+  agent.socket_ended(false, true);
+  assert_eq!(warnings.count("authentication challenge"), 0);
+  let refused = r#"reason="login refused: SchemaMismatch" the relay controller refused this agent"#;
+  assert_eq!(warnings.count(refused), 1);
 }
 
 #[tokio::test]

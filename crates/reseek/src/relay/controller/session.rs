@@ -24,6 +24,7 @@ use super::login::{self, Challenge};
 use super::{Controller, OUTBOUND, Outbound, Registration};
 use crate::crypto::{base62, random_bytes};
 use crate::live::Revalidate;
+use crate::shares::Shares;
 use reseek_relay_proto::credential::Key;
 use reseek_relay_proto::frames::{
   self, LOGIN_WITHIN, MAX_FRAME, PING_EVERY, SILENCE, SYNC_WITHIN, close, millis,
@@ -259,9 +260,14 @@ impl Session {
           agent,
           credential,
           version,
+          shares_schema,
           ..
         },
-      ) => return self.login(socket, agent, &credential, version).await,
+      ) => {
+        return self
+          .login(socket, agent, &credential, version, shares_schema)
+          .await;
+      }
       (
         Phase::LoggedIn {
           name,
@@ -310,6 +316,7 @@ impl Session {
     name: String,
     credential: &str,
     version: String,
+    shares_schema: Option<u32>,
   ) -> Option<Ended> {
     let Phase::Challenged(challenge) = &mut self.phase else {
       return None;
@@ -317,11 +324,16 @@ impl Session {
     let challenge = challenge.take();
     let options = self.controller.config.current();
     let configured = Controller::configured(&options.values, &name);
-    let ours = crate::version::info().current;
+    let current = crate::version::info().current;
+    let ours = login::Ours {
+      version: &current,
+      shares_schema: Shares::schema_version(),
+    };
     let login = login::Login {
       address: self.address,
       credential,
       version: &version,
+      shares_schema,
     };
     let checked = login::check(
       configured.as_ref(),
@@ -366,6 +378,7 @@ impl Session {
       Err(LoginFailure::ChallengeExpired) => "challenge_expired",
       Err(LoginFailure::BadCredential) => "bad_credential",
       Err(LoginFailure::IncompatibleVersion) => "incompatible_version",
+      Err(LoginFailure::SchemaMismatch) => "schema_mismatch",
     };
     self.controller.count("login", counted);
     if let Err(reason) = registered {
@@ -387,7 +400,7 @@ impl Session {
       None,
       RelayMessage::LoginOk {
         agent: name.clone(),
-        server_version: ours,
+        server_version: current,
         protocol: RELAY_PROTOCOL,
         timeouts: RelayTimeouts {
           file_info: millis(timeouts.file_info),
@@ -412,14 +425,15 @@ impl Session {
   }
 }
 
-/// Logs a refused login: an unknown agent, one outside its networks, a bad credential and a
-/// version outside ours (`ours`) are warnings, never with the credential.
+/// Logs a refused login: an unknown agent, one outside its networks, a bad credential, a
+/// version outside ours and a share schema other than ours (`ours`) are warnings, never with
+/// the credential.
 fn log_refusal(
   name: &str,
   login: &login::Login,
   reason: LoginFailure,
   cidr: Option<String>,
-  ours: &str,
+  ours: &login::Ours,
 ) {
   match reason {
     LoginFailure::UnknownAgent => warn!(
@@ -447,8 +461,14 @@ fn log_refusal(
     LoginFailure::IncompatibleVersion => warn!(
       agent = name,
       version = login.version,
-      controller_version = ours,
+      controller_version = ours.version,
       "Agent login refused: its version is not on this controller's release line"
+    ),
+    LoginFailure::SchemaMismatch => warn!(
+      agent = name,
+      shares_schema = login.shares_schema,
+      controller_shares_schema = ours.shares_schema,
+      "Agent login refused: its share index's schema is not this controller's"
     ),
   }
 }
