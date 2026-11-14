@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
-use super::{Transfer, TransferStates};
+use super::{Transfer, TransferStates, unknown};
 
 /// One peer's transfers in one direction, grouped by remote directory, in the order the
 /// transfers were first asked for.
@@ -190,15 +190,6 @@ impl<'de> Deserialize<'de> for TransferStateFilter {
   }
 }
 
-/// The refusal of `text`, which is no `what`, naming every one of `valid`.
-fn unknown<'a>(what: &str, text: &str, valid: impl IntoIterator<Item = &'a str>) -> String {
-  let valid: Vec<String> = valid.into_iter().map(|name| format!("`{name}`")).collect();
-  format!(
-    "unknown {what} `{text}`, expected one of {}",
-    valid.join(", ")
-  )
-}
-
 /// What the flat transfer listing is sorted by.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -288,5 +279,27 @@ mod tests {
       TransferStateFilter::State(TransferStates::Requested)
     );
     assert!(serde_json::from_str::<TransferStateFilter>("\"failed\"").is_err());
+  }
+
+  #[test]
+  fn an_unknown_state_category_or_filter_is_refused_naming_the_valid_ones() {
+    let refused = [
+      "x".parse::<TransferStates>().unwrap_err(),
+      "x".parse::<TransferStateCategory>().unwrap_err(),
+      "x".parse::<TransferStateFilter>().unwrap_err(),
+    ];
+    assert_eq!(
+      refused
+        .iter()
+        .map(|text| text.split_once(", expected one of `").unwrap().0)
+        .collect::<Vec<_>>(),
+      [
+        "unknown transfer state `x`",
+        "unknown transfer state category `x`",
+        "unknown transfer state `x`"
+      ]
+    );
+    assert!(refused[0].ends_with("`Completed, Rejected`, `Completed, Aborted`"));
+    assert!(refused[1].ends_with("`Errored`, `Cancelled`"));
   }
 }

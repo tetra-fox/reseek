@@ -106,8 +106,17 @@ impl std::str::FromStr for TransferStates {
     Self::ALL
       .into_iter()
       .find(|state| state.as_str() == text)
-      .ok_or_else(|| format!("`{text}` is not a transfer state"))
+      .ok_or_else(|| unknown("transfer state", text, Self::ALL.map(Self::as_str)))
   }
+}
+
+/// The refusal of `text`, which is no `what`, naming every one of `valid`.
+fn unknown<'a>(what: &str, text: &str, valid: impl IntoIterator<Item = &'a str>) -> String {
+  let valid: Vec<String> = valid.into_iter().map(|name| format!("`{name}`")).collect();
+  format!(
+    "unknown {what} `{text}`, expected one of {}",
+    valid.join(", ")
+  )
 }
 
 impl Serialize for TransferStates {
