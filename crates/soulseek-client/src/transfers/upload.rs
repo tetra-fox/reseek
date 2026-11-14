@@ -3,7 +3,8 @@
 //! file to the peer; once it accepts we open the transfer connection, the peer says where to
 //! start, and we write the rest of the file. The peer closes the connection when it has every
 //! byte; we close it ourselves only after a grace period. An upload that does not succeed tells
-//! the peer, which queues the file again unless we canceled it.
+//! the peer, which queues the file again unless we canceled it; a peer that refused it or closed
+//! the transfer connection itself is told nothing.
 
 use std::io::SeekFrom;
 use std::sync::Arc;
@@ -24,7 +25,7 @@ use super::task::{self, Stop, TransferTask};
 use super::{NewTransfer, Registration};
 use crate::client::{Client, non_blank};
 use crate::conn::{Conn, ConnHandle};
-use crate::error::{ClientError, ErrorSource, MessageErrorKind};
+use crate::error::{ClientError, ConnectionErrorKind, ErrorSource, MessageErrorKind};
 use crate::limit::Permit;
 use crate::peers::write_peer;
 use crate::state::ClientState;
@@ -445,7 +446,8 @@ impl Upload {
   }
 
   /// Tells the peer an upload did not succeed: that we canceled it, so it drops the file, or
-  /// that it failed, so it queues the file again. A peer that refused the offer is told nothing.
+  /// that it failed, so it queues the file again. A peer that refused the offer or closed the
+  /// transfer connection is told nothing.
   /// Best effort and bounded; skipped while the client disconnects or once it is disposed, but
   /// not because the server session was lost.
   async fn tell_peer(&mut self, error: &ClientError) {
@@ -457,10 +459,16 @@ impl Upload {
       );
       return;
     }
-    // an offline peer cannot hear it, and one that refused the file has said it does not want it
+    // an offline peer cannot hear it, one that refused the file has said it does not want it,
+    // and one that closed the transfer connection under the upload left on its own
     if matches!(
       error,
-      ClientError::UserOffline(_) | ClientError::TransferRejected(_)
+      ClientError::UserOffline(_)
+        | ClientError::TransferRejected(_)
+        | ClientError::Connection {
+          kind: ConnectionErrorKind::RemoteClosed,
+          ..
+        }
     ) {
       return;
     }

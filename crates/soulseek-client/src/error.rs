@@ -166,6 +166,8 @@ pub enum ConnectionErrorKind {
   WriteDropped,
   /// the SOCKS5 proxy refused or failed the connection
   Proxy,
+  /// the remote ended or reset a transfer connection before the transfer was done
+  RemoteClosed,
 }
 
 /// Which framing failure a [`ClientError::Message`] is

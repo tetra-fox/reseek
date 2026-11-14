@@ -13,8 +13,8 @@ use crate::support::scripted::{BOB, Scripted};
 use crate::support::transfers::{self, content, file, scratch, states};
 use crate::support::{Logs, PATIENCE, listening_options};
 use soulseek_client::{
-  ClientError, Event, Governor, InputFactory, Transfer, TransferOutcome, TransferState,
-  UploadInput, UploadRequest,
+  ClientError, ConnectionErrorKind, Event, Governor, InputFactory, Transfer, TransferOutcome,
+  TransferState, UploadInput, UploadRequest,
 };
 use soulseek_proto::peer::{QueueDownload, TransferResponse, UploadDenied, UploadFailed};
 use soulseek_proto::server::{GetPeerAddressRequest, GetPeerAddressResponse};
@@ -256,27 +256,24 @@ async fn an_offset_past_the_end_fails_the_upload_and_the_broken_one_is_logged_on
 }
 
 #[tokio::test]
-async fn a_downloader_that_closes_early_fails_the_upload_and_may_queue_the_file_again_at_once() {
+async fn a_failed_upload_tells_the_downloader_which_may_queue_the_file_again_at_once() {
   let mut options = listening_options();
   let mut requests = transfers::queueing(&mut options);
   let mut scripted = Scripted::with_options(options).await;
-  let running = upload(&scripted, "@@share\\gone.mp3", |request| {
-    request.options.governor = Some(first_chunk_only());
-  });
+  let running = upload(&scripted, "@@share\\shrunk.mp3", |_| {});
   let mut bob = scripted.connected().await;
   let source = running.source.clone();
-  let mut transfer = accepted(&mut scripted, &mut bob, "@@share\\gone.mp3").await;
+  let mut transfer = accepted(&mut scripted, &mut bob, "@@share\\shrunk.mp3").await;
+  std::fs::write(&source, content(SIZE / 2)).unwrap();
   transfer.send(&0u64.to_le_bytes()).await;
-  assert_eq!(transfer.raw(1000).await, content(1000));
-  drop(transfer);
   let error = running.result().await.unwrap_err();
-  assert!(matches!(error, ClientError::Connection { .. }), "{error:?}");
+  assert!(matches!(error, ClientError::Transfer { .. }), "{error:?}");
   // told as soon as the upload's record is gone, so asking again finds no duplicate
-  assert!(told_failed(bob.read_peer().await, "@@share\\gone.mp3"));
+  assert!(told_failed(bob.read_peer().await, "@@share\\shrunk.mp3"));
   bob
     .send(
       &PeerMessage::QueueDownload(QueueDownload {
-        filename: "@@share\\gone.mp3".into(),
+        filename: "@@share\\shrunk.mp3".into(),
       })
       .encode(),
     )
@@ -293,7 +290,7 @@ async fn a_downloader_that_closes_early_fails_the_upload_and_may_queue_the_file_
 }
 
 #[tokio::test]
-async fn a_downloader_that_closes_or_resets_mid_file_is_said_to_have_closed_it() {
+async fn a_downloader_that_closes_or_resets_mid_file_left_and_is_told_nothing() {
   for reset in [false, true] {
     let mut scripted = Scripted::start().await;
     let running = upload(&scripted, "@@share\\left.mp3", |request| {
@@ -316,28 +313,33 @@ async fn a_downloader_that_closes_or_resets_mid_file_is_said_to_have_closed_it()
       "Transfer failed: the downloader closed the connection",
       "reset: {reset}"
     );
+    assert_eq!(
+      error.connection_kind(),
+      Some(ConnectionErrorKind::RemoteClosed)
+    );
+    // told it failed, it would queue the file it just let go of
+    assert!(
+      bob.quiet_for(Duration::from_millis(200)).await,
+      "reset: {reset}"
+    );
   }
 }
 
 #[tokio::test]
 async fn an_upload_that_fails_after_the_server_session_was_lost_still_tells_the_downloader() {
   let mut scripted = Scripted::start().await;
-  let running = upload(&scripted, "@@share\\outage.mp3", |request| {
-    request.options.governor = Some(first_chunk_only());
-  });
-  let mut bob = scripted.connected().await;
+  let (running, mut bob) = offered_upload(&mut scripted, "@@share\\outage.mp3").await;
   let mut transfer = accepted(&mut scripted, &mut bob, "@@share\\outage.mp3").await;
-  transfer.send(&0u64.to_le_bytes()).await;
-  assert_eq!(transfer.raw(1000).await, content(1000));
   // the server goes away without the application asking to disconnect
   scripted.session.server.stream.shutdown().await.unwrap();
   scripted
     .session
     .event(|event| matches!(event, Event::Disconnected { .. }).then_some(()))
     .await;
-  drop(transfer);
+  std::fs::write(&running.source, content(SIZE / 2)).unwrap();
+  transfer.send(&0u64.to_le_bytes()).await;
   let error = running.result().await.unwrap_err();
-  assert!(matches!(error, ClientError::Connection { .. }), "{error:?}");
+  assert!(matches!(error, ClientError::Transfer { .. }), "{error:?}");
   assert!(told_failed(bob.read_peer().await, "@@share\\outage.mp3"));
 }
 

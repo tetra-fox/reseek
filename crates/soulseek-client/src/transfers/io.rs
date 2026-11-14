@@ -199,16 +199,16 @@ pub(super) fn connection_failure(
   let ConnState::Disconnected(reason) = handle.state() else {
     return error;
   };
-  let failed = |text: String| {
-    ClientError::connection(
-      ConnectionErrorKind::Other,
-      format!("Transfer failed: {text}"),
-    )
-  };
   match reason.error {
     Some(ClientError::Timeout(message)) => ClientError::Timeout(message),
     Some(ClientError::Canceled) => ClientError::Canceled,
-    Some(error) if closed_by_remote(&error) => failed(format!("{remote} closed the connection")),
-    _ => failed(reason.message),
+    Some(error) if closed_by_remote(&error) => ClientError::connection(
+      ConnectionErrorKind::RemoteClosed,
+      format!("Transfer failed: {remote} closed the connection"),
+    ),
+    _ => ClientError::connection(
+      ConnectionErrorKind::Other,
+      format!("Transfer failed: {}", reason.message),
+    ),
   }
 }
