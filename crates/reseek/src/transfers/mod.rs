@@ -187,9 +187,10 @@ mod tests {
 
   #[tokio::test]
   async fn rows_whose_state_was_lost_end_errored_at_the_last_time_they_were_known() {
-    use TransferStates::{Completed, InProgress, QueuedLocally};
+    use TransferStates::{Completed, QueuedLocally};
     use api_types::transfers::TransferOutcome::{Errored, Succeeded};
     use chrono::{DateTime, Utc};
+    use rusqlite::types::Value;
 
     let dir = tempfile::tempdir().unwrap();
     let location = Location::on_disk(dir.path());
@@ -219,14 +220,6 @@ mod tests {
       ..row("no end", Completed(Succeeded))
     };
     let blank = row("blank", QueuedLocally);
-    let running = Row {
-      started_at: Some(at(1)),
-      ..row("running", InProgress)
-    };
-    let done = Row {
-      ended_at: Some(at(8)),
-      ..row("done", Completed(Succeeded))
-    };
     // each with the time it ends at: its end when it has one, else the latest time it holds
     let lost = [
       (none.id, at(5)),
@@ -235,7 +228,6 @@ mod tests {
       (unknown.id, at(0)),
       (no_end.id, at(4)),
     ];
-    let kept = [(running.id, running.state), (done.id, done.state)];
     let blank_id = blank.id;
     let raw = [
       (none.id, 0),
@@ -244,13 +236,24 @@ mod tests {
       (unknown.id, 2 | 2048 | 4096),
       (blank.id, 0),
     ];
-    insert(
-      &old,
-      vec![
-        none, queued, completed, unknown, no_end, blank, running, done,
-      ],
-    )
-    .await;
+    // a row in every state the daemon writes, a finished one with its end, and a download
+    // waiting here paused and one waiting to be retried
+    let mut kept: Vec<Row> = TransferStates::ALL
+      .into_iter()
+      .map(|state| Row {
+        ended_at: state.is_completed().then(|| at(6)),
+        ..row(state.as_str(), state)
+      })
+      .collect();
+    let paused = row("paused", QueuedLocally);
+    let retrying = row("retrying", QueuedLocally);
+    let (paused_id, retrying_id) = (paused.id, retrying.id);
+    kept.extend([paused, retrying]);
+    let kept_ids: Vec<uuid::Uuid> = kept.iter().map(|row| row.id).collect();
+    let mut rows = vec![none, queued, completed, unknown, no_end, blank];
+    rows.extend(kept);
+    insert(&old, rows).await;
+    let job = uuid::Uuid::new_v4().to_string();
     old
       .write(move |conn| {
         for (id, state) in raw {
@@ -263,27 +266,74 @@ mod tests {
           "UPDATE Transfers SET RequestedAt = '' WHERE Id = ?1",
           [blank_id.to_string()],
         )?;
+        // every row with a time a login would enqueue again, its job given
+        conn.execute(
+          "UPDATE Transfers SET Resumable = 1, JobId = ?1 WHERE Id != ?2",
+          [job, blank_id.to_string()],
+        )?;
+        conn.execute(
+          "UPDATE Transfers SET Paused = 1 WHERE Id = ?1",
+          [paused_id.to_string()],
+        )?;
+        conn.execute(
+          "UPDATE Transfers SET NextAttemptAt = '2026-11-01T11:00:00.000000Z', Attempts = 2 \
+           WHERE Id = ?1",
+          [retrying_id.to_string()],
+        )?;
+        conn.execute(
+          "UPDATE Transfers SET PlaceInQueue = 4 WHERE State = ?1",
+          [state::column(TransferStates::QueuedRemotely)],
+        )?;
         // the queued row was last heard of when the peer queued it
         store::entered(conn, lost[1].0, TransferStates::QueuedRemotely, at(7))
       })
       .await
       .unwrap();
+    let whole = |ids: Vec<uuid::Uuid>| {
+      move |conn: &mut rusqlite::Connection| {
+        let mut select = conn.prepare("SELECT * FROM Transfers WHERE Id = ?1")?;
+        let columns = select.column_count();
+        ids
+          .iter()
+          .map(|id| {
+            select.query_row([id.to_string()], |row| {
+              (0..columns)
+                .map(|i| row.get::<_, Value>(i))
+                .collect::<rusqlite::Result<Vec<_>>>()
+            })
+          })
+          .collect::<rusqlite::Result<Vec<_>>>()
+      }
+    };
+    let before_rows = old.write(whole(kept_ids.clone())).await.unwrap();
     drop(old);
     let before = chrono::Utc::now();
     let migrated = open(&location).await.unwrap();
     let errored = Completed(Errored);
-    let read = |id: uuid::Uuid| {
-      migrated.read(move |conn| Ok((store::get(conn, id)?.unwrap(), store::history(conn, id)?)))
-    };
     for (id, ended) in lost {
-      let (record, history) = read(id).await.unwrap();
+      let (record, history, resumable) = migrated
+        .read(move |conn| {
+          let resumable: bool = conn.query_row(
+            "SELECT Resumable FROM Transfers WHERE Id = ?1",
+            [id.to_string()],
+            |row| row.get(0),
+          )?;
+          Ok((
+            store::get(conn, id)?.unwrap(),
+            store::history(conn, id)?,
+            resumable,
+          ))
+        })
+        .await
+        .unwrap();
       assert_eq!(
         (
           record.state.kind(),
           record.ended_at,
-          record.exception.as_deref()
+          record.exception.as_deref(),
+          resumable
         ),
-        (errored, Some(ended), Some("State lost")),
+        (errored, Some(ended), Some("State lost"), false),
         "{}",
         record.username
       );
@@ -295,16 +345,30 @@ mod tests {
         record.username
       );
     }
-    for (id, state) in kept {
-      let (record, history) = read(id).await.unwrap();
-      assert_eq!(
-        (record.state.kind(), record.exception),
-        (state, None),
-        "{}",
-        record.username
-      );
-      assert!(history.is_empty(), "{}", record.username);
+    assert_eq!(
+      migrated.write(whole(kept_ids.clone())).await.unwrap(),
+      before_rows,
+      "a row in a state the daemon writes is left as it was"
+    );
+    for id in kept_ids.iter().copied() {
+      let history = migrated
+        .read(move |conn| store::history(conn, id))
+        .await
+        .unwrap();
+      assert!(history.is_empty(), "{id}");
     }
+    let resumed: usize = cleanup::take_resumable(&migrated)
+      .await
+      .unwrap()
+      .into_values()
+      .flatten()
+      .map(|group| group.files.len())
+      .sum();
+    assert_eq!(
+      resumed,
+      kept_ids.len(),
+      "only the rows left as they were resume"
+    );
     let (state, ended): (u32, String) = migrated
       .read(move |conn| {
         conn.query_row(
