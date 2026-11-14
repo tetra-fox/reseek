@@ -11,7 +11,7 @@ use api_types::events::{Event, SessionCreated, SessionRevokeReason, SessionRevok
 use axum::http::{HeaderMap, HeaderValue, Uri, header};
 use chrono::Utc;
 use soulseek_client::LogLimiter;
-use tracing::{debug, info, warn};
+use tracing::{Instrument, debug, info, warn};
 
 use super::cookies::{self, Scope};
 use super::sessions::{self, NewSession, Origin, StoredSession};
@@ -396,30 +396,37 @@ pub async fn start_session(
 }
 
 /// Revokes the sessions `ids`, raising `SessionRevoked` for each one that was still going and
-/// closing the event streams they opened.
+/// closing the event streams they opened. It runs on a task of its own, so a caller that goes
+/// away once the revoke is committed cannot leave the streams open and the events unraised.
 pub async fn end_sessions(
   app: &AppState,
   ids: Vec<String>,
   by: Option<String>,
   reason: SessionRevokeReason,
 ) -> Result<(), ApiError> {
-  let ended = sessions::revoke(&app.auth.db, ids)
+  let app = app.clone();
+  let ending = async move {
+    let ended = sessions::revoke(&app.auth.db, ids)
+      .await
+      .map_err(ApiError::internal)?;
+    if !ended.is_empty() {
+      app.live.credentials_ended();
+    }
+    for session in ended {
+      info!(subject = session.subject, by, ?reason, "session revoked");
+      app.events.raise(Event::SessionRevoked(SessionRevoked {
+        version: 0,
+        session_id: session.id,
+        subject: session.subject,
+        by: by.clone(),
+        reason,
+      }));
+    }
+    Ok(())
+  };
+  tokio::spawn(ending.in_current_span())
     .await
-    .map_err(ApiError::internal)?;
-  if !ended.is_empty() {
-    app.live.credentials_ended();
-  }
-  for session in ended {
-    info!(subject = session.subject, by, ?reason, "session revoked");
-    app.events.raise(Event::SessionRevoked(SessionRevoked {
-      version: 0,
-      session_id: session.id,
-      subject: session.subject,
-      by: by.clone(),
-      reason,
-    }));
-  }
-  Ok(())
+    .map_err(ApiError::internal)?
 }
 
 /// The `Set-Cookie` value that hands `session` to the browser until it expires.
@@ -455,6 +462,50 @@ fn presented_credential(headers: &HeaderMap) -> Option<&str> {
 mod tests {
   use crate::auth::tests::{CONFIG, with_header};
   use crate::testing::{OUTSIDE, app, request};
+
+  #[tokio::test]
+  async fn a_revoke_whose_request_goes_away_still_tells_of_it() {
+    use std::sync::{Arc, Mutex};
+    use std::time::Duration;
+
+    use api_types::events::{Event, SessionRevokeReason};
+    use serde_json::json;
+
+    let app = app("", &[]).await;
+    let login = json!({ "username": "reseek", "password": "reseek" });
+    let signed = app
+      .send_from(OUTSIDE, request("POST", "/api/v0/session", Some(login)))
+      .await;
+    let cookie = crate::testing::set_cookie(&signed.headers, "reseek_session").unwrap();
+    let (id, _) = cookie
+      .trim_start_matches("reseek_session=")
+      .split_once('.')
+      .unwrap();
+    let revoked = Arc::new(Mutex::new(Vec::new()));
+    let kept = revoked.clone();
+    app.state.events.subscribe("test", None, move |record| {
+      if let Event::SessionRevoked(event) = &record.event {
+        kept.lock().unwrap().push(event.session_id.clone());
+      }
+      async { Ok(()) }
+    });
+    let mut ending = Box::pin(super::end_sessions(
+      &app.state,
+      vec![id.to_string()],
+      None,
+      SessionRevokeReason::Admin,
+    ));
+    let polled = futures_util::FutureExt::now_or_never(&mut ending);
+    assert!(polled.is_none(), "the revoke is under way: {polled:?}");
+    drop(ending);
+    for _ in 0..500 {
+      if !revoked.lock().unwrap().is_empty() {
+        break;
+      }
+      tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert_eq!(*revoked.lock().unwrap(), [id.to_string()]);
+  }
 
   #[tokio::test]
   async fn twenty_failed_credentials_from_an_address_are_answered_429() {
