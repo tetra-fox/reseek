@@ -2,10 +2,11 @@
 //! for a minute, and lookups for one user take turns so concurrent callers share one request.
 //! An address that refuses a connection or does not answer one in time is forgotten, so the next
 //! lookup asks the server again. The per-user turn locks that nobody holds are swept every five
-//! minutes.
+//! minutes. Whether a connection comes from where the server says a user is also asks the
+//! server again when the cached address is another, since the user may have moved.
 
 use std::collections::HashMap;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -46,6 +47,14 @@ impl Endpoints {
 
   fn peek(&self, username: &str) -> Option<SocketAddr> {
     lock(&self.cache).peek(&username.to_owned()).copied()
+  }
+
+  /// the turn lookups for `username` take
+  fn turn(&self, username: &str) -> Arc<tokio::sync::Mutex<()>> {
+    lock(&self.locks)
+      .entry(username.to_owned())
+      .or_default()
+      .clone()
   }
 
   /// follows a change of the cache bound
@@ -98,16 +107,19 @@ impl Client {
       tracing::debug!(username, %endpoint, "EndPoint cache HIT");
       return Ok(endpoint);
     }
-    let turn = lock(&endpoints.locks)
-      .entry(username.to_owned())
-      .or_default()
-      .clone();
+    let turn = endpoints.turn(username);
     let _turn = turn.lock().await;
     // a caller ahead of us may have just looked it up
     if let Some(endpoint) = endpoints.cached(username) {
       tracing::debug!(username, %endpoint, "EndPoint cache HIT");
       return Ok(endpoint);
     }
+    self.ask_user_endpoint(username).await
+  }
+
+  /// Asks the server where `username` listens and caches the answer; for a caller holding the
+  /// user's turn
+  async fn ask_user_endpoint(&self, username: &str) -> Result<SocketAddr, ClientError> {
     let lookup_failed = |error: ClientError| match error {
       ClientError::Timeout(_) | ClientError::Canceled => error,
       error => ClientError::UserEndPoint {
@@ -140,9 +152,37 @@ impl Client {
       source: None,
     })?;
     let endpoint = SocketAddr::from((address.ip, port));
-    lock(&endpoints.cache).insert(username.to_owned(), endpoint);
+    lock(&self.inner.endpoints.cache).insert(username.to_owned(), endpoint);
     tracing::debug!(username, %endpoint, "EndPoint cache MISS");
     Ok(endpoint)
+  }
+
+  /// Whether the server gives `ip` as `username`'s address. A cached address that matches
+  /// answers; otherwise the server is asked again, unless a caller ahead in the user's turn had
+  /// it answered meanwhile. A lookup that fails is a no.
+  pub(crate) async fn server_gives(&self, username: &str, ip: IpAddr) -> bool {
+    let ip = ip.to_canonical();
+    let matches = |endpoint: SocketAddr| endpoint.ip().to_canonical() == ip;
+    let endpoints = &self.inner.endpoints;
+    if endpoints.cached(username).is_some_and(matches) {
+      return true;
+    }
+    let asked = Instant::now();
+    let turn = endpoints.turn(username);
+    let _turn = turn.lock().await;
+    let answered = lock(&endpoints.cache)
+      .stored_since(&username.to_owned(), asked)
+      .copied();
+    if let Some(endpoint) = answered {
+      return matches(endpoint);
+    }
+    match self.ask_user_endpoint(username).await {
+      Ok(endpoint) => matches(endpoint),
+      Err(error) => {
+        tracing::debug!(username, %ip, %error, "address lookup for a connection naming the user failed");
+        false
+      }
+    }
   }
 
   /// The address cached for `username`, without asking the server and without counting as a
@@ -276,6 +316,30 @@ mod tests {
     .unwrap_err();
     refusing.await.unwrap();
     assert!(unreachable(&refused), "{refused:?}");
+  }
+
+  #[tokio::test]
+  async fn an_address_answered_while_waiting_for_the_turn_is_taken_without_asking_again() {
+    use std::future::Future;
+    use std::task::{Context, Waker};
+
+    // not logged in, so asking the server fails, which is a no
+    let client = Client::new(crate::options::ClientOptions {
+      enable_listener: false,
+      ..crate::options::ClientOptions::default()
+    })
+    .unwrap();
+    let ip = IpAddr::from([198, 51, 100, 7]);
+    let endpoints = &client.inner.endpoints;
+    let turn = endpoints.turn("alice");
+    let ahead = turn.lock().await;
+    let mut gives = Box::pin(client.server_gives("alice", ip));
+    let polled = gives.as_mut().poll(&mut Context::from_waker(Waker::noop()));
+    assert!(polled.is_pending(), "waits for the turn");
+    // the caller ahead has the server's answer
+    lock(&endpoints.cache).insert("alice".into(), SocketAddr::from((ip, 2234)));
+    drop(ahead);
+    assert!(gives.await);
   }
 
   #[test]

@@ -22,7 +22,8 @@ use soulseek_client::{Client, ClientError, ClientOptions, ClientState, Event, Wa
 use soulseek_proto::frame::{self, FrameKind};
 use soulseek_proto::init::PeerInit;
 use soulseek_proto::server::{
-  GlobalAdminMessage, LoginRequest, LoginResponse, PrivateMessageRequest,
+  GetPeerAddressRequest, GetPeerAddressResponse, GlobalAdminMessage, LoginRequest, LoginResponse,
+  PrivateMessageRequest,
 };
 use soulseek_proto::{
   InitMessage, Limits, PeerConnectionType, Secret, ServerCode, ServerRequest, ServerResponse,
@@ -297,6 +298,33 @@ impl Session {
     });
     peer.send(&introduce.encode()).await;
     peer
+  }
+
+  /// answers the client's next lookup of `username`'s address with `address`
+  pub async fn give_address(&mut self, username: &str, address: SocketAddr) {
+    self
+      .server
+      .request_matching(|request| match request {
+        ServerRequest::GetPeerAddress(GetPeerAddressRequest { username: asked })
+          if asked == username =>
+        {
+          Some(())
+        }
+        _ => None,
+      })
+      .await;
+    let SocketAddr::V4(address) = address else {
+      panic!("the server gives IPv4 addresses");
+    };
+    self
+      .server
+      .send(&ServerResponse::GetPeerAddress(GetPeerAddressResponse {
+        username: username.into(),
+        ip: *address.ip(),
+        port: u32::from(address.port()),
+        obfuscation: None,
+      }))
+      .await;
   }
 
   /// registers a wait under `key`, sends `response` and returns what the wait completed with

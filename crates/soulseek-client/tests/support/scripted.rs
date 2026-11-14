@@ -9,10 +9,7 @@ use soulseek_client::{
 };
 use soulseek_proto::init::{FileTransferInit, PeerInit};
 use soulseek_proto::peer::{QueueDownload, TransferRequest, TransferResponse};
-use soulseek_proto::server::{GetPeerAddressRequest, GetPeerAddressResponse};
-use soulseek_proto::{
-  InitMessage, PeerConnectionType, PeerMessage, ServerRequest, ServerResponse, TransferDirection,
-};
+use soulseek_proto::{InitMessage, PeerConnectionType, PeerMessage, TransferDirection};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
@@ -48,26 +45,7 @@ impl Scripted {
 
   /// answers the client's next lookup of bob's address with the scripted peer's
   pub async fn give_address(&mut self) {
-    self
-      .session
-      .server
-      .request_matching(|request| match request {
-        ServerRequest::GetPeerAddress(GetPeerAddressRequest { username }) if username == BOB => {
-          Some(())
-        }
-        _ => None,
-      })
-      .await;
-    self
-      .session
-      .server
-      .send(&ServerResponse::GetPeerAddress(GetPeerAddressResponse {
-        username: BOB.into(),
-        ip: std::net::Ipv4Addr::LOCALHOST,
-        port: self.bob.port(),
-        obfuscation: None,
-      }))
-      .await;
+    self.session.give_address(BOB, self.bob.address()).await;
   }
 
   /// gives the client bob's address and returns the message connection it then opens to bob

@@ -1,8 +1,8 @@
 //! Connections to other users. Message connections (`P`) are kept one per user: whoever asks
 //! for one shares the attempt already under way, a peer that connects to us replaces the one we
-//! had, and an entry is only ever removed by the attempt or connection it belongs to, so an old
-//! connection closing never takes a newer one with it. Transfer connections (`F`) are made per
-//! file and never kept.
+//! had unless that one is open and the server gives the user another address, and an entry is
+//! only ever removed by the attempt or connection it belongs to, so an old connection closing
+//! never takes a newer one with it. Transfer connections (`F`) are made per file and never kept.
 
 mod answer;
 mod dispatch;
@@ -83,7 +83,9 @@ impl Entry {
 pub(crate) struct PeerConnections {
   /// one entry per user
   cache: Mutex<HashMap<String, Entry>>,
-  /// connections that were replaced but stay open until they go idle, oldest first, by user
+  /// connections that are not their user's current one but stay open until they go idle,
+  /// oldest first, by user: replaced ones, and ones from an address the server does not give
+  /// for the user
   replaced: Mutex<HashMap<String, VecDeque<MessageConn>>>,
   next_entry: AtomicU64,
   /// cancels an inbound indirect attempt still connecting, so a direct connection from the same
@@ -125,15 +127,19 @@ impl PeerConnections {
   /// ours, with the sender that settles it
   fn new_entry(&self, request: Option<u32>) -> (Entry, watch::Sender<Outcome>) {
     let (settle, outcome) = watch::channel(None);
-    let id = self.next_entry.fetch_add(1, Ordering::Relaxed);
     (
       Entry {
-        id,
+        id: self.next_id(),
         request,
         outcome,
       },
       settle,
     )
+  }
+
+  /// an id no entry has had
+  fn next_id(&self) -> u64 {
+    self.next_entry.fetch_add(1, Ordering::Relaxed)
   }
 
   /// an entry already settled with `conn`

@@ -59,6 +59,13 @@ impl PeerSide {
     Self::new(TcpStream::connect(address).await.unwrap())
   }
 
+  /// connects to a client's listener from the loopback address `from`, such as 127.0.0.2
+  pub async fn connect_from(from: Ipv4Addr, address: SocketAddr) -> Self {
+    let socket = tokio::net::TcpSocket::new_v4().unwrap();
+    socket.bind(SocketAddr::from((from, 0))).unwrap();
+    Self::new(socket.connect(address).await.unwrap())
+  }
+
   /// reads what has arrived into the buffer; false once the client closed the connection
   async fn fill(&mut self) -> bool {
     let mut chunk = vec![0; 64 << 10];

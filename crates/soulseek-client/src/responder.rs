@@ -709,7 +709,7 @@ mod tests {
     // carol acts on the request late: her connection takes what was kept under it
     let (conn, mut carol) = crate::conn::tests::pair(ConnectionOptions::default()).await;
     client
-      .add_or_update_message_connection("carol", conn, Via::Indirect.kind())
+      .add_or_update_message_connection("carol", conn, Via::Indirect.kind(), true)
       .unwrap();
     client.try_respond_cached(request).await;
     // the answer that shared the attempt is kept only now
@@ -777,7 +777,7 @@ mod tests {
     assert_eq!(searcher.as_deref(), Some("carol"));
     let (conn, mut carol) = crate::conn::tests::pair(ConnectionOptions::default()).await;
     client
-      .add_or_update_message_connection("carol", conn, Via::Indirect.kind())
+      .add_or_update_message_connection("carol", conn, Via::Indirect.kind(), true)
       .unwrap();
     client.try_respond_cached(request).await;
     let unreached = ClientError::Timeout("carol".into());

@@ -57,6 +57,17 @@ async fn bob(session: &Session) -> PeerSide {
   bob
 }
 
+/// bob connecting again from where he is while the client holds his first connection; the
+/// client asks the server where bob is, and the server says there
+async fn bob_again(session: &mut Session) -> PeerSide {
+  let mut bob = session.peer("bob").await;
+  session
+    .give_address("bob", SocketAddr::from((Ipv4Addr::LOCALHOST, 2234)))
+    .await;
+  answered(&mut bob).await;
+  bob
+}
+
 #[tokio::test]
 async fn user_info_says_no_one_may_send_files_only_when_offers_are_refused() {
   for (takes_offers, permitted) in [(false, Some(0)), (true, None)] {
@@ -391,9 +402,9 @@ async fn a_frame_longer_than_its_message_is_skipped_unread() {
 #[tokio::test]
 async fn a_replaced_connection_closing_never_takes_its_replacement_with_it() {
   let logs = Logs::capture();
-  let session = session().await;
+  let mut session = session().await;
   let mut first = bob(&session).await;
-  let mut second = bob(&session).await;
+  let mut second = bob_again(&mut session).await;
   // the replaced connection is still read and answered on until bob closes it
   first.send(&PeerMessage::InfoRequest.encode()).await;
   assert!(matches!(
@@ -456,53 +467,107 @@ async fn a_wait_fails_when_its_connection_closes_though_another_request_finds_it
   );
 }
 
-/// A connection is whoever its first message says it is: one that names a user we already hold
-/// a connection to takes that user's place, whatever address it comes from. Whether the address
-/// should be checked is not settled; this holds today's behavior still until it is.
-#[tokio::test]
-async fn a_connection_naming_a_user_we_are_connected_to_replaces_it_from_any_address() {
-  let session = session().await;
-  let known = FakePeer::start().await;
-  let cancel = CancellationToken::new();
-  let dialed = session
-    .client
-    .get_or_add_message_connection("bob", Some(known.address()), &cancel);
-  let (dialed, _bob) = tokio::join!(dialed, known.accept());
-  assert_eq!(dialed.unwrap().handle().remote(), known.address());
-  // someone at another address says it is bob
-  let socket = tokio::net::TcpSocket::new_v4().unwrap();
-  socket
-    .bind(SocketAddr::from((Ipv4Addr::new(127, 0, 0, 2), 0)))
-    .unwrap();
-  let mut other = PeerSide::new(socket.connect(session.listen_address()).await.unwrap());
+/// an address on loopback other than the one the scripted peers use
+const ELSEWHERE: Ipv4Addr = Ipv4Addr::new(127, 0, 0, 2);
+
+/// bob's message connection, which the client dialed at `known` after asking the server
+async fn dialed_bob(session: &mut Session, known: &FakePeer) -> PeerSide {
+  let client = session.client.clone();
+  let dialing = tokio::spawn(async move {
+    client
+      .get_or_add_message_connection("bob", None, &CancellationToken::new())
+      .await
+  });
+  session.give_address("bob", known.address()).await;
+  let side = known.accept().await;
+  let dialed = dialing.await.unwrap().unwrap();
+  assert_eq!(dialed.handle().remote(), known.address());
+  side
+}
+
+/// a scripted peer at `from` that connected to the client for messages as `username`
+async fn introduced_from(session: &Session, from: Ipv4Addr, username: &str) -> PeerSide {
+  let mut side = PeerSide::connect_from(from, session.listen_address()).await;
   let introduce = InitMessage::PeerInit(PeerInit {
-    username: "bob".into(),
+    username: username.into(),
     connection_type: PeerConnectionType::Peer,
     token: 0,
   });
-  other.send(&introduce.encode()).await;
-  other.send(&PeerMessage::InfoRequest.encode()).await;
+  side.send(&introduce.encode()).await;
+  side
+}
+
+/// `side` is read and answered on
+async fn answered(side: &mut PeerSide) {
+  side.send(&PeerMessage::InfoRequest.encode()).await;
   assert!(matches!(
-    other.read_peer().await,
+    side.read_peer().await,
     PeerMessage::InfoResponse(_)
   ));
-  let from = other.stream.local_addr().unwrap();
-  assert_eq!(from.ip(), Ipv4Addr::new(127, 0, 0, 2));
-  assert_eq!(session.client.message_connection_address("bob"), Some(from));
-  // what we write to bob from now on goes to the newcomer
+}
+
+#[tokio::test]
+async fn a_connection_naming_a_user_from_an_address_the_server_does_not_give_is_kept_beside() {
+  let logs = Logs::capture();
+  let mut session = session().await;
+  let known = FakePeer::start().await;
+  let mut bob = dialed_bob(&mut session, &known).await;
+  assert!(matches!(bob.read_init().await, InitMessage::PeerInit(_)));
+  let mut other = introduced_from(&session, ELSEWHERE, "bob").await;
+  // the address cached for bob is not the newcomer's, so the server is asked again, and still
+  // gives the one we dialed
+  session.give_address("bob", known.address()).await;
+  answered(&mut other).await;
+  logs
+    .wait_for(&["address the server does not give", "bob", "127.0.0.2"])
+    .await;
+  assert_eq!(
+    session.client.message_connection_address("bob"),
+    Some(known.address())
+  );
+  // what we write to bob still goes to the connection we dialed
   let current = session
     .client
-    .get_or_add_message_connection("bob", None, &cancel)
+    .get_or_add_message_connection("bob", None, &CancellationToken::new())
     .await
     .unwrap();
-  assert_eq!(current.handle().remote(), from);
+  current
+    .write(PeerMessage::InfoRequest.encode())
+    .await
+    .unwrap();
+  assert!(matches!(bob.read_peer().await, PeerMessage::InfoRequest));
+}
+
+#[tokio::test]
+async fn a_connection_from_the_address_the_server_now_gives_replaces_the_open_one() {
+  let mut session = session().await;
+  let known = FakePeer::start().await;
+  let _bob = dialed_bob(&mut session, &known).await;
+  let mut moved = introduced_from(&session, ELSEWHERE, "bob").await;
+  // bob's address changed since we looked it up, and the server says so
+  session
+    .give_address("bob", SocketAddr::from((ELSEWHERE, known.address().port())))
+    .await;
+  answered(&mut moved).await;
+  let from = moved.stream.local_addr().unwrap();
+  assert_eq!(session.client.message_connection_address("bob"), Some(from));
+}
+
+#[tokio::test]
+async fn a_user_on_a_new_address_with_nothing_open_is_served_without_asking() {
+  let session = session().await;
+  let mut bob = introduced_from(&session, ELSEWHERE, "bob").await;
+  answered(&mut bob).await;
+  let from = bob.stream.local_addr().unwrap();
+  assert_eq!(session.client.message_connection_address("bob"), Some(from));
 }
 
 #[tokio::test]
 async fn a_peer_reconnecting_over_and_over_keeps_two_replaced_connections() {
-  let session = session().await;
-  let mut sides = Vec::new();
-  for _ in 0..5 {
+  let mut session = session().await;
+  let mut sides = vec![bob(&session).await, bob_again(&mut session).await];
+  // the server's answer is cached, so the rest are not asked about
+  for _ in 0..3 {
     sides.push(bob(&session).await);
   }
   // the oldest ones are closed as newer ones replace them

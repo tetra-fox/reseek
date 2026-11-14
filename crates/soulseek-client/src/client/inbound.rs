@@ -19,7 +19,13 @@ impl Client {
     self.inner.inbound.send_modify(|counted| *counted += 1);
     let routed = match inbound {
       InboundConnection::Peer { username, conn } => {
-        self.add_or_update_message_connection(&username, conn, ConnKind::INBOUND | ConnKind::DIRECT)
+        let vouched = self.vouched(&username, &conn).await;
+        self.add_or_update_message_connection(
+          &username,
+          conn,
+          ConnKind::INBOUND | ConnKind::DIRECT,
+          vouched,
+        )
       }
       InboundConnection::Transfer {
         username,
@@ -41,10 +47,25 @@ impl Client {
     }
   }
 
+  /// Whether `conn`, introducing itself as `username`, may replace the open connection we have
+  /// with that user: only when the server gives its address for the user. With nothing open
+  /// the server is not asked, and the connection is taken whatever its address.
+  async fn vouched(&self, username: &str, conn: &Conn) -> bool {
+    let open = self
+      .peers()
+      .cached(username)
+      .is_some_and(|open| open.handle().is_open());
+    open
+      && self
+        .server_gives(username, conn.handle().remote().ip())
+        .await
+  }
+
   /// A peer connected because the server relayed one of our requests: a solicitation still
   /// waiting takes it, or it is the searcher answers ride on the request for, who gets those
   /// kept now and the rest as they come to be kept. One that comes after its solicitor stopped
-  /// waiting is taken as [`Client::late_answer`] says. Anything else is closed.
+  /// waiting is taken as [`Client::late_answer`] says. Anything else is closed. The ticket it
+  /// answers with went only to the user it was relayed to, so it vouches for the connection.
   async fn pierced(&self, token: u32, conn: Conn) -> Result<(), ClientError> {
     if let Some((solicitation, answer)) = self.peers().solicitations.take(token) {
       let conn = match answer {
@@ -58,7 +79,7 @@ impl Client {
       return self.late_answer(token, &solicitation, conn).await;
     }
     if let Some(username) = self.responder().searcher_for(token) {
-      self.add_or_update_message_connection(&username, conn, Via::Indirect.kind())?;
+      self.add_or_update_message_connection(&username, conn, Via::Indirect.kind(), true)?;
       self.try_respond_cached(token).await;
       return Ok(());
     }
@@ -95,7 +116,7 @@ impl Client {
           %remote,
           "late answer to a message connection request taken"
         );
-        self.add_or_update_message_connection(username, conn, Via::Indirect.kind())?;
+        self.add_or_update_message_connection(username, conn, Via::Indirect.kind(), true)?;
         // a search answer for the user kept under this token, its delivery having failed after
         // dialing won, goes out now
         self.try_respond_cached(token).await;

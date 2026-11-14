@@ -59,6 +59,13 @@ impl<K: Eq + Hash + Clone, V> BoundedCache<K, V> {
     self.entries.get(key).map(|entry| &entry.value)
   }
 
+  /// the value under `key` when it was stored at `since` or later and has not expired, without
+  /// counting as a use
+  pub(crate) fn stored_since(&self, key: &K, since: Instant) -> Option<&V> {
+    let entry = self.entries.get(key)?;
+    (entry.stored >= since && !self.expired(key, Instant::now())).then_some(&entry.value)
+  }
+
   /// stores `value` under `key`, replacing what was there and making room if the map is full
   pub(crate) fn insert(&mut self, key: K, value: V) {
     let now = Instant::now();

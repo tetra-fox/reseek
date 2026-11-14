@@ -1,10 +1,12 @@
 //! Message connections to other users: the one we open, which dials the user and asks the server
 //! to have the user dial us at the same time; one a user opens to us, introducing itself or
 //! answering our request late, which replaces whatever we had; and one we open because a user
-//! asked the server to have us connect. A replaced connection is not closed: what is queued on it
-//! is still written and what the user sends on it is still read and answered, until it goes idle
-//! or the user closes it. Only the last two replaced per user are kept; an older one closes once
-//! its queued writes are out. One address opens at most a few at once, and more are refused.
+//! asked the server to have us connect. A connection introducing itself replaces an open one only
+//! from the address the server gives for the user; from elsewhere it is served beside it. A
+//! replaced connection is not closed: what is queued on it is still written and what the user
+//! sends on it is still read and answered, until it goes idle or the user closes it. Only the
+//! last two kept beside the current one per user stay; an older one closes once its queued
+//! writes are out. One address opens at most a few at once, and more are refused.
 
 use std::net::SocketAddr;
 
@@ -209,13 +211,16 @@ impl Client {
   /// A peer connected to us for messages, introducing itself or answering a connection
   /// request of ours. Its connection replaces whatever we had for that user, since the peer
   /// considers this one current, and takes our writes from now on; the one it replaces stays
-  /// open until it goes idle. `kind` says how it was made. One the remote opened is refused
+  /// open until it goes idle. An open connection is replaced only by one `vouched` for, by a
+  /// ticket of ours or by the server giving its address for the user; one that is not stays
+  /// open beside it the same way. `kind` says how it was made. One the remote opened is refused
   /// when its address has as many open already, so one host cannot fill the cache.
   pub(crate) fn add_or_update_message_connection(
     &self,
     username: &str,
     provisional: Conn,
     kind: ConnKind,
+    vouched: bool,
   ) -> Result<(), ClientError> {
     self.check_not_disposed()?;
     let remote = provisional.handle().remote();
@@ -257,6 +262,23 @@ impl Client {
         conn
           .handle()
           .disconnect("Too many message connections from this address", None);
+        return Ok(());
+      }
+      let open = cache
+        .get(username)
+        .and_then(Entry::connection)
+        .filter(|open| open.handle().is_open());
+      if !vouched && let Some(open) = open {
+        drop(cache);
+        tracing::debug!(
+          username,
+          %remote,
+          open = %open.handle().remote(),
+          "message connection from an address the server does not give for the user, kept beside the open one"
+        );
+        self.watch_message_connection(username, peers.next_id(), &conn);
+        peers.keep_replaced(username, conn.clone());
+        self.start_peer_reading(&conn);
         return Ok(());
       }
       if !cache.contains_key(username) {
