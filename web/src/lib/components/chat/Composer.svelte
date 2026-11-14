@@ -30,6 +30,7 @@
   import { chatHref, roomHref, userHref } from "#lib/nav.js";
   import { call } from "#lib/request.js";
   import { openSearch } from "#lib/search/searches.svelte.js";
+  import { fold } from "#lib/text.js";
   import { COMPOSER } from "#lib/ui/bindings.js";
   import { isPressed, keyStep } from "#lib/ui/keys.js";
   import { links } from "#lib/users/actions.js";
@@ -157,7 +158,8 @@
   export const quote = (message: Message) => {
     // an action is quoted as what was done, without the `/me` it was sent with
     const line = (actionOf(message.text) ?? message.text).replace(/\s+/g, " ").trim();
-    const short = line.length > QUOTED ? `${line.slice(0, QUOTED)}…` : line;
+    const folded = fold(line, QUOTED);
+    const short = folded === null ? line : `${folded}…`;
     const head = `[${message.author}] ${short} --> `;
     text = `${head}${text}`;
     caret = head.length;

@@ -128,4 +128,12 @@ describe("the composer", () => {
     flushSync();
     expect(box.value).toBe("[carol] waves at everyone --> ");
   });
+
+  it("cuts a long quote between letters, never inside an emoji", async () => {
+    const { box } = open();
+    const quote = (component as unknown as { quote: (m: unknown) => void }).quote;
+    quote({ author: "carol", text: `${"x".repeat(99)}🔥🔥 and more` });
+    flushSync();
+    expect(box.value).toBe(`[carol] ${"x".repeat(99)}… --> `);
+  });
 });

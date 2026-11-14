@@ -1,5 +1,6 @@
 import type { Schemas } from "#lib/api/client.js";
 import { formatCount } from "#lib/format.js";
+import { fold } from "#lib/text.js";
 
 export type Transfer = Schemas["Transfer"];
 export type TransferState = Schemas["TransferStates"];
@@ -146,7 +147,10 @@ export type Tone = "accent" | "success" | "info" | "neutral" | "warning" | "dang
  */
 const withReason = (word: string, why: string | null) => {
   if (!why) return word;
-  const cut = (text: string) => (text.length > 40 ? `${text.slice(0, 40)}...` : text);
+  const cut = (text: string) => {
+    const folded = fold(text, 40);
+    return folded === null ? text : `${folded}...`;
+  };
   if (why.toLowerCase().startsWith(word.toLowerCase())) return cut(why);
   const said = new RegExp(`^[^:]*\\b${word}: *`, "i");
   return `${word}: ${cut(why.replace(said, ""))}`;

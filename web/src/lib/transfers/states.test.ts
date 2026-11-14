@@ -161,6 +161,13 @@ describe("state chips", () => {
     expect(stateChip(transfer({ state: "InProgress", percentComplete: 99.6 })).text).toBe("99%");
   });
 
+  it("cut a long reason between letters, never inside an emoji", () => {
+    const chip = stateChip(
+      transfer({ state: "Completed, Errored", exception: `${"x".repeat(39)}🔥🔥 denied` })
+    );
+    expect(chip.text).toBe(`Failed: ${"x".repeat(39)}...`);
+  });
+
   it("say the outcome once when the reason names it too", () => {
     const failed = (state: TransferState, exception: string) =>
       stateChip(transfer({ state, exception })).text;
