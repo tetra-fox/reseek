@@ -1,10 +1,10 @@
 import { mount, unmount } from "svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { layout } from "#lib/chat/messages/messages.js";
+import { fromPrivate, layout } from "#lib/chat/messages/messages.js";
 import { MessagePane, PAGE } from "#lib/chat/pane.svelte.js";
 import { dismiss, toasts } from "#lib/feedback/toast.svelte.js";
-import { interaction } from "#lib/lists/interaction.svelte.js";
+import { Freeze, freezesWhileUsed, interaction } from "#lib/lists/interaction.svelte.js";
 import { ListWindow } from "#lib/lists/virtual.svelte.js";
 import { flush } from "#lib/testing/flush.js";
 import { press } from "#lib/testing/keys.js";
@@ -220,5 +220,35 @@ describe("the message list", () => {
     await flush();
     expect(document.querySelector("[data-message]")).toBeNull();
     expect(document.activeElement).toBe(box);
+  });
+
+  it("follows a new message unless text in the messages is selected", async () => {
+    history(3);
+    const { pane } = await open();
+    const trim = vi.spyOn(pane, "trim");
+    const arrive = async (localId: number) => {
+      pane.messages.upsert(fromPrivate(stored(localId), "me"));
+      await flush();
+    };
+    const select = (element: Element) => {
+      document.getSelection()!.selectAllChildren(element);
+      document.dispatchEvent(new Event("selectionchange"));
+    };
+
+    // a selection in another list leaves the messages to follow
+    const other = document.body.appendChild(document.createElement("div"));
+    other.textContent = "elsewhere";
+    const detach = freezesWhileUsed(new Freeze())(other);
+    select(other);
+    await arrive(4);
+    expect(trim).toHaveBeenCalledOnce();
+
+    // one in a message holds the view and the oldest messages where they are
+    select(document.querySelector('[data-message="1"] p')!);
+    await arrive(5);
+    expect(trim).toHaveBeenCalledOnce();
+    expect(document.querySelector('[data-message="5"]')).not.toBeNull();
+    detach();
+    document.getSelection()!.removeAllRanges();
   });
 });

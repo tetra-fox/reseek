@@ -59,4 +59,26 @@ describe("a room's users", () => {
     press(grid, "Enter");
     expect(goto).toHaveBeenCalledWith("#/users/zed");
   });
+
+  it("holds its order while text in it is selected", () => {
+    fakeNetwork(() => undefined);
+    const members = new RoomMembers("indie");
+    for (const u of [member("amy", "Online"), member("zed", "Online")]) members.users.upsert(u);
+    component = mount(RoomUsers, { target: document.body, props: { members } });
+    flushSync();
+    const names = () =>
+      [...document.querySelectorAll("[data-line]:not([data-line^='h:'])")].map((l) =>
+        l.getAttribute("data-line")
+      );
+    const selection = document.getSelection()!;
+    selection.selectAllChildren(document.querySelector("[data-line='amy']")!);
+    document.dispatchEvent(new Event("selectionchange"));
+    members.users.upsert(member("amy", "Away"));
+    flushSync();
+    expect(names()).toEqual(["amy", "zed"]);
+    selection.removeAllRanges();
+    document.dispatchEvent(new Event("selectionchange"));
+    flushSync();
+    expect(names()).toEqual(["zed", "amy"]);
+  });
 });

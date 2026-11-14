@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { chat } from "#lib/chat/chat.svelte.js";
 import { pins } from "#lib/chat/pins.svelte.js";
-import { interaction } from "#lib/lists/interaction.svelte.js";
+import { Freeze, freezesWhileUsed, interaction } from "#lib/lists/interaction.svelte.js";
 import { session } from "#lib/session.svelte.js";
 import { conversation, joinedRoom } from "#lib/testing/fixtures.js";
 import { active, press, ticked } from "#lib/testing/keys.js";
@@ -135,6 +135,49 @@ describe("the chat list", () => {
     release();
     flushSync();
     expect(keys()).toEqual(["user:bob", "user:alice"]);
+  });
+
+  it("holds its order under a selection in it, and not under one in another list", () => {
+    start();
+    const keys = () =>
+      [...document.querySelectorAll("[data-line^='user:']")].map((l) =>
+        l.getAttribute("data-line")
+      );
+    const newest = (username: string, localId: number) => {
+      chat.conversations.get(username)!.lastMessage = {
+        localId,
+        id: localId,
+        timestamp: `2026-10-26T12:0${localId}:00Z`,
+        username,
+        direction: "In",
+        message: "hey",
+        isAcknowledged: false,
+        wasReplayed: false,
+        autoReply: false
+      };
+      flushSync();
+    };
+    const select = (element: Element | null) => {
+      if (element) document.getSelection()!.selectAllChildren(element);
+      else document.getSelection()!.removeAllRanges();
+      document.dispatchEvent(new Event("selectionchange"));
+      flushSync();
+    };
+
+    select(document.querySelector("[data-line='user:alice']"));
+    newest("bob", 1);
+    expect(keys()).toEqual(["user:alice", "user:bob"]);
+    select(null);
+    expect(keys()).toEqual(["user:bob", "user:alice"]);
+
+    const other = document.body.appendChild(document.createElement("div"));
+    other.textContent = "elsewhere";
+    const detach = freezesWhileUsed(new Freeze())(other);
+    select(other);
+    newest("alice", 2);
+    expect(keys()).toEqual(["user:alice", "user:bob"]);
+    detach();
+    select(null);
   });
 
   it("holds each pinned chat once above the sections, in the user's order, while joined", () => {
