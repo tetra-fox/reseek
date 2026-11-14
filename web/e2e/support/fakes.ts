@@ -8,16 +8,22 @@ import { layout, spectra, spectrogram, waveform } from "./pictures";
 const at = (minute: number, second = 0) =>
   new Date(Date.UTC(2026, 9, 27, 18, minute, second)).toISOString();
 
-/** One event stream frame as the daemon writes it */
-export const frame = (id: number, event: string, data: unknown) =>
-  `id: ${id}\nevent: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+/** The run of the daemon the fake frames come from, 16 hex digits as the daemon's are */
+const EPOCH = "00000000000000e2";
+
+/**
+ * One event stream frame as the daemon writes it, the `seq`th of its run. A stream's hello and
+ * snapshots take the number of the last frame published before it opened
+ */
+export const frame = (seq: number, event: string, data: unknown) =>
+  `id: ${EPOCH}-${seq}\nevent: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 
 /** The first frame of a live stream over `topics`, for the built-in administrator */
 export const helloFrame = (topics: string[]) =>
   frame(1, "hello", {
     principal: { name: "reseek", role: "Administrator" },
     resumed: false,
-    epoch: "e2e",
+    epoch: EPOCH,
     serverTime: at(30),
     topics,
     version: {
@@ -59,8 +65,8 @@ export const fakeConnected = async (page: Page) => {
       headers: { "content-type": "text/event-stream" },
       body:
         helloFrame(topics) +
-        frame(2, "application.state", connected) +
-        frame(2, "application.options", options)
+        frame(1, "application.state", connected) +
+        frame(1, "application.options", options)
     });
   });
 };
