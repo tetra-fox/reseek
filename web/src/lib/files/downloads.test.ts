@@ -20,45 +20,48 @@ const plan = (files: string[], topOf: (path: string) => string, separator: "\\" 
     files.map((f) => file(f)),
     topOf,
     separator
-  ).map((g): [string | null, string[]] => [g.destination, g.files.map((f) => f.filename)]);
+  ).map((g): [string | null, string[]] => [g.folder, g.files.map((f) => f.filename)]);
 
 describe("downloading a selection", () => {
-  it("splits it from the deepest folder holding it: its own files, then one group per folder below", () => {
-    const groups = plan(
+  it("sends it in the deepest folder holding it, its own files first, each folder's together", () => {
+    expect(
+      plan(
+        [
+          "C:\\Music\\Album\\Disc 1\\Extras\\x.mp3",
+          "C:\\Music\\Album\\Disc 1\\01.mp3",
+          "C:\\Music\\Album\\cover.jpg",
+          "C:\\Music\\Album\\Disc 1\\Extras\\y.mp3"
+        ],
+        () => "C:"
+      )
+    ).toEqual([
       [
-        "C:\\Music\\Album\\Disc 1\\Extras\\x.mp3",
-        "C:\\Music\\Album\\cover.jpg",
-        "C:\\Music\\Album\\Disc 1\\01.mp3",
-        "C:\\Music\\Album\\Disc 2\\01.mp3"
-      ],
-      () => "C:"
-    );
-    expect(groups.map(([destination, files]) => [destination, files.length])).toEqual([
-      ["Album", 1],
-      ["Album/Disc 1/Extras", 1],
-      ["Album/Disc 1", 1],
-      ["Album/Disc 2", 1]
+        "C:\\Music\\Album",
+        [
+          "C:\\Music\\Album\\cover.jpg",
+          "C:\\Music\\Album\\Disc 1\\Extras\\x.mp3",
+          "C:\\Music\\Album\\Disc 1\\Extras\\y.mp3",
+          "C:\\Music\\Album\\Disc 1\\01.mp3"
+        ]
+      ]
     ]);
-    // the files of one folder, with nothing below it, go where the pattern puts them
     expect(plan(["top/sub/a", "top/sub/b"], () => "top", "/")).toEqual([
-      [null, ["top/sub/a", "top/sub/b"]]
+      ["top/sub", ["top/sub/a", "top/sub/b"]]
     ]);
   });
 
-  it("names every top's folder once anything in the selection is nested, so no pattern splits it", () => {
+  it("sends each top folder's files as a group of their own", () => {
     const top = (path: string) => path.split("\\").slice(0, 2).join("\\");
     expect(
       plan(["@@a\\Music\\A\\1.flac", "@@a\\Video\\x.mkv", "@@a\\Music\\A\\CD2\\2.flac"], top)
     ).toEqual([
-      ["A", ["@@a\\Music\\A\\1.flac"]],
-      ["A/CD2", ["@@a\\Music\\A\\CD2\\2.flac"]],
-      ["Video", ["@@a\\Video\\x.mkv"]]
+      ["@@a\\Music\\A", ["@@a\\Music\\A\\1.flac", "@@a\\Music\\A\\CD2\\2.flac"]],
+      ["@@a\\Video", ["@@a\\Video\\x.mkv"]]
     ]);
-    // with nothing nested anywhere, every top's files go where the pattern puts them
-    expect(plan(["@@a\\Music\\A\\1.flac", "@@a\\Video\\x.mkv"], top)).toEqual([
-      [null, ["@@a\\Music\\A\\1.flac"]],
-      [null, ["@@a\\Video\\x.mkv"]]
-    ]);
+  });
+
+  it("sends files that are in no folder in none", () => {
+    expect(plan(["a.flac", "b.flac"], () => "")).toEqual([[null, ["a.flac", "b.flac"]]]);
   });
 });
 
@@ -68,49 +71,26 @@ describe("downloading a folder", () => {
       name,
       files.map((f) => file(f)),
       "\\"
-    ).map((g): [string | null, string[]] => [g.destination, g.files.map((f) => f.filename)]);
+    ).map((g): [string | null, string[]] => [g.folder, g.files.map((f) => f.filename)]);
 
-  it("keeps each subfolder under the folder's name, so two discs' files never meet", () => {
-    expect(folder("@@a\\Album", ["@@a\\Album\\CD1\\01.flac", "@@a\\Album\\CD2\\01.flac"])).toEqual([
-      ["Album/CD1", ["@@a\\Album\\CD1\\01.flac"]],
-      ["Album/CD2", ["@@a\\Album\\CD2\\01.flac"]]
-    ]);
-    // a folder holding one subfolder still names itself, unlike a selection of that subfolder
-    expect(folder("@@a\\Album", ["@@a\\Album\\cover.jpg", "@@a\\Album\\CD1\\01.flac"])).toEqual([
-      ["Album", ["@@a\\Album\\cover.jpg"]],
-      ["Album/CD1", ["@@a\\Album\\CD1\\01.flac"]]
-    ]);
-  });
-
-  it("puts its own files under its name beside its subfolders", () => {
-    expect(
-      folder("@@a\\Artist", [
-        "@@a\\Artist\\notes.txt",
-        "@@a\\Artist\\Album\\cover.jpg",
-        "@@a\\Artist\\Album\\CD1\\01.flac"
-      ])
-    ).toEqual([
-      ["Artist", ["@@a\\Artist\\notes.txt"]],
-      ["Artist/Album", ["@@a\\Artist\\Album\\cover.jpg"]],
-      ["Artist/Album/CD1", ["@@a\\Artist\\Album\\CD1\\01.flac"]]
-    ]);
-  });
-
-  it("names itself when nothing is below it, so a folder download never follows the pattern", () => {
-    expect(folder("@@a\\Album", ["@@a\\Album\\01.flac", "@@a\\Album\\02.flac"])).toEqual([
-      ["Album", ["@@a\\Album\\01.flac", "@@a\\Album\\02.flac"]]
-    ]);
-  });
-
-  it("keeps folders below its subfolders too", () => {
+  it("sends every file in the folder, its own files first, each folder's below together", () => {
     expect(
       folder("@@a\\Artist", [
         "@@a\\Artist\\Album\\CD1\\01.flac",
-        "@@a\\Artist\\Album\\CD2\\01.flac"
+        "@@a\\Artist\\Album\\cover.jpg",
+        "@@a\\Artist\\notes.txt",
+        "@@a\\Artist\\Album\\CD1\\02.flac"
       ])
     ).toEqual([
-      ["Artist/Album/CD1", ["@@a\\Artist\\Album\\CD1\\01.flac"]],
-      ["Artist/Album/CD2", ["@@a\\Artist\\Album\\CD2\\01.flac"]]
+      [
+        "@@a\\Artist",
+        [
+          "@@a\\Artist\\notes.txt",
+          "@@a\\Artist\\Album\\CD1\\01.flac",
+          "@@a\\Artist\\Album\\CD1\\02.flac",
+          "@@a\\Artist\\Album\\cover.jpg"
+        ]
+      ]
     ]);
   });
 });

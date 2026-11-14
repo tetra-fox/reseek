@@ -25,7 +25,14 @@
   import { FILE_ACTIONS as A } from "#lib/files/actions.js";
   import type { AllFiles } from "#lib/files/allfiles.svelte.js";
   import { fileColumns, fileTemplate, fileWidth } from "#lib/files/columns.js";
-  import { asItem, type Enqueued, enqueueJob, followDownloads } from "#lib/files/downloads.js";
+  import {
+    asItem,
+    downloadFolderPlan,
+    type Enqueued,
+    enqueueJob,
+    enqueuePlan,
+    followDownloads
+  } from "#lib/files/downloads.js";
   import { formatAttributes, getFileName, plural } from "#lib/format.js";
   import { inspector } from "#lib/inspector/inspector.svelte.js";
   import { offerFields, type Picked, userFacts } from "#lib/search/facts.js";
@@ -35,6 +42,7 @@
     type FolderNode,
     itemsUnder,
     scopedKey,
+    separatorOf,
     tickedCounts,
     treeAt,
     treeLines
@@ -172,9 +180,14 @@
       }))
     );
   };
-  const downloadNow = async (files: Item[]) => {
-    const outcome = await download(files);
+  const tell = (outcome: Enqueued) =>
     toast(outcome.text, outcome.kind === "done" ? "info" : "error");
+  const downloadNow = async (files: Item[]) => tell(await download(files));
+  /** Every file under a folder as one job that keeps the folders below it, the folder's own too */
+  const downloadFolder = async (node: FolderNode<Item>) => {
+    const files = itemsUnder(node).filter((f) => !f.locked);
+    const plan = downloadFolderPlan(node.path, files, separatorOf(node.path));
+    tell(await enqueuePlan(ownerOf(node), plan, searchId));
   };
 
   const details = (file: Item) => {
@@ -198,7 +211,7 @@
   <RemoteFolderItems
     folder={node.path}
     username={owner}
-    ondownload={write && node.unlocked ? () => void downloadNow(itemsUnder(node)) : undefined}
+    ondownload={write && node.unlocked ? () => void downloadFolder(node) : undefined}
     onallfiles={() => void allFiles.show(owner, node.path)} />
 {/snippet}
 
@@ -322,7 +335,7 @@
         open={expansion.isOpen(node.key)}
         depth={depth - 1}
         tick={tickState(node, ticked.get(node.key) ?? 0)}
-        ondownload={write && node.unlocked ? () => void downloadNow(itemsUnder(node)) : undefined}>
+        ondownload={write && node.unlocked ? () => void downloadFolder(node) : undefined}>
         {#snippet actions()}
           <Tooltip text={A.allFiles.label}>
             {#snippet child({ props })}

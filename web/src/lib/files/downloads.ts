@@ -20,8 +20,11 @@ type Request = {
   files: EnqueueItem[];
   /** the search the files were found by */
   searchId?: string;
-  /** a relative folder under the downloads directory that every file goes to */
-  destination?: string;
+  /**
+   * the remote folder the files were picked in, which the daemon keeps their folders below,
+   * wherever the download pattern puts the folder
+   */
+  folder?: string;
 };
 
 /** How long a file asked for stays marked as starting while its download hasn't shown yet */
@@ -62,11 +65,11 @@ export const enqueueJob = async (requests: Request[]): Promise<Enqueued> => {
   const outcome = await call(() =>
     api.POST("/api/v0/transfers/downloads/jobs", {
       body: {
-        groups: requests.map(({ username, files, searchId, destination }) => ({
+        groups: requests.map(({ username, files, searchId, folder }) => ({
           username,
           files,
           searchId: searchId ?? null,
-          destination: destination || null
+          folder: folder || null
         }))
       }
     })
@@ -118,65 +121,50 @@ export const asItem = (file: Schemas["File"], filename = file.filename): Enqueue
 
 export type DownloadGroup = {
   files: Schemas["File"][];
-  /** where the files go under the downloads directory, null for where the pattern puts them */
-  destination: string | null;
+  /** the remote folder the files were picked in, null when they are in none */
+  folder: string | null;
 };
 
 /**
- * Files under the folder `name` by the path of their folder below it, `""` for those directly
- * in it, which come first
+ * Files under the folder `name` in the order they download: those directly in it first, then
+ * each folder's below it together
  */
-const byFolder = (
+const inOrder = (
   name: string,
   files: Schemas["File"][],
   separator: Separator
-): [string, Schemas["File"][]][] => {
+): Schemas["File"][] => {
   const prefix = name + separator;
   const groups = new Map<string, Schemas["File"][]>();
   for (const file of files) {
     const relative = file.filename.startsWith(prefix)
       ? file.filename.slice(prefix.length)
       : file.filename;
-    const group = relative.split(separator).filter(Boolean).slice(0, -1).join("/");
+    const group = relative.split(separator).filter(Boolean).slice(0, -1).join(separator);
     const grouped = groups.get(group);
     if (grouped) grouped.push(file);
     else groups.set(group, [file]);
   }
-  return [...groups.entries()].toSorted(([a], [b]) => (a === "" ? -1 : b === "" ? 1 : 0));
-};
-
-/** Groups of files under the folder `name`, each sent to its folder's path from `name`'s parent */
-const named = (
-  name: string,
-  groups: [string, Schemas["File"][]][],
-  separator: Separator
-): DownloadGroup[] => {
-  const label = name.split(separator).filter(Boolean).pop() ?? "";
-  return groups.map(([group, files]) => ({
-    files,
-    destination: [label, group].filter(Boolean).join("/") || null
-  }));
+  return [...groups.entries()]
+    .toSorted(([a], [b]) => (a === "" ? -1 : b === "" ? 1 : 0))
+    .flatMap(([, grouped]) => grouped);
 };
 
 /**
- * Files under the folder `name` split for downloading, each folder's to its path from `name`'s
- * parent with `/` between: those directly in `Music\Album` to `Album`, those in
- * `Music\Album\Disc 1\Extras` to `Album/Disc 1/Extras`. Every destination is written, so a
- * folder lands the same whatever the download pattern, which the daemon does not apply to a
- * written one
+ * Files under the folder `name` as one group in it. The daemon puts each file's folders from
+ * `name` down where the download pattern names the file's folder: `${SOURCE_DIRECTORY}` gives
+ * `Album/Disc 1` for `Music\Album\Disc 1\01.flac` in `Music\Album`, so a folder keeps its tree
  */
 export const downloadFolderPlan = (
   name: string,
   files: Schemas["File"][],
   separator: Separator
-): DownloadGroup[] => named(name, byFolder(name, files, separator), separator);
+): DownloadGroup[] => [{ files: inOrder(name, files, separator), folder: name }];
 
 /**
- * Selected files split into the groups that download them. The files under each top folder,
- * which `topOf` gives a path's, are split from the deepest folder holding all of them. When
- * anything in the selection is below such a folder, every group is named as
- * `downloadFolderPlan` names it, so the selection keeps its folders and lands in one tree; when
- * nothing is, every file goes where the download pattern puts it
+ * Selected files as the groups that download them: the files under each top folder, which
+ * `topOf` gives a path's, as a group in the deepest folder holding all of them, so the selection
+ * keeps its folders below it as `downloadFolderPlan` keeps a folder's
  */
 export const downloadPlan = (
   files: Schemas["File"][],
@@ -190,19 +178,13 @@ export const downloadPlan = (
     if (listed) listed.push(file);
     else byTop.set(top, [file]);
   }
-  const tops = [...byTop.values()].map((grouped) => {
+  return [...byTop.values()].map((grouped) => {
     const name = commonFolder(
       grouped.map((f) => f.filename),
       separator
     );
-    return { name, groups: byFolder(name, grouped, separator) };
+    return { files: inOrder(name, grouped, separator), folder: name || null };
   });
-  const nested = tops.some(({ groups }) => groups.some(([group]) => group !== ""));
-  return tops.flatMap(({ name, groups }) =>
-    nested
-      ? named(name, groups, separator)
-      : groups.map(([, grouped]) => ({ files: grouped, destination: null }))
-  );
 };
 
 /**
@@ -219,6 +201,6 @@ export const enqueuePlan = (
       username,
       files: group.files.map((f) => asItem(f)),
       searchId,
-      destination: group.destination ?? undefined
+      folder: group.folder ?? undefined
     }))
   );

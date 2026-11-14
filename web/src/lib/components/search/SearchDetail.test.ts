@@ -60,6 +60,7 @@ describe("search results", () => {
     resultList.sort = null;
     app.options = null;
     app.optionsRevision = null;
+    app.state = null;
     session.principal = null;
     toasts.splice(0);
     live.stop();
@@ -487,6 +488,37 @@ describe("search results", () => {
     flushSync();
     expect(text()).not.toContain("Showing");
     expect(searchOptions.hideLocked).toBe(true);
+  });
+
+  it("download a folder in the folder, so the daemon keeps its own level", async () => {
+    session.principal = { name: "a", role: "Administrator", session: null } as never;
+    app.state = { server: { isConnected: true }, user: { username: "me" } } as never;
+    const album = response("alice", 1, [
+      sharedFile("@@alice\\Music\\Album\\CD1\\01.flac"),
+      sharedFile("@@alice\\Music\\Album\\CD2\\01.flac")
+    ]);
+    const net = await open([album]);
+    net.frame("search.response", { searchId: ID, response: album });
+    await streamed();
+    const line = [...document.querySelectorAll("[data-line]")].find((l) =>
+      l.getAttribute("data-line")!.endsWith("@@alice\\Music\\Album")
+    )!;
+    line.querySelector<HTMLButtonElement>('button[aria-label^="Download folder"]')!.click();
+    await flushFaked();
+    const job = net.requests.find((r) => r.url.pathname.endsWith("/transfers/downloads/jobs"));
+    expect(job?.body).toEqual({
+      groups: [
+        {
+          username: "alice",
+          files: [
+            { filename: "@@alice\\Music\\Album\\CD1\\01.flac", size: expect.any(Number) },
+            { filename: "@@alice\\Music\\Album\\CD2\\01.flac", size: expect.any(Number) }
+          ],
+          searchId: ID,
+          folder: "@@alice\\Music\\Album"
+        }
+      ]
+    });
   });
 
   it("keep every preset removed in a row off, and undo only the one undone", async () => {

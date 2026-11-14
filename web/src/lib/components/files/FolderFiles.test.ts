@@ -39,22 +39,19 @@ describe("every file in a search result's folder", () => {
   };
   const button = (text: string) =>
     [...document.querySelectorAll("button")].find((b) => b.textContent?.trim() === text)!;
-  /** each group of the one job asked for, as its search and its destination */
+  /** each group of the one job asked for, as its search and its folder */
   const asked = async (net: ReturnType<typeof fakeNetwork>) => {
     await vi.waitFor(() => expect(net.requests).toHaveLength(1));
     const body = net.requests[0].body as {
-      groups: { searchId: string | null; destination: string | null }[];
+      groups: { searchId: string | null; folder: string | null }[];
     };
-    return body.groups.map((g) => [g.searchId, g.destination]);
+    return body.groups.map((g) => [g.searchId, g.folder]);
   };
 
-  it("downloads them as found by the search, each folder in its place", async () => {
+  it("downloads them as found by the search, in the folder", async () => {
     const net = open();
     button("Download all").click();
-    expect(await asked(net)).toEqual([
-      ["s1", "Album"],
-      ["s1", "Album/CD1"]
-    ]);
+    expect(await asked(net)).toEqual([["s1", "@@a\\Album"]]);
   });
 
   it("downloads a selection as found by the search too", async () => {
@@ -62,7 +59,7 @@ describe("every file in a search result's folder", () => {
     document.querySelector<HTMLElement>("[aria-label='Select 01.flac']")!.click();
     flushSync();
     button("Download").click();
-    expect(await asked(net)).toEqual([["s1", null]]);
+    expect(await asked(net)).toEqual([["s1", "@@a\\Album\\CD1"]]);
   });
 
   it("names who they come from as a username, which shows a name's edge spaces", () => {
