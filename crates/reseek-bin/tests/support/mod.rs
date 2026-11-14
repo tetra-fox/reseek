@@ -162,7 +162,23 @@ impl Daemon {
   /// Starts the daemon as [`Daemon::start`] does, on `port`. A daemon that exits before it
   /// answers fails the test with what it printed.
   pub fn start_on(port: u16, dir: &Path, args: &[&str], env: &[(&str, &str)]) -> Self {
+    Self::launch(Command::new(PROGRAM), port, dir, args, env)
+  }
+
+  /// [`Daemon::start`] run from the directory `cwd`, which a relative `dir` is read against.
+  pub fn start_from(cwd: &Path, dir: &Path, args: &[&str], env: &[(&str, &str)]) -> Self {
     let mut command = Command::new(PROGRAM);
+    command.current_dir(cwd);
+    Self::launch(command, 0, dir, args, env)
+  }
+
+  fn launch(
+    mut command: Command,
+    port: u16,
+    dir: &Path,
+    args: &[&str],
+    env: &[(&str, &str)],
+  ) -> Self {
     command
       // never the release feed, which a release build would read
       .args([

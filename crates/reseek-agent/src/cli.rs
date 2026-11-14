@@ -20,7 +20,7 @@ pub enum Command {
 /// What the agent is started with.
 #[derive(Debug, Default, PartialEq)]
 pub struct Invocation {
-  /// the application directory, from `--app-dir` or `RESEEK_APP_DIR`
+  /// the application directory, from `--app-dir` or `RESEEK_APP_DIR`, made absolute
   pub app_dir: Option<PathBuf>,
   /// the configuration files, from `--config` or `RESEEK_CONFIG`, in the order they apply
   pub config_files: Vec<PathBuf>,
@@ -99,6 +99,19 @@ pub fn parse(
   if invocation.app_dir.is_none() {
     invocation.app_dir = env("RESEEK_APP_DIR").map(PathBuf::from);
   }
+  // read once against the directory the agent starts in, so every path derived from it and
+  // stored is absolute
+  invocation.app_dir = invocation
+    .app_dir
+    .map(|dir| {
+      std::path::absolute(&dir).map_err(|e| {
+        format!(
+          "the application directory `{}` has no absolute path: {e}",
+          dir.display()
+        )
+      })
+    })
+    .transpose()?;
   if invocation.config_files.is_empty() {
     invocation.config_files = env("RESEEK_CONFIG")
       .map(PathBuf::from)
@@ -205,5 +218,18 @@ mod tests {
         .contains("--http-port")
     );
     assert!(parsed(&["--instance-name"]).is_err(), "a value is missing");
+  }
+
+  #[test]
+  fn a_relative_app_dir_is_read_against_the_working_directory() {
+    let Command::Run(invocation) = parsed(&["-a", "app"]).unwrap() else {
+      panic!("not a run");
+    };
+    let here = std::env::current_dir().unwrap();
+    assert_eq!(invocation.app_dir, Some(here.join("app")));
+    assert!(
+      parsed(&["--app-dir="]).is_err(),
+      "an empty path is no directory"
+    );
   }
 }

@@ -91,7 +91,7 @@ impl Shell {
 /// What the daemon is started with.
 #[derive(Debug, Default, PartialEq)]
 pub struct Invocation {
-  /// the application directory, from `--app-dir` or `RESEEK_APP_DIR`
+  /// the application directory, from `--app-dir` or `RESEEK_APP_DIR`, made absolute
   pub app_dir: Option<PathBuf>,
   /// the configuration files, from `--config`/`--config-file` or `RESEEK_CONFIG`, in the
   /// order they apply
@@ -374,6 +374,19 @@ fn command(
   if invocation.app_dir.is_none() {
     invocation.app_dir = env("RESEEK_APP_DIR").map(PathBuf::from);
   }
+  // read once against the directory the daemon starts in, so every path derived from it and
+  // stored is absolute
+  invocation.app_dir = invocation
+    .app_dir
+    .map(|dir| {
+      std::path::absolute(&dir).map_err(|e| {
+        UsageError(format!(
+          "the application directory `{}` has no absolute path: {e}",
+          dir.display()
+        ))
+      })
+    })
+    .transpose()?;
   if invocation.config_files.is_empty() {
     invocation.config_files = env("RESEEK_CONFIG")
       .map(PathBuf::from)

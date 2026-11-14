@@ -7,7 +7,7 @@ use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Output, Stdio};
 
-use support::{Daemon, PROGRAM, send};
+use support::{ACCOUNT, Daemon, PROGRAM, send, signed_in};
 
 /// The program run with `args` and only the variables in `env`.
 fn run(args: &[&str], env: &[(&str, &str)]) -> Output {
@@ -231,6 +231,22 @@ fn the_daemon_serves_health_and_stops_on_sigterm() {
   assert!(
     logs_written(&dir.path().join("logs")),
     "a log file is written"
+  );
+}
+
+#[tokio::test]
+async fn a_relative_app_dir_is_read_against_where_the_daemon_starts() {
+  let cwd = tempfile::tempdir().unwrap();
+  let daemon = Daemon::start_from(cwd.path(), Path::new("app"), &[], &ACCOUNT);
+  let state = signed_in(&daemon).await.application().await.unwrap();
+  let data = cwd.path().canonicalize().unwrap().join("app/data");
+  assert_eq!(
+    Path::new(&state.directories.downloads),
+    data.join("downloads")
+  );
+  assert_eq!(
+    Path::new(&state.directories.incomplete),
+    data.join("incomplete")
   );
 }
 
