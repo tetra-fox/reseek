@@ -370,8 +370,7 @@ fn unavailable(name: &str, error: &str) -> ApiError {
 
 /// The provider `name`, 404 when none is configured.
 async fn provider(app: &AppState, name: &str) -> Result<Arc<Provider>, ApiError> {
-  let current = app.config.current();
-  match app.auth.oidc.get(name, &current.values).await {
+  match app.auth.oidc.get(name, &app.config).await {
     Ok(Some(provider)) => Ok(provider),
     Ok(None) => Err(ApiError::not_found(format!(
       "No identity provider named {name}"

@@ -13,6 +13,7 @@ use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use cascade::Watcher;
 use openidconnect::core::{
   CoreAuthDisplay, CoreAuthPrompt, CoreErrorResponseType, CoreGenderClaim, CoreJsonWebKey,
   CoreJweContentEncryptionAlgorithm, CoreJwsSigningAlgorithm, CoreRevocableToken,
@@ -134,35 +135,57 @@ enum Document {
   },
 }
 
+/// The provider `name` among `known` when it was made for `options`.
+fn made_for(
+  known: &HashMap<String, Arc<Provider>>,
+  name: &str,
+  options: &Oidc,
+) -> Option<Arc<Provider>> {
+  known
+    .get(name)
+    .filter(|provider| provider.options == *options)
+    .cloned()
+}
+
 /// Whether `failed_at` is a failure recent enough to hold back the next try.
 fn holds_back(failed_at: Option<Instant>) -> bool {
   failed_at.is_some_and(|at| at.elapsed() < RETRY)
 }
 
 impl Providers {
-  /// The provider `name` as `options` configure it now, `None` when there is none by that
-  /// name. A changed configuration makes a new provider, which discovers again.
-  pub async fn get(&self, name: &str, options: &Options) -> Result<Option<Arc<Provider>>, String> {
-    let Some(configured) = options.web.authentication.oidc.get(name) else {
+  /// The provider `name` as `config` gives it now, `None` when there is none by that name. A
+  /// changed configuration makes a new provider, which discovers again.
+  pub async fn get(
+    &self,
+    name: &str,
+    config: &Watcher<Options>,
+  ) -> Result<Option<Arc<Provider>>, String> {
+    let current = config.current();
+    let Some(configured) = current.values.web.authentication.oidc.get(name) else {
       return Ok(None);
     };
-    let current = |known: &HashMap<String, Arc<Provider>>| {
-      known
-        .get(name)
-        .filter(|provider| provider.options == *configured)
-        .cloned()
-    };
-    if let Some(provider) = current(&lock(&self.known)) {
+    if let Some(provider) = made_for(&lock(&self.known), name, configured) {
       return Ok(Some(provider));
     }
     let made = Arc::new(Provider::new(name, configured.clone()).await?);
+    Ok(Some(self.keep(made, config)))
+  }
+
+  /// `made`, or one made meanwhile for the same options, so its discovery is shared. `made` is
+  /// kept for later calls only while its options are still the configured ones, so one made for
+  /// options replaced meanwhile never takes the place of a newer one.
+  fn keep(&self, made: Arc<Provider>, config: &Watcher<Options>) -> Arc<Provider> {
     let mut known = lock(&self.known);
-    // one made meanwhile for the same options is kept, so its discovery is shared
-    if let Some(provider) = current(&known) {
-      return Ok(Some(provider));
+    if let Some(provider) = made_for(&known, &made.name, &made.options) {
+      return provider;
     }
-    known.insert(name.to_string(), made.clone());
-    Ok(Some(made))
+    // read under the lock, so a provider kept after this one is checked against these
+    // options or newer ones
+    let current = config.current();
+    if current.values.web.authentication.oidc.get(&made.name) == Some(&made.options) {
+      known.insert(made.name.clone(), made.clone());
+    }
+    made
   }
 
   /// Held by a login while it asks for its tokens and stores its session.
@@ -350,7 +373,7 @@ pub fn external_base(url_base: &str, options: &Options, client: &Client) -> Opti
 pub async fn discover_at_start(app: AppState) {
   let current = app.config.current();
   for name in current.values.web.authentication.oidc.keys() {
-    let provider = match app.auth.oidc.get(name, &current.values).await {
+    let provider = match app.auth.oidc.get(name, &app.config).await {
       Ok(Some(provider)) => provider,
       Ok(None) => continue,
       Err(e) => {
@@ -400,5 +423,29 @@ mod tests {
     provider.metadata().await.unwrap();
     tokio::time::advance(RETRY).await;
     provider.metadata().await.unwrap();
+  }
+
+  #[tokio::test]
+  async fn a_provider_made_for_replaced_options_does_not_replace_a_newer_one() {
+    let home = |issuer: &str| {
+      format!("[web.authentication.oidc.home]\nissuer = \"{issuer}\"\nclient_id = \"reseek\"\n")
+    };
+    let app = crate::testing::app(&home("http://127.0.0.1:9/old"), &[]).await;
+    let config = &app.state.config;
+    let providers = Providers::default();
+    // made for the first options, and finishing once newer ones are in use
+    let first = config.current().values.web.authentication.oidc["home"].clone();
+    let stale = Arc::new(Provider::new("home", first).await.unwrap());
+    let path = app.dir.path().join("config.toml");
+    std::fs::write(path, home("http://127.0.0.1:9/new")).unwrap();
+    config.reload().await.unwrap();
+    let newer = providers.get("home", config).await.unwrap().unwrap();
+    let kept = providers.keep(stale.clone(), config);
+    assert!(
+      Arc::ptr_eq(&kept, &stale),
+      "its caller gets the one it made"
+    );
+    let again = providers.get("home", config).await.unwrap().unwrap();
+    assert!(Arc::ptr_eq(&again, &newer));
   }
 }
