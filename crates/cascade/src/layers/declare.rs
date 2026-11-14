@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use serde_json::Value;
 use tracing::debug;
@@ -13,7 +13,7 @@ use crate::describe::Kind;
 use crate::files::{self, LoadedFile};
 use crate::schema::Field;
 use crate::source::Source;
-use crate::{Error, Key, Root, tree};
+use crate::{Error, Key, Root, paths, tree};
 
 /// The layers below the runtime one, merged.
 #[derive(Clone, Debug)]
@@ -112,9 +112,7 @@ impl<T: Root> Layers<T> {
         .to_str()
         .ok_or_else(|| error("the value is not UTF-8".to_string()))?;
       let mut value = tree::coerce(raw, &field.kind, Some(LIST_SEPARATOR)).map_err(error)?;
-      if field.path {
-        from_working_directory(&mut value).map_err(error)?;
-      }
+      paths::resolve(field, &mut value, None).map_err(error)?;
       debug!(key = field.key, var, "set by the environment");
       tree::set(&mut declared.tree, &field.key, value);
       declared.sources.insert(
@@ -150,7 +148,7 @@ impl<T: Root> Layers<T> {
         let mut v = v;
         drop_unknown_in_entries(field, &mut v, &key, name, &mut declared.warnings);
         let mut value = tree::from_toml(v).map_err(shape_error)?;
-        from_file_directory(field, &mut value, file.dir).map_err(shape_error)?;
+        paths::resolve(field, &mut value, Some(file.dir)).map_err(shape_error)?;
         tree::set(&mut declared.tree, &key, value);
         declared.sources.insert(
           key.clone(),
@@ -200,9 +198,7 @@ impl<T: Root> Layers<T> {
           .push(tree::coerce(raw, item, None).map_err(error)?),
         kind => {
           let mut value = tree::coerce(raw, kind, None).map_err(error)?;
-          if field.path {
-            from_working_directory(&mut value).map_err(error)?;
-          }
+          paths::resolve(field, &mut value, None).map_err(error)?;
           tree::set(&mut declared.tree, &field.key, value);
         }
       }
@@ -221,63 +217,6 @@ impl<T: Root> Layers<T> {
 struct File<'a> {
   name: &'a str,
   dir: &'a Path,
-}
-
-/// Makes a relative path `value` absolute against the working directory. An empty one names no
-/// path and stays, for the application's checks to refuse.
-fn from_working_directory(value: &mut Value) -> Result<(), String> {
-  let Value::String(text) = value else {
-    return Ok(());
-  };
-  if text.is_empty() || Path::new(text.as_str()).is_absolute() {
-    return Ok(());
-  }
-  let absolute = std::path::absolute(text.as_str())
-    .map_err(|e| format!("the working directory it counts from is not known: {e}"))?;
-  *text = utf8(absolute)?;
-  Ok(())
-}
-
-/// Counts each relative path in `value`, which a file in `dir` sets `field` to, from `dir`: the
-/// field's own when it is a path, else those in its entries. An empty path stays, as one set
-/// any other way does.
-fn from_file_directory(field: &Field, value: &mut Value, dir: &Path) -> Result<(), String> {
-  if field.path {
-    let Value::String(text) = value else {
-      return Ok(());
-    };
-    if text.is_empty() || Path::new(text.as_str()).is_absolute() {
-      return Ok(());
-    }
-    // collecting the components drops the `.` ones, so `./dl` names the same place as `dl`
-    *text = utf8(dir.join(text.as_str()).components().collect())?;
-    return Ok(());
-  }
-  if field.entries.is_empty() {
-    return Ok(());
-  }
-  let entries: Vec<&mut Value> = match value {
-    Value::Object(entries) if field.kind == Kind::Map => entries.values_mut().collect(),
-    Value::Array(items) => items.iter_mut().collect(),
-    // a value of the wrong shape is refused when the configuration is read into its type
-    _ => return Ok(()),
-  };
-  for entry in entries {
-    for inner in &field.entries {
-      if let Some(value) = tree::get_mut(entry, &inner.key) {
-        from_file_directory(inner, value, dir)?;
-      }
-    }
-  }
-  Ok(())
-}
-
-/// `path` as the text a value holds.
-fn utf8(path: PathBuf) -> Result<String, String> {
-  path
-    .into_os_string()
-    .into_string()
-    .map_err(|path| format!("{} is not UTF-8", Path::new(&path).display()))
 }
 
 /// Takes out of each entry of a user-keyed map or list of tables the keys its type does not
@@ -364,10 +303,10 @@ fn drop_unknown(
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::Cascade;
-  use crate::testing::{Example, Mode, example_layers, pairs, write};
+  use crate::testing::{Example, Located, Mode, example_layers, pairs, write};
   use chrono::Utc;
   use std::fs;
+  use std::path::PathBuf;
 
   fn file(name: &str) -> Source {
     Source::File { file: name.into() }
@@ -434,28 +373,6 @@ mod tests {
     assert_eq!(loaded.sources["server.port"], env_source("APP_SERVER_PORT"));
   }
 
-  #[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize, Cascade)]
-  #[serde(default)]
-  struct Located {
-    /// Where the data is.
-    #[cascade(env = "LOC_DATA", cli = "--data", path)]
-    data: Option<PathBuf>,
-    /// Not a path.
-    #[cascade(env = "LOC_NAME", cli = "--name")]
-    name: String,
-    /// Providers by name.
-    #[cascade(user_keyed)]
-    providers: BTreeMap<String, Provider>,
-  }
-
-  #[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize, Cascade)]
-  #[serde(default)]
-  struct Provider {
-    /// A certificate authority.
-    #[cascade(path)]
-    ca: Option<PathBuf>,
-  }
-
   #[test]
   fn a_relative_path_counts_from_the_file_that_sets_it_or_the_working_directory() {
     let dir = tempfile::tempdir().unwrap();
@@ -472,7 +389,7 @@ mod tests {
     write(
       dir,
       "config.d/10-a.toml",
-      "data = \"./music/dl\"\n[providers.home]\nca = \"ca.pem\"\n",
+      "data = \"./music/dl\"\n[providers.home]\nca = \"ca.pem\"\n[[mirrors]]\nca = \"../m.pem\"\n",
     );
     let loaded = layers().load().unwrap();
     assert_eq!(
@@ -487,6 +404,11 @@ mod tests {
       loaded.values.providers["home"].ca,
       Some(dir.join("config.d/ca.pem")),
       "a path inside an entry counts from its file too"
+    );
+    assert_eq!(
+      loaded.tree()["mirrors"][0]["ca"].as_str().map(Path::new),
+      Some(dir.join("m.pem").as_path()),
+      "and one in a list of tables, its `..` resolved by name"
     );
 
     write(dir, "config.d/10-a.toml", "data = \"/srv/./dl\"\n");

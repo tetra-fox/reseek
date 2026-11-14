@@ -1,7 +1,7 @@
 //! An example configuration that uses every attribute, shared by the tests.
 
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -161,6 +161,34 @@ pub(crate) struct Flags {
   /// Keep nothing on disk.
   #[cascade(env = "APP_VOLATILE", cli = "--volatile")]
   pub(crate) volatile: bool,
+}
+
+/// A configuration with paths: at the top, in a user-keyed map's entries and in a list of
+/// tables.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Cascade)]
+#[serde(default)]
+pub(crate) struct Located {
+  /// Where the data is.
+  #[cascade(env = "LOC_DATA", cli = "--data", path)]
+  pub(crate) data: Option<PathBuf>,
+  /// Not a path.
+  #[cascade(env = "LOC_NAME", cli = "--name")]
+  pub(crate) name: String,
+  /// Providers by name.
+  #[cascade(user_keyed)]
+  pub(crate) providers: BTreeMap<String, Provider>,
+  /// Mirrors, in order.
+  pub(crate) mirrors: Vec<Provider>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Cascade)]
+#[serde(default)]
+pub(crate) struct Provider {
+  /// A certificate authority.
+  #[cascade(path)]
+  pub(crate) ca: Option<PathBuf>,
+  /// Where it is.
+  pub(crate) url: String,
 }
 
 pub(crate) fn example_schema() -> Schema {

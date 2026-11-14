@@ -15,7 +15,7 @@ use crate::overrides::{Lasts, Override};
 use crate::schema::Schema;
 use crate::source::Source;
 use crate::write::writability;
-use crate::{Error, Key, Root, tree};
+use crate::{Error, Key, Root, paths, tree};
 
 impl<T: Root> State<T> {
   /// Sets and removes runtime overrides, saving them before they take effect. For a secret,
@@ -120,7 +120,11 @@ impl<T: Root> State<T> {
     let editor = FileEditor::new(&schema);
     let old = current.unwrap_or_default();
     let text = match edit {
-      FileEdit::Patch { set, unset } => editor.patch(name, &old, &set, &unset)?,
+      FileEdit::Patch { mut set, unset } => {
+        let dir = path.parent().expect("a file's path ends in its name");
+        paths::as_written(&schema, &mut set, &old, dir);
+        editor.patch(name, &old, &set, &unset)?
+      }
       FileEdit::Replace(text) => text,
     };
     // the files as they are now with the edit, not as last loaded: a file that failed to load
@@ -179,7 +183,7 @@ mod tests {
   use super::*;
   use crate::overrides::Overrides;
   use crate::schema::REDACTED;
-  use crate::testing::{next_change, values, watched, watched_layers};
+  use crate::testing::{Located, next_change, values, watched, watched_layers};
   use crate::{Watch, Watcher};
   use serde_json::json;
   use std::fs;
@@ -393,6 +397,87 @@ mod tests {
       .await
       .unwrap();
     assert_eq!(watcher.current().values.api_keys["robot"].key, "real");
+  }
+
+  #[tokio::test]
+  async fn a_path_sent_back_as_it_resolves_is_written_as_the_file_had_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    fs::write(
+      &path,
+      "data = \"dl\"\n[providers.home]\nca = \"ca.pem\"\nurl = \"a\"\n\
+       [providers.work]\nca = \"/etc/ssl/work.pem\"\n[[mirrors]]\nca = \"m.pem\"\n",
+    )
+    .unwrap();
+    let watcher =
+      Watcher::new(crate::Layers::<Located>::new().files(dir.path(), ["config.toml"])).unwrap();
+    let current = watcher.current();
+    // a client changes one field of an entry and sends back the whole map as it read it
+    let mut providers = current.tree()["providers"].clone();
+    assert_eq!(
+      providers["home"]["ca"],
+      json!(dir.path().join("ca.pem").to_str())
+    );
+    providers["home"]["url"] = json!("b");
+    let mut mirrors = current.tree()["mirrors"].clone();
+    mirrors[0]["url"] = json!("m");
+    let data = current.tree()["data"].clone();
+    watcher
+      .patch_file(
+        "config.toml",
+        current.files[0].revision.as_deref(),
+        None,
+        values(&[
+          ("providers", providers.clone()),
+          ("mirrors", mirrors),
+          ("data", data),
+        ]),
+        vec![],
+      )
+      .await
+      .unwrap();
+    let text = fs::read_to_string(&path).unwrap();
+    let written: toml::Table = text.parse().unwrap();
+    assert_eq!(
+      written["providers"]["home"]["ca"].as_str(),
+      Some("ca.pem"),
+      "{text}"
+    );
+    assert_eq!(
+      written["providers"]["home"]["url"].as_str(),
+      Some("b"),
+      "{text}"
+    );
+    assert_eq!(
+      written["providers"]["work"]["ca"].as_str(),
+      Some("/etc/ssl/work.pem"),
+      "{text}"
+    );
+    assert_eq!(
+      written["mirrors"][0]["ca"].as_str(),
+      Some("m.pem"),
+      "{text}"
+    );
+    assert_eq!(written["data"].as_str(), Some("dl"), "{text}");
+
+    // a path the client changed is written as sent
+    let current = watcher.current();
+    providers["home"]["ca"] = json!("/srv/ca.pem");
+    watcher
+      .patch_file(
+        "config.toml",
+        current.files[0].revision.as_deref(),
+        None,
+        values(&[("providers", providers)]),
+        vec![],
+      )
+      .await
+      .unwrap();
+    let written: toml::Table = fs::read_to_string(&path).unwrap().parse().unwrap();
+    assert_eq!(
+      written["providers"]["home"]["ca"].as_str(),
+      Some("/srv/ca.pem")
+    );
   }
 
   #[tokio::test]
