@@ -5,9 +5,9 @@
 //! loaded at startup. Those in no group of ours, not privileged, not watched and not in the
 //! upload queue leave once more than [`KEPT`] of them are known, the ones read or changed
 //! longest ago first, so names a peer makes up do not pile up; a user the queue holds whom the
-//! cache does not know is asked about again. What the server pushes on its own is taken only for users known
-//! already. Whatever it says that moves the groups a user with a row is shown in pushes
-//! their summary.
+//! cache does not know is asked about again. What the server pushes on its own is taken only
+//! for users known already. Whatever it says that moves the groups a user with a row is shown
+//! in pushes their summary.
 //!
 //! The server pushes a watched user's presence, never their statistics, so those are asked for
 //! again when the presence changes on its own, when a user's page is opened or a transfer with

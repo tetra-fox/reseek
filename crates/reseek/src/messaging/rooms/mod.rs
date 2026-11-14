@@ -320,8 +320,8 @@ impl Messaging {
         }
         debug!(
           rooms = refused.len(),
-          wait = ?wait,
-          "rooms not joined after the login; tried again"
+          after = %humantime::format_duration(wait),
+          "rooms not joined after the login; trying again after a wait"
         );
         tokio::select! {
           () = session.cancelled() => {
