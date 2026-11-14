@@ -93,7 +93,8 @@
     {/snippet}
   </Notice>
 {/if}
-{#if view.pendingReconnect.length || app.state?.pendingReconnect}
+<!-- offline, the next connect takes the options anyway -->
+{#if app.isServerConnected && (view.pendingReconnect.length || app.state?.pendingReconnect)}
   <Notice kind="warning">
     Reconnect to the Soulseek server to apply {view.pendingReconnect.join(", ") || "a change"}.
     {#snippet action()}
