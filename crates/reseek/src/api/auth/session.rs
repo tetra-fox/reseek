@@ -47,7 +47,13 @@ pub fn routes() -> OpenApiRouter<AppState> {
 /// Who the caller is, with the browser session it came with.
 #[utoipa::path(
   get, path = "/session", tag = "session",
-  responses((status = 200, body = CurrentPrincipal), (status = 401, body = api_types::ErrorBody))
+  responses(
+    (status = 200, body = CurrentPrincipal), (status = 401, body = api_types::ErrorBody),
+    (
+      status = 403, body = api_types::ErrorBody,
+      description = "`access_withheld`: the session's user has no role right now; the session goes on"
+    )
+  )
 )]
 async fn get_session(
   caller: Authorized<AnyRole>,

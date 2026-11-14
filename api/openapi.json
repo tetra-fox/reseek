@@ -9290,6 +9290,16 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "`access_withheld`: the session's user has no role right now; the session goes on",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
           }
         }
       },
