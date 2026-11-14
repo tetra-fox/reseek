@@ -74,7 +74,10 @@ for (const [width, height] of [
       await expect(download).toBeVisible();
       if (width < 768) {
         const tick = grid.getByRole("checkbox", { name: "Select every transfer in Bonus" });
-        const icon = download.locator("xpath=preceding-sibling::*[1]");
+        // the file's icon, the first svg in the name's cell
+        const icon = download
+          .locator("xpath=ancestor::*[@role='gridcell'][1]//*[name()='svg']")
+          .first();
         expect(await apart(tick, icon), "downloads").toBeLessThan(0.5);
       } else {
         const subfolder = grid.getByText("Bonus", { exact: true });

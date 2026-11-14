@@ -138,18 +138,17 @@
 </script>
 
 {#snippet label()}
-  <!-- the folder after the name gives way first; a name alone is the control's own text -->
-  {#if folder}
-    <span class="max-w-full shrink-0 truncate" dir="auto">{getFileName(t.filename)}</span>
-    <MiddleTruncate text={folder} path class="text-fg-muted" />
-  {:else}
-    {getFileName(t.filename)}
-  {/if}
+  <!-- the folder after the name gives way first, then the name, cut in the middle so names that
+       share a start keep their ends in view -->
+  <MiddleTruncate
+    text={getFileName(t.filename)}
+    class={folder ? "max-w-full shrink-0" : undefined} />
+  {#if folder}<MiddleTruncate text={folder} path class="text-fg-muted" />{/if}
 {/snippet}
 
 {#snippet name()}
-  <!-- the analysis mark keeps its word and the name gives way at its end; in a cell too narrow
-       for an icon, a few letters and the mark, the mark goes so the name keeps them -->
+  <!-- the analysis mark keeps its word and the name gives way; in a cell too narrow for an icon,
+       a few letters and the mark, the mark goes so the name keeps them -->
   <span class="@container flex min-w-0 flex-1">
     <span class="grid min-w-0 flex-1 grid-cols-[minmax(0,max-content)_auto] items-center gap-1.5">
       <span class="flex min-w-0 items-center gap-1.5">
@@ -160,16 +159,12 @@
               <button
                 {...props}
                 type="button"
-                class={["min-w-0 text-left hover:underline", folder ? "flex gap-1.5" : "truncate"]}
-                dir={folder ? undefined : "auto"}
+                class="flex min-w-0 gap-1.5 text-left hover:underline"
                 onclick={() => ondetails()}>
                 {@render label()}
               </button>
             {:else}
-              <span
-                {...props}
-                class={["min-w-0", folder ? "flex gap-1.5" : "truncate"]}
-                dir={folder ? undefined : "auto"}>{@render label()}</span>
+              <span {...props} class="flex min-w-0 gap-1.5">{@render label()}</span>
             {/if}
           {/snippet}
         </Tooltip>
