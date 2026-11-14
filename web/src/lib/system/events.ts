@@ -39,7 +39,8 @@ const SESSION_ENDS: Record<Schemas["SessionRevokeReason"], string> = {
   admin: "logged out by an administrator",
   backchannel: "ended by the identity provider",
   proxy: "ended by the reverse proxy",
-  expired: "expired"
+  expired: "expired",
+  configuration: "ended, no role in the configuration"
 };
 
 const JOB_ENDINGS: Record<Schemas["JobEnding"], string> = {
