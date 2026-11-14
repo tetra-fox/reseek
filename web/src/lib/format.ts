@@ -258,14 +258,13 @@ export const fromWhom = (usernames: string[]) => {
 
 /**
  * The directory part of a remote path, by the separator it uses: `/` when it has one, else `\`.
- * A separator at the very start is not a cut, so "\\foo" stays as it is; a bare file name, which
- * some peers send, has no directory
+ * A file at a peer's root, `\x.flac`, and a bare file name, which some peers send, have none, as in
+ * the daemon's grouping by directory
  */
 export const getDirectoryName = (path: string): string => {
   const separator = path.includes("/") ? "/" : "\\";
   const cut = path.lastIndexOf(separator);
-  if (cut === -1) return "";
-  return cut > 0 ? path.slice(0, cut) : path;
+  return cut > 0 ? path.slice(0, cut) : "";
 };
 
 /** `text` cut to `max` characters with "..." after it when it was longer */

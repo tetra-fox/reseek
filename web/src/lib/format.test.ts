@@ -102,8 +102,11 @@ describe("files", () => {
     expect(getFileName("music/artist/song.mp3")).toBe("song.mp3");
     expect(getDirectoryName("a\\b\\c.mp3")).toBe("a\\b");
     expect(getDirectoryName("a/b/c.mp3")).toBe("a/b");
-    expect(getDirectoryName("\\foo")).toBe("\\foo");
     expect(getDirectoryName("c.mp3")).toBe("");
+    // a file at a peer's root has no directory, as a bare name has none
+    expect(getDirectoryName("\\x.flac")).toBe("");
+    expect(getDirectoryName("/x.flac")).toBe("");
+    expect(getDirectoryName("/home/x.flac")).toBe("/home");
   });
 });
 
