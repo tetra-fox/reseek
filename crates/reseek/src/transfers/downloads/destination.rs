@@ -2,10 +2,11 @@
 //! the peer's own, and the directory under the downloads directory it is moved to once it has
 //! arrived, from the configured pattern or the download's own destination. A download asked for
 //! in a folder puts the folder's tree, from the folder down, where the pattern names the file's
-//! own directory. Every name that came from the peer, the destination or the search is made safe
-//! before it becomes part of a path. The incomplete file's name carries a hash of the exact peer
-//! and remote filename, since two downloads can have names that are made safe alike or that a
-//! filesystem takes as one.
+//! own directory, or after the pattern's directory when it names none of the file's directories,
+//! so the files of two of the folder's folders never meet. Every name that came from the peer,
+//! the destination or the search is made safe before it becomes part of a path. The incomplete
+//! file's name carries a hash of the exact peer and remote filename, since two downloads can have
+//! names that are made safe alike or that a filesystem takes as one.
 
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
@@ -74,26 +75,53 @@ fn file_name(name: &str, os: Os) -> String {
 }
 
 /// The part of the remote filename `filename` from the remote folder `folder` down, the
-/// folder's own name first: `Album\CD1\01.flac` in `@@abcde\Music\Album`. `None` when the file
-/// is not under the folder.
+/// folder's own name first: `Album\CD1\01.flac` in `@@abcde\Music\Album`. A folder that is only
+/// separators is a root, such as a Unix peer's `/`, whose files are named from their first
+/// folder down. `None` when the file is not under the folder.
 pub fn from_folder<'a>(folder: &str, filename: &'a str) -> Option<&'a str> {
-  let folder = folder.trim_end_matches(['/', '\\']);
-  let below = filename.strip_prefix(folder)?;
-  if folder.is_empty() || !below.starts_with(['/', '\\']) {
+  let trimmed = folder.trim_end_matches(['/', '\\']);
+  if trimmed.is_empty() {
+    if folder.is_empty() || !filename.starts_with(['/', '\\']) {
+      return None;
+    }
+    let below = filename.trim_start_matches(['/', '\\']);
+    return (!below.is_empty()).then_some(below);
+  }
+  let below = filename.strip_prefix(trimmed)?;
+  if !below.starts_with(['/', '\\']) {
     return None;
   }
-  let name_at = folder
+  let name_at = trimmed
     .rfind(['/', '\\'])
     .map_or(0, |separator| separator + 1);
   Some(&filename[name_at..])
 }
 
+/// The folders of the remote filename `filename` from the remote folder `folder` down, made
+/// safe; fails when the file is not under the folder, which the API refuses.
+fn folder_tree(folder: &str, filename: &str, os: Os) -> Result<String, String> {
+  let below = from_folder(folder, filename)
+    .ok_or_else(|| format!("the remote filename {filename} is not under the folder {folder}"))?;
+  Ok(directory_name_safely(below, true, os).unwrap_or_default())
+}
+
+/// Whether `pattern` names a directory of the file: its own, or its whole path.
+fn names_source_directory(pattern: &str) -> bool {
+  TOKEN.captures_iter(pattern).any(|captures| {
+    matches!(
+      captures[1].to_ascii_uppercase().as_str(),
+      "SOURCE_DIRECTORY" | "SOURCE_PATH"
+    )
+  })
+}
+
 /// The relative directory under the downloads directory the download of `source` goes to,
 /// empty for the downloads directory itself: the download's own destination when it has one, else
-/// `pattern` with its `${NAME}`s filled in, made safe, `${SOURCE_DIRECTORY}` being the tree from
-/// the download's folder down when it has one. Fails when the result would leave the downloads
-/// directory, which making it safe rules out, or the file is not under its folder, which the
-/// API refuses.
+/// `pattern` with its `${NAME}`s filled in, made safe. A download with a folder has the tree from
+/// the folder down as `${SOURCE_DIRECTORY}`, or after the pattern's directory when the pattern
+/// names neither `${SOURCE_DIRECTORY}` nor `${SOURCE_PATH}`. Fails when the result would leave the
+/// downloads directory, which making it safe rules out, or the file is not under its folder,
+/// which the API refuses.
 pub fn subdirectory(pattern: Option<&str>, source: &Source<'_>, os: Os) -> Result<String, String> {
   if let Some(destination) = source
     .destination
@@ -103,26 +131,21 @@ pub fn subdirectory(pattern: Option<&str>, source: &Source<'_>, os: Os) -> Resul
     return contained(creatable_path(destination, os), os);
   }
   let pattern = pattern.unwrap_or(DEFAULT_PATTERN);
+  let tree = source
+    .folder
+    .map(|folder| folder_tree(folder, source.filename, os))
+    .transpose()?;
   if pattern.eq_ignore_ascii_case(DOWNLOADS_ITSELF) {
-    return Ok(String::new());
+    return contained(creatable_path(&tree.unwrap_or_default(), os), os);
   }
   let source_path = directory_name_safely(source.filename, true, os).unwrap_or_default();
-  let source_directory = match source.folder {
-    Some(folder) => {
-      let tree = from_folder(folder, source.filename).ok_or_else(|| {
-        format!(
-          "the remote filename {} is not under the folder {folder}",
-          source.filename
-        )
-      })?;
-      directory_name_safely(tree, true, os).unwrap_or_default()
-    }
-    None => source_path
+  let source_directory = tree.clone().unwrap_or_else(|| {
+    source_path
       .rsplit(os.separator())
       .next()
       .unwrap_or_default()
-      .to_string(),
-  };
+      .to_string()
+  });
   let value = |name: &str| -> Option<String> {
     Some(match name.to_ascii_uppercase().as_str() {
       "SOURCE_USERNAME" => file_name(source.username, os),
@@ -152,6 +175,10 @@ pub fn subdirectory(pattern: Option<&str>, source: &Source<'_>, os: Os) -> Resul
   let filled = TOKEN.replace_all(pattern, |captures: &Captures<'_>| {
     value(&captures[1]).unwrap_or_else(|| captures[0].to_string())
   });
+  let filled = match tree {
+    Some(tree) if !names_source_directory(pattern) => format!("{filled}/{tree}"),
+    _ => filled.into_owned(),
+  };
   contained(creatable_path(&filled, os), os)
 }
 
@@ -382,7 +409,7 @@ mod tests {
   }
 
   #[test]
-  fn a_folder_puts_its_tree_where_the_pattern_names_the_files_directory() {
+  fn a_folder_keeps_its_tree_wherever_the_pattern_puts_it() {
     let in_album = |filename| Source {
       folder: Some("@@abcde\\Music\\Album"),
       ..source("alice", filename)
@@ -400,7 +427,17 @@ mod tests {
       "Music/Album/CD1",
       "the full path has the tree already"
     );
-    assert_eq!(unix("{}", &disc), "");
+    assert_eq!(
+      unix("${SOURCE_USERNAME}", &disc),
+      "alice/Album/CD1",
+      "the tree after a pattern that names no directory of the file, so CD1 and CD2 stay apart"
+    );
+    assert_eq!(unix("{}", &disc), "Album/CD1");
+    assert_eq!(unix("{}", &cover), "Album");
+    assert_eq!(
+      unix("${SOURCE_USERNAME}/${SOURCE_PATH}", &disc),
+      "alice/Music/Album/CD1"
+    );
     let windows = subdirectory(Some("${SOURCE_DIRECTORY}"), &disc, Os::Windows).unwrap();
     assert_eq!(windows, "Album\\CD1");
     let hostile = Source {
@@ -430,7 +467,14 @@ mod tests {
     assert_eq!(from_folder("a\\Album", "a\\Albums\\1.flac"), None);
     assert_eq!(from_folder("a\\Album", "a\\Album"), None);
     assert_eq!(from_folder("", "a\\1.flac"), None);
-    assert_eq!(from_folder("\\", "\\a\\1.flac"), None);
+    assert_eq!(
+      from_folder("\\", "\\a\\1.flac"),
+      Some("a\\1.flac"),
+      "a root names its files from their first folder"
+    );
+    assert_eq!(from_folder("/", "/x.flac"), Some("x.flac"));
+    assert_eq!(from_folder("/", "x.flac"), None);
+    assert_eq!(from_folder("/", "/"), None);
   }
 
   #[test]

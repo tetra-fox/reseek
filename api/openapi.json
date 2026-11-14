@@ -18916,7 +18916,7 @@
               "string",
               "null"
             ],
-            "description": "the remote folder the files were picked in, such as a folder downloaded whole, which every\nfile is under: each file's folders from this one down, `Album/CD1` for\n`@@abcde\\Music\\Album\\CD1\\01.flac` in `@@abcde\\Music\\Album`, take the place of the download\npattern's `${SOURCE_DIRECTORY}`, so the folder keeps its tree wherever the pattern puts it;\nnull for each file's own folder name",
+            "description": "the remote folder the files were picked in, such as a folder downloaded whole, which every\nfile is under: each file's folders from this one down, `Album/CD1` for\n`@@abcde\\Music\\Album\\CD1\\01.flac` in `@@abcde\\Music\\Album`, take the place of the download\npattern's `${SOURCE_DIRECTORY}`, or go after the pattern's directory when it names neither\n`${SOURCE_DIRECTORY}` nor `${SOURCE_PATH}`, so the folder keeps its tree wherever the pattern\nputs it. A root such as `/` names its files from their first folder down. Null for each\nfile's own folder name",
             "example": "@@abcde\\Music\\Artist\\Album"
           },
           "searchId": {

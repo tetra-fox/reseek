@@ -48,8 +48,10 @@ pub struct EnqueueDownloadGroup {
   /// the remote folder the files were picked in, such as a folder downloaded whole, which every
   /// file is under: each file's folders from this one down, `Album/CD1` for
   /// `@@abcde\Music\Album\CD1\01.flac` in `@@abcde\Music\Album`, take the place of the download
-  /// pattern's `${SOURCE_DIRECTORY}`, so the folder keeps its tree wherever the pattern puts it;
-  /// null for each file's own folder name
+  /// pattern's `${SOURCE_DIRECTORY}`, or go after the pattern's directory when it names neither
+  /// `${SOURCE_DIRECTORY}` nor `${SOURCE_PATH}`, so the folder keeps its tree wherever the pattern
+  /// puts it. A root such as `/` names its files from their first folder down. Null for each
+  /// file's own folder name
   #[serde(default)]
   #[schema(example = "@@abcde\\Music\\Artist\\Album")]
   pub folder: Option<String>,
