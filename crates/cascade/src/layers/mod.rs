@@ -22,7 +22,7 @@ use crate::loaded::Loaded;
 use crate::overrides::{Override, Overrides};
 use crate::schema::Schema;
 use crate::source::Source;
-use crate::{Error, Invalid, Key, Root, tree};
+use crate::{Error, Invalid, Key, Root, paths, tree};
 
 /// What a message about a secret's value says instead of quoting it.
 pub(crate) const SECRET_VALUE: &str = "the value does not fit the key (not shown, it is secret)";
@@ -321,7 +321,18 @@ impl<T: Root> Layers<T> {
     let mut tree = declared.tree.clone();
     let mut sources = declared.sources.clone();
     for (key, o) in overrides {
-      tree::set(&mut tree, key, o.value.clone());
+      let field = self
+        .schema
+        .field(key)
+        .expect("an override in effect is of a key the schema has");
+      // an override is stored resolved, but the store may be written by hand
+      let mut value = o.value.clone();
+      paths::resolve_runtime(field, &mut value).map_err(|message| Error::Value {
+        key: key.clone(),
+        by: "a runtime override".into(),
+        message,
+      })?;
+      tree::set(&mut tree, key, value);
       sources.insert(
         key.clone(),
         Source::Runtime {

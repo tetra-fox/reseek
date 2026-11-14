@@ -80,6 +80,20 @@ pub(crate) fn resolve(field: &Field, value: &mut Value, base: Option<&Path>) -> 
   each_path(field, value, None, &mut |value, _| resolve_one(value, base))
 }
 
+/// [`resolve`] for a value set at run time, where nothing says what a relative path counts
+/// from, so one is refused. The message does not quote the path, which may be secret.
+pub(crate) fn resolve_runtime(field: &Field, value: &mut Value) -> Result<(), String> {
+  each_path(field, value, None, &mut |value, _| {
+    if let Value::String(text) = value
+      && !text.is_empty()
+      && !Path::new(text.as_str()).is_absolute()
+    {
+      return Err("a path set at run time must be absolute".to_string());
+    }
+    resolve_one(value, None)
+  })
+}
+
 /// [`resolve`] for one path, which an absolute one goes through too for its `.` and `..`. An
 /// empty one names no path and stays, for the application's checks to refuse.
 fn resolve_one(value: &mut Value, base: Option<&Path>) -> Result<(), String> {

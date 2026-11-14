@@ -39,7 +39,7 @@ impl<T: Root> State<T> {
     for key in unset {
       items.remove(key);
     }
-    for (key, value) in set {
+    for (key, mut value) in set {
       let field = schema
         .field(&key)
         .ok_or_else(|| Error::UnknownKey(key.clone()))?;
@@ -62,6 +62,11 @@ impl<T: Root> State<T> {
           message: "an override needs a value; remove it to go back to the declared one".into(),
         });
       }
+      paths::resolve_runtime(field, &mut value).map_err(|message| Error::Value {
+        key: key.clone(),
+        by: "a runtime override".into(),
+        message,
+      })?;
       // null when nothing below sets the key
       let declared_value = tree::get(&declared.tree, &key).cloned().unwrap_or_default();
       let item = Override {
@@ -472,6 +477,66 @@ mod tests {
       .await
       .unwrap();
     assert_eq!(watcher.current().values.api_keys["robot"].key, "real");
+  }
+
+  #[tokio::test]
+  async fn a_path_set_at_run_time_must_be_absolute() {
+    let dir = tempfile::tempdir().unwrap();
+    let stored = dir.path().join("overrides.toml");
+    let layers = || {
+      crate::Layers::<Located>::new()
+        .files(dir.path(), ["config.toml"])
+        .overrides(Overrides::load(&stored).unwrap())
+    };
+    let watcher = Watcher::new(layers()).unwrap();
+    let set = async |key: &str, value: Value| {
+      watcher
+        .set_overrides(
+          values(&[(key, value)]),
+          vec![],
+          "admin",
+          Lasts::UntilRemoved,
+          None,
+        )
+        .await
+    };
+    let e = set("data", json!("dl")).await.unwrap_err();
+    assert!(
+      matches!(&e, Error::Value { key, by, .. } if key == "data" && by == "a runtime override"),
+      "{e}"
+    );
+    let e = set("providers", json!({ "home": { "ca": "ca.pem" } }))
+      .await
+      .unwrap_err();
+    assert!(
+      matches!(&e, Error::Value { key, .. } if key == "providers"),
+      "{e}"
+    );
+    assert!(watcher.current().overrides.is_empty());
+
+    let resolved = dir.path().join("dl");
+    set(
+      "data",
+      json!(format!("{}/sub/./../dl", dir.path().display())),
+    )
+    .await
+    .unwrap();
+    assert_eq!(watcher.current().values.data, Some(resolved.clone()));
+    assert_eq!(
+      watcher.current().overrides["data"].value,
+      json!(resolved.to_str()),
+      "kept as it applies"
+    );
+
+    // a relative one in the store, written by hand or by an older version, is dropped
+    fs::write(
+      &stored,
+      "[data]\nvalue = \"dl\"\nset_by = \"a\"\nset_at = \"2026-01-01T00:00:00Z\"\n",
+    )
+    .unwrap();
+    let restarted = Watcher::new(layers()).unwrap();
+    assert_eq!(restarted.current().values.data, None);
+    assert!(restarted.current().overrides.is_empty());
   }
 
   #[tokio::test]
