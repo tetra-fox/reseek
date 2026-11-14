@@ -631,6 +631,13 @@ mod tests {
     a_message_stored_during_a_figure_read_is_counted_after_it(&app, profile).await;
   }
 
+  #[tokio::test(start_paused = true)]
+  async fn a_summary_built_before_a_message_was_stored_is_not_kept_after_it() {
+    let app = app("", &[]).await;
+    let summary = async { app.state.users.summary("alice").await.unwrap() };
+    a_message_stored_during_a_figure_read_is_counted_after_it(&app, summary).await;
+  }
+
   #[tokio::test]
   async fn a_message_the_server_did_not_take_opens_no_conversation() {
     let config = "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n";
