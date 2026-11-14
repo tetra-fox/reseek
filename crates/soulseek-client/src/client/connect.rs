@@ -158,7 +158,12 @@ impl Client {
         _ = state.changed() => {}
       }
     }
-    tracing::info!(address, port, %remote, username, "connecting to server");
+    // while connects keep failing each one is a step of the caller's retries, which says so
+    if self.inner.session().outage.ongoing() {
+      tracing::debug!(address, port, %remote, username, "connecting to server");
+    } else {
+      tracing::info!(address, port, %remote, username, "connecting to server");
+    }
     let result = self
       .connect_session(address, remote, username, password, attempt)
       .await;

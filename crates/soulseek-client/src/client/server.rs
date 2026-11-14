@@ -457,7 +457,7 @@ impl Client {
         .transition(&mut session, Edge::Accept, "Logged in".into(), None)
       {
         // a connect that fails from now on is a new outage
-        Ok(_) => session.connect_failure_warned = None,
+        Ok(_) => session.outage.end(),
         Err(refused) => {
           tracing::debug!(state = %refused, "a login reply outside a login is not taken");
         }

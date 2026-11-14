@@ -181,12 +181,10 @@ impl Teardown {
       // a connect that failed is tried again, so each way it fails is warned about once until
       // a login succeeds
       (Some(error), _) if !logged_in => {
-        let failure = error.to_string();
-        if session.connect_failure_warned.as_ref() == Some(&failure) {
-          tracing::debug!(message, %error, "disconnected from server");
-        } else {
+        if session.outage.new_reason(&error.to_string()) {
           tracing::warn!(message, %error, "disconnected from server");
-          session.connect_failure_warned = Some(failure);
+        } else {
+          tracing::debug!(message, %error, "disconnected from server");
         }
       }
       (Some(error), _) => tracing::warn!(message, %error, "disconnected from server"),

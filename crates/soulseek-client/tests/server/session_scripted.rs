@@ -623,7 +623,8 @@ async fn a_disconnect_asked_for_is_no_warning_and_a_lost_session_is() {
 }
 
 /// A connect that fails is tried again by the application, so each way it fails is warned about
-/// once, and again only once a login came between
+/// once, and again only once a login came between; the connects after the first that failed are
+/// told at debug
 #[tokio::test]
 async fn a_server_out_of_reach_is_warned_about_once_until_a_login() {
   let logs = Logs::capture();
@@ -658,6 +659,13 @@ async fn a_server_out_of_reach_is_warned_about_once_until_a_login() {
     cut.await.unwrap().unwrap_err();
   }
   assert_eq!(warned(), 2, "{}", logs.text());
+  fail().await;
+  assert_eq!(
+    warned(),
+    2,
+    "a way it failed earlier in the outage: {}",
+    logs.text()
+  );
   let logging_in = connect(client, &session.fake, CancellationToken::new());
   let mut server = session.fake.accept().await;
   server.accept_login().await;
@@ -669,6 +677,9 @@ async fn a_server_out_of_reach_is_warned_about_once_until_a_login() {
   drop(session.fake.accept().await);
   cut.await.unwrap().unwrap_err();
   assert_eq!(warned(), 3, "{}", logs.text());
+  // the session's own, the first that failed, and the first after the login
+  let told = logs.lines_with(&["INFO", "connecting to server"]).len();
+  assert_eq!(told, 3, "{}", logs.text());
 }
 
 /// The clock is paused only while nothing waits on the socket: a paused clock jumps to the next
