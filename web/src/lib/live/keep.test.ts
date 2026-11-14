@@ -1,7 +1,7 @@
 import { flushSync, mount, unmount } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { interaction } from "#lib/lists/interaction.svelte.js";
+import { Freeze, interaction } from "#lib/lists/interaction.svelte.js";
 import { frameText } from "#lib/testing/frames.js";
 import Keep from "#lib/testing/Keep.svelte";
 
@@ -36,9 +36,12 @@ describe("keepCurrent", () => {
     await vi.advanceTimersByTimeAsync(0);
   };
 
-  /** mounts a screen on topic `transfers` and lets the stream greet */
-  const connected = async () => {
-    component = mount(Keep, { target: document.body, props: { reload, topic: "transfers" } });
+  /** mounts a screen on topic `transfers`, with its list's `freeze`, and lets the stream greet */
+  const connected = async (freeze?: Freeze) => {
+    component = mount(Keep, {
+      target: document.body,
+      props: { reload, topic: "transfers", freeze }
+    });
     flushSync();
     live.start();
     send(hello(1));
@@ -151,6 +154,24 @@ describe("keepCurrent", () => {
     expect(live.topics).toEqual(["search", "transfers"]);
     expect(reload).not.toHaveBeenCalled();
     release();
+  });
+
+  it("waits for its own list only, while another list is held", async () => {
+    const own = new Freeze();
+    const other = new Freeze();
+    await connected(own);
+    const elsewhere = other.hold();
+    send(LAGGED);
+    await pass(0);
+    expect(reload).toHaveBeenCalledOnce();
+    elsewhere();
+
+    const held = own.hold();
+    send(frameText(3, "lagged", {}));
+    await pass(RECONCILE_MS);
+    expect(reload).toHaveBeenCalledOnce();
+    held();
+    expect(reload).toHaveBeenCalledTimes(2);
   });
 
   it("waits while a list is held and reloads once when it is let go", async () => {
