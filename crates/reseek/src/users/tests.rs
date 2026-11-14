@@ -371,6 +371,49 @@ async fn groups_are_set_per_user_and_moved_or_let_go_together() {
   assert!(groups_of().await.0.is_empty());
 }
 
+#[tokio::test]
+async fn a_group_made_at_run_time_outlasts_a_config_file_change() {
+  let app = app(CONFIG, &[]).await;
+  // the group editor sends the whole map of groups with the new one in it
+  let (_, view) = app.call("GET", "/api/v0/options/view", None).await;
+  let mut groups = view["values"]["transfers"]["groups"]["user_defined"].clone();
+  assert_eq!(groups["friends"]["color"], "teal");
+  groups["mates"] = json!({ "color": "pink", "upload": { "slots": 3 } });
+  let body = json!({ "set": { "transfers.groups.user_defined": groups } });
+  let (status, answer) = app.call("PATCH", "/api/v0/options", Some(body)).await;
+  assert_eq!(status, 200, "{answer}");
+
+  let edited = CONFIG.replace("slots = 2", "slots = 4") + "[transfers.upload]\nslots = 7\n";
+  std::fs::write(app.dir.path().join("config.toml"), edited).unwrap();
+  app.state.config.reload().await.unwrap();
+  let current = app.state.config.current();
+  let transfers = &current.values.transfers;
+  assert_eq!(transfers.upload.slots, 7);
+  let defined = &transfers.groups.user_defined;
+  assert_eq!(
+    defined.keys().collect::<Vec<_>>(),
+    ["friends", "mates", "vip"]
+  );
+  assert_eq!(defined["mates"].upload.slots, Some(3));
+  assert_eq!(
+    defined["mates"].color,
+    crate::config::enums::GroupColor::Pink
+  );
+  assert_eq!(
+    defined["vip"].upload.slots,
+    Some(4),
+    "the file's change shows"
+  );
+  let (_, listed) = app.call("GET", "/api/v0/groups", None).await;
+  let mates = listed["groups"]
+    .as_array()
+    .unwrap()
+    .iter()
+    .find(|g| g["name"] == "mates")
+    .map(|g| g["defined"].clone());
+  assert_eq!(mates, Some(json!(true)));
+}
+
 /// Each listed block's user and source.
 fn sources(listed: &Value) -> Vec<(&str, &str)> {
   listed["users"]
