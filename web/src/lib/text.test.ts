@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { linkify, pathParts, snippetParts, splitTail } from "./text";
+import { fold, linkify, pathParts, snippetParts, splitTail } from "./text";
 
 describe("links in text", () => {
   it("makes http and https runs links and keeps the rest as text", () => {
@@ -65,6 +65,25 @@ describe("cutting in the middle", () => {
     expect(splitTail("short")).toEqual(["", "short"]);
   });
 
+  it("keeps as wide an end in a script whose letters are twice as wide", () => {
+    expect(splitTail("1_戦場のメリークリスマス.flac")).toEqual([
+      "1_戦場のメリークリ",
+      "スマス.flac"
+    ]);
+    // a last part as wide as the most kept in Latin letters is too wide in these
+    const deep = "@@a\\音楽\\" + "坂".repeat(30);
+    expect(splitTail(deep, true)).toEqual([deep.slice(0, -6), "坂".repeat(6)]);
+  });
+
+  it("never cuts inside a letter drawn from several code points", () => {
+    for (const name of ["🔥".repeat(9) + ".flac", "👩🏽‍💻".repeat(4) + "-x.mp3", "Tiến.flac"]) {
+      const [head, tail] = splitTail("x".repeat(20) + name);
+      const whole = new Intl.Segmenter().segment(head + tail);
+      const at = [...whole].map((s) => s.index);
+      expect(at, name).toContain(head.length);
+    }
+  });
+
   it("splits a path into its parts and separators", () => {
     expect(pathParts("@@abd\\موسيقى\\أم كلثوم")).toEqual([
       "@@abd",
@@ -74,5 +93,19 @@ describe("cutting in the middle", () => {
       "أم كلثوم"
     ]);
     expect(pathParts("/home/ryu")).toEqual(["/", "home", "/", "ryu"]);
+  });
+});
+
+describe("folded text", () => {
+  it("keeps the start up to so many characters or lines, and nothing when it all fits", () => {
+    expect(fold("x".repeat(1_000_000), 1000)).toBe("x".repeat(1000));
+    expect(fold("a\nb\nc\nd", 1000, 2)).toBe("a\nb");
+    expect(fold("a\nb", 1000, 2)).toBeNull();
+    expect(fold("short", 1000)).toBeNull();
+  });
+
+  it("never cuts inside a letter", () => {
+    expect(fold("a" + "🔥".repeat(600), 1000)).toBe("a" + "🔥".repeat(499));
+    expect(fold("x" + "👩🏽‍💻".repeat(200), 1000)).toBe("x" + "👩🏽‍💻".repeat(142));
   });
 });

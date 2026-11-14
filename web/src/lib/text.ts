@@ -64,23 +64,61 @@ export const snippetParts = (snippet: string): SnippetPart[] => {
   return parts;
 };
 
-/** How many characters a text keeps whole at its end when it is cut in the middle */
+/** How many columns of a text, a letter of a CJK script or an emoji taking two, its end keeps */
 const TAIL = 12;
-/** A path's last part is kept whole up to this long; a longer one keeps its last `TAIL` */
+/** A path's last part is kept whole up to this many columns; a longer one keeps its last `TAIL` */
 const PATH_TAIL = 48;
+
+/** A letter drawn twice as wide as a Latin one */
+const WIDE =
+  /[\p{scx=Han}\p{scx=Hiragana}\p{scx=Katakana}\p{scx=Hangul}\p{Emoji_Presentation}\u3000-\u303f\uff01-\uff60\uffe0-\uffe6]/u;
+
+const LETTERS = new Intl.Segmenter();
+
+/**
+ * Where the last `columns` of a text start, never inside a letter: an emoji or an accented letter
+ * made of several code points is kept whole on one side
+ */
+const tailStart = (text: string, columns: number): number => {
+  const letters = [...LETTERS.segment(text)];
+  let width = 0;
+  for (let i = letters.length - 1; i >= 0; i--) {
+    width += WIDE.test(letters[i].segment) ? 2 : 1;
+    if (width > columns) return letters[i].index + letters[i].segment.length;
+  }
+  return 0;
+};
 
 /**
  * Where a text cut in the middle splits: the head, which gives way first, and the tail, which
  * stays. A path keeps its last part with the separator before it; other text, such as a file
- * name, keeps its last few characters, where names that share a start differ
+ * name, keeps its last few letters, where names that share a start differ
  */
 export const splitTail = (text: string, path = false): [string, string] => {
   if (path) {
     const cut = Math.max(text.lastIndexOf("\\"), text.lastIndexOf("/"));
-    if (cut > 0 && text.length - cut <= PATH_TAIL) return [text.slice(0, cut), text.slice(cut)];
+    if (cut > 0 && tailStart(text, PATH_TAIL) <= cut) return [text.slice(0, cut), text.slice(cut)];
   }
-  const cut = Math.max(0, text.length - TAIL);
+  const cut = tailStart(text, TAIL);
   return [text.slice(0, cut), text.slice(cut)];
+};
+
+/**
+ * The start of `text` up to `chars` characters and `lines` lines, never cut inside a letter, for a
+ * long text shown folded; null when the whole text fits
+ */
+export const fold = (text: string, chars: number, lines = Infinity): string | null => {
+  let end = Math.min(text.length, chars);
+  // the end of the last line kept, when the text has more lines than that before `end`
+  let lineEnd = -1;
+  for (let n = 0; n < lines; n++) {
+    lineEnd = text.indexOf("\n", lineEnd + 1);
+    if (lineEnd === -1 || lineEnd >= end) break;
+  }
+  if (lineEnd !== -1 && lineEnd < end) end = lineEnd;
+  if (end === text.length) return null;
+  // end is inside the text, so a letter holds it
+  return text.slice(0, LETTERS.segment(text).containing(end)!.index);
 };
 
 /** Whether a text holds letters of a right-to-left script, Hebrew, Arabic, Syriac, Thaana or N'Ko */
