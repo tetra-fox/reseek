@@ -74,8 +74,13 @@ pub fn files_path(encoded: &str, deleting: bool) -> Result<String, ApiError> {
   let bytes = engine
     .decode(encoded)
     .map_err(|e| ApiError::invalid("The path is not valid base64", e.to_string()))?;
-  let text =
-    String::from_utf8(bytes).map_err(|_| ApiError::bad_request("The path is not valid UTF-8"))?;
+  // a name sent as it is can happen to read as base64, so the refusal says what is expected
+  let text = String::from_utf8(bytes).map_err(|_| {
+    ApiError::invalid(
+      "The path does not decode to UTF-8 text",
+      "a files route takes the path as base64 of its UTF-8 text",
+    )
+  })?;
   relative_path(&text, deleting)
 }
 
@@ -161,10 +166,12 @@ mod tests {
       400
     );
     assert_eq!(files_path("!!!", false).unwrap_err().status(), 400);
+    let not_text = files_path("/w==", false).unwrap_err();
+    assert_eq!(not_text.status(), 400);
+    assert_eq!(not_text.message(), "The path does not decode to UTF-8 text");
     assert_eq!(
-      files_path("/w==", false).unwrap_err().status(),
-      400,
-      "not UTF-8"
+      not_text.detail(),
+      Some("a files route takes the path as base64 of its UTF-8 text")
     );
   }
 }
