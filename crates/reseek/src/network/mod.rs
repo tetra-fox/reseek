@@ -95,8 +95,8 @@ pub fn credentials(soulseek: &crate::config::Soulseek) -> Option<(&str, &str)> {
 /// Says that the daemon does not connect for want of credentials.
 pub fn warn_no_credentials() {
   warn!(
-    "Not connecting to the Soulseek server; username and/or password invalid.  Specify valid \
-     credentials and manually connect, or update config and restart."
+    "Not connecting to the Soulseek server; the username or password is not set. Saving both \
+     connects."
   );
 }
 
