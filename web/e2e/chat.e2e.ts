@@ -182,6 +182,23 @@ test("a chat row shows its menu is open while the pointer is on the menu", async
   await expect(row).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
 });
 
+test("a right-click opens a message's menu at the pointer, as on every list", async ({ page }) => {
+  await fakeChat(page);
+  await visit(page, "/chat");
+  await open(page, "/chat/rooms/indie");
+  const text = page.getByRole("log").getByText("anyone have the new boards of canada rip?");
+  const box = (await text.boundingBox())!;
+  const at = { x: box.x + box.width / 4, y: box.y + box.height / 2 };
+  await page.mouse.click(at.x, at.y, { button: "right" });
+  const menu = page.getByRole("menu");
+  await expect(menu).toBeVisible();
+  // the menu's corner is at the pointer, below it by the menu's offset
+  await expect.poll(async () => (await menu.boundingBox())?.x).toBeCloseTo(at.x, 0);
+  const top = (await menu.boundingBox())!.y;
+  expect(top - at.y).toBeGreaterThanOrEqual(0);
+  expect(top - at.y).toBeLessThan(8);
+});
+
 test("a message takes the page's own hover tint", async ({ page }) => {
   await fakeChat(page);
   await visit(page, "/chat");
