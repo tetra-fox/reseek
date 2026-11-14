@@ -618,6 +618,36 @@ mod tests {
       written["providers"]["home"]["ca"].as_str(),
       Some("/srv/ca.pem")
     );
+
+    // a client that reorders a list, or puts an element before the others, sends the paths
+    // that stay at other places
+    fs::write(
+      &path,
+      "[[mirrors]]\nca = \"a.pem\"\n[[mirrors]]\nca = \"b.pem\"\n",
+    )
+    .unwrap();
+    watcher.reload().await.unwrap();
+    let current = watcher.current();
+    let shown = current.tree()["mirrors"].as_array().unwrap().clone();
+    let mirrors = json!([{ "ca": "/srv/new.pem" }, shown[1], shown[0]]);
+    watcher
+      .patch_file(
+        "config.toml",
+        current.files[0].revision.as_deref(),
+        None,
+        values(&[("mirrors", mirrors)]),
+        vec![],
+      )
+      .await
+      .unwrap();
+    let written: toml::Table = fs::read_to_string(&path).unwrap().parse().unwrap();
+    let cas: Vec<&str> = written["mirrors"]
+      .as_array()
+      .unwrap()
+      .iter()
+      .map(|m| m["ca"].as_str().unwrap())
+      .collect();
+    assert_eq!(cas, ["/srv/new.pem", "b.pem", "a.pem"]);
   }
 
   #[tokio::test]

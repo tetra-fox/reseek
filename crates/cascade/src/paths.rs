@@ -35,55 +35,61 @@ pub fn absolute(path: &Path) -> std::io::Result<PathBuf> {
   Ok(resolved)
 }
 
-/// Calls `f` on each path in `value`, a value of `field`, with what `other`, another value of
-/// the field, holds in the same place: the value itself when the field is a path, else the
-/// paths in its entries, matched by name in a map and by position in a list.
+/// Calls `f` on each path in `value`, a value of `field`, with what `others`, other values of
+/// the field, hold in its place: themselves when the field is a path, else the paths at the
+/// same key in any of their entries, since an entry may have been renamed or moved.
 fn each_path<'a, E>(
   field: &Field,
   value: &mut Value,
-  other: Option<&'a Value>,
-  f: &mut impl FnMut(&mut Value, Option<&'a Value>) -> Result<(), E>,
+  others: &[&'a Value],
+  f: &mut impl FnMut(&mut Value, &[&'a Value]) -> Result<(), E>,
 ) -> Result<(), E> {
   if field.path {
-    return f(value, other);
+    return f(value, others);
   }
   if field.entries.is_empty() {
     return Ok(());
   }
-  let entries: Vec<(&mut Value, Option<&Value>)> = match value {
-    Value::Object(entries) if field.kind == Kind::Map => entries
-      .iter_mut()
-      .map(|(name, entry)| (entry, other.and_then(|other| other.get(name.as_str()))))
-      .collect(),
-    Value::Array(items) => items
-      .iter_mut()
-      .enumerate()
-      .map(|(i, item)| (item, other.and_then(|other| other.get(i))))
-      .collect(),
+  let entries: Vec<&mut Value> = match value {
+    Value::Object(entries) if field.kind == Kind::Map => entries.values_mut().collect(),
+    Value::Array(items) => items.iter_mut().collect(),
     // a value of the wrong shape is refused when the configuration is read into its type
     _ => return Ok(()),
   };
-  for (entry, other) in entries {
+  let other_entries: Vec<&Value> = others.iter().flat_map(|other| entries_of(other)).collect();
+  for entry in entries {
     for inner in &field.entries {
       if let Some(value) = tree::get_mut(entry, &inner.key) {
-        let other = other.and_then(|other| tree::get(other, &inner.key));
-        each_path(inner, value, other, f)?;
+        let others: Vec<&Value> = other_entries
+          .iter()
+          .filter_map(|other| tree::get(other, &inner.key))
+          .collect();
+        each_path(inner, value, &others, f)?;
       }
     }
   }
   Ok(())
 }
 
+/// The entries of a map's or a list's value.
+fn entries_of(value: &Value) -> Vec<&Value> {
+  match value {
+    Value::Object(entries) => entries.values().collect(),
+    Value::Array(items) => items.iter().collect(),
+    _ => Vec::new(),
+  }
+}
+
 /// Makes each relative path in `value`, a value of `field`, absolute against `base`: the
 /// directory of the file that sets it, or the working directory when `None`.
 pub(crate) fn resolve(field: &Field, value: &mut Value, base: Option<&Path>) -> Result<(), String> {
-  each_path(field, value, None, &mut |value, _| resolve_one(value, base))
+  each_path(field, value, &[], &mut |value, _| resolve_one(value, base))
 }
 
 /// [`resolve`] for a value set at run time, where nothing says what a relative path counts
 /// from, so one is refused. The message does not quote the path, which may be secret.
 pub(crate) fn resolve_runtime(field: &Field, value: &mut Value) -> Result<(), String> {
-  each_path(field, value, None, &mut |value, _| {
+  each_path(field, value, &[], &mut |value, _| {
     if let Value::String(text) = value
       && !text.is_empty()
       && !Path::new(text.as_str()).is_absolute()
@@ -119,7 +125,7 @@ fn resolve_one(value: &mut Value, base: Option<&Path>) -> Result<(), String> {
 
 /// Puts back in each value of `set`, to be written to the file in `dir` that holds `text`, the
 /// paths as the file writes them wherever the value holds them as they resolve: a client reads
-/// the resolved values, and sends back a whole map when it changes one entry.
+/// the resolved values, and sends back a whole map or list when it changes one entry.
 pub(crate) fn as_written(schema: &Schema, set: &mut BTreeMap<Key, Value>, text: &str, dir: &Path) {
   // a file that does not parse is refused by the edit itself
   let Ok(table) = text.parse::<toml::Table>() else {
@@ -135,13 +141,14 @@ pub(crate) fn as_written(schema: &Schema, set: &mut BTreeMap<Key, Value>, text: 
     let kept: Result<(), Infallible> = each_path(
       field,
       value,
-      tree::get(&written, key),
+      tree::get(&written, key).as_slice(),
       &mut |value, written| {
-        if let Some(written) = written {
-          let mut resolved = written.clone();
-          if resolve_one(&mut resolved, Some(dir)).is_ok() && resolved == *value {
-            *value = written.clone();
-          }
+        let same = written.iter().find(|written| {
+          let mut resolved = Value::clone(written);
+          resolve_one(&mut resolved, Some(dir)).is_ok() && resolved == *value
+        });
+        if let Some(written) = same {
+          *value = Value::clone(written);
         }
         Ok(())
       },
