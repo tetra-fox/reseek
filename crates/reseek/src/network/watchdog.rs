@@ -366,7 +366,7 @@ impl Watchdog {
         return;
       }
       let span = info_span!("server_connect", attempt = failed + 1);
-      match self.attempt(&attempt, failed > 0).instrument(span).await {
+      match self.attempt(&attempt).instrument(span).await {
         Attempt::Connected | Attempt::Canceled => return,
         Attempt::Stop => {
           self.stop(&attempt);
@@ -382,15 +382,11 @@ impl Watchdog {
     }
   }
 
-  /// One attempt with the current options, once the shares are initialized. A `retry` follows
-  /// the wait that was logged, so it is told at debug.
-  async fn attempt(&self, cancel: &CancellationToken, retry: bool) -> Attempt {
+  /// One attempt with the current options, once the shares are initialized. The client logs
+  /// the connect itself, so this is told at debug.
+  async fn attempt(&self, cancel: &CancellationToken) -> Attempt {
     let inner = &self.inner;
-    if retry {
-      debug!("Attempting to connect to the Soulseek server");
-    } else {
-      info!("Attempting to connect to the Soulseek server");
-    }
+    debug!("Attempting to connect to the Soulseek server");
     tokio::select! {
       () = cancel.cancelled() => {
         debug!("Reconnection attempt canceled");
@@ -560,7 +556,7 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn a_server_that_stays_down_is_one_info_line_per_wait() {
+  async fn a_server_that_stays_down_is_one_info_line_per_attempt() {
     use api_types::logs::LogLevel;
 
     let (logs, _capturing) = crate::testing::captured_logs();
@@ -595,6 +591,13 @@ mod tests {
       .filter(|(_, record)| record.message.starts_with("Failed to reconnect"))
       .map(|(i, _)| i)
       .collect();
+    let first: Vec<&str> = records[..failed[0]]
+      .iter()
+      .filter(|record| record.level == LogLevel::Information)
+      .map(|record| record.message.as_str())
+      .filter(|line| line.starts_with("Attempting to connect") || line.starts_with("connecting"))
+      .collect();
+    assert_eq!(first.len(), 1, "{first:#?}");
     let retries = &records[failed[0]..failed[2]];
     let told: Vec<&str> = retries
       .iter()
