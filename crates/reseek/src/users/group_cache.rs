@@ -2,8 +2,10 @@
 //! once wherever they are asked: whether the server calls them privileged, their presence and
 //! their statistics with when they came, and the groups we put them in. A user enters on a
 //! fetch, a watch or the server's list of privileged users, and every user we put in a group is
-//! loaded at startup; nobody leaves. What the server pushes on its own is taken only for users
-//! known already. Whatever it says that moves the groups a user with a row is shown in pushes
+//! loaded at startup. Those in no group of ours, not privileged and not watched leave once more
+//! than [`KEPT`] of them are known, the ones read or changed longest ago first, so names a peer
+//! makes up do not pile up. What the server pushes on its own is taken only for users known
+//! already. Whatever it says that moves the groups a user with a row is shown in pushes
 //! their summary.
 //!
 //! The server pushes a watched user's presence, never their statistics, so those are asked for
@@ -13,7 +15,8 @@
 //! of a server session forgets which users the server was watching for us, not what it said.
 
 use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock, RwLockReadGuard};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::time::{Duration, Instant};
 
 use api_types::state::UserStatistics;
@@ -34,22 +37,62 @@ use crate::turns::Turns;
 /// for again.
 const STALE: Duration = Duration::from_secs(4 * 3600);
 
+/// How many users the cache keeps that it may forget. A user we put in a group, one the server
+/// calls privileged and one it watches for us are kept however many there are.
+const KEPT: usize = 10_000;
+
 static REFETCH_FAILED: LogLimiter = LogLimiter::new();
+
+/// What is known of one user, and when it was last read or changed, by the cache's clock.
+struct Entry {
+  facts: Facts,
+  used: AtomicU64,
+}
+
+impl Entry {
+  fn new(facts: Facts, used: u64) -> Self {
+    Self {
+      facts,
+      used: AtomicU64::new(used),
+    }
+  }
+}
+
+/// Every user known, and when the cache is trimmed next.
+struct Entries {
+  by_user: HashMap<String, Entry>,
+  /// how many users past which the cache is trimmed
+  trim_past: usize,
+}
+
+impl Default for Entries {
+  fn default() -> Self {
+    Self {
+      by_user: HashMap::new(),
+      trim_past: KEPT,
+    }
+  }
+}
 
 /// What the server last said of each user known, with the groups we put them in, by user, and
 /// the users it watches for us. It is shared with the database writes that make a user's row,
 /// which start the row with it.
 #[derive(Clone, Default)]
 pub struct Reported {
-  facts: Arc<RwLock<HashMap<String, Facts>>>,
+  entries: Arc<RwLock<Entries>>,
   /// the users the server watches for us in this session, whose presence it keeps current
   watched: Arc<Mutex<HashSet<String>>>,
+  /// counts every read and change, so each entry says how recently it was used
+  clock: Arc<AtomicU64>,
 }
 
 impl Reported {
   /// What is known of `username`, when anything is.
   pub fn of(&self, username: &str) -> Option<Facts> {
-    self.read().get(username).cloned()
+    let entries = self.read();
+    let entry = entries.by_user.get(username)?;
+    entry.used.store(self.tick(), Ordering::Relaxed);
+    Some(entry.facts.clone())
   }
 
   /// What a row made now for `username` starts with: their statistics, which carry the time
@@ -68,17 +111,70 @@ impl Reported {
   /// when it exists; returns whether there was one to change.
   pub fn update(&self, username: &str, create: bool, change: impl FnOnce(&mut Facts)) -> bool {
     // every change is made whole before the lock is let go
-    let mut facts = self.facts.write().unwrap_or_else(PoisonError::into_inner);
-    match facts.get_mut(username) {
-      Some(known) => change(known),
-      None if create => change(facts.entry(username.to_string()).or_default()),
+    let mut entries = self.write();
+    let used = self.tick();
+    match entries.by_user.get_mut(username) {
+      Some(entry) => {
+        change(&mut entry.facts);
+        *entry.used.get_mut() = used;
+      }
+      None if create => {
+        let mut facts = Facts::default();
+        change(&mut facts);
+        let entry = Entry::new(facts, used);
+        entries.by_user.insert(username.to_string(), entry);
+        if entries.by_user.len() > entries.trim_past {
+          drop(entries);
+          self.trim();
+        }
+      }
       None => return false,
     }
     true
   }
 
-  fn read(&self) -> RwLockReadGuard<'_, HashMap<String, Facts>> {
-    self.facts.read().unwrap_or_else(PoisonError::into_inner)
+  /// Forgets the users read or changed longest ago among those the cache may forget, down to
+  /// nine tenths of [`KEPT`], and trims again a tenth of [`KEPT`] later. Takes the watched users
+  /// before the entries, in the order [`Reported::for_new_row`] does.
+  fn trim(&self) {
+    let watched = lock(&self.watched);
+    let mut entries = self.write();
+    let mut forgettable: Vec<(u64, String)> = entries
+      .by_user
+      .iter()
+      .filter(|(username, entry)| {
+        !entry.facts.privileged
+          && entry.facts.memberships.is_empty()
+          && !watched.contains(*username)
+      })
+      .map(|(username, entry)| (entry.used.load(Ordering::Relaxed), username.clone()))
+      .collect();
+    let keep = KEPT - KEPT / 10;
+    if forgettable.len() > keep {
+      let over = forgettable.len() - keep;
+      forgettable.sort_unstable();
+      for (_, username) in &forgettable[..over] {
+        entries.by_user.remove(username);
+      }
+      debug!(
+        forgotten = over,
+        kept = entries.by_user.len(),
+        "users cache trimmed"
+      );
+    }
+    entries.trim_past = entries.by_user.len() + KEPT / 10;
+  }
+
+  fn tick(&self) -> u64 {
+    self.clock.fetch_add(1, Ordering::Relaxed)
+  }
+
+  fn read(&self) -> RwLockReadGuard<'_, Entries> {
+    self.entries.read().unwrap_or_else(PoisonError::into_inner)
+  }
+
+  fn write(&self) -> RwLockWriteGuard<'_, Entries> {
+    self.entries.write().unwrap_or_else(PoisonError::into_inner)
   }
 }
 
@@ -107,13 +203,17 @@ pub struct GroupCache {
 impl GroupCache {
   /// The cache knowing the groups `memberships` puts users in, each as the user and the group.
   pub fn new(memberships: impl IntoIterator<Item = (String, String)>) -> Self {
-    let mut facts: HashMap<String, Facts> = HashMap::new();
+    let mut entries = Entries::default();
     for (username, group) in memberships {
-      facts.entry(username).or_default().memberships.push(group);
+      let entry = entries
+        .by_user
+        .entry(username)
+        .or_insert_with(|| Entry::new(Facts::default(), 0));
+      entry.facts.memberships.push(group);
     }
     Self {
       facts: Reported {
-        facts: Arc::new(RwLock::new(facts)),
+        entries: Arc::new(RwLock::new(entries)),
         ..Reported::default()
       },
       ..Self::default()
@@ -635,10 +735,11 @@ impl Directory {
 
   /// Every user the cache knows, by name, with what the server last said of them.
   pub fn cached_users(&self) -> Vec<CachedUser> {
-    let facts = self.groups.facts.read();
-    let mut users: Vec<CachedUser> = facts
+    let entries = self.groups.facts.read();
+    let mut users: Vec<CachedUser> = entries
+      .by_user
       .iter()
-      .map(|(username, facts)| CachedUser {
+      .map(|(username, Entry { facts, .. })| CachedUser {
         username: username.clone(),
         statistics: facts.statistics.clone(),
         status: facts.presence.map(|presence| UserStatus {
@@ -706,5 +807,50 @@ impl Directory {
     self.groups.update(username, create, |facts| {
       facts.memberships = memberships;
     });
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn fresh_names_keep_the_cache_bounded_and_the_users_it_must_keep() {
+    let reported = Reported::default();
+    lock(&reported.watched).insert("watched".to_string());
+    reported.update("watched", true, |_| {});
+    reported.update("privileged", true, |facts| facts.privileged = true);
+    reported.update("member", true, |facts| {
+      facts.memberships.push("friends".to_string());
+    });
+    reported.update("alice", true, |_| {});
+    let fresh = |n: usize| format!("fresh{n}");
+    let known = |reported: &Reported| reported.read().by_user.len();
+    // up to the bound nothing is forgotten, and alice is read last
+    let mut next = 0;
+    while known(&reported) < KEPT {
+      reported.update(&fresh(next), true, |_| {});
+      next += 1;
+    }
+    assert!(reported.of("alice").is_some());
+    reported.update(&fresh(next), true, |_| {});
+    assert!(
+      reported.of("alice").is_some(),
+      "read after every fresh name but one"
+    );
+    assert!(
+      reported.of(&fresh(0)).is_none(),
+      "the one used longest ago goes first"
+    );
+
+    for n in next + 1..next + 5 * KEPT {
+      reported.update(&fresh(n), true, |_| {});
+    }
+    let kept = known(&reported);
+    assert!(kept <= KEPT + KEPT / 10 + 3, "{kept} users kept");
+    for name in ["watched", "privileged", "member"] {
+      assert!(reported.of(name).is_some(), "{name} was forgotten");
+    }
+    assert!(reported.of(&fresh(next + 5 * KEPT - 1)).is_some());
   }
 }
