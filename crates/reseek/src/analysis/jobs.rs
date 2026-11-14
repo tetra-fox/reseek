@@ -26,6 +26,7 @@ use crate::config::Analysis as AnalysisOptions;
 use crate::files::LocalFile;
 use crate::jobs::{Ended, NewJob, NewPart, StoredPart, store as job_store};
 use crate::services::FileTarget;
+use crate::transfers::listing::common_folder;
 
 /// The most files one batch may name.
 pub(super) const BATCH_LIMIT: usize = 100_000;
@@ -173,25 +174,6 @@ fn job_name(targets: &[Target]) -> String {
       }
     }
   }
-}
-
-/// The deepest folder holding every one of `paths`, `/`-separated; empty when none does.
-fn common_folder<'a>(mut paths: impl Iterator<Item = &'a str>) -> &'a str {
-  let parent = |path: &'a str| path.rsplit_once('/').map_or("", |(dir, _)| dir);
-  let Some(first) = paths.next() else {
-    return "";
-  };
-  let mut common = parent(first);
-  for path in paths {
-    while !common.is_empty()
-      && !path
-        .strip_prefix(common)
-        .is_some_and(|rest| rest.starts_with('/'))
-    {
-      common = parent(common);
-    }
-  }
-  common
 }
 
 impl Analysis {
@@ -755,7 +737,7 @@ fn listed(extensions: &[String], path: &std::path::Path) -> bool {
 mod tests {
   use std::path::Path;
 
-  use super::{common_folder, listed};
+  use super::listed;
 
   #[test]
   fn listed_extensions_match_without_case_and_only_the_last_one() {
@@ -765,13 +747,5 @@ mod tests {
     assert!(!listed(&extensions, Path::new("/d/a.flac.mp3")));
     assert!(!listed(&extensions, Path::new("/d/flac")));
     assert!(!listed(&[], Path::new("/d/a.flac")));
-  }
-
-  #[test]
-  fn a_batch_is_named_by_its_deepest_common_folder() {
-    let folder = |paths: &[&'static str]| common_folder(paths.iter().copied());
-    assert_eq!(folder(&["A/Album/1.flac", "A/Album/CD2/1.flac"]), "A/Album");
-    assert_eq!(folder(&["A/Album/1.flac", "A/Albums/1.flac"]), "A");
-    assert_eq!(folder(&["1.flac", "A/2.flac"]), "");
   }
 }

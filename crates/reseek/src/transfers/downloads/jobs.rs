@@ -24,7 +24,7 @@ use uuid::Uuid;
 use super::{Downloads, Group};
 use crate::jobs::{Ended, NewJob, NewPart};
 use crate::transfers::categories::{CANCELLED, ERRORED, SUCCESSFUL, UNFINISHED};
-use crate::transfers::listing::remote_directory;
+use crate::transfers::listing::common_folder;
 use crate::transfers::state::state_at;
 use crate::transfers::{ASKED_ORDER, Record, readable, text_at};
 
@@ -151,25 +151,6 @@ fn summary(job: Uuid, rows: &[(String, String, TransferStates)]) -> Option<Downl
     failed_count: failed,
     canceled_count: canceled,
   })
-}
-
-/// The deepest remote folder holding every one of `filenames`; empty when they share none.
-fn common_folder<'a>(mut filenames: impl Iterator<Item = &'a str>) -> &'a str {
-  let Some(first) = filenames.next() else {
-    return "";
-  };
-  let holds = |folder: &str, path: &str| {
-    path
-      .strip_prefix(folder)
-      .is_some_and(|rest| rest.starts_with(['\\', '/']))
-  };
-  let mut common = remote_directory(first);
-  for filename in filenames {
-    while !common.is_empty() && !holds(common, filename) {
-      common = remote_directory(common);
-    }
-  }
-  common
 }
 
 /// The name of a download job of `groups`: its file or its folder from its user when it has one
@@ -866,24 +847,5 @@ mod tests {
       ]),
       "Downloads from alice and 2 others"
     );
-  }
-
-  #[test]
-  fn the_common_folder_is_the_deepest_holding_every_file() {
-    let folder = |names: &[&'static str]| common_folder(names.iter().copied());
-    assert_eq!(
-      folder(&[
-        "@@a\\M\\Album\\Disc 1\\1.flac",
-        "@@a\\M\\Album\\Disc 2\\1.flac"
-      ]),
-      "@@a\\M\\Album"
-    );
-    assert_eq!(
-      folder(&["@@a\\M\\Album\\1.flac", "@@a\\M\\Albums\\1.flac"]),
-      "@@a\\M",
-      "a folder's name is not a prefix of another's"
-    );
-    assert_eq!(folder(&["a/b/c.mp3", "a/b/d/e.mp3"]), "a/b");
-    assert_eq!(folder(&["one.flac", "@@a\\two.flac"]), "");
   }
 }

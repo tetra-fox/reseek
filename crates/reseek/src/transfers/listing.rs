@@ -26,6 +26,26 @@ pub fn remote_directory(filename: &str) -> &str {
     .map_or("", |(directory, _)| directory)
 }
 
+/// The deepest folder holding every one of `paths`, remote filenames or `/`-separated local
+/// paths, where `\` and `/` both end a folder; empty when they share none.
+pub fn common_folder<'a>(mut paths: impl Iterator<Item = &'a str>) -> &'a str {
+  let Some(first) = paths.next() else {
+    return "";
+  };
+  let holds = |folder: &str, path: &str| {
+    path
+      .strip_prefix(folder)
+      .is_some_and(|rest| rest.starts_with(['\\', '/']))
+  };
+  let mut common = remote_directory(first);
+  for path in paths {
+    while !common.is_empty() && !holds(common, path) {
+      common = remote_directory(common);
+    }
+  }
+  common
+}
+
 /// The transfers of `direction`, of `username` alone when given, grouped by user in the order
 /// each user first asked or was asked, then by remote directory; removed ones only with
 /// `include_removed`.
@@ -284,6 +304,27 @@ mod tests {
     // a forward slash anywhere makes it the separator
     assert_eq!(remote_directory("Music\\AC/DC\\01.flac"), "Music\\AC");
     assert_eq!(remote_directory("01.flac"), "");
+  }
+
+  #[test]
+  fn the_common_folder_is_the_deepest_holding_every_file() {
+    let folder = |names: &[&'static str]| common_folder(names.iter().copied());
+    assert_eq!(
+      folder(&[
+        "@@a\\M\\Album\\Disc 1\\1.flac",
+        "@@a\\M\\Album\\Disc 2\\1.flac"
+      ]),
+      "@@a\\M\\Album"
+    );
+    assert_eq!(
+      folder(&["@@a\\M\\Album\\1.flac", "@@a\\M\\Albums\\1.flac"]),
+      "@@a\\M",
+      "a folder's name is not a prefix of another's"
+    );
+    assert_eq!(folder(&["A/Album/1.flac", "A/Album/CD2/1.flac"]), "A/Album");
+    assert_eq!(folder(&["A/Album/1.flac", "A/Albums/1.flac"]), "A");
+    assert_eq!(folder(&["1.flac", "A/2.flac"]), "");
+    assert_eq!(folder(&["one.flac", "@@a\\two.flac"]), "");
   }
 
   #[tokio::test]
