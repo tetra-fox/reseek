@@ -558,9 +558,8 @@ mod tests {
     );
   }
 
-  // paused time moves on once every task waits, a database call among them, so a use recorded
-  // by a task of its own is in before the sleep below ends. A session's uses are wall-clock times
-  // in the database, which paused time does not move, so the session is moved back instead
+  // a session's uses are wall-clock times in the database, which paused time does not move, so
+  // the session is moved back instead
   #[tokio::test(start_paused = true)]
   async fn a_session_holding_only_a_stream_goes_idle() {
     use chrono::{Duration, Utc};
@@ -630,6 +629,8 @@ mod tests {
       crate::live::Topic::Application.role(),
     );
     assert!(check().await);
+    // a use would be recorded by a task of its own. Paused time moves on only once every task
+    // waits, a database call among them, so such a write is in before this ends
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     assert_eq!(
       last_seen().await,
