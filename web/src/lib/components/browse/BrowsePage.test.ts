@@ -118,16 +118,15 @@ describe("browse progress", () => {
     );
   });
 
-  it("downloads a folder whose line is ticked in it, though it holds only files", async () => {
+  it("downloads a folder whose line is ticked in it, and some of its files loose", async () => {
     const net = fakeNetwork((url) => {
       if (url.pathname.endsWith("/transfers/downloads/jobs")) return { id: "j", groups: [] };
       if (!url.pathname.endsWith("/users/alice/browse")) return undefined;
       return {
         directories: [
-          { name: "Music", fileCount: 1, files: [sharedFile("1.flac")] },
-          { name: "Music\\CD2", fileCount: 1, files: [sharedFile("2.flac")] }
+          { name: "Album", fileCount: 2, files: [sharedFile("1.flac"), sharedFile("2.flac")] }
         ],
-        directoryCount: 2,
+        directoryCount: 1,
         lockedDirectories: [],
         lockedDirectoryCount: 0
       };
@@ -140,17 +139,22 @@ describe("browse progress", () => {
     });
     await flushFaked();
     await flushFaked();
-    document
-      .querySelector<HTMLElement>('[role=checkbox][aria-label="Select every file in CD2"]')!
-      .click();
+    /** ticks `label`, downloads the selection and gives the folder the job was asked in */
+    const download = async (label: string) => {
+      document.querySelector<HTMLElement>(`[aria-label="${label}"]`)!.click();
+      flushSync();
+      [...document.querySelectorAll("button")]
+        .find((b) => b.textContent?.trim() === "Download")!
+        .click();
+      await flushFaked();
+      const jobs = net.requests.filter((r) => r.url.pathname.endsWith("/transfers/downloads/jobs"));
+      const body = jobs.at(-1)!.body as { groups: { folder: string | null }[] };
+      return body.groups.map((g) => g.folder);
+    };
+    document.querySelector<HTMLElement>("[aria-label='Open Album']")!.click();
     flushSync();
-    [...document.querySelectorAll("button")]
-      .find((b) => b.textContent?.trim() === "Download")!
-      .click();
-    await flushFaked();
-    const jobs = net.requests.filter((r) => r.url.pathname.endsWith("/transfers/downloads/jobs"));
-    const body = jobs[0].body as { groups: { folder: string | null }[] };
-    expect(body.groups.map((g) => g.folder)).toEqual(["Music\\CD2"]);
+    expect(await download("Select 1.flac")).toEqual([null]);
+    expect(await download("Select every file in Album")).toEqual(["Album"]);
   });
 
   it("leaves the next user's tree where it is when the one before answers late", async () => {

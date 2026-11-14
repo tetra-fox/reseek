@@ -62,17 +62,25 @@
     const filters = parseFilters(text);
     return files.filter((f) => fileMatches(filters, f));
   });
-  const lines = $derived(
-    treeLines(
-      folderTree(
-        shown,
-        (f) => f.filename,
-        (f) => f.size
-      ),
-      expansion.isOpen,
-      (f) => f.filename
+  const tree = $derived(
+    folderTree(
+      shown,
+      (f) => f.filename,
+      (f) => f.size
     )
   );
+  const lines = $derived(treeLines(tree, expansion.isOpen, (f) => f.filename));
+  /** each folder of the tree by its path */
+  const byPath = $derived.by(() => {
+    const found = new Map<string, FolderNode<Schemas["File"]>>();
+    const stack = [...tree];
+    while (stack.length) {
+      const node = stack.pop()!;
+      found.set(node.path, node);
+      stack.push(...node.children);
+    }
+    return found;
+  });
   const columns = $derived(fileColumns({ quality: true, phone: viewport.phone }));
   const chosen = $derived(shown.filter((f) => selected.has(f.filename)));
   const ticked = $derived(tickedCounts(selected));
@@ -80,10 +88,17 @@
 
   const tell = (result: Enqueued) => toast(result.text, result.kind === "done" ? "info" : "error");
 
+  /** A folder line's tick: how many of the files under it are ticked, of how many are shown */
+  const tickOf = (node: FolderNode<Schemas["File"]>) => ({
+    on: ticked.get(node.path) ?? 0,
+    of: node.count
+  });
+
   /** Whether the line of the folder `path` is ticked: every file under it the filter keeps is */
   const tickedWhole = (path: string) => {
-    const under = shown.filter((f) => f.filename.startsWith(path + separator)).length;
-    return under > 0 && (ticked.get(path) ?? 0) === under;
+    const node = byPath.get(path);
+    const state = node && tickOf(node);
+    return !!state && state.of > 0 && state.on === state.of;
   };
 
   /**
@@ -132,14 +147,14 @@
       <FileHeader {columns} {all} />
     {/snippet}
     {#snippet folder(node, depth)}
+      {@const state = tickOf(node)}
       <FolderLine
         {node}
         open={expansion.isOpen(node.key)}
         {depth}
         tick={{
-          checked: (ticked.get(node.path) ?? 0) === node.count,
-          indeterminate:
-            (ticked.get(node.path) ?? 0) > 0 && (ticked.get(node.path) ?? 0) < node.count,
+          checked: tickedWhole(node.path),
+          indeterminate: state.on > 0 && state.on < state.of,
           ontick: (on) => {
             for (const f of itemsUnder(node)) {
               if (on) selected.add(f.filename);
