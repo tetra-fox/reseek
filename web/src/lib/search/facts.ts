@@ -8,8 +8,8 @@ import type { ResultFile, SearchResponse } from "./results";
 export type Picked = { file: ResultFile; username: string; facts: Field[] };
 
 /**
- * What a response says of its user's uploads: "1.2 MB/s · free slot · 3 queued", with a queue as
- * long as the list's column writes it
+ * What a response says of its user's uploads: "1.2 MB/s · free slot · 3 queued". A queue past
+ * `QUEUE_MOST` is written "99,999+", as the results list's column writes it
  */
 export const userFacts = (response: SearchResponse) =>
   `${formatSpeed(response.uploadSpeed)} · ${response.hasFreeUploadSlot ? "free slot" : "no free slot"} · ${badgeCount(response.queueLength, QUEUE_MOST)} queued`;
