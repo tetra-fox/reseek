@@ -1,31 +1,14 @@
-import { execFileSync } from "node:child_process";
-
 import { defineConfig } from "@playwright/test";
 
+import { launchOptions } from "./e2e/support/browser";
 import { SESSION } from "./e2e/support/session";
 
 /**
- * The daemon's port: E2E_PORT, else one free now, so gates run at once pick their own. It is
- * chosen once, by the runner, and reaches the workers and serve.sh through the environment
+ * The daemon's port: E2E_PORT, else the one it picked itself, so gates run at once never share
+ * one. The global setup starts it and sets E2E_PORT, which the workers find as they load this
+ * file again; the runner reads it before then, and its URLs go unused
  */
-const freePort = (): string => {
-  const ask = `const s = require("node:net").createServer();
-    s.listen(0, "127.0.0.1", () => { console.log(s.address().port); s.close(); });`;
-  return execFileSync(process.execPath, ["-e", ask], { encoding: "utf8" }).trim();
-};
-process.env.E2E_PORT ??= freePort();
-const port = Number(process.env.E2E_PORT);
-
-/** The browser to drive: CHROMIUM_BIN, else a chromium on PATH */
-const chromium = (): string => {
-  if (process.env.CHROMIUM_BIN) return process.env.CHROMIUM_BIN;
-  try {
-    return execFileSync("sh", ["-c", "command -v chromium"], { encoding: "utf8" }).trim();
-  } catch {
-    throw new Error("no browser for the tests: set CHROMIUM_BIN or put chromium on PATH");
-  }
-};
-const launchOptions = { executablePath: chromium() };
+const port = process.env.E2E_PORT;
 
 /** The daemon on localhost, where the tests start with the session the login project saved */
 const local = {
@@ -33,12 +16,6 @@ const local = {
   launchOptions,
   storageState: SESSION
 };
-
-/**
- * How the servers are stopped: SIGTERM lets serve.sh remove its directory; without it playwright
- * sends SIGKILL, which no trap sees
- */
-const gracefulShutdown = { signal: "SIGTERM", timeout: 10_000 } as const;
 
 export default defineConfig({
   testDir: "e2e",
@@ -80,13 +57,5 @@ export default defineConfig({
       }
     }
   ],
-  webServer: [
-    {
-      command: "./e2e/support/serve.sh",
-      url: `http://127.0.0.1:${port}/reseek/`,
-      reuseExistingServer: false,
-      gracefulShutdown,
-      env: { E2E_PORT: String(port) }
-    }
-  ]
+  globalSetup: "./e2e/support/daemon.ts"
 });
