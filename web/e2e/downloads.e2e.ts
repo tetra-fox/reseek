@@ -81,11 +81,11 @@ test("a right-click on a download offers what its ... button does, and on its us
 test("a line keeps its tint and its buttons while the pointer is on its right-click menu", async ({
   page
 }) => {
-  await fakeDownloadList(page, () => [userDownloads("alice", [transfer("@@a\\One\\a.flac")])]);
+  await fakeDownloadList(page, () => [userDownloads("alice", [transfer("@@a\\One\\tinted.flac")])]);
   await visit(page, "/downloads");
   const table = page.getByRole("treegrid", { name: "Downloads" });
-  const row = table.getByRole("row").filter({ hasText: "a.flac" });
-  await row.getByText("a.flac").click({ button: "right" });
+  const row = table.getByRole("row").filter({ hasText: "tinted.flac" });
+  await row.getByText("tinted.flac").click({ button: "right" });
   await page.getByRole("menuitem").first().hover();
   await expect(row).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
   await expect(row.locator(".row-action")).toHaveCSS("opacity", "1");
