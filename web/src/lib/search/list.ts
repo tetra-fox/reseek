@@ -1,5 +1,5 @@
 import { FILE_COLUMNS } from "#lib/files/columns.js";
-import { columnWidth, formatCount, getDirectoryName, getFileName, WIDEST } from "#lib/format.js";
+import { badgeCount, columnWidth, getDirectoryName, getFileName, WIDEST } from "#lib/format.js";
 import type { GridColumn } from "#lib/lists/table.svelte.js";
 import { fields, stored } from "#lib/stored.svelte.js";
 import { scopedKey } from "#lib/tree/folders.js";
@@ -37,6 +37,12 @@ export const resultRows = (results: Result[]): ResultRow[] =>
       folder: getDirectoryName(file.filename)
     }))
   );
+
+/**
+ * The longest queue the list writes in full: a user's queue runs to thousands, and a longer one
+ * is written "99,999+"
+ */
+export const QUEUE_MOST = 99_999;
 
 export type ResultColumn =
   | "user"
@@ -79,8 +85,7 @@ export const RESULT_COLUMNS: (GridColumn<ResultRow> & {
   {
     id: "queue",
     label: "Queue",
-    // a user's queue runs to thousands, not the millions a count of files can
-    width: columnWidth(formatCount(99_999)),
+    width: columnWidth(badgeCount(Infinity, QUEUE_MOST)),
     end: true,
     value: (r) => r.queue
   },

@@ -188,8 +188,9 @@ const NUMBER = new Intl.NumberFormat();
 /** A count with the browser's digit grouping: "1,200" */
 export const formatCount = (n: number): string => NUMBER.format(n);
 
-/** A count on a badge, which keeps one width: "999+" past 999 */
-export const badgeCount = (n: number): string => (n > 999 ? "999+" : formatCount(n));
+/** A count that keeps one width, on a badge or in a column: "999+" past 999, or past `most` */
+export const badgeCount = (n: number, most = 999): string =>
+  n > most ? `${formatCount(most)}+` : formatCount(n);
 
 const thisYear = (date: Date, now: number) => date.getFullYear() === new Date(now).getFullYear();
 

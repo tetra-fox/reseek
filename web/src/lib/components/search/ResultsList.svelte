@@ -20,12 +20,13 @@
   import type { AllFiles } from "#lib/files/allfiles.svelte.js";
   import type { FileColumn } from "#lib/files/columns.js";
   import { asItem, type Enqueued, enqueueJob, followDownloads } from "#lib/files/downloads.js";
-  import { formatBytes, formatCount, formatSpeed, getFileName, plural } from "#lib/format.js";
+  import { badgeCount, formatBytes, formatSpeed, getFileName, plural } from "#lib/format.js";
   import { inspector } from "#lib/inspector/inspector.svelte.js";
   import { heldOrder } from "#lib/lists/interaction.svelte.js";
   import { Grid } from "#lib/lists/table.svelte.js";
   import { offerFields, type Picked } from "#lib/search/facts.js";
   import {
+    QUEUE_MOST,
     RESULT_COLUMNS,
     type ResultColumn,
     resultList,
@@ -235,7 +236,7 @@
     {/if}
     {#if shows.has("queue")}
       <span role="gridcell" class="truncate px-2 text-right tabular-nums"
-        >{formatCount(row.queue)}</span>
+        >{badgeCount(row.queue, QUEUE_MOST)}</span>
     {/if}
     {#if shows.has("free")}
       <span role="gridcell" class={["px-2", row.free ? "text-success-soft-fg" : "text-fg-muted"]}>
