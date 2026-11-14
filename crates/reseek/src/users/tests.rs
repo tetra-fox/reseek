@@ -1200,6 +1200,50 @@ async fn a_buddy_watched_at_login_is_shown_with_the_presence_the_server_gives_th
 }
 
 #[tokio::test]
+async fn a_status_that_moves_a_watched_users_groups_pushes_them_once_with_their_row() {
+  use soulseek_proto::server::UserStatus;
+  use soulseek_proto::{ServerRequest, ServerResponse};
+
+  let app = crate::testing::soulseek::app(CONFIG).await;
+  let users = &app.state.users;
+  users.set_buddy("alice", Default::default()).await.unwrap();
+  let online = || alice_is(soulseek_proto::UserPresence::Online);
+  let server = crate::testing::soulseek::Server::start(move |request| match request {
+    ServerRequest::WatchUser(_) => vec![online().1],
+    ServerRequest::GetStatus(_) => vec![online().0],
+    _ => Vec::new(),
+  })
+  .await;
+  server.login(&app).await;
+  tokio::time::timeout(std::time::Duration::from_secs(5), async {
+    while alice(&app).await["presence"] != "Online" {
+      tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+  })
+  .await
+  .expect("the buddy was never watched");
+  let mut stream = app
+    .stream_from(
+      "127.0.0.1:1",
+      request("GET", "/api/v0/live?topics=users", None),
+    )
+    .await;
+  stream.until("hello").await;
+  // alice goes away holding privileges, which moves her into the privileged group
+  server.send(vec![ServerResponse::GetStatus(UserStatus {
+    username: "alice".into(),
+    presence: soulseek_proto::UserPresence::Away,
+    is_privileged: true,
+  })]);
+  let pushed = next_pushed(&mut stream).await;
+  assert_eq!(
+    (&pushed["presence"], &pushed["isPrivileged"]),
+    (&json!("Away"), &json!(true)),
+    "pushed before her row took the status"
+  );
+}
+
+#[tokio::test]
 async fn forgetting_a_watched_user_unwatches_them_and_a_later_status_makes_no_row() {
   use soulseek_proto::ServerRequest;
 

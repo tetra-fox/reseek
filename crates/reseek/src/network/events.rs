@@ -421,7 +421,7 @@ async fn user_status(app: &AppState, status: &soulseek_proto::server::UserStatus
     .users
     .status_received(username, presence, status.is_privileged)
     .await;
-  if !app.users.is_watched(username) {
+  if !received.watched {
     return;
   }
   let touch = crate::users::Touch::Status {

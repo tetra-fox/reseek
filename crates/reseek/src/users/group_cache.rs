@@ -158,6 +158,8 @@ pub struct Unwatched {
 
 /// What a status the server sent tells beside itself.
 pub struct StatusReceived {
+  /// the server watches the user for us, so the status is theirs to touch their row with
+  pub watched: bool,
   /// the user's presence before it, when it was known in this server session
   pub previous: Option<UserPresence>,
 }
@@ -353,17 +355,18 @@ impl Directory {
   /// Statistics we asked for, kept for the user's groups.
   async fn statistics_kept(&self, username: &str, stats: &UserStats) -> StatisticsSnapshot {
     let taken = snapshot(stats);
-    self
-      .learned(username, true, |facts| {
-        facts.statistics = Some(taken.clone());
-      })
-      .await;
+    if self.learned(username, true, |facts| {
+      facts.statistics = Some(taken.clone());
+    }) {
+      self.push(username).await;
+    }
     taken
   }
 
   /// Changes what the server said of `username` with `change`, making their entry when `create`
-  /// or when it exists, and pushes the summary of a user with a row whose groups it moves.
-  async fn learned(&self, username: &str, create: bool, change: impl FnOnce(&mut Facts)) {
+  /// or when it exists. Says whether it moved the groups of a user with a row, whose cached
+  /// summary is dropped then; pushing it is the caller's.
+  fn learned(&self, username: &str, create: bool, change: impl FnOnce(&mut Facts)) -> bool {
     let options = self.config.current();
     let mut moved = false;
     self.groups.update(username, create, |facts| {
@@ -371,10 +374,11 @@ impl Directory {
       change(facts);
       moved = groups::moves(&options.values, &before, facts);
     });
-    if moved && self.known.has(username) {
+    let shown = moved && self.known.has(username);
+    if shown {
       self.forget(username);
-      self.push(username).await;
     }
+    shown
   }
 
   /// Asks the server for `username`'s status now and keeps it. The reply is also raised as a
@@ -397,6 +401,8 @@ impl Directory {
 
   /// The status we asked for of `username`, kept. The same reply is also raised as a status
   /// change, and either may be taken first, so both tell of a change missed while disconnected.
+  /// A watched user's summary is pushed by the touch the reply's event makes, so here only the
+  /// summary of a user nobody watches is.
   pub(super) async fn status_fetched(
     &self,
     username: &str,
@@ -404,12 +410,14 @@ impl Directory {
     is_privileged: bool,
   ) {
     self.tell_missed(username, presence);
-    self
-      .learned(username, true, |facts| {
-        facts.presence = Some(presence);
-        facts.privileged = is_privileged;
-      })
-      .await;
+    let watched = self.is_watched(username);
+    let moved = self.learned(username, true, |facts| {
+      facts.presence = Some(presence);
+      facts.privileged = is_privileged;
+    });
+    if moved && !watched {
+      self.push(username).await;
+    }
   }
 
   /// Tells of a buddy's move from the presence we knew when the last server session ended to
@@ -570,17 +578,18 @@ impl Directory {
   /// Every user on the server's list of privileged users is privileged from now on.
   pub async fn privileged_listed(&self, usernames: &[String]) {
     for username in usernames {
-      self
-        .learned(username, true, |facts| facts.privileged = true)
-        .await;
+      if self.learned(username, true, |facts| facts.privileged = true) {
+        self.push(username).await;
+      }
     }
     debug!(users = usernames.len(), "privileged users listed");
   }
 
-  /// A status the server sent of `username`: kept when we know them. Says the presence known
-  /// before in this session, or none when this is the first word on a buddy after a reconnect,
-  /// whose change while we were not connected is told of here unless our own request's reply
-  /// was taken first.
+  /// A status the server sent of `username`: kept when we know them, and their summary pushed
+  /// when it moves their groups, unless the server watches them: the touch of their row with it
+  /// pushes that one. Says whether it watches them, and the presence known before in this
+  /// session, or none for the first word on a buddy after a reconnect, whose change while we
+  /// were not connected is told of here unless our own request's reply was taken first.
   pub async fn status_received(
     &self,
     username: &str,
@@ -588,26 +597,28 @@ impl Directory {
     is_privileged: bool,
   ) -> StatusReceived {
     let first = self.tell_missed(username, presence);
+    let watched = self.is_watched(username);
     let mut previous = None;
-    self
-      .learned(username, false, |facts| {
-        previous = facts.presence.replace(presence);
-        facts.privileged = is_privileged;
-      })
-      .await;
+    let moved = self.learned(username, false, |facts| {
+      previous = facts.presence.replace(presence);
+      facts.privileged = is_privileged;
+    });
+    if moved && !watched {
+      self.push(username).await;
+    }
     if first {
       previous = None;
     }
-    StatusReceived { previous }
+    StatusReceived { watched, previous }
   }
 
   /// Statistics the server sent of `username` on its own: kept when we know them.
   pub async fn statistics_received(&self, username: &str, stats: &UserStats) {
-    self
-      .learned(username, false, |facts| {
-        facts.statistics = Some(snapshot(stats));
-      })
-      .await;
+    if self.learned(username, false, |facts| {
+      facts.statistics = Some(snapshot(stats));
+    }) {
+      self.push(username).await;
+    }
   }
 
   /// Whether the server watches `username` for us in this session.
