@@ -600,6 +600,10 @@ async fn a_controller_out_of_reach_is_warned_about_once_until_a_socket_is_ready(
   // failing another way is news
   agent.agent.dial_failed("certificate expired");
   assert_eq!(warnings.count("Failed attempt to connect"), 2);
+  // the reasons taking turns, as a controller that is down can give
+  agent.agent.dial_failed("connection refused");
+  agent.agent.dial_failed("certificate expired");
+  assert_eq!(warnings.count("Failed attempt to connect"), 2);
   agent.socket_ended(true, false);
   agent.agent.dial_failed("certificate expired");
   agent.login_refused(LoginFailure::ChallengeExpired);
@@ -615,7 +619,7 @@ async fn a_dial_that_connects_ends_the_outage_though_its_socket_is_never_ready()
   let agent = agent_at(Start::Scanned, &format!("http://{socket}/"), calls, false).await;
   agent.agent.dial_failed("connection refused");
   let running = tokio::spawn(agent.agent.clone().run());
-  eventually(|| lock(&agent.agent.dial_warned).is_none()).await;
+  eventually(|| !lock(&agent.agent.dial_warned).ongoing()).await;
   agent.shutdown.cancel();
   running.await.unwrap();
   agent.agent.dial_failed("connection refused");

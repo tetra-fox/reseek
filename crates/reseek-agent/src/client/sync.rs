@@ -135,7 +135,7 @@ impl AgentClient {
       Ok(()) => {
         link.synced();
         // a later run of failures is warned about again
-        *lock(&self.sync_warned) = None;
+        lock(&self.sync_warned).end();
         return info!("Shares uploaded. Ready to relay files.");
       }
       Err(SyncError::Closed) => return debug!("share upload stopped: the socket closed"),

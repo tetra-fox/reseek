@@ -22,6 +22,7 @@ use std::time::Duration;
 use cascade::Watcher;
 use reseek_relay_proto::frames::close;
 use reseek_shares::{Shares, backoff, lock};
+use soulseek_client::Outage;
 use tokio::sync::Notify;
 use tokio::sync::broadcast::error::RecvError;
 use tokio_util::sync::CancellationToken;
@@ -55,15 +56,13 @@ pub struct AgentClient {
   syncing: AtomicBool,
   /// another share upload was asked for while one ran
   again: AtomicBool,
-  /// the last refusal or configuration problem warned about, so a repeated one is not; forgotten
-  /// when the controller's settings change or a socket that was ready ends
-  warned: Mutex<Option<String>>,
-  /// why the last failed dial was warned about, so the same failure again is not; forgotten when
-  /// a dial succeeds and with `warned`
-  dial_warned: Mutex<Option<String>>,
-  /// the last share upload failure warned about, so a repeated one is not; forgotten once an
-  /// upload succeeds
-  sync_warned: Mutex<Option<String>>,
+  /// the refusals and configuration problems warned about; forgotten when the controller's
+  /// settings change or a socket that was ready ends
+  warned: Mutex<Outage>,
+  /// the ways dials failed, warned about; forgotten when a dial succeeds and with `warned`
+  dial_warned: Mutex<Outage>,
+  /// the share upload failures warned about; forgotten once an upload succeeds
+  sync_warned: Mutex<Outage>,
   /// the controller's settings changed, so the next dial is at once
   redial: Notify,
 }
@@ -92,9 +91,9 @@ impl AgentClient {
       link: Mutex::new(None),
       syncing: AtomicBool::new(false),
       again: AtomicBool::new(false),
-      warned: Mutex::new(None),
-      dial_warned: Mutex::new(None),
-      sync_warned: Mutex::new(None),
+      warned: Mutex::new(Outage::new()),
+      dial_warned: Mutex::new(Outage::new()),
+      sync_warned: Mutex::new(Outage::new()),
       redial: Notify::new(),
     });
     let span = info_span!("relay_agent");
@@ -182,7 +181,7 @@ impl AgentClient {
         }
       };
       info!(address = %settings.address, "connected to the relay controller");
-      *lock(&self.dial_warned) = None;
+      lock(&self.dial_warned).end();
       let ended = self.serve(socket, settings).await;
       shut_down = ended.code == Some(close::SHUTTING_DOWN);
       // two agents with one instance name would otherwise take the socket from each other
@@ -208,8 +207,8 @@ impl AgentClient {
 
   /// Forgets the refusals and the failed dial warned about, so the next is warned about again.
   fn forget_warnings(&self) {
-    *lock(&self.warned) = None;
-    *lock(&self.dial_warned) = None;
+    lock(&self.warned).end();
+    lock(&self.dial_warned).end();
   }
 
   /// Logs how a socket `ended`: a refusal or another agent taking it is warned about once per
@@ -269,7 +268,7 @@ impl AgentClient {
       applied = now;
       info!("relay controller settings changed; connecting again with them");
       self.forget_warnings();
-      *lock(&self.sync_warned) = None;
+      lock(&self.sync_warned).end();
       if let Some(link) = self.current() {
         link.close(close::NORMAL);
       }
@@ -291,13 +290,11 @@ impl AgentClient {
   }
 }
 
-/// Logs `reason` as a warning unless it is the last one `warned` holds; then at debug.
-fn warn_once(warned: &Mutex<Option<String>>, reason: &str, message: &'static str) {
-  let mut warned = lock(warned);
-  if warned.as_deref() == Some(reason) {
-    debug!(reason, message);
-  } else {
+/// Logs `reason` as a warning the first time `warned` sees it, at debug after.
+fn warn_once(warned: &Mutex<Outage>, reason: &str, message: &'static str) {
+  if lock(warned).new_reason(reason) {
     warn!(reason, message);
-    *warned = Some(reason.to_string());
+  } else {
+    debug!(reason, message);
   }
 }
