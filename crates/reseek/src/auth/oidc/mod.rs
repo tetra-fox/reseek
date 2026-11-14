@@ -91,7 +91,7 @@ const DISCOVERY_AGE: Duration = Duration::from_secs(24 * 3600);
 
 /// The least time between two reads of a provider's keys, and between discovery attempts
 /// after one failed.
-const RETRY: Duration = Duration::from_secs(60);
+pub(crate) const RETRY: Duration = Duration::from_secs(60);
 
 /// How far a provider's clock may be from ours when its tokens' times are checked.
 pub const LEEWAY: chrono::Duration = chrono::Duration::minutes(5);
@@ -116,10 +116,27 @@ pub struct Provider {
   discovery: tokio::sync::Mutex<Discovery>,
 }
 
-/// The provider's discovery document as read so far, and when its keys were last read.
+/// The provider's discovery document as read so far, and the last read of its keys.
 struct Discovery {
   document: Document,
-  keys_at: Option<Instant>,
+  keys: Option<KeysRead>,
+}
+
+/// A read of the provider's signing keys: when it began, and whether it got them.
+#[derive(Clone, Copy)]
+struct KeysRead {
+  at: Instant,
+  got: bool,
+}
+
+/// What reading a provider's signing keys again gave.
+pub enum Keys {
+  /// read now, in this document
+  Read(Box<Metadata>),
+  /// read less than a minute ago, so the keys in use are the provider's
+  Current,
+  /// not read, now or at the try less than a minute ago, so a token's key may be one of them
+  Unread,
 }
 
 /// Where reading the discovery document stands.
@@ -208,7 +225,7 @@ impl Provider {
       options,
       discovery: tokio::sync::Mutex::new(Discovery {
         document: Document::Unread { failed_at: None },
-        keys_at: None,
+        keys: None,
       }),
     })
   }
@@ -240,7 +257,10 @@ impl Provider {
           read_at: Instant::now(),
           failed_at: None,
         };
-        discovery.keys_at = Some(Instant::now());
+        discovery.keys = Some(KeysRead {
+          at: Instant::now(),
+          got: true,
+        });
         Ok(metadata)
       }
       Err(e) => match &mut discovery.document {
@@ -266,31 +286,41 @@ impl Provider {
     }
   }
 
-  /// Reads the signing keys again, at most once a minute; the new document when it did.
-  pub async fn refresh_keys(&self) -> Option<Metadata> {
+  /// Reads the signing keys again, at most once a minute.
+  pub async fn refresh_keys(&self) -> Keys {
     let mut discovery = self.discovery.lock().await;
-    if discovery.keys_at.is_some_and(|at| at.elapsed() < RETRY) {
-      return None;
+    if let Some(last) = discovery.keys.filter(|last| last.at.elapsed() < RETRY) {
+      return if last.got {
+        Keys::Current
+      } else {
+        Keys::Unread
+      };
     }
-    discovery.keys_at = Some(Instant::now());
+    let at = Instant::now();
     let Document::Read { metadata, .. } = &mut discovery.document else {
-      return None;
+      return Keys::Unread;
     };
-    match JsonWebKeySet::<CoreJsonWebKey>::fetch_async(metadata.jwks_uri(), &self.http).await {
-      Ok(keys) => {
-        debug!(
-          provider = self.name,
-          count = keys.keys().len(),
-          "provider signing keys read again"
-        );
-        **metadata = Metadata::clone(metadata).set_jwks(keys);
-        Some(Metadata::clone(metadata))
-      }
-      Err(e) => {
-        warn!(provider = self.name, error = %e, "provider signing keys not read");
-        None
-      }
-    }
+    let keys =
+      match JsonWebKeySet::<CoreJsonWebKey>::fetch_async(metadata.jwks_uri(), &self.http).await {
+        Ok(keys) => {
+          debug!(
+            provider = self.name,
+            count = keys.keys().len(),
+            "provider signing keys read again"
+          );
+          **metadata = Metadata::clone(metadata).set_jwks(keys);
+          Keys::Read(metadata.clone())
+        }
+        Err(e) => {
+          warn!(provider = self.name, error = %e, "provider signing keys not read");
+          Keys::Unread
+        }
+      };
+    discovery.keys = Some(KeysRead {
+      at,
+      got: matches!(keys, Keys::Read(_)),
+    });
+    keys
   }
 
   /// Reads the discovery document and the signing keys now, without keeping them.

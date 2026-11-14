@@ -21,7 +21,7 @@ use crate::api::error::ApiError;
 use crate::app::AppState;
 use crate::auth::cookies::{self, Scope};
 use crate::auth::oidc::flow::{self, LOGIN_TIME, is_local_path};
-use crate::auth::oidc::logout::{check_token, end_session_url};
+use crate::auth::oidc::logout::{NotTaken, check_token, end_session_url};
 use crate::auth::oidc::{Provider, external_base};
 use crate::auth::sessions::{self, NewSession, Origin};
 use crate::auth::{
@@ -232,9 +232,9 @@ async fn callback(
 
 /// Where the provider ends sessions it started, with a signed logout token naming its session
 /// or its user. Answered 404 for a provider that takes no back-channel logout whatever the
-/// body, and 503 while the provider's discovery document, which the token is checked with,
-/// cannot be read, so a provider that retries sends the logout again. Else always 200, a body
-/// that is not a logout form included.
+/// body, and 503 while the provider's discovery document, or the keys for a token signed with
+/// one not seen yet, cannot be read to check the token, so a provider that retries sends the
+/// logout again. Else always 200, a body that is not a logout form included.
 #[utoipa::path(
   post, path = "/auth/oidc/{name}/backchannel", tag = "auth",
   params(("name" = String, Path, description = "the provider's name in the configuration")),
@@ -285,7 +285,16 @@ async fn backchannel(
   };
   let logged_out = match check_token(&provider, metadata, &form.logout_token).await {
     Ok(logged_out) => logged_out,
-    Err(reason) => {
+    Err(NotTaken::Unchecked) => {
+      if let Some(suppressed) = LOGOUT_UNCHECKED.allow() {
+        warn!(
+          provider = name,
+          suppressed, "back-channel logout not checked; provider keys unreadable, answered 503"
+        );
+      }
+      return Err(ApiError::service_unavailable("The identity provider is unavailable").logged());
+    }
+    Err(NotTaken::Invalid(reason)) => {
       if let Some(suppressed) = LOGOUT_REFUSED.allow() {
         warn!(
           provider = name,
@@ -932,6 +941,35 @@ mod tests {
         )
         .await;
       assert_eq!(answer.status, 503, "{attempt}");
+    }
+  }
+
+  #[tokio::test]
+  async fn a_logout_token_signed_with_a_key_not_read_is_refused_or_answered_503() {
+    let issuer = Issuer::start().await;
+    let app = app(
+      &format!(
+        "[web.authentication.oidc.home]\nissuer = \"{}\"\nclient_id = \"{CLIENT_ID}\"\n",
+        issuer.url
+      ),
+      &[],
+    )
+    .await;
+    // signed with a key the provider never published
+    let other = Issuer::start().await;
+    let claims = logout_claims(&issuer, "s1");
+    let token = || logout_request(&other, &claims);
+    let fresh = app.send_from(OUTSIDE, token()).await;
+    assert_eq!(
+      fresh.status, 200,
+      "the keys were just read and none signed it"
+    );
+    drop(issuer);
+    tokio::time::pause();
+    tokio::time::advance(crate::auth::oidc::RETRY).await;
+    for attempt in ["read again", "while reading again is held back"] {
+      let unread = app.send_from(OUTSIDE, token()).await;
+      assert_eq!(unread.status, 503, "{attempt}: the keys could not be read");
     }
   }
 

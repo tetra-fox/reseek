@@ -10,7 +10,7 @@ use openidconnect::{JsonWebKey, LogoutRequest, PostLogoutRedirectUrl};
 use serde_json::Value;
 use tracing::warn;
 
-use super::{LEEWAY, Metadata, OidcIdToken, Provider};
+use super::{Keys, LEEWAY, Metadata, OidcIdToken, Provider};
 
 /// The event a logout token carries.
 const BACKCHANNEL_EVENT: &str = "http://schemas.openid.net/event/backchannel-logout";
@@ -24,6 +24,18 @@ pub struct LoggedOut {
   pub sub: Option<String>,
 }
 
+/// Why a logout token was not taken.
+#[derive(Debug, thiserror::Error)]
+pub enum NotTaken {
+  /// the token is not a valid logout token of the provider
+  #[error("{0}")]
+  Invalid(String),
+  /// no key in use made its signature, and the provider's keys could not be read again to look
+  /// for the one that did
+  #[error("the provider's signing keys could not be read to check the token")]
+  Unchecked,
+}
+
 /// Checks a logout token like an ID token, without a nonce and with the back-channel logout
 /// event, and says who it signs out. The provider's keys are read again once when the token
 /// names a key not seen yet.
@@ -31,15 +43,25 @@ pub async fn check_token(
   provider: &Provider,
   metadata: Metadata,
   token: &str,
-) -> Result<LoggedOut, String> {
+) -> Result<LoggedOut, NotTaken> {
   let claims = match signed(&metadata, token) {
     Err(Unverified::NoKey) => match provider.refresh_keys().await {
-      Some(fresh) => signed(&fresh, token),
-      None => Err(Unverified::NoKey),
+      Keys::Read(fresh) => signed(&fresh, token),
+      Keys::Current => Err(Unverified::NoKey),
+      Keys::Unread => return Err(NotTaken::Unchecked),
     },
     other => other,
   }
-  .map_err(|e| e.to_string())?;
+  .map_err(|e| NotTaken::Invalid(e.to_string()))?;
+  logged_out(provider, &metadata, &claims).map_err(NotTaken::Invalid)
+}
+
+/// Who the signed claims of a logout token sign out, once they are checked.
+fn logged_out(
+  provider: &Provider,
+  metadata: &Metadata,
+  claims: &Value,
+) -> Result<LoggedOut, String> {
   let text = |name: &str| claims.get(name).and_then(Value::as_str).map(str::to_string);
   if text("iss").as_deref() != Some(metadata.issuer().as_str()) {
     return Err("issued by another issuer".to_string());

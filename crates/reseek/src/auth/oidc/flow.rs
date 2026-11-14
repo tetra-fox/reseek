@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tracing::debug;
 
-use super::{ExtraClaims, LEEWAY, Metadata, OidcClient, OidcIdToken, Provider};
+use super::{ExtraClaims, Keys, LEEWAY, Metadata, OidcClient, OidcIdToken, Provider};
 use crate::auth::roles::{Mapping, claim_strings};
 use crate::auth::secret::Secret;
 use crate::crypto;
@@ -142,11 +142,11 @@ pub async fn exchange(
     Err(ClaimsVerificationError::SignatureVerification(
       SignatureVerificationError::NoMatchingKey,
     )) => match provider.refresh_keys().await {
-      Some(fresh) => {
-        let client = provider.client(fresh, callback);
+      Keys::Read(fresh) => {
+        let client = provider.client(*fresh, callback);
         verify(&client, &id_token, &nonce)
       }
-      None => Err(ClaimsVerificationError::SignatureVerification(
+      Keys::Current | Keys::Unread => Err(ClaimsVerificationError::SignatureVerification(
         SignatureVerificationError::NoMatchingKey,
       )),
     },

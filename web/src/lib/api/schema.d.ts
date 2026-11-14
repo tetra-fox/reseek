@@ -291,9 +291,9 @@ export interface paths {
         /**
          * Where the provider ends sessions it started, with a signed logout token naming its session
          *     or its user. Answered 404 for a provider that takes no back-channel logout whatever the
-         *     body, and 503 while the provider's discovery document, which the token is checked with,
-         *     cannot be read, so a provider that retries sends the logout again. Else always 200, a body
-         *     that is not a logout form included.
+         *     body, and 503 while the provider's discovery document, or the keys for a token signed with
+         *     one not seen yet, cannot be read to check the token, so a provider that retries sends the
+         *     logout again. Else always 200, a body that is not a logout form included.
          */
         post: operations["backchannel"];
         delete?: never;
