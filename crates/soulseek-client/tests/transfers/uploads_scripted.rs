@@ -291,6 +291,38 @@ async fn a_failed_upload_tells_the_downloader_which_may_queue_the_file_again_at_
 }
 
 #[tokio::test]
+async fn a_downloader_that_closes_before_its_start_offset_left_and_is_told_nothing() {
+  // how many of the offset's eight bytes it sends first, and whether it resets
+  for (sent, reset) in [(0, false), (3, false), (0, true)] {
+    let mut scripted = Scripted::start().await;
+    let (running, mut bob) = offered_upload(&mut scripted, "@@share\\early.mp3").await;
+    let mut transfer = accepted(&mut scripted, &mut bob, "@@share\\early.mp3").await;
+    if sent > 0 {
+      transfer.send(&0u64.to_le_bytes()[..sent]).await;
+    }
+    if reset {
+      socket2::SockRef::from(&transfer.stream)
+        .set_linger(Some(Duration::ZERO))
+        .unwrap();
+    }
+    drop(transfer);
+    let error = running.result().await.unwrap_err();
+    assert_eq!(
+      (error.to_string(), error.connection_kind()),
+      (
+        "Transfer failed: the downloader closed the connection".to_string(),
+        Some(ConnectionErrorKind::RemoteClosed)
+      ),
+      "sent {sent}, reset {reset}"
+    );
+    assert!(
+      bob.quiet_for(Duration::from_millis(200)).await,
+      "sent {sent}, reset {reset}"
+    );
+  }
+}
+
+#[tokio::test]
 async fn a_downloader_that_closes_or_resets_mid_file_left_and_is_told_nothing() {
   for reset in [false, true] {
     let mut scripted = Scripted::start().await;

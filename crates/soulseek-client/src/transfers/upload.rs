@@ -344,7 +344,13 @@ impl Upload {
     let mut offset = [0; 8];
     self.stop.run(read.read_exact(&mut offset)).await.map_err(
       |error| match io::connection_failure(handle, error, DOWNLOADER) {
-        error @ (ClientError::Timeout(_) | ClientError::Canceled) => error,
+        // a downloader that closes before sending its offset left, as one that closes mid-file did
+        error @ (ClientError::Timeout(_)
+        | ClientError::Canceled
+        | ClientError::Connection {
+          kind: ConnectionErrorKind::RemoteClosed,
+          ..
+        }) => error,
         error => ClientError::Message {
           kind: MessageErrorKind::Read,
           message: "Failed to read transfer start offset".into(),
