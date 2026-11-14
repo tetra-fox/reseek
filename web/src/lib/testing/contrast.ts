@@ -83,3 +83,28 @@ export const token = (block: string, name: string): Oklch => {
   if (!parts) throw new Error(`--color-${name} is not a plain oklch(): ${value}`);
   return [Number(parts[1]), Number(parts[2]), Number(parts[3])];
 };
+
+/**
+ * How opaque a selected row's accent-soft is: mixing a color with transparent in oklab keeps the
+ * color and takes the mix's share as its opacity
+ */
+const selectedAlpha = (() => {
+  const mix =
+    /\[aria-selected="true"\] \{\s*background-color: color-mix\(\s*in oklab,\s*var\(--color-accent-soft\) ([\d.]+)%,\s*var\(--line-under, transparent\)\s*\);/.exec(
+      rule("@utility line-tint")
+    );
+  if (!mix) throw new Error("line-tint's selected row is not a mix of accent-soft and transparent");
+  return Number(mix[1]) / 100;
+})();
+
+/** the luminance of a line-tint row's backgrounds in `block`: plain, hovered, selected, and selected under the pointer */
+export const rows = (block: string) => {
+  const surface = shown(token(block, "surface"));
+  const soft = shown(token(block, "accent-soft"));
+  return {
+    "surface": luminance(surface),
+    "hovered": luminance(shown(token(block, "hover"))),
+    "selected": luminance(over(soft, selectedAlpha, surface)),
+    "selected and hovered": luminance(soft)
+  };
+};

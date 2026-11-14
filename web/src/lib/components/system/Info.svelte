@@ -118,7 +118,7 @@
       variant="outline"
       href={`https://www.slsknet.org/qtlogin.php?username=${encodeURIComponent(s.user.username)}`}
       target="_blank"
-      rel="noopener"><StarIcon class="text-warning" />Get privileges</Button>
+      rel="noopener"><StarIcon class="text-warning-icon" />Get privileges</Button>
   {/if}
   <Button variant="outline" disabled={!s} onclick={() => void copyDiagnostics()}>
     {#if copying.copied}<CheckIcon />Copied{:else}<ClipboardListIcon />Copy diagnostics{/if}

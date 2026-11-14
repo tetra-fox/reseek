@@ -116,7 +116,7 @@
       <ul class="flex flex-col gap-1">
         {#if canary}
           <li class="pointer-events-none nav-item">
-            <FlaskConicalIcon class="size-4 shrink-0 text-warning" />
+            <FlaskConicalIcon class="size-4 shrink-0 text-warning-icon" />
             <span class={["truncate", sidebar.collapsed && "hidden"]}>Canary</span>
           </li>
         {/if}

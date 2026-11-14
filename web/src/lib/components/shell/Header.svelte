@@ -154,7 +154,7 @@
                       class="size-6"
                       aria-label="Copy path"
                       onclick={() => void copier.copy(text)}>
-                      <CopyIcon copied={copier.copied} class="text-success" />
+                      <CopyIcon copied={copier.copied} class="text-success-icon" />
                     </Button>
                   {/snippet}
                 </Tooltip>
@@ -202,7 +202,7 @@
             {...props}
             href={href("/system/info")}
             class="flex h-control-sm items-center gap-1.5 rounded-control px-2 text-sm text-warning-soft-fg hover:bg-hover">
-            <CircleAlertIcon class="size-4 text-warning" />
+            <CircleAlertIcon class="size-4 text-warning-icon" />
             <span class="max-sm:sr-only">Changes pending</span>
           </a>
         {/snippet}

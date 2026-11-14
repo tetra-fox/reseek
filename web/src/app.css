@@ -74,6 +74,10 @@
      surface, so it takes the soft tones' text there */
   --color-warning-text: var(--color-warning-soft-fg);
   --color-success-text: var(--color-success-soft-fg);
+  /* icons in the warning and success colours, darker than the fills so they reach 3:1 on every
+     surface and tinted line in the light theme */
+  --color-warning-icon: oklch(0.6 0.125 75);
+  --color-success-icon: oklch(0.58 0.14 155);
   --color-info: oklch(0.58 0.13 250);
   --color-info-soft: oklch(0.955 0.025 250);
   --color-info-soft-fg: oklch(0.45 0.13 250);
@@ -304,6 +308,8 @@
   --color-success-soft-fg: oklch(0.86 0.1 155);
   --color-warning-text: var(--color-warning);
   --color-success-text: var(--color-success);
+  --color-warning-icon: var(--color-warning);
+  --color-success-icon: var(--color-success);
   --color-info: oklch(0.7 0.11 250);
   --color-info-soft: oklch(0.27 0.05 250);
   --color-info-soft-fg: oklch(0.86 0.07 250);

@@ -24,7 +24,7 @@
   <div
     class="flex items-center gap-2 border-b border-warning/40 bg-warning-soft px-gutter py-2 text-sm text-warning-soft-fg"
     role="status">
-    <TriangleAlertIcon class="size-4 shrink-0 text-warning" />
+    <TriangleAlertIcon class="size-4 shrink-0 text-warning-icon" />
     <span>
       {#if shown}
         Lost connection to reseek. {seconds ? `Retrying in ${seconds}s.` : "Retrying..."}

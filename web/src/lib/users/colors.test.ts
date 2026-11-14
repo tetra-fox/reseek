@@ -1,30 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import fixture from "#lib/config/fixtures/view.json";
-import { contrast, luminance, over, rule, shown, token } from "#lib/testing/contrast.js";
+import { contrast, luminance, rows, rule, shown } from "#lib/testing/contrast.js";
 
 import { DARK, GROUP_COLORS, LIGHT, NAME_HUES, nameHue } from "./colors";
-
-/**
- * How opaque a selected row's accent-soft is: mixing a color with transparent in oklab keeps the
- * color and takes the mix's share as its opacity
- */
-const selectedAlpha = (() => {
-  const mix =
-    /\[aria-selected="true"\] \{\s*background-color: color-mix\(\s*in oklab,\s*var\(--color-accent-soft\) ([\d.]+)%,\s*var\(--line-under, transparent\)\s*\);/.exec(
-      rule("@utility line-tint")
-    );
-  if (!mix) throw new Error("line-tint's selected row is not a mix of accent-soft and transparent");
-  return Number(mix[1]) / 100;
-})();
-
-/** a line-tint row's backgrounds: plain, hovered, selected, and selected under the pointer */
-const rows = (block: string) => {
-  const surface = shown(token(block, "surface"));
-  const soft = shown(token(block, "accent-soft"));
-  const selected = over(soft, selectedAlpha, surface);
-  return [surface, shown(token(block, "hover")), selected, soft].map(luminance);
-};
 
 describe("username colors", () => {
   it("spread names evenly over the palette", () => {
@@ -44,8 +23,8 @@ describe("username colors", () => {
   });
 
   it("read as text on the rows of both themes", () => {
-    const light = rows(rule("@theme"));
-    const dark = rows(rule(".dark"));
+    const light = Object.values(rows(rule("@theme")));
+    const dark = Object.values(rows(rule(".dark")));
     for (const h of NAME_HUES) {
       const onLight = luminance(shown([LIGHT.l, LIGHT.c, h]));
       const onDark = luminance(shown([DARK.l, DARK.c, h]));

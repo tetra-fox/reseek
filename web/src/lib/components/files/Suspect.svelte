@@ -21,7 +21,7 @@
 <Tooltip {text}>
   {#snippet child({ props })}
     <button {...props} type="button" class="inline-flex align-text-bottom" aria-label={first}>
-      <TriangleAlertIcon class="size-3.5 text-warning" />
+      <TriangleAlertIcon class="size-3.5 text-warning-icon" />
     </button>
   {/snippet}
 </Tooltip>

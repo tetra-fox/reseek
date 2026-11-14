@@ -12,7 +12,7 @@
 
 {#if version?.isUpdateAvailable}
   <Button variant="ghost" size="sm" class="text-warning-soft-fg" onclick={() => (open = true)}>
-    <MegaphoneIcon class="text-warning" />
+    <MegaphoneIcon class="text-warning-icon" />
     <span class="max-sm:sr-only">Update available</span>
   </Button>
   <Dialog bind:open title="Update available">

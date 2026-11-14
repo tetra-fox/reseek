@@ -196,7 +196,7 @@
               "size-3.5",
               k.type === "uploadEnded"
                 ? isSucceeded(k.state)
-                  ? "text-success"
+                  ? "text-success-icon"
                   : "text-danger"
                 : "text-fg-muted"
             ]} />

@@ -217,7 +217,7 @@
                   class="size-3.5 shrink-0 text-fg-muted"
                   aria-label="Private" />{/if}
               {#if room.isOwned}<CrownIcon
-                  class="size-3.5 shrink-0 text-warning"
+                  class="size-3.5 shrink-0 text-warning-icon"
                   aria-label="Owned" />{/if}
               {#if room.isModerated}<GavelIcon
                   class="size-3.5 shrink-0 text-fg-muted"

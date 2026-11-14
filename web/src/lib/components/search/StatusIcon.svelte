@@ -14,11 +14,11 @@
 
   const ICONS: Record<SearchStage, { Icon: typeof CheckIcon; tone: string; spin: boolean }> = {
     waiting: { Icon: ClockIcon, tone: "text-fg-muted", spin: false },
-    running: { Icon: LoaderCircleIcon, tone: "text-success", spin: true },
-    found: { Icon: CheckIcon, tone: "text-success", spin: false },
-    cancelled: { Icon: CircleStopIcon, tone: "text-success", spin: false },
+    running: { Icon: LoaderCircleIcon, tone: "text-success-icon", spin: true },
+    found: { Icon: CheckIcon, tone: "text-success-icon", spin: false },
+    cancelled: { Icon: CircleStopIcon, tone: "text-success-icon", spin: false },
     errored: { Icon: XIcon, tone: "text-danger", spin: false },
-    unknown: { Icon: CircleHelpIcon, tone: "text-warning", spin: false }
+    unknown: { Icon: CircleHelpIcon, tone: "text-warning-icon", spin: false }
   };
 
   const icon = $derived(ICONS[searchStage(state)]);

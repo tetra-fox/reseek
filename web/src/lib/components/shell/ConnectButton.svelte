@@ -27,7 +27,7 @@
       const cut = server.listen.reachable === "no";
       return {
         label: cut ? "Connected, unreachable" : "Connected",
-        plug: state?.pendingReconnect || cut ? "text-warning" : "text-success",
+        plug: state?.pendingReconnect || cut ? "text-warning-icon" : "text-success-icon",
         badge: cut
           ? ("unreachable" as const)
           : state?.user.privileges.isPrivileged
@@ -80,14 +80,15 @@
       <span class="relative shrink-0">
         <PlugIcon class={["size-4", view.plug]} />
         {#if view.badge === "unreachable"}
-          <TriangleAlertIcon class="absolute -top-1 -right-1 size-2.5 fill-warning text-warning" />
+          <TriangleAlertIcon
+            class="absolute -top-1 -right-1 size-2.5 fill-warning-icon text-warning-icon" />
         {:else if view.badge === "privileged"}
-          <StarIcon class="absolute -top-1 -right-1 size-2.5 fill-warning text-warning" />
+          <StarIcon class="absolute -top-1 -right-1 size-2.5 fill-warning-icon text-warning-icon" />
         {:else if view.badge === "connecting"}
           <RefreshCwIcon
-            class="absolute -top-1 -right-1 size-2.5 animate-spin text-success motion-reduce:animate-none" />
+            class="absolute -top-1 -right-1 size-2.5 animate-spin text-success-icon motion-reduce:animate-none" />
         {:else if view.badge === "waiting"}
-          <ClockIcon class="absolute -top-1 -right-1 size-2.5 text-warning" />
+          <ClockIcon class="absolute -top-1 -right-1 size-2.5 text-warning-icon" />
         {:else if view.badge === "closed"}
           <XIcon class="absolute -top-1 -right-1 size-2.5 text-danger" />
         {/if}

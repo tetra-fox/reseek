@@ -122,7 +122,7 @@
                   {formatCount(search.fileCount)}
                 </td>
                 <td class="text-right text-fg-muted tabular-nums max-md:hidden">
-                  <LockIcon class="inline size-3 text-warning" />
+                  <LockIcon class="inline size-3 text-warning-icon" />
                   {formatCount(search.lockedFileCount)}
                 </td>
                 <td class="text-right tabular-nums max-md:hidden">

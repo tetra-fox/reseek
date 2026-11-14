@@ -101,7 +101,7 @@
   )}
   {@render tile(
     RadioTowerIcon,
-    reach === "no" ? "text-warning" : reach === "yes" ? "text-success" : "text-fg-muted",
+    reach === "no" ? "text-warning-icon" : reach === "yes" ? "text-success-icon" : "text-fg-muted",
     "Incoming connections",
     [
       {

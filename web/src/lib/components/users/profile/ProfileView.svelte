@@ -40,7 +40,7 @@
         <dt class="text-fg-muted">Free upload slot</dt>
         <dd>
           {#if freeUploadSlot}
-            <CircleCheckIcon class="size-3.5 text-success" aria-label="Yes" />
+            <CircleCheckIcon class="size-3.5 text-success-icon" aria-label="Yes" />
           {:else}
             <CircleXIcon class="size-3.5 text-danger" aria-label="No" />
           {/if}

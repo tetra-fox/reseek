@@ -86,7 +86,7 @@
   {#if fill === "waiting"}
     <span class="shrink-0 text-xs text-fg-muted">Queued</span>
   {:else if fill === "done"}
-    <CheckIcon class="size-4 shrink-0 text-success" aria-label="Downloaded" />
+    <CheckIcon class="size-4 shrink-0 text-success-icon" aria-label="Downloaded" />
   {:else if fill === "failed" && download && session.can("ReadWrite")}
     <Tooltip text={download.exception ?? undefined}>
       {#snippet child({ props })}

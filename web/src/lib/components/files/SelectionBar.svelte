@@ -51,7 +51,7 @@
   {#if busy}
     <Spinner class="size-4" label="Queueing" />
   {:else if status?.kind === "done"}
-    <CheckIcon class="size-4 text-success" aria-label={status.text} />
+    <CheckIcon class="size-4 text-success-icon" aria-label={status.text} />
   {:else if status}
     <span class="flex items-center gap-1 text-sm text-danger">
       <XIcon class="size-4" />{status.text}
