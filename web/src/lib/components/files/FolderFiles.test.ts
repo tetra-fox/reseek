@@ -56,10 +56,18 @@ describe("every file in a search result's folder", () => {
 
   it("downloads a selection as found by the search too", async () => {
     const net = open();
-    document.querySelector<HTMLElement>("[aria-label='Select 01.flac']")!.click();
+    document.querySelector<HTMLElement>("[aria-label='Select cover.jpg']")!.click();
     flushSync();
     button("Download").click();
     expect(await asked(net)).toEqual([["s1", null]]);
+  });
+
+  it("downloads a folder whose line is ticked in it, though it holds only files", async () => {
+    const net = open();
+    document.querySelector<HTMLElement>("[aria-label='Select every file in CD1']")!.click();
+    flushSync();
+    button("Download").click();
+    expect(await asked(net)).toEqual([["s1", "@@a\\Album\\CD1"]]);
   });
 
   it("names who they come from as a username, which shows a name's edge spaces", () => {

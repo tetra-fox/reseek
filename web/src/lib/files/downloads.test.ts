@@ -15,11 +15,17 @@ const file = (filename: string, size = 10): Schemas["File"] => ({
   attributes: []
 });
 
-const plan = (files: string[], topOf: (path: string) => string, separator: "\\" | "/" = "\\") =>
+const plan = (
+  files: string[],
+  topOf: (path: string) => string,
+  separator: "\\" | "/" = "\\",
+  whole?: (folder: string) => boolean
+) =>
   downloadPlan(
     files.map((f) => file(f)),
     topOf,
-    separator
+    separator,
+    whole
   ).map((g): [string | null, string[]] => [g.folder, g.files.map((f) => f.filename)]);
 
 describe("downloading a selection", () => {
@@ -48,6 +54,27 @@ describe("downloading a selection", () => {
     // the files of one folder, with nothing below it, go where the pattern puts them
     expect(plan(["top/sub/a", "top/sub/b"], () => "top", "/")).toEqual([
       [null, ["top/sub/a", "top/sub/b"]]
+    ]);
+  });
+
+  it("sends a folder ticked whole in it though it holds only files", () => {
+    const album = ["@@a\\Music\\Album\\1.flac", "@@a\\Music\\Album\\2.flac"];
+    const whole = (folder: string) => folder === "@@a\\Music\\Album";
+    expect(plan(album, () => "@@a\\Music", "\\", whole)).toEqual([["@@a\\Music\\Album", album]]);
+    // some of its files, or a folder the tree does not show ticked, go where the pattern puts them
+    expect(
+      plan(
+        album.slice(0, 1),
+        () => "@@a\\Music",
+        "\\",
+        () => false
+      )
+    ).toEqual([[null, album.slice(0, 1)]]);
+    // the other tops of the selection follow, as they do once anything is nested
+    const top = (path: string) => path.split("\\").slice(0, 2).join("\\");
+    expect(plan([...album, "@@a\\Video\\x.mkv"], top, "\\", whole)).toEqual([
+      ["@@a\\Music\\Album", album],
+      ["@@a\\Video", ["@@a\\Video\\x.mkv"]]
     ]);
   });
 

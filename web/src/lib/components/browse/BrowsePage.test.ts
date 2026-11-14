@@ -118,6 +118,41 @@ describe("browse progress", () => {
     );
   });
 
+  it("downloads a folder whose line is ticked in it, though it holds only files", async () => {
+    const net = fakeNetwork((url) => {
+      if (url.pathname.endsWith("/transfers/downloads/jobs")) return { id: "j", groups: [] };
+      if (!url.pathname.endsWith("/users/alice/browse")) return undefined;
+      return {
+        directories: [
+          { name: "Music", fileCount: 1, files: [sharedFile("1.flac")] },
+          { name: "Music\\CD2", fileCount: 1, files: [sharedFile("2.flac")] }
+        ],
+        directoryCount: 2,
+        lockedDirectories: [],
+        lockedDirectoryCount: 0
+      };
+    });
+    session.principal = { name: "me", role: "Administrator" } as never;
+    app.state = { server: { isConnected: true }, user: { username: "me" } } as never;
+    component = mount(BrowsePage, {
+      target: document.body,
+      props: { user: "alice", path: null }
+    });
+    await flushFaked();
+    await flushFaked();
+    document
+      .querySelector<HTMLElement>('[role=checkbox][aria-label="Select every file in CD2"]')!
+      .click();
+    flushSync();
+    [...document.querySelectorAll("button")]
+      .find((b) => b.textContent?.trim() === "Download")!
+      .click();
+    await flushFaked();
+    const jobs = net.requests.filter((r) => r.url.pathname.endsWith("/transfers/downloads/jobs"));
+    const body = jobs[0].body as { groups: { folder: string | null }[] };
+    expect(body.groups.map((g) => g.folder)).toEqual(["Music\\CD2"]);
+  });
+
   it("leaves the next user's tree where it is when the one before answers late", async () => {
     let answerAlice!: (listing: Schemas["BrowseResponse"]) => void;
     const folders = (...names: string[]): Schemas["BrowseResponse"] => ({

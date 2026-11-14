@@ -80,11 +80,23 @@
 
   const tell = (result: Enqueued) => toast(result.text, result.kind === "done" ? "info" : "error");
 
-  /** Downloads files as one job that keeps their folders below the deepest one holding them */
-  const download = (list: Schemas["File"][]): Promise<Enqueued> =>
+  /** Whether the line of the folder `path` is ticked: every file under it the filter keeps is */
+  const tickedWhole = (path: string) => {
+    const under = shown.filter((f) => f.filename.startsWith(path + separator)).length;
+    return under > 0 && (ticked.get(path) ?? 0) === under;
+  };
+
+  /**
+   * Downloads files as one job that keeps their folders below the deepest one holding them, or
+   * that folder itself when `whole` says its line is ticked
+   */
+  const download = (
+    list: Schemas["File"][],
+    whole?: (folder: string) => boolean
+  ): Promise<Enqueued> =>
     enqueuePlan(
       username,
-      downloadPlan(list, () => folder, separator),
+      downloadPlan(list, () => folder, separator, whole),
       searchId
     );
   const downloadNow = async (list: Schemas["File"][]) => tell(await download(list));
@@ -164,7 +176,7 @@
   {#if write && chosen.length}
     <SelectionBar
       files={chosen}
-      ondownload={() => download(chosen)}
+      ondownload={() => download(chosen, tickedWhole)}
       onclear={() => selected.clear()} />
   {/if}
   {#snippet footer()}

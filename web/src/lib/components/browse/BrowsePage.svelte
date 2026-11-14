@@ -228,12 +228,19 @@
   const topOf = (at: string) =>
     ancestors(at, browser.tree, browser.separator)[0] ?? getFileName(at);
 
+  /** Whether the line of the folder `path` is ticked: every file under it that it offers is */
+  const tickedWhole = (path: string) => {
+    const node = browser.tree.byPath.get(path);
+    const state = node && tickOf(node);
+    return !!state && state.of > 0 && state.on === state.of;
+  };
+
   /**
    * Downloads files as one job: each top folder's as groups that keep their folders below the
-   * deepest one holding them
+   * deepest one holding them, or that folder itself when `whole` says its line is ticked
    */
-  const download = (list: RemoteFile[]): Promise<Enqueued> =>
-    enqueuePlan(browser.username, downloadPlan(list, topOf, browser.separator));
+  const download = (list: RemoteFile[], whole?: (folder: string) => boolean): Promise<Enqueued> =>
+    enqueuePlan(browser.username, downloadPlan(list, topOf, browser.separator, whole));
 
   /** Every file under a folder, filtered or not, as one job that keeps the folders below it */
   const downloadFolder = async (node: FolderNode<RemoteFile>) => {
@@ -396,7 +403,7 @@
     {#if chosen.length}
       <SelectionBar
         files={chosen}
-        ondownload={write ? () => download(chosen) : undefined}
+        ondownload={write ? () => download(chosen, tickedWhole) : undefined}
         onclear={() => browser.selected.clear()} />
     {/if}
   {/if}

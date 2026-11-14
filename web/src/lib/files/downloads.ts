@@ -180,14 +180,16 @@ export const downloadFolderPlan = (
 /**
  * Selected files as the groups that download them, one per top folder, which `topOf` gives a
  * path's. When anything in the selection is in a folder below the deepest one holding its top's
- * files, folders were picked, and every group is sent in that deepest folder so the selection
- * keeps its tree, as `downloadFolderPlan` keeps a folder's. When nothing is, the files are loose
- * and each goes where the download pattern puts it
+ * files, or that folder is one `whole` says was ticked whole, folders were picked, and every
+ * group is sent in that deepest folder so the selection keeps its tree, as `downloadFolderPlan`
+ * keeps a folder's. When neither is, the files are loose and each goes where the download pattern
+ * puts it
  */
 export const downloadPlan = (
   files: Schemas["File"][],
   topOf: (path: string) => string,
-  separator: Separator
+  separator: Separator,
+  whole: (folder: string) => boolean = () => false
 ): DownloadGroup[] => {
   const byTop = new Map<string, Schemas["File"][]>();
   for (const file of files) {
@@ -203,19 +205,21 @@ export const downloadPlan = (
     ),
     grouped
   }));
-  const deeper = ({ name, grouped }: (typeof tops)[number]) => {
+  const picked = ({ name, grouped }: (typeof tops)[number]) => {
     const prefix = prefixOf(name, separator);
     return (
       name !== "" &&
-      grouped.some(
-        (f) => f.filename.startsWith(prefix) && f.filename.slice(prefix.length).includes(separator)
-      )
+      (whole(name) ||
+        grouped.some(
+          (f) =>
+            f.filename.startsWith(prefix) && f.filename.slice(prefix.length).includes(separator)
+        ))
     );
   };
-  const nested = tops.some(deeper);
+  const inFolders = tops.some(picked);
   return tops.map(({ name, grouped }) => ({
     files: inOrder(name, grouped, separator),
-    folder: nested ? folderOf(name, grouped, separator) : null
+    folder: inFolders ? folderOf(name, grouped, separator) : null
   }));
 };
 
