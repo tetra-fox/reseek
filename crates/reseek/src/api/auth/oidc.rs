@@ -887,9 +887,9 @@ mod tests {
     );
     reload("", users).await;
     assert_eq!(
-      me(&app, &cookie).await.status,
-      401,
-      "the session ended, so it takes a new sign-in"
+      me(&app, &cookie).await.json()["role"],
+      "ReadWrite",
+      "a removal that did not stand ends nothing"
     );
 
     let cookie = sign_in("c2", true).await;

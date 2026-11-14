@@ -1,7 +1,8 @@
 //! The background work every request relies on: the application state and the event stream
 //! follow the configuration and the log, the log filter follows its options, and the OpenID
-//! Connect providers are discovered; and the sessions that expired are ended and old ended
-//! sessions and tokens deleted, which the scheduler runs.
+//! Connect providers are discovered, the sessions of users a configuration that stands gives no
+//! role are ended; and the sessions that expired are ended and old ended sessions and tokens
+//! deleted, which the scheduler runs.
 
 use std::sync::Arc;
 
@@ -26,8 +27,13 @@ const KEPT: chrono::Duration = chrono::Duration::days(30);
 
 static LOGS_MISSED: LogLimiter = LogLimiter::new();
 
+/// How long a configuration stands unchanged before the sessions of users it gives no role are
+/// ended, so a file read half written does not end them for good.
+const SETTLE: std::time::Duration = std::time::Duration::from_secs(10);
+
 pub(super) fn spawn(app: &AppState) {
   tokio::spawn(follow_configuration(app.clone()).instrument(info_span!("state")));
+  tokio::spawn(end_roleless_sessions(app.clone()).instrument(info_span!("sessions")));
   tokio::spawn(forward_logs(app.clone()).instrument(info_span!("log_stream")));
   tokio::spawn(crate::auth::oidc::discover_at_start(app.clone()));
 }
@@ -48,12 +54,37 @@ async fn follow_configuration(app: AppState) {
     app.state.configured(&loaded);
     // a principal's role is read from the configuration, so every stream checks its own again
     app.live.credentials_changed();
-    if let Err(e) = crate::auth::end_sessions_without_role(&app).await {
-      warn!(error = ?e, "the sessions of users with no role now were not ended");
-    }
     app
       .live
       .publish(LiveFrame::ApplicationOptions(view::document(&loaded)));
+  }
+}
+
+/// Ends the sessions of users the configuration gives no role, each time a configuration has
+/// stood unchanged for [`SETTLE`], the one the daemon starts with included.
+async fn end_roleless_sessions(app: AppState) {
+  let mut loads = app.config.subscribe();
+  loads.borrow_and_update();
+  loop {
+    // a change starts the wait over
+    let settled = tokio::select! {
+      () = app.shutdown.cancelled() => return,
+      changed = loads.changed() => match changed {
+        Ok(()) => false,
+        Err(_) => return,
+      },
+      () = tokio::time::sleep(SETTLE) => true,
+    };
+    if !settled {
+      continue;
+    }
+    if let Err(e) = crate::auth::end_sessions_without_role(&app).await {
+      warn!(error = ?e, "the sessions of users with no role now were not ended");
+    }
+    tokio::select! {
+      () = app.shutdown.cancelled() => return,
+      changed = loads.changed() => if changed.is_err() { return },
+    }
   }
 }
 
@@ -164,4 +195,103 @@ pub(crate) async fn prune_sessions(app: &AppState) -> Result<usize, crate::db::D
   let sessions = sessions::prune(db, before).await?;
   let tokens = tokens::prune(db, before).await?;
   Ok(sessions + tokens)
+}
+
+#[cfg(test)]
+mod tests {
+  use std::time::Duration;
+
+  use serde_json::json;
+
+  use super::SETTLE;
+  use crate::auth::sessions;
+  use crate::testing::{OUTSIDE, TestApp, app, request, set_cookie, with};
+
+  const VIEWER: &str = "[web.authentication.local.users.viewer]\npassword = \"look\"\n";
+
+  async fn signed_in(app: &TestApp) -> String {
+    let login = json!({ "username": "viewer", "password": "look" });
+    let answer = app
+      .send_from(OUTSIDE, request("POST", "/api/v0/session", Some(login)))
+      .await;
+    set_cookie(&answer.headers, "reseek_session").unwrap()
+  }
+
+  /// Loads `text` as the configuration and lets the scan see the change before the clock moves.
+  async fn reload(app: &TestApp, text: &str) {
+    std::fs::write(app.dir.path().join("config.toml"), text).unwrap();
+    app.state.config.reload().await.unwrap();
+    tokio::task::yield_now().await;
+  }
+
+  async fn status(app: &TestApp, cookie: &str) -> u16 {
+    let me = with(request("GET", "/api/v0/session", None), "cookie", cookie);
+    app.send_from(OUTSIDE, me).await.status.as_u16()
+  }
+
+  async fn ended(app: &TestApp, cookie: &str) -> bool {
+    let id = cookie.split_once('=').unwrap().1.split_once('.').unwrap().0;
+    let session = sessions::find(&app.state.auth.db, id).await.unwrap();
+    session.unwrap().revoked_at.is_some()
+  }
+
+  /// Waits up to another [`SETTLE`] until the session of `cookie` ended, which the scan does on
+  /// tasks of its own.
+  async fn until_ended(app: &TestApp, cookie: &str) {
+    let step = Duration::from_millis(100);
+    for _ in 0..SETTLE.as_millis() / step.as_millis() {
+      if ended(app, cookie).await {
+        return;
+      }
+      tokio::time::sleep(step).await;
+    }
+    panic!("the session was not ended");
+  }
+
+  /// Lets the clock pass `wait` and whatever that wakes run to its end: a paused clock moves on
+  /// by itself only once every task waits on a timer.
+  async fn pass(wait: Duration) {
+    tokio::time::advance(wait).await;
+    tokio::time::sleep(Duration::from_secs(1)).await;
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn a_removal_that_does_not_stand_ends_no_session() {
+    let app = app(VIEWER, &[]).await;
+    let cookie = signed_in(&app).await;
+    // a file read half written, then whole a moment later
+    reload(&app, "").await;
+    assert_eq!(status(&app, &cookie).await, 401, "refused at once");
+    pass(Duration::from_secs(1)).await;
+    reload(&app, VIEWER).await;
+    pass(SETTLE).await;
+    assert!(!ended(&app, &cookie).await);
+    assert_eq!(status(&app, &cookie).await, 200);
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn a_removal_that_stands_ends_the_session() {
+    let app = app(VIEWER, &[]).await;
+    let cookie = signed_in(&app).await;
+    reload(&app, "").await;
+    pass(SETTLE - Duration::from_secs(2)).await;
+    assert!(
+      !ended(&app, &cookie).await,
+      "the removal has not stood long enough"
+    );
+    pass(Duration::from_secs(2)).await;
+    until_ended(&app, &cookie).await;
+    reload(&app, VIEWER).await;
+    assert_eq!(status(&app, &cookie).await, 401, "it takes a new sign-in");
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn a_removal_made_while_stopped_ends_the_session_after_the_start() {
+    let app = app(VIEWER, &[]).await;
+    let cookie = signed_in(&app).await;
+    std::fs::write(app.dir.path().join("config.toml"), "").unwrap();
+    let app = app.restarted(&[]).await;
+    pass(SETTLE).await;
+    until_ended(&app, &cookie).await;
+  }
 }

@@ -1,9 +1,9 @@
 //! The chain that settles who a request is, in order: an API token, a configuration API key,
 //! the session cookie, a trusted reverse proxy's forwarded identity, a trusted network. A
 //! token or key that is presented but not valid fails at once, as does a token whose owner the
-//! configuration in effect gives no role; a session cookie that is not valid is cleared and the
-//! next ways are tried, and its session ended when the configuration gives its user no role. A session the proxy step started ends when the proxy forwards someone else or a
-//! different role for them.
+//! configuration in effect gives no role; a session cookie that is not valid, or whose user the
+//! configuration gives no role, is cleared and the next ways are tried. A session the proxy step
+//! started ends when the proxy forwards someone else or a different role for them.
 
 use std::net::IpAddr;
 
@@ -351,7 +351,9 @@ async fn cookie_session(
 }
 
 /// The active session a cookie value names with the role `options` give its user, recording its
-/// use when `used` and the record is stale. A session whose user they give no role is ended.
+/// use when `used` and the record is stale. A session whose user they give no role is refused
+/// but not ended here: the options may be a file read half written, so only a configuration
+/// that stands ends it, through [`end_sessions_without_role`].
 async fn session_of(
   app: &AppState,
   value: &str,
@@ -380,8 +382,10 @@ async fn session_of(
     return Ok(None);
   }
   let Some(role) = session.role(&options.web.authentication) else {
-    let reason = SessionRevokeReason::Configuration;
-    end_sessions(app, vec![session.id], None, reason).await?;
+    debug!(
+      subject = session.subject,
+      "session cookie of a user the configuration gives no role refused"
+    );
     return Ok(None);
   };
   if used && session.seen_due(now, idle) {
