@@ -1409,18 +1409,19 @@ async fn statistics_asked_before_a_watched_user_is_forgotten_and_answered_after_
   users.set_buddy("alice", Default::default()).await.unwrap();
   let online = || alice_is(soulseek_proto::UserPresence::Online);
   // alice's statistics are answered only when the test says
-  let mut server = crate::testing::soulseek::Server::start(move |request| match request {
-    ServerRequest::WatchUser(_) => vec![online().1],
-    ServerRequest::GetStatus(_) => vec![online().0],
-    ServerRequest::GetUserStats(asked) if asked.username != "alice" => {
-      vec![ServerResponse::GetUserStats(UserStatistics {
-        username: asked.username.clone(),
-        stats: UserStats::default(),
-      })]
-    }
-    _ => Vec::new(),
-  })
-  .await;
+  let mut server =
+    crate::testing::soulseek::Server::start_scripting_statistics(move |request| match request {
+      ServerRequest::WatchUser(_) => vec![online().1],
+      ServerRequest::GetStatus(_) => vec![online().0],
+      ServerRequest::GetUserStats(asked) if asked.username != "alice" => {
+        vec![ServerResponse::GetUserStats(UserStatistics {
+          username: asked.username.clone(),
+          stats: UserStats::default(),
+        })]
+      }
+      _ => Vec::new(),
+    })
+    .await;
   server.login(&app).await;
   tokio::time::timeout(std::time::Duration::from_secs(5), async {
     while !users.is_watched("alice") {

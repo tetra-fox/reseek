@@ -54,7 +54,22 @@ impl Server {
   /// A server answering each request with what `script` gives for it, besides the login and
   /// the statistics and privileges requests, which it answers itself.
   pub async fn start(
+    script: impl FnMut(&ServerRequest) -> Vec<ServerResponse> + Send + 'static,
+  ) -> Self {
+    Self::serving(script, true).await
+  }
+
+  /// [`Server::start`] whose `script` answers the statistics requests too, so a test can hold
+  /// some back.
+  pub async fn start_scripting_statistics(
+    script: impl FnMut(&ServerRequest) -> Vec<ServerResponse> + Send + 'static,
+  ) -> Self {
+    Self::serving(script, false).await
+  }
+
+  async fn serving(
     mut script: impl FnMut(&ServerRequest) -> Vec<ServerResponse> + Send + 'static,
+    statistics: bool,
   ) -> Self {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
@@ -62,7 +77,7 @@ impl Server {
     let (control, mut controls) = mpsc::unbounded_channel();
     tokio::spawn(async move {
       while let Ok((stream, _)) = listener.accept().await {
-        if !serve(stream, &mut script, &sent, &mut controls).await {
+        if !serve(stream, &mut script, statistics, &sent, &mut controls).await {
           return;
         }
       }
@@ -144,10 +159,12 @@ impl Server {
   }
 }
 
-/// Serves one connection until it closes; false when the test is done with the server.
+/// Serves one connection until it closes, answering the statistics requests itself when
+/// `statistics`; false when the test is done with the server.
 async fn serve(
   mut stream: TcpStream,
   script: &mut (impl FnMut(&ServerRequest) -> Vec<ServerResponse> + Send),
+  statistics: bool,
   sent: &mpsc::UnboundedSender<ServerRequest>,
   controls: &mut mpsc::UnboundedReceiver<Control>,
 ) -> bool {
@@ -158,7 +175,7 @@ async fn serve(
     {
       let frame: Vec<u8> = buffer.drain(..consumed).collect();
       let request = ServerRequest::decode(&frame).unwrap();
-      let mut answers = always(&request);
+      let mut answers = always(&request, statistics);
       answers.extend(script(&request));
       if !answers.is_empty() && stream.write_all(&encoded(&answers)).await.is_err() {
         return true;
@@ -190,9 +207,9 @@ fn encoded(messages: &[ServerResponse]) -> Vec<u8> {
   messages.iter().flat_map(ServerResponse::encode).collect()
 }
 
-/// What every server here answers: the login, and any user's statistics and our privileges,
-/// which the daemon asks for after each login.
-fn always(request: &ServerRequest) -> Vec<ServerResponse> {
+/// What every server here answers: the login, our privileges and, when `statistics`, any user's
+/// statistics, which the daemon asks for after each login.
+fn always(request: &ServerRequest, statistics: bool) -> Vec<ServerResponse> {
   match request {
     ServerRequest::Login(_) => vec![ServerResponse::Login(LoginResponse::Success {
       greeting: "welcome".into(),
@@ -200,10 +217,12 @@ fn always(request: &ServerRequest) -> Vec<ServerResponse> {
       hash: Secret::new("0123456789abcdef0123456789abcdef"),
       is_supporter: false,
     })],
-    ServerRequest::GetUserStats(asked) => vec![ServerResponse::GetUserStats(UserStatistics {
-      username: asked.username.clone(),
-      stats: UserStats::default(),
-    })],
+    ServerRequest::GetUserStats(asked) if statistics => {
+      vec![ServerResponse::GetUserStats(UserStatistics {
+        username: asked.username.clone(),
+        stats: UserStats::default(),
+      })]
+    }
     ServerRequest::CheckPrivileges => {
       vec![ServerResponse::CheckPrivileges(CheckPrivilegesResponse {
         seconds_remaining: 0,
