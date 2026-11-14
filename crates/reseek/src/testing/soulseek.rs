@@ -27,9 +27,7 @@ const RECEIVED_WITHIN: Duration = Duration::from_secs(8);
 /// A daemon to log in to a [`Server`], with the `config.toml` `config`: it listens for peers on
 /// a loopback port of its own, since tests run at once, and asks no router to forward it.
 pub async fn app(config: &str) -> TestApp {
-  let free = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-  let port = free.local_addr().unwrap().port().to_string();
-  drop(free);
+  let port = super::ports::free_port().to_string();
   let env = [
     ("RESEEK_SLSK_LISTEN_IP_ADDRESS", "127.0.0.1"),
     ("RESEEK_SLSK_LISTEN_PORT", port.as_str()),

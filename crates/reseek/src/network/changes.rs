@@ -211,9 +211,7 @@ mod tests {
 
   #[tokio::test]
   async fn a_listener_that_cannot_move_does_not_keep_a_room_added_later_from_being_joined() {
-    let free = std::net::TcpListener::bind("0.0.0.0:0").unwrap();
-    let listen = free.local_addr().unwrap().port();
-    drop(free);
+    let listen = crate::testing::ports::free_port();
     let app = app(
       &format!(
         "remote_configuration = true\n[web.authentication]\n\

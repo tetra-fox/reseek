@@ -3,6 +3,9 @@
 //! a stand-in OpenID Connect provider; and a scripted Soulseek server.
 
 pub mod issuer;
+/// Free listening ports, picked as the client's and the program's tests pick theirs.
+#[path = "../../../soulseek-client/tests/support/ports.rs"]
+pub mod ports;
 pub mod routes;
 pub mod soulseek;
 
