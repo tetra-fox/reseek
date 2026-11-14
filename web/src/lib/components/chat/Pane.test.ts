@@ -263,6 +263,33 @@ describe("a chat pane", () => {
     expect(document.querySelectorAll("[role=note]")).toHaveLength(2);
   });
 
+  it("shows a room the server refused as not joined, its history read, and joins it again", async () => {
+    const net = indie(() => ({ messages: [roomMessage(1)], hasMore: false, gaps: [] }), {
+      refused: true
+    });
+    component = mount(Pane, {
+      target: document.body,
+      props: { target: { kind: "room", name: "indie" } }
+    });
+    await flush();
+    const joinButton = () =>
+      [...document.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Join");
+    expect(document.querySelector("header")?.textContent).toContain("Not joined");
+    expect(ids()).toEqual(["1"]);
+    expect(joinButton()).toBeDefined();
+
+    joinButton()!.click();
+    await flush();
+    const joined = net.requests.find((r) => r.method === "POST");
+    expect(joined?.url.pathname).toBe("/api/v0/rooms/joined");
+    expect(joined?.body).toEqual({ name: "indie", private: false });
+    // the daemon's list then has it joined
+    chat.rooms.upsert(joinedRoom("indie"));
+    flushSync();
+    expect(joinButton()).toBeUndefined();
+    expect(document.querySelector("header")?.textContent).not.toContain("Not joined");
+  });
+
   it("adds no gap from a login to the history of another room", async () => {
     const net = fakeNetwork((url) =>
       url.pathname.endsWith("/rooms/history/indie/messages")

@@ -386,6 +386,7 @@
                     class="size-3 shrink-0 text-fg-subtle"
                     aria-label="Muted" />{/if}
                 {#if summary?.block}<Badge tone="danger" class="-my-px py-0">blocked</Badge>{/if}
+                {#if room?.refused}<Badge class="-my-px py-0">not joined</Badge>{/if}
               </span>
               <span class="row-meta text-right text-xs text-fg-muted"
                 ><span>{at ? ago(at, clock.now) : ""}</span></span>

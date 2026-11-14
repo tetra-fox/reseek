@@ -87,7 +87,9 @@
   });
 
   const write = $derived(session.can("ReadWrite"));
-  const joined = $derived(target.kind === "room" ? !!chat.rooms.get(target.name) : true);
+  const room = $derived(target.kind === "room" ? chat.rooms.get(target.name) : undefined);
+  // a room the server refused after a login is listed but not joined
+  const joined = $derived(target.kind === "room" ? !!room && !room.refused : true);
   const summary = $derived(target.kind === "user" ? users.get(target.name) : undefined);
   const disabled = $derived.by(() => {
     if (!write) return "Read-only accounts cannot send messages";
@@ -204,7 +206,11 @@
       <div class="name-count flex-1 gap-2">
         <h2 class="truncate font-medium">{target.name}</h2>
         <span class="text-xs text-fg-muted"
-          ><span>{plural(members?.users.size ?? 0, "user", "users")}</span></span>
+          ><span
+            >{room?.refused
+              ? "Not joined"
+              : plural(members?.users.size ?? 0, "user", "users")}</span
+          ></span>
       </div>
     {/if}
     <div class="ml-auto flex shrink-0 items-center gap-1">
