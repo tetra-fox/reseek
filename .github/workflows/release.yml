@@ -19,6 +19,8 @@ jobs:
           - arch: arm64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
+    # 15 to 20 minutes, 30 when one job built both
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-nix
@@ -34,6 +36,8 @@ jobs:
   # no cargo or pnpm cache: only this tag's runs could read it, and main never builds on macos
   macos:
     runs-on: macos-latest
+    # 34 to 44 minutes, with nothing cached
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
@@ -57,6 +61,8 @@ jobs:
   sign:
     needs: [linux, macos]
     runs-on: ubuntu-latest
+    # under a minute
+    timeout-minutes: 10
     permissions:
       id-token: write
       attestations: write
@@ -90,6 +96,8 @@ jobs:
   release:
     needs: sign
     runs-on: ubuntu-latest
+    # under a minute
+    timeout-minutes: 10
     permissions:
       contents: write
     steps:

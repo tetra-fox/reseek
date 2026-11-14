@@ -17,6 +17,8 @@ concurrency:
 jobs:
   trim:
     runs-on: ubuntu-latest
+    # a few seconds
+    timeout-minutes: 10
     steps:
       - name: Keep each ref's newest nix and cargo cache, delete tags' caches
         env:

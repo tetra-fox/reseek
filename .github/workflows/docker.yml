@@ -14,6 +14,8 @@ permissions:
 jobs:
   image:
     runs-on: ubuntu-latest
+    # about a minute: the binaries are the release's, the image only copies them in
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # the binaries go in only once SHA256SUMS is signed by reseek.pub and lists each one's hash
