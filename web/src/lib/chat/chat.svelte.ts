@@ -37,6 +37,12 @@ class Chat {
   readonly conversations = new Keyed<Conversation>((c) => c.username, this.freeze);
   /** the joined rooms, by name */
   readonly rooms = new Keyed<JoinedRoom>((r) => r.name, this.freeze);
+
+  /** Whether we are in the room `name`: listed, and not refused when joined again after a login */
+  isJoined = (name: string) => {
+    const room = this.rooms.get(name);
+    return !!room && !room.refused;
+  };
   /** the newest stored notice from the server, held apart as it is no conversation */
   latestNotice = $state.raw<Schemas["PrivateMessage"] | null>(null);
   /**

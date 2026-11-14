@@ -88,8 +88,7 @@
 
   const write = $derived(session.can("ReadWrite"));
   const room = $derived(target.kind === "room" ? chat.rooms.get(target.name) : undefined);
-  // a room the server refused after a login is listed but not joined
-  const joined = $derived(target.kind === "room" ? !!room && !room.refused : true);
+  const joined = $derived(target.kind === "room" ? chat.isJoined(target.name) : true);
   const summary = $derived(target.kind === "user" ? users.get(target.name) : undefined);
   const disabled = $derived.by(() => {
     if (!write) return "Read-only accounts cannot send messages";

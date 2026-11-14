@@ -111,7 +111,7 @@
     })
   );
   /** joined now, by this page's list, which the server's room list can lag behind */
-  const isJoined = (room: string) => !!chat.rooms.get(room);
+  const isJoined = (room: string) => chat.isJoined(room);
   /** the rooms whose Join or Leave is under way */
   const busy = new SvelteSet<string>();
 

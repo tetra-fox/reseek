@@ -2,6 +2,7 @@ import { flushSync, mount, unmount } from "svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { chat } from "#lib/chat/chat.svelte.js";
+import { joinedRoom } from "#lib/testing/fixtures.js";
 import { flush } from "#lib/testing/flush.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 
@@ -144,5 +145,23 @@ describe("the join dialog", () => {
     expect(document.querySelector('button[aria-label="Leave indie"]')).not.toBeNull();
     // the dialog stays open for the next one
     expect(document.querySelector("[role=dialog]")).not.toBeNull();
+  });
+
+  it("offers Join on the row of a room the server refused after a login", async () => {
+    chat.rooms.upsert(joinedRoom("indie", { refused: true }));
+    const net = fakeNetwork((url, method) => {
+      if (url.pathname.endsWith("/rooms/available")) return [room("indie", 40)];
+      if (method === "POST") return { status: 403, body: { error: "no" } };
+      return undefined;
+    });
+    component = mount(JoinRoomDialog, { target: document.body, props: { open: true } });
+    await flush();
+    expect(document.querySelector('[data-line="indie"]')!.textContent).not.toContain("Joined");
+    document.querySelector<HTMLButtonElement>('button[aria-label="Join indie"]')!.click();
+    await flush();
+    expect(net.requests.find((r) => r.method === "POST")?.body).toEqual({
+      name: "indie",
+      private: false
+    });
   });
 });
