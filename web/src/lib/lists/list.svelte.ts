@@ -74,6 +74,10 @@ export type ListSpec<L> = {
 
 let lists = 0;
 
+/** Whether `target` is inside a list's container */
+export const inList = (target: EventTarget | null) =>
+  target instanceof Element && !!target.closest("[data-list]");
+
 /**
  * The selection and keyboard focus of a list, shared by every list in the app so they all
  * behave alike.
@@ -287,6 +291,7 @@ export class ListControl<L> {
   /** For `{@attach}` on the list's container */
   attach = (node: HTMLElement) => {
     this.#element = node;
+    node.dataset.list = "";
     const stops = [
       on(node, "pointerdown", (e) => {
         this.#ringed = false;
@@ -315,6 +320,7 @@ export class ListControl<L> {
     ];
     return () => {
       for (const stop of stops) stop();
+      delete node.dataset.list;
       if (this.#element === node) this.#element = null;
     };
   };

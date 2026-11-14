@@ -96,7 +96,7 @@ it("does not open over a select's open list", () => {
   unmount(select);
 });
 
-it("opens on ? over a focused list, whatever its rows are named", async () => {
+it("leaves ? to a focused list, which goes to the row it names", () => {
   const lines = box([
     { key: "alpha", group: "g" },
     { key: "?odd", group: "g" }
@@ -108,11 +108,13 @@ it("opens on ? over a focused list, whatever its rows are named", async () => {
   grid.focus();
   press(grid, "ArrowDown");
   press(grid, "?", { shiftKey: true });
-  await vi.waitFor(() => expect(open()).not.toBeNull());
-  // the list's focus stays on the row it was on
-  expect(document.querySelector('[data-line="alpha"]')!.id).toBe(
+  expect(open()).toBeNull();
+  expect(document.querySelector('[data-line="?odd"]')!.id).toBe(
     grid.getAttribute("aria-activedescendant")
   );
+  // a control in a row is in the list too
+  press(document.querySelector('[data-line="alpha"] button')!, "?", { shiftKey: true });
+  expect(open()).toBeNull();
   unmount(sheet);
   unmount(list);
 });

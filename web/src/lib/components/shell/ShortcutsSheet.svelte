@@ -5,6 +5,7 @@
   import Dialog from "#lib/components/ui/Dialog.svelte";
   import Input from "#lib/components/ui/Input.svelte";
   import Keys from "#lib/components/ui/Keys.svelte";
+  import { inList } from "#lib/lists/list.svelte.js";
   import { route } from "#lib/nav.js";
   import { shortcuts } from "#lib/shell/shortcuts.svelte.js";
   import { APP, SHEET } from "#lib/ui/bindings.js";
@@ -28,16 +29,15 @@
       .filter((g) => g.bindings.length);
   });
 
-  // taken on the way down, before the focused element: a list would read `?` as the start of a
-  // row's name. A field, a menu or a dialog keeps it
+  // a list reads `?` as the start of a row's name; a field, a menu or a dialog keeps it too
   const keydown = (e: KeyboardEvent) => {
-    if (!isPressed(APP.shortcuts, e) || keepsKey(e) || layerOpen()) return;
+    if (!isPressed(APP.shortcuts, e) || keepsKey(e) || inList(e.target) || layerOpen()) return;
     e.preventDefault();
     shortcuts.show(document.activeElement);
   };
 </script>
 
-<svelte:window onkeydowncapture={keydown} />
+<svelte:window onkeydown={keydown} />
 
 <Dialog
   bind:open={
