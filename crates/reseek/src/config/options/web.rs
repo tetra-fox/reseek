@@ -35,7 +35,8 @@ pub struct Web {
   /// Serves the web UI.
   #[cascade(env = "RESEEK_WEB_UI", cli = "--web-ui", apply = "restart")]
   pub ui: bool,
-  /// Directory to serve the UI from, instead of the UI built into the program.
+  /// Directory to serve the UI from, instead of the UI built into the program. A relative path
+  /// counts from the file that sets it.
   #[cascade(
     env = "RESEEK_CONTENT_PATH",
     cli = "--content-path",

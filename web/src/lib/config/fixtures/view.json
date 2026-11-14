@@ -5230,7 +5230,7 @@
       "envVar": "RESEEK_CONTENT_PATH",
       "cliFlag": "--content-path",
       "kind": "string",
-      "doc": "Directory to serve the UI from, instead of the UI built into the program.",
+      "doc": "Directory to serve the UI from, instead of the UI built into the program. A relative path counts from the file that sets it.",
       "choices": null,
       "default": null,
       "apply": "restart",
