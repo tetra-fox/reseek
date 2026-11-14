@@ -329,6 +329,42 @@ async fn a_share_hidden_from_a_user_is_answered_as_one_we_do_not_have() {
   assert!(shares.browse_cache(&View::everything()).exists());
 }
 
+/// A browse cache written for a view of a generation that is forgotten before the file is put in
+/// place is never put in place, whether the older generations' files were already removed or
+/// the removal waits for the placement to end.
+#[tokio::test]
+async fn a_browse_cache_of_a_forgotten_generation_is_not_left_behind() {
+  let (files, engine) = shared_engine().await;
+  let shares = &engine.shares;
+  let text = format!(
+    "{}[shares.visible_to]\nmusic = [\"buddies\"]\n",
+    config(files.path())
+  );
+  engine.reconfigure(&text).await;
+  eventually(async || shares.shared_counts().borrow().files == 0).await;
+  let everyone = shares.view(&BTreeSet::new());
+  let older = |name: &str| shares.cache.join(format!("browse.0-{name}.cache"));
+
+  // the removal of the older generations ran before the file was put in place
+  let file = shares.browse_cache(&everyone);
+  let written = shares.write_browse_cache(&everyone, &file).await.unwrap();
+  std::fs::write(older("removed"), "x").unwrap();
+  shares.forget_browse_views();
+  eventually(async || !older("removed").exists()).await;
+  assert!(!shares.place_browse_cache(&everyone, written).await.unwrap());
+  assert!(!file.exists());
+
+  // a placement in progress as the generation moves on is put in place, then removed
+  let file = shares.browse_cache(&everyone);
+  let placing = shares.browse_placing.lock().await;
+  shares.forget_browse_views();
+  std::fs::write(&file, "placed").unwrap();
+  tokio::time::sleep(Duration::from_millis(200)).await;
+  assert!(file.exists(), "the removal waits for the placement");
+  drop(placing);
+  eventually(async || !file.exists()).await;
+}
+
 #[tokio::test]
 async fn a_scan_is_one_at_a_time_and_only_a_running_one_cancels() {
   let (_files, engine) = shared_engine().await;

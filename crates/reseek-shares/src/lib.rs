@@ -285,8 +285,9 @@ pub struct Shares {
   browse_order: AtomicU64,
   /// the number of the last time an agent's host came or went
   hosts_changed_at: AtomicU64,
-  /// held while a browse cache is checked against the one in place and renamed over it
-  browse_placing: tokio::sync::Mutex<()>,
+  /// held while a browse cache is checked against the one in place and renamed over it, and
+  /// while a forgotten generation's files are removed
+  browse_placing: Arc<tokio::sync::Mutex<()>>,
   /// what each local share holds as last counted
   local_counts: Mutex<Counted>,
   /// the views other than everything whose browse cache was written, rewritten whenever the
@@ -380,7 +381,7 @@ impl Shares {
       hosts_settling: AtomicBool::new(false),
       browse_order: AtomicU64::new(0),
       hosts_changed_at: AtomicU64::new(0),
-      browse_placing: tokio::sync::Mutex::new(()),
+      browse_placing: Arc::new(tokio::sync::Mutex::new(())),
       local_counts: Mutex::new(Counted::default()),
       browse_views: Mutex::new(BrowseViews::default()),
       unmatched: Mutex::new(HashSet::new()),
@@ -557,22 +558,31 @@ impl Shares {
   }
 
   /// Puts `written` in place of its file unless the file holds a listing read after it, which
-  /// is left as it is; returns whether it was put in place.
+  /// is left as it is, or belongs to a generation forgotten since it was written; returns
+  /// whether it was put in place.
   async fn place_browse_cache(
     &self,
     view: &View,
     written: browse::Unplaced,
   ) -> Result<bool, std::io::Error> {
-    // checked and renamed under one lock, so no later listing is put in place between the two
+    // checked and renamed under one lock, so no later listing is put in place between the two,
+    // and the removal of a forgotten generation's files runs before the check or after the rename
     let _placing = self.browse_placing.lock().await;
-    if lock(&self.browse_views).read_after(&written.file, written.read) {
-      debug!("browse cache read before the one in place discarded");
+    let (forgotten, read_later) = {
+      let views = lock(&self.browse_views);
+      (
+        browse::path(&self.cache, view, views.generation) != written.file,
+        views.read_after(&written.file, written.read),
+      )
+    };
+    if forgotten || read_later {
+      debug!(forgotten, "browse cache discarded");
       written.discard().await;
       return Ok(false);
     }
     written.place().await?;
     let mut views = lock(&self.browse_views);
-    // a file of a generation forgotten meanwhile is never read again
+    // a generation forgotten since the check removes the file once the lock is let go
     if browse::path(&self.cache, view, views.generation) == written.file {
       views.listed.insert(written.file, written.read);
     }
@@ -624,8 +634,13 @@ impl Shares {
       views.generation += 1;
       views.generation
     };
-    let cache = self.cache.clone();
-    tokio::spawn(async move { browse::remove_older(&cache, generation).await }.in_current_span());
+    let (cache, placing) = (self.cache.clone(), self.browse_placing.clone());
+    // after a placement under way, which checked the generation before it moved on
+    let removal = async move {
+      let _placing = placing.lock().await;
+      browse::remove_older(&cache, generation).await;
+    };
+    tokio::spawn(removal.in_current_span());
   }
 
   /// The contents of the directory `name` a peer asked `username` for, as `view` sees it: that
